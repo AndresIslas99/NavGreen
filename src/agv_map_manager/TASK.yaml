@@ -1,0 +1,31 @@
+task_version: "1.1"
+package: "agv_map_manager"
+owner_role: "architect_agent"
+language: "C++17"
+
+objective: "Manage map persistence and editable operational overlays such as keepout zones and speed zones."
+
+inputs:
+  map_sources:
+    - "current occupancy map"
+  config_files:
+    - "zone definitions and map metadata"
+
+outputs:
+  services:
+    - "/{robot_namespace}/map_manager/save_map"
+    - "/{robot_namespace}/map_manager/load_map"
+    - "/{robot_namespace}/map_manager/update_zone"
+
+rules:
+  - "Persist map and zone data outside source code"
+  - "Serialization format must be stable and documented"
+  - "Zone editing must be compatible with UI workflows"
+  - "Keepout and speed zones must be versioned with the associated map revision"
+  - "Map metadata must include site identifier, revision timestamp, and declared occupancy-grid generation source"
+
+done_definition:
+  - "maps save and load successfully"
+  - "zone updates persist and reload"
+  - "service interfaces match specs/interfaces.yaml"
+  - "navigation overlays remain consistent across save/load cycles"

@@ -1,0 +1,7 @@
+# cuVSLAM parameter override for fusion mode
+# When dual EKF is active, cuVSLAM must NOT publish TF transforms
+# because the EKF nodes own odom→base_link and map→odom.
+visual_slam_node:
+  ros__parameters:
+    publish_odom_to_base_tf: false
+    publish_map_to_odom_tf: false

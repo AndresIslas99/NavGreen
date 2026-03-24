@@ -1,0 +1,87 @@
+task_version: "1.1"
+package: "agv_odrive"
+owner_role: "architect_agent"
+status: "in_progress"
+
+# Current state: Python dev tooling (working)
+# Target state: C++17 production node
+current_language: "Python (ament_python, dev tooling)"
+target_language: "C++17"
+dev_only: true
+
+dev_tools:
+  - name: "odrive_can_node.py"
+    purpose: "CAN communication node for commissioning and validation"
+    status: "working"
+  - name: "odrive_gui.py"
+    purpose: "ImGui diagnostic GUI for real-time motor tuning"
+    status: "working"
+    classification: "dev_tool"
+  - name: "validate.py"
+    purpose: "Hardware validation script (CAN, OpenGL, ROS2, ODrive)"
+    status: "working"
+  - name: "simple_test.py"
+    purpose: "Basic CAN connectivity test"
+    status: "working"
+
+objective: "Implement production ROS2 C++17 driver for ODrive S1 over SocketCAN, publish wheel odometry, and convert cmd_vel to motor commands. The current Python package provides working dev tooling for commissioning. The C++17 production node will replace the Python CAN node but the GUI and validation tools may remain as Python dev utilities."
+
+inputs:
+  config_files:
+    - "config/odrive_params.yaml"
+  runtime_interfaces:
+    - "/{robot_namespace}/cmd_vel"
+    - "/{robot_namespace}/e_stop"
+  hardware_dependencies:
+    - "can0 available (see docs/hardware_setup.md — not trivial)"
+    - "ODrive heartbeats visible"
+    - "left and right axis IDs configured"
+
+outputs:
+  topics:
+    - name: "/{robot_namespace}/wheel_odom"
+      type: "nav_msgs/Odometry"
+      min_rate_hz: 50
+    - name: "/{robot_namespace}/joint_states"
+      type: "sensor_msgs/JointState"
+      min_rate_hz: 50
+
+parameters:
+  required:
+    - "can_interface"
+    - "left_axis_id"
+    - "right_axis_id"
+    - "wheel_radius"
+    - "track_width"
+    - "encoder_ticks_per_rev"
+  validation:
+    wheel_radius: "> 0"
+    track_width: "> 0"
+    encoder_ticks_per_rev: "> 0"
+    odom_publish_rate: ">= 10"
+
+logic:
+  - "open CAN socket"
+  - "verify both ODrive axes heartbeat"
+  - "enter closed-loop control"
+  - "read encoder estimates at target loop rate"
+  - "integrate differential odometry"
+  - "publish odom and joint states"
+  - "convert cmd_vel to left and right wheel targets"
+  - "on e_stop true, command zero velocity immediately and persist until false"
+
+tests:
+  - id: "test_kinematics"
+    type: "unit"
+    must_pass: true
+  - id: "test_odom_integration"
+    type: "unit"
+    must_pass: true
+  - id: "test_e_stop_latency"
+    type: "hardware_or_mock"
+    must_pass: true
+
+done_definition:
+  - "build succeeds with -Wall -Wextra -Werror"
+  - "all required tests pass"
+  - "wheel_odom is coherent at 50Hz for 30 seconds on hardware"

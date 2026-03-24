@@ -1,0 +1,42 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives (not source)
+*.zip
+
+# Secrets / credentials
+.env
+credentials.json
+
+# Claude internal
+.claude/
+
+# Third-party ROS packages (clone separately)
+src/agv_slam/
+src/ethz_nvblox/
+src/isaac_ros_common/
+src/isaac_ros_nitros/
+src/isaac_ros_nova/
+src/isaac_ros_nvblox/
+src/isaac_ros_visual_slam/
+src/negotiated/
+src/zed-ros2-wrapper/

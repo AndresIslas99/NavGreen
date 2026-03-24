@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<!--
+  AGV Full Robot Description
+
+  All dimensions from src/agv_description/config/robot_params.yaml
+  Override via xacro args or launch parameters if needed.
+
+  TF chain produced:
+    base_link
+      ├── left_wheel     (continuous joint, driven by agv_odrive)
+      ├── right_wheel    (continuous joint, driven by agv_odrive)
+      └── base_footprint (fixed, at ground level)
+
+  Camera TF (base_link → zed_camera_link) is NOT included here.
+  It is published by agv_slam's static_transform_publisher.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="agv">
+
+  <!-- Measured parameters (defaults from robot_params.yaml, 2026-03-18) -->
+  <xacro:arg name="wheel_radius" default="0.0625"/>
+  <xacro:arg name="left_wheel_y" default="0.3675"/>
+  <xacro:arg name="right_wheel_y" default="-0.3675"/>
+  <xacro:arg name="wheel_z" default="-0.1375"/>
+  <xacro:arg name="wheel_width" default="0.05"/>
+
+  <!-- Include components -->
+  <xacro:include filename="$(find agv_description)/urdf/agv_base.xacro"/>
+  <xacro:include filename="$(find agv_description)/urdf/wheel.xacro"/>
+
+  <!-- Left wheel -->
+  <xacro:wheel
+    name="left"
+    x="0"
+    y="$(arg left_wheel_y)"
+    z="$(arg wheel_z)"
+    radius="$(arg wheel_radius)"
+    width="$(arg wheel_width)"/>
+
+  <!-- Right wheel -->
+  <xacro:wheel
+    name="right"
+    x="0"
+    y="$(arg right_wheel_y)"
+    z="$(arg wheel_z)"
+    radius="$(arg wheel_radius)"
+    width="$(arg wheel_width)"/>
+
+</robot>

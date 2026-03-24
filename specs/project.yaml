@@ -1,0 +1,224 @@
+spec_version: "1.1"
+
+project:
+  id: "agv-greenhouse-mvp"
+  name: "AGV Greenhouse MVP for First Site Visit"
+  status: "planning"
+  primary_goal: "Deliver a field-ready AGV that can be teleoperated from a local tablet, build and load a map, execute waypoint missions, and show live status during the first greenhouse visit."
+  success_definition:
+    - "Operator can control robot from browser over local WiFi"
+    - "Robot can create and save a valid map"
+    - "Robot can reload map and localize reliably"
+    - "Robot can execute waypoint mission autonomously"
+    - "Operator can trigger E-stop from dashboard"
+    - "System runs for 30 minutes demo without technical intervention"
+
+deployment_targets:
+  development:
+    compute: "Jetson AGX Orin 64GB"
+    role: "current MVP and field commissioning target"
+  production:
+    compute: "Jetson Orin NX 16GB"
+    role: "future production optimization target after MVP stability is proven"
+
+environment:
+  site_type: "commercial greenhouse"
+  operational_risks:
+    - "repetitive crop rows reduce visual feature diversity"
+    - "lighting changes across the day"
+    - "moving leaves and workers create dynamic scene elements"
+    - "reflective or wet surfaces can degrade visual tracking"
+  mitigations_required:
+    - "stereo-inertial SLAM mode"
+    - "wheel odometry fused at all times"
+    - "AprilTags used as pose anchors, not as sole localization method"
+    - "mapping runs performed when dynamic activity is minimal"
+    - "re-mapping process documented for crop growth or layout changes"
+
+robot:
+  kinematics: "differential_drive"
+  traction:
+    controller: "ODrive S1"
+    motors: "2x M8325s BLDC"
+    can_bus:
+      bitrate_kbps: 250
+      connector: "JST-GH 4-pin"
+  perception:
+    camera: "ZED 2i"
+    visual_slam: "cuVSLAM stereo-inertial"
+    imu_source: "ZED 2i IMU"
+    marker_system:
+      type: "AprilTag"
+      family: "tag36h11"
+  localization:
+    fusion: "robot_localization dual EKF"
+    odometry_sources:
+      - "wheel encoders from ODrive"
+      - "ZED 2i IMU"
+      - "visual SLAM"
+    architecture:
+      local_filter: "odom -> base_link from wheel odometry + IMU"
+      global_filter: "map -> odom from visual SLAM and optional marker correction"
+  navigation:
+    stack: "Nav2"
+    planner: "Smac Hybrid-A*"
+    controller: "Regulated Pure Pursuit"
+    dynamic_obstacle_handling:
+      - "Nav2 Collision Monitor"
+      - "nvblox-derived or equivalent obstacle/costmap layer"
+    costmap_filters:
+      - "keepout zones"
+      - "speed zones"
+
+commissioning_protocol:
+  mapping_speed_mps:
+    min: 0.3
+    max: 0.5
+  mapping_rules:
+    - "perform at least one full pass through each operational corridor"
+    - "prefer multiple passes in both directions to improve loop closure"
+    - "perform mapping when traffic and dynamic obstacles are minimal"
+    - "save map revision with timestamp and site identifier"
+    - "document whether occupancy grid is derived from slam_toolbox, nvblox slice, or another canonical pipeline"
+  field_calibration:
+    - "measure real wheel radius"
+    - "measure real track width"
+    - "verify encoder ticks per revolution from hardware config"
+    - "validate camera extrinsics in TF tree"
+    - "validate map, odom, base_link, and sensor frame consistency"
+
+scope:
+  in_scope:
+    - id: "teleop_web"
+      package: "agv_teleop"
+      outcome: "Web joystick sends cmd_vel over local WiFi"
+    - id: "slam_mapping"
+      package: "agv_slam"
+      outcome: "Create, save, and load 2D occupancy map"
+    - id: "map_editing"
+      package: "agv_map_manager"
+      outcome: "Edit keepout zones and speed zones from web UI"
+    - id: "waypoint_selection"
+      package: "agv_waypoint_manager"
+      outcome: "Click on map and save waypoint or mission"
+    - id: "autonomous_navigation"
+      package: "agv_navigation"
+      outcome: "Robot reaches goals autonomously without collision"
+    - id: "mission_execution"
+      package: "agv_behaviors"
+      outcome: "Execute waypoint sequences through behavior tree"
+    - id: "live_monitoring"
+      package: "agv_ui_backend"
+      outcome: "Robot pose, path, map, and state visible in browser"
+    - id: "marker_localization"
+      package: "agv_markers"
+      outcome: "AprilTags correct global pose drift"
+    - id: "wheel_odometry"
+      package: "agv_odrive"
+      outcome: "Wheel odometry published at required rate"
+
+  out_of_scope:
+    - "full simulation and virtual commissioning"
+    - "fleet management"
+    - "battery automation"
+    - "VDA 5050 interoperability"
+    - "Open-RMF integration"
+    - "certified functional safety"
+    - "automatic docking and charging"
+
+hard_constraints:
+  languages:
+    ros2_robot_nodes: "C++17 only"
+    ui_backend: "TypeScript"
+    web_frontend: "TypeScript/React"
+    offline_tooling: "Python allowed"
+  policies:
+    - "No hardcoded physical parameters"
+    - "No hardcoded IPs"
+    - "No hardcoded marker IDs in source code"
+    - "No ROS2 robot node in Python"
+    - "All runtime configuration must come from YAML or environment"
+    - "Warnings are treated as errors"
+    - "Do not claim software-only collision handling is certified safety"
+
+canonical_terms:
+  marker_term: "AprilTag"
+  deprecated_terms:
+    - "QR marker"
+    - "ArUco"
+  goal_dispatch:
+    type: "action"
+    canonical_interface: "/navigate_to_pose"
+  robot_namespace:
+    source: "parameter"
+    default: "agv"
+
+phases:
+  - id: "phase_1_foundation"
+    sequence: 1
+    status: "in_progress"
+    depends_on: []
+    packages:
+      - "agv_description"
+      - "agv_odrive"
+      - "agv_bringup"
+    gate: "wheel_odom published coherently at 50Hz and robot moves under CLI teleop"
+    notes: |
+      CAN bus working (devmem pinmux + systemd service).
+      ODrive S1 communication validated via CAN and USB.
+      Motor actuation working via Python dev tooling.
+      Pending: C++17 production node, URDF/TF, wheel odom at 50Hz.
+
+  - id: "phase_2_perception"
+    sequence: 2
+    status: "in_progress"
+    depends_on: ["phase_1_foundation"]
+    packages:
+      - "agv_slam"
+      - "agv_sensor_fusion"
+    gate: "2D map visible and robot relocalizes after save/load"
+    notes: |
+      cuVSLAM + nvblox pipeline operational (agv_slam v3.0.0).
+      ZED 2i stereo-inertial mapping working.
+      Pending: dual EKF sensor fusion (agv_sensor_fusion not yet created).
+
+  - id: "phase_3_navigation"
+    sequence: 3
+    status: "blocked"
+    depends_on: ["phase_2_perception"]
+    packages:
+      - "agv_navigation"
+      - "agv_behaviors"
+      - "agv_map_manager"
+    gate: "robot navigates from A to B and stops or reroutes around obstacle"
+    notes: "Blocked by: wheel odom + TF tree + dual EKF must be stable first."
+
+  - id: "phase_4_markers"
+    sequence: 4
+    status: "todo"
+    priority: "post_mvp_stretch"
+    depends_on: ["phase_3_navigation"]
+    packages:
+      - "agv_markers"
+    gate: "AprilTag correction yields pose error under 5 cm"
+    notes: "De-prioritized per retro. Not required for first field visit if visual SLAM + wheel odom fusion is stable."
+
+  - id: "phase_5_dashboard"
+    sequence: 5
+    status: "todo"
+    depends_on: ["phase_3_navigation"]
+    packages:
+      - "agv_ui_backend"
+      - "agv_waypoint_manager"
+      - "web/agv_dashboard"
+    gate: "full operator workflow works from tablet without terminal"
+    notes: "Can be developed in parallel with Phase 3 once interfaces are stable."
+
+  - id: "phase_6_integration"
+    sequence: 6
+    status: "todo"
+    depends_on:
+      - "phase_4_markers"
+      - "phase_5_dashboard"
+    packages: ["all"]
+    gate: "30-minute end-to-end demo passes without technical intervention"

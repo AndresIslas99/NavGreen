@@ -1,0 +1,59 @@
+spec_version: "1.1"
+
+quality_gates:
+  unit:
+    pass_condition:
+      - "0 failures"
+      - "0 errors"
+
+  integration:
+    pass_condition:
+      - "TF tree complete within 5 seconds"
+      - "/wheel_odom near 50Hz"
+      - "required services available"
+      - "Nav2 lifecycle active"
+      - "dual EKF responsibilities respected: map->odom global, odom->base_link local"
+
+  mapping_commissioning:
+    pass_condition:
+      - "mapping performed at 0.3 to 0.5 m/s nominal speed"
+      - "each operational corridor is traversed at least once"
+      - "at least one bi-directional pass is performed in representative aisles"
+      - "map revision saved with timestamp and site identifier"
+      - "occupancy-grid generation pipeline is documented for that revision"
+
+  greenhouse_visual_localization:
+    pass_condition:
+      - "stereo-inertial mode enabled"
+      - "wheel odometry remains fused continuously"
+      - "temporary visual degradation does not collapse local odom estimate"
+      - "marker-based correction is supplemental, not the only localization source"
+
+  hardware:
+    pass_condition:
+      - "1 meter straight motion error <= 0.05 m"
+      - "360 degree rotation error <= 0.1 rad"
+      - "goal reach error <= 0.15 m"
+      - "E-stop command-to-stop <= 0.2 s"
+
+  end_to_end:
+    checklist:
+      - "stack auto-starts on boot"
+      - "tablet loads dashboard in <= 5 seconds"
+      - "teleop is responsive"
+      - "operator can map, save, load, create waypoint, create mission, execute mission"
+      - "dashboard shows live robot state"
+      - "E-stop from UI stops robot immediately"
+      - "zone edit persists and affects navigation behavior after reload"
+
+safety_boundary:
+  statements:
+    - "Nav2 collision handling and software E-stop logic are operational safeguards, not certified functional safety"
+    - "Any certified human safety requirement must be implemented with dedicated safety-rated hardware and logic outside this MVP spec"
+
+task_completion_rule:
+  must_satisfy_all:
+    - "build"
+    - "tests"
+    - "runtime interface compliance"
+    - "acceptance gate"

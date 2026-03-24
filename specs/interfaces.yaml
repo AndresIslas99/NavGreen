@@ -1,0 +1,106 @@
+spec_version: "1.1"
+
+ros:
+  namespace_parameter: "robot_namespace"
+  default_namespace: "agv"
+  tf_tree:
+    - "map"
+    - "odom"
+    - "base_link"
+  required_sensor_frames:
+    - "zed_camera_center"
+    - "zed_left_camera_frame"
+    - "zed_right_camera_frame"
+    - "imu_link"
+
+topics:
+  publish:
+    - name: "/{robot_namespace}/pose"
+      type: "geometry_msgs/PoseWithCovarianceStamped"
+      target_rate_hz: 10
+    - name: "/{robot_namespace}/wheel_odom"
+      type: "nav_msgs/Odometry"
+      target_rate_hz: 50
+    - name: "/{robot_namespace}/joint_states"
+      type: "sensor_msgs/JointState"
+      target_rate_hz: 50
+    - name: "/{robot_namespace}/battery"
+      type: "sensor_msgs/BatteryState"
+      target_rate_hz: 1
+    - name: "/{robot_namespace}/mode"
+      type: "std_msgs/String"
+      trigger: "on state changes"
+    - name: "/{robot_namespace}/map"
+      type: "nav_msgs/OccupancyGrid"
+      trigger: "on save/load or map refresh"
+    - name: "/{robot_namespace}/costmap"
+      type: "nav_msgs/OccupancyGrid"
+      max_rate_hz: 2
+    - name: "/{robot_namespace}/path"
+      type: "nav_msgs/Path"
+      trigger: "on route plan"
+    - name: "/{robot_namespace}/marker_pose"
+      type: "geometry_msgs/PoseWithCovarianceStamped"
+      trigger: "on valid AprilTag correction"
+    - name: "/{robot_namespace}/marker_detected"
+      type: "std_msgs/String"
+      trigger: "on valid marker detection"
+    - name: "/tf"
+      type: "tf2_msgs/TFMessage"
+      trigger: "continuous transform broadcast"
+    - name: "/tf_static"
+      type: "tf2_msgs/TFMessage"
+      trigger: "static transform broadcast"
+
+  subscribe:
+    - name: "/{robot_namespace}/cmd_vel"
+      type: "geometry_msgs/Twist"
+      max_rate_hz: 10
+    - name: "/{robot_namespace}/e_stop"
+      type: "std_msgs/Bool"
+      semantics: "true means immediate stop, persists until false"
+    - name: "/{robot_namespace}/tag_detections"
+      type: "isaac_ros_apriltag/AprilTagDetectionArray"
+
+actions:
+  - name: "/navigate_to_pose"
+    type: "nav2_msgs/action/NavigateToPose"
+    canonical: true
+
+services:
+  - name: "/{robot_namespace}/map_manager/save_map"
+    type: "agv_map_manager/SaveMap"
+  - name: "/{robot_namespace}/map_manager/load_map"
+    type: "agv_map_manager/LoadMap"
+  - name: "/{robot_namespace}/map_manager/update_zone"
+    type: "agv_map_manager/UpdateZone"
+  - name: "/{robot_namespace}/waypoint_manager/save"
+    type: "agv_waypoint_manager/SaveWaypoint"
+  - name: "/{robot_namespace}/waypoint_manager/list"
+    type: "agv_waypoint_manager/ListMissions"
+  - name: "/{robot_namespace}/waypoint_manager/execute"
+    type: "agv_waypoint_manager/ExecuteMission"
+
+websocket:
+  server_to_client_schema:
+    required_fields: ["type", "timestamp", "payload"]
+    allowed_types: ["pose", "odom", "map", "path", "status", "battery", "mode"]
+  client_to_server_schema:
+    required_fields: ["type", "payload"]
+    allowed_types: ["cmd_vel", "e_stop", "nav_goal", "mode"]
+
+rest:
+  endpoints:
+    - "GET /api/maps"
+    - "POST /api/maps/:name/save"
+    - "POST /api/maps/:name/load"
+    - "PUT /api/maps/zones"
+    - "GET /api/missions"
+    - "POST /api/missions"
+    - "DELETE /api/missions/:id"
+    - "POST /api/missions/:id/execute"
+
+runtime_notes:
+  - "Occupancy map source must be documented per deployment revision"
+  - "Map-space coordinates are meters in the map frame"
+  - "Costmap publication toward UI must be throttled"

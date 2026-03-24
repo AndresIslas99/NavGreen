@@ -1,0 +1,46 @@
+# AGV Robot Physical Parameters — Single Source of Truth
+# Measured 2026-03-18 on production chassis
+#
+# base_link origin: geometric center of chassis, 200mm above ground
+# All coordinates relative to base_link unless noted otherwise
+#
+#   TOP VIEW (base_link at center)
+#
+#          +X (forward)
+#           ^
+#           |
+#    LW ----+---- RW      LW = left wheel, RW = right wheel
+#           |
+#           |
+#      ZED mounted 700mm forward, 55mm below base_link
+#
+#   SIDE VIEW
+#
+#       base_link (0,0,0)
+#           |
+#     ------+------ chassis top plate
+#           |  55mm
+#          ZED
+#           |
+#     ------+------ axle height (z = -137.5mm)
+#        [wheel]
+#           | 62.5mm radius
+#     ------+------ ground (z = -200mm from base_link)
+#
+
+robot:
+  base_link:
+    height_above_ground: 0.200  # meters
+
+  wheels:
+    radius: 0.0625               # meters (125mm diameter)
+    left:
+      xyz: [0.0, 0.3675, -0.1375]
+    right:
+      xyz: [0.0, -0.3675, -0.1375]
+    track_width: 0.735            # meters (367.5mm × 2)
+
+  sensors:
+    zed2i:
+      xyz: [0.700, 0.0, -0.055]
+      rpy: [0.0, 0.0, 0.0]
