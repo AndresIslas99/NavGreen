@@ -1,0 +1,12 @@
+mode: engineering_deployment
+goal: constrained_greenhouse_autonomy_demo
+can_bus: validated
+odrive_python_dev: validated
+odrive_cpp: in_progress
+encoder_read: validated
+wheel_odom: in_progress
+cuvslam_greenhouse: validated
+urdf_tf: validated
+dual_ekf: config_ready
+nav2_demo_route: pending
+dashboard: deferred

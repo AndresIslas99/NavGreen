@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AGV Greenhouse MVP — Agentic Spec Pack</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.5; color: #111; }
+    h1,h2 { margin-bottom: 0.3rem; }
+    code { background: #f3f3f3; padding: 2px 6px; border-radius: 4px; }
+    .box { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 16px 0; }
+    ul { margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>AGV Greenhouse MVP — Agentic Spec Pack</h1>
+  <p>This is the human-facing summary of the agent-operable file set.</p>
+
+  <div class="box">
+    <h2>Canonical source files</h2>
+    <ul>
+      <li><code>specs/project.yaml</code></li>
+      <li><code>specs/interfaces.yaml</code></li>
+      <li><code>specs/acceptance.yaml</code></li>
+      <li><code>agents/registry.yaml</code></li>
+      <li><code>policies/engineering_rules.md</code></li>
+      <li>package-level <code>TASK.yaml</code> files</li>
+    </ul>
+  </div>
+
+  <div class="box">
+    <h2>Key standardizations</h2>
+    <ul>
+      <li>Marker system: <strong>AprilTag tag36h11</strong></li>
+      <li>Canonical goal interface: <strong><code>/navigate_to_pose</code></strong> action</li>
+      <li>ROS2 robot nodes: <strong>C++17 only</strong></li>
+      <li>Runtime configuration: <strong>YAML or environment only</strong></li>
+    </ul>
+  </div>
+
+  <div class="box">
+    <h2>MVP outcome</h2>
+    <p>Deliver a field-ready AGV for the first site visit with local WiFi teleop, mapping, map load, waypoint missions, autonomous navigation, live monitoring, and dashboard E-stop.</p>
+  </div>
+</body>
+</html>

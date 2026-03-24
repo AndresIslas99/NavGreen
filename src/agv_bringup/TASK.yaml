@@ -1,0 +1,32 @@
+task_version: "1.1"
+package: "agv_bringup"
+owner_role: "architect_agent"
+language: "Python launch files only, no runtime robot node"
+
+objective: "Provide launch entrypoints for teleop, mapping, navigation, and full-stack bringup using parameterized namespaces, paths, and flags."
+
+inputs:
+  config_files:
+    - "config/robot.yaml"
+    - "config/agv_params.yaml"
+  dependencies:
+    - "all runtime packages"
+
+outputs:
+  launch_files:
+    - "agv_full.launch.py"
+    - "agv_mapping.launch.py"
+    - "agv_navigation.launch.py"
+    - "agv_teleop.launch.py"
+
+rules:
+  - "Use LaunchConfiguration for namespace, paths, modes, and feature flags"
+  - "Do not hardcode package share paths or namespaces"
+  - "Bringup must support partial modes for debugging"
+  - "Mapping bringup and localization bringup must be separable"
+  - "Launch composition must preserve dual-EKF frame responsibilities"
+
+done_definition:
+  - "each launch file starts the intended subset correctly"
+  - "full launch exposes required interfaces from specs/interfaces.yaml"
+  - "launch files are parameterized and warning-free"
