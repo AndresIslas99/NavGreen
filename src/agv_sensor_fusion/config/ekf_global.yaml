@@ -7,7 +7,7 @@
 # When visual SLAM loses tracking, this filter holds the last
 # known map→odom correction while the local filter continues.
 
-ekf_global:
+/**:
   ros__parameters:
     frequency: 10.0
     two_d_mode: true
