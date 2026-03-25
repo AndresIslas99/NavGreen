@@ -6,7 +6,7 @@
 #
 # This filter must remain functional even when visual SLAM degrades.
 
-ekf_local:
+/**:
   ros__parameters:
     frequency: 50.0
     two_d_mode: true
