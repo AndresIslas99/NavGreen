@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>agv_integration_tests</name>
+  <version>1.0.0</version>
+  <description>Integration tests for AGV greenhouse production stack</description>
+  <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>agv_interfaces</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

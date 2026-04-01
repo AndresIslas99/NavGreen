@@ -1,15 +1,36 @@
 mode: engineering_deployment
 goal: constrained_greenhouse_autonomy_demo
+
+# Phase 1: Foundation
 can_bus: validated
 odrive_python_dev: validated
 odrive_cpp: validated
 encoder_read: validated
 wheel_odom: validated
-cuvslam_greenhouse: validated
 urdf_tf: validated
+
+# Phase 2: Perception
+cuvslam_greenhouse: validated
 dual_ekf: hil_validated
-hil_mode: validated
+ground_plane_filter: validated  # pointcloud_to_laserscan with height filter
+
+# Phase 3: Navigation
 nav2_config: validated
 nav2_install: installed
 nav2_demo_route: hil_validated_5_of_5
-dashboard: deferred
+
+# HIL Infrastructure
+hil_mode: validated
+
+# Production C++17 Packages
+agv_interfaces: built        # 2 msg + 6 srv definitions
+agv_map_manager: built       # C++17, 2/2 tests pass
+agv_waypoint_manager: built  # C++17, 3/3 tests pass
+agv_markers: built           # C++17, 3/3 tests pass (conditional on isaac_ros_apriltag)
+agv_behaviors: built         # C++17 + BehaviorTree.CPP, 2/2 tests pass
+agv_ui_backend_ts: built     # TypeScript + rclnodejs, builds clean
+
+# Operator Dashboard
+dashboard: operational       # React/TypeScript, ISA-101, scan accumulation, mission control
+
+# Next: real hardware validation (dual EKF + Nav2 on physical robot)
