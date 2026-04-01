@@ -1,0 +1,13 @@
+<root main_tree_to_execute="NavigateWithRecovery">
+  <BehaviorTree ID="NavigateWithRecovery">
+    <Fallback>
+      <!-- Try direct navigation first -->
+      <NavigateToPose goal="{goal}" server_name="navigate_to_pose"/>
+      <!-- Recovery: wait, then retry -->
+      <Sequence>
+        <Wait msec="3000"/>
+        <NavigateToPose goal="{goal}" server_name="navigate_to_pose"/>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+</root>
