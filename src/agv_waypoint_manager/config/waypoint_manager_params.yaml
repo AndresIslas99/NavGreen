@@ -1,0 +1,4 @@
+waypoint_manager:
+  ros__parameters:
+    missions_file: ""      # set via launch argument
+    default_speed: 0.3     # m/s default for mission execution
