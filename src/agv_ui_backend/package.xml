@@ -3,7 +3,7 @@
 <package format="3">
   <name>agv_ui_backend</name>
   <version>0.1.0</version>
-  <description>Minimal web teleop console for AGV commissioning (dev_only)</description>
+  <description>AGV operator backend: teleop, map, mission, navigation (dev_only Python)</description>
   <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
   <license>MIT</license>
 
@@ -14,6 +14,7 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

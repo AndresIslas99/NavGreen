@@ -15,10 +15,16 @@ def generate_launch_description():
     robot_description = ParameterValue(
         Command(['xacro ', xacro_file]), value_type=str)
 
+    use_sim_time = LaunchConfiguration('use_sim_time')
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'namespace', default_value='agv',
             description='Robot namespace'),
+
+        DeclareLaunchArgument(
+            'use_sim_time', default_value='false',
+            description='Use /clock for time (set true for HIL/sim)'),
 
         DeclareLaunchArgument(
             'use_joint_state_publisher', default_value='false',
@@ -29,7 +35,10 @@ def generate_launch_description():
             executable='robot_state_publisher',
             name='robot_state_publisher',
             namespace=LaunchConfiguration('namespace'),
-            parameters=[{'robot_description': robot_description}],
+            parameters=[{
+                'robot_description': robot_description,
+                'use_sim_time': use_sim_time,
+            }],
             output='screen',
         ),
 
@@ -38,6 +47,7 @@ def generate_launch_description():
             executable='joint_state_publisher',
             name='joint_state_publisher',
             namespace=LaunchConfiguration('namespace'),
+            parameters=[{'use_sim_time': use_sim_time}],
             condition=IfCondition(LaunchConfiguration('use_joint_state_publisher')),
             output='screen',
         ),
