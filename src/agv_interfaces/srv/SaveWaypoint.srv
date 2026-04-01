@@ -1,0 +1,6 @@
+string mission_id             # empty = auto-generate
+string mission_name
+agv_interfaces/Waypoint[] waypoints
+---
+bool success
+string mission_id             # assigned or existing ID
