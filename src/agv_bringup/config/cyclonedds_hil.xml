@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CycloneDDS config for HIL cross-machine discovery.
+
+  Before launching, set the PC's IP address in the Peers section below,
+  then export this file:
+
+    export CYCLONEDDS_URI=$(ros2 pkg prefix agv_bringup)/share/agv_bringup/config/cyclonedds_hil.xml
+
+  The same ROS_DOMAIN_ID and RMW_IMPLEMENTATION must be used on both machines.
+-->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain id="any">
+    <General>
+      <Interfaces>
+        <NetworkInterface name="wlP1p1s0" multicast="false"/>
+      </Interfaces>
+      <AllowMulticast>spdp</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
+      <FragmentSize>32768B</FragmentSize>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer address="localhost"/>
+        <!-- Set this to the PC running the simulation -->
+        <Peer address="SIM-HOST-LAN-IP"/>
+      </Peers>
+    </Discovery>
+    <Internal>
+      <SocketReceiveBufferSize min="26MB"/>
+    </Internal>
+  </Domain>
+</CycloneDDS>

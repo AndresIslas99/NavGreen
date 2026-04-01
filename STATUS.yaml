@@ -7,6 +7,9 @@ encoder_read: validated
 wheel_odom: validated
 cuvslam_greenhouse: validated
 urdf_tf: validated
-dual_ekf: local_ekf_validated
-nav2_demo_route: pending
+dual_ekf: hil_validated
+hil_mode: validated
+nav2_config: validated
+nav2_install: installed
+nav2_demo_route: hil_validated_5_of_5
 dashboard: deferred
