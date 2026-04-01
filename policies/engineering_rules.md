@@ -59,3 +59,11 @@ A task is not done until:
 - Use **AprilTag** and **tag36h11**
 - Do not use QR or ArUco terminology for the implemented marker system
 - Use **`/navigate_to_pose` action** as the canonical goal interface
+
+## Rule 8 — Production-first development
+Develop every node, algorithm, and pipeline as if it will run on the real robot.
+- Simulation provides raw sensor data (the same topics the real hardware would publish)
+- All processing (filtering, fusion, navigation, perception) runs on the Jetson
+- Never implement workarounds on the sim side that wouldn't exist in production
+- If a pipeline works in sim but requires sim-side processing, it is architecturally wrong
+- HIL mode must exercise the same code paths as production — only the sensor source changes

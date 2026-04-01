@@ -29,6 +29,7 @@ Workspace-level rules here take precedence on any conflict. Package CLAUDE.md fi
 - Build warnings are treated as errors
 - Do not edit files locked by another agent
 - Do not describe software-only collision handling as certified safety
+- Develop as production: every algorithm, node, and pipeline must be designed to run on the Jetson in production. Simulation only provides sensor inputs — processing belongs on the Jetson. Never push compute or filtering to the sim side that would run on the robot in the real world.
 
 ## Canonical decisions
 - Marker system: AprilTag family tag36h11
