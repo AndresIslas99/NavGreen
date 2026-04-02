@@ -1,0 +1,19 @@
+# Velocity Smoother — smooth acceleration ramps between Nav2 controller and motors
+#
+# Pipeline: controller_server (cmd_vel) → velocity_smoother (cmd_vel_smoothed)
+#           → collision_monitor (cmd_vel_safe) → ODrive CAN node
+#
+# Runs at 50Hz (higher than 20Hz controller) for smooth interpolation.
+
+/**/velocity_smoother:
+  ros__parameters:
+    smoothing_frequency: 50.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.5, 0.0, 1.0]
+    min_velocity: [-0.1, 0.0, -1.0]
+    max_accel: [0.5, 0.0, 1.5]
+    max_decel: [1.0, 0.0, 2.0]
+    deadband_velocity: [0.01, 0.0, 0.05]
+    odom_topic: odometry/local
+    odom_duration: 0.1
