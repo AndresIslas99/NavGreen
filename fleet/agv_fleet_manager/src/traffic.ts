@@ -99,6 +99,96 @@ export class TrafficManager {
   }
 
   // ---------------------------------------------------------------------------
+  // Deadlock detection — wait-for-graph cycle detection
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a wait-for graph and detects cycles (deadlocks).
+   * A robot R1 "waits for" R2 if R1 is in a wait queue for a zone occupied by R2.
+   * Returns list of robot IDs involved in deadlock, or empty array if none.
+   */
+  detectDeadlocks(): string[] {
+    // Build wait-for graph: robotId → set of robotIds it waits for
+    const waitFor = new Map<string, Set<string>>();
+
+    for (const [zoneId, queue] of this.waitQueues) {
+      if (queue.length === 0) continue;
+      const occupants = this.occupancy.get(zoneId);
+      if (!occupants) continue;
+
+      for (const waitingRobot of queue) {
+        if (!waitFor.has(waitingRobot)) waitFor.set(waitingRobot, new Set());
+        for (const occupant of occupants) {
+          waitFor.get(waitingRobot)!.add(occupant);
+        }
+      }
+    }
+
+    // DFS cycle detection
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+    const cycleMembers = new Set<string>();
+
+    const dfs = (node: string): boolean => {
+      visited.add(node);
+      inStack.add(node);
+
+      const neighbors = waitFor.get(node);
+      if (neighbors) {
+        for (const neighbor of neighbors) {
+          if (inStack.has(neighbor)) {
+            // Found cycle — collect all nodes in current stack path
+            cycleMembers.add(node);
+            cycleMembers.add(neighbor);
+            return true;
+          }
+          if (!visited.has(neighbor) && dfs(neighbor)) {
+            cycleMembers.add(node);
+            return true;
+          }
+        }
+      }
+
+      inStack.delete(node);
+      return false;
+    };
+
+    for (const robot of waitFor.keys()) {
+      if (!visited.has(robot)) dfs(robot);
+    }
+
+    if (cycleMembers.size > 0) {
+      this.emitEvent('conflict', 'deadlock', Array.from(cycleMembers).join(','),
+        `Deadlock detected: ${Array.from(cycleMembers).join(', ')}`);
+    }
+
+    return Array.from(cycleMembers);
+  }
+
+  /**
+   * Resolve a deadlock by force-releasing the lowest-priority robot from its zone.
+   * Returns the robot ID that was released, or null if no deadlock.
+   */
+  resolveDeadlock(deadlockedRobots: string[]): string | null {
+    if (deadlockedRobots.length === 0) return null;
+
+    // Find which robot to evict: the one waiting longest (first in queue)
+    for (const [zoneId, queue] of this.waitQueues) {
+      for (const robot of deadlockedRobots) {
+        const idx = queue.indexOf(robot);
+        if (idx >= 0) {
+          // Force remove this robot from the wait queue
+          queue.splice(idx, 1);
+          this.emitEvent('conflict', zoneId, robot, 'Deadlock resolved: robot released from wait queue');
+          this.onResumeRobot?.(robot);
+          return robot;
+        }
+      }
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
   // Position update — called for each robot position change
   // ---------------------------------------------------------------------------
 

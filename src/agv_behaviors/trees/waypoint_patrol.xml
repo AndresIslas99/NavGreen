@@ -9,7 +9,7 @@
       <Repeat num_cycles="{num_waypoints}">
         <Sequence>
           <GetWaypointFromList waypoints="{waypoints}" index="{wp_index}" goal="{goal}"/>
-          <RecoveryNode number_of_retries="3" name="WaypointRecovery">
+          <RecoveryNode number_of_retries="6" name="WaypointRecovery">
             <PipelineSequence name="NavToWaypoint">
               <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
               <FollowPath path="{path}" controller_id="FollowPath"/>

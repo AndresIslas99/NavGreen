@@ -45,6 +45,10 @@
     odom1_relative: false
     odom1_queue_size: 5
 
+    # Reject cuVSLAM outliers via Mahalanobis distance (prevents zero-covariance crashes)
+    odom1_pose_rejection_threshold: 5.0
+    odom1_twist_rejection_threshold: 3.0
+
     # ── Process noise covariance ──
     # 2x higher than local filter — global corrections should be gradual.
     # This prevents the global EKF from reacting too aggressively to
