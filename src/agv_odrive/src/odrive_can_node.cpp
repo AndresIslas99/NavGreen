@@ -254,19 +254,26 @@ void ODriveCANNode::publish_odometry() {
   msg.pose.pose.orientation.z = std::sin(half_yaw);
   msg.pose.pose.orientation.w = std::cos(half_yaw);
 
-  // Pose covariance (diagonal, conservative)
-  msg.pose.covariance[0]  = 0.01;   // x
-  msg.pose.covariance[7]  = 0.01;   // y
-  msg.pose.covariance[35] = 0.03;   // yaw
-
   // Twist (from current encoder velocities)
   double v_left  = left_.velocity * wheel_radius_ * 2.0 * M_PI;   // m/s
   double v_right = right_.velocity * wheel_radius_ * 2.0 * M_PI;  // m/s
-  msg.twist.twist.linear.x  = (v_left + v_right) / 2.0;
-  msg.twist.twist.angular.z = (v_right - v_left) / track_width_;
+  double v_linear = (v_left + v_right) / 2.0;
+  double v_angular = (v_right - v_left) / track_width_;
+  msg.twist.twist.linear.x  = v_linear;
+  msg.twist.twist.angular.z = v_angular;
 
-  msg.twist.covariance[0]  = 0.01;
-  msg.twist.covariance[35] = 0.03;
+  // Pose covariance — grows with angular velocity (turns are less accurate)
+  double base_xy_cov = 0.01;
+  double base_yaw_cov = 0.03;
+  double angular_factor = 1.0 + 2.0 * std::abs(v_angular);  // higher when turning
+  msg.pose.covariance[0]  = base_xy_cov * angular_factor;    // x
+  msg.pose.covariance[7]  = base_xy_cov * angular_factor;    // y
+  msg.pose.covariance[35] = base_yaw_cov * angular_factor;   // yaw
+
+  // Twist covariance — velocity-dependent (less certain at higher speeds)
+  double speed_factor = 1.0 + std::abs(v_linear);
+  msg.twist.covariance[0]  = 0.01 * speed_factor;
+  msg.twist.covariance[35] = 0.03 * speed_factor;
 
   pub_odom_->publish(msg);
 }

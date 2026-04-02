@@ -83,14 +83,24 @@ private:
     }
 
     auto out_path = map_dir_ + "/" + name;
-
-    // Call nav2 map_saver_cli via subprocess
-    std::string cmd = "ros2 run nav2_map_server map_saver_cli -f " + out_path
-                    + " -t " + map_topic_
-                    + " --ros-args -p save_map_timeout:=10.0 2>&1";
-
     RCLCPP_INFO(get_logger(), "Saving map to %s", out_path.c_str());
-    int ret = std::system(cmd.c_str());
+
+    // Use popen instead of system() — captures output, avoids shell injection
+    std::string cmd = "ros2 run nav2_map_server map_saver_cli"
+                      " -f '" + out_path + "'"
+                      " -t '" + map_topic_ + "'"
+                      " --ros-args -p save_map_timeout:=10.0 2>&1";
+
+    std::string output;
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+      res->success = false;
+      res->message = "Failed to launch map_saver_cli";
+      return;
+    }
+    char buf[256];
+    while (fgets(buf, sizeof(buf), pipe)) { output += buf; }
+    int ret = pclose(pipe);
 
     if (ret == 0) {
       res->success = true;
@@ -98,8 +108,8 @@ private:
       RCLCPP_INFO(get_logger(), "Map saved: %s", name.c_str());
     } else {
       res->success = false;
-      res->message = "map_saver_cli failed (exit " + std::to_string(ret) + ")";
-      RCLCPP_ERROR(get_logger(), "Map save failed: %s", name.c_str());
+      res->message = "map_saver_cli failed (exit " + std::to_string(ret) + "): " + output;
+      RCLCPP_ERROR(get_logger(), "Map save failed: %s — %s", name.c_str(), output.c_str());
     }
   }
 
