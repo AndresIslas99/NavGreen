@@ -1,0 +1,15 @@
+# Mosquitto ACL — AGV Fleet
+# Pattern: topic access per client type
+
+# Fleet manager can read/write all topics
+user fleet-manager
+topic readwrite uagv/v2/#
+
+# Each robot can only publish to its own topics
+# Pattern uses %c (client ID) which maps to vda5050-{serial}
+pattern readwrite uagv/v2/+/%c/#
+
+# All clients can read connection topics (for monitoring)
+topic read uagv/v2/+/+/connection
+
+# Default: deny
