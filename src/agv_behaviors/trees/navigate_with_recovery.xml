@@ -1,13 +1,36 @@
 <root main_tree_to_execute="NavigateWithRecovery">
   <BehaviorTree ID="NavigateWithRecovery">
-    <Fallback>
-      <!-- Try direct navigation first -->
-      <NavigateToPose goal="{goal}" server_name="navigate_to_pose"/>
-      <!-- Recovery: wait, then retry -->
-      <Sequence>
-        <Wait msec="3000"/>
-        <NavigateToPose goal="{goal}" server_name="navigate_to_pose"/>
-      </Sequence>
-    </Fallback>
+    <!--
+      Standard Nav2 recovery pattern:
+      1. Compute path + follow path
+      2. On failure: round-robin recovery (clear costmap + spin, OR backup + wait)
+      3. Up to 3 retries before giving up
+    -->
+    <RecoveryNode number_of_retries="3" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="0.5">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </RateController>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryActions">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryStrategies">
+          <!-- Strategy 1: Clear costmaps + spin to free stuck inflation artifacts -->
+          <Sequence name="ClearAndSpin">
+            <ClearEntireCostmap name="ClearLocal"
+              service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobal"
+              service_name="global_costmap/clear_entirely_global_costmap"/>
+            <Spin spin_dist="1.57"/>
+          </Sequence>
+          <!-- Strategy 2: Backup + wait for dynamic obstacles to move -->
+          <Sequence name="BackupAndWait">
+            <BackUp backup_dist="0.3" backup_speed="0.1"/>
+            <Wait wait_duration="2"/>
+          </Sequence>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
   </BehaviorTree>
 </root>

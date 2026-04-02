@@ -65,13 +65,16 @@ def generate_launch_description():
             launch_arguments={'namespace': ns}.items(),
         ),
 
-        # ── ODrive motor control (immediate) ──
+        # ── ODrive motor control (immediate, listens to cmd_vel_safe from collision monitor) ──
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
                     FindPackageShare('agv_odrive'), 'launch', 'odrive.launch.py'
                 ])),
-            launch_arguments={'namespace': ns}.items(),
+            launch_arguments={
+                'namespace': ns,
+                'cmd_vel_topic': 'cmd_vel_safe',
+            }.items(),
         ),
 
         # ── Ground-filtered LaserScan from ZED point cloud (production pipeline) ──

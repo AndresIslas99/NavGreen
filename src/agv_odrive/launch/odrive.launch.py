@@ -19,12 +19,17 @@ def generate_launch_description():
             'params_file', default_value=params_file,
             description='Path to parameter YAML file'),
 
+        DeclareLaunchArgument(
+            'cmd_vel_topic', default_value='cmd_vel',
+            description='cmd_vel input topic (use cmd_vel_safe when velocity smoother + collision monitor active)'),
+
         Node(
             package='agv_odrive',
             executable='odrive_can_node',
             name='agv_odrive_node',
             namespace=LaunchConfiguration('namespace'),
             parameters=[LaunchConfiguration('params_file')],
+            remappings=[('cmd_vel', LaunchConfiguration('cmd_vel_topic'))],
             output='screen',
         ),
     ])

@@ -1,0 +1,45 @@
+# Nav2 Collision Monitor — last-resort reactive obstacle avoidance
+#
+# Operates independently of costmaps. Directly modifies cmd_vel based on
+# real-time sensor readings and configurable safety zones.
+#
+# Two zones:
+#   stop_zone: Robot footprint + 5cm margin → full stop
+#   slowdown_zone: 25cm clearance beyond footprint → 30% speed reduction
+#
+# Robot footprint: front=0.50m, rear=-0.30m, left=0.37m, right=-0.37m
+
+/**/collision_monitor:
+  ros__parameters:
+    base_frame_id: base_link
+    odom_frame_id: odom
+    cmd_vel_in_topic: cmd_vel_smoothed
+    cmd_vel_out_topic: cmd_vel_safe
+    state_topic: collision_monitor_state
+    transform_tolerance: 0.3
+    source_timeout: 2.0
+    stop_pub_timeout: 2.0
+
+    polygons: ["stop_zone", "slowdown_zone"]
+
+    stop_zone:
+      type: "polygon"
+      points: "[[0.55, 0.40], [0.55, -0.40], [-0.35, -0.40], [-0.35, 0.40]]"
+      action_type: "stop"
+      max_points: 3
+      visualize: true
+      polygon_pub_topic: "stop_zone_polygon"
+
+    slowdown_zone:
+      type: "polygon"
+      points: "[[0.80, 0.50], [0.80, -0.50], [-0.50, -0.50], [-0.50, 0.50]]"
+      action_type: "slowdown"
+      slowdown_ratio: 0.3
+      max_points: 3
+      visualize: true
+      polygon_pub_topic: "slowdown_zone_polygon"
+
+    observation_sources: ["scan_source"]
+    scan_source:
+      type: "scan"
+      topic: /agv/scan
