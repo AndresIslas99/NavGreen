@@ -3,6 +3,7 @@ import type { WsMessage, RobotStatus, PathPoint, MapUpdate, LogEntry } from '../
 
 const RECONNECT_BASE = 500
 const RECONNECT_MAX = 5000
+const SCAN_FLUSH_MS = 500 // Debounce scan/path state updates to ~2Hz
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
@@ -14,8 +15,29 @@ export function useWebSocket() {
   const [accMapData, setAccMapData] = useState<MapUpdate | null>(null)
   const [events, setEvents] = useState<LogEntry[]>([])
 
+  // High-frequency data stored in refs, flushed to state on debounce timer
+  const scanBuf = useRef<PathPoint[]>([])
+  const pathBuf = useRef<PathPoint[]>([])
+  const scanDirty = useRef(false)
+  const pathDirty = useRef(false)
+
   // Load event history on first connect
   const historyLoaded = useRef(false)
+
+  // Debounce flush timer for scan/path
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (scanDirty.current) {
+        scanDirty.current = false
+        setScanPoints(scanBuf.current)
+      }
+      if (pathDirty.current) {
+        pathDirty.current = false
+        setPath(pathBuf.current)
+      }
+    }, SCAN_FLUSH_MS)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     let delay = RECONNECT_BASE
@@ -58,9 +80,13 @@ export function useWebSocket() {
           if (msg.type === 'status') {
             setStatus(msg as unknown as RobotStatus)
           } else if (msg.type === 'path') {
-            setPath((msg as { type: 'path'; points: PathPoint[] }).points)
+            // Buffer path, flush on debounce timer
+            pathBuf.current = (msg as { type: 'path'; points: PathPoint[] }).points
+            pathDirty.current = true
           } else if (msg.type === 'scan') {
-            setScanPoints((msg as { type: 'scan'; points: PathPoint[] }).points)
+            // Buffer scan, flush on debounce timer
+            scanBuf.current = (msg as { type: 'scan'; points: PathPoint[] }).points
+            scanDirty.current = true
           } else if (msg.type === 'map_update') {
             setMapData(msg as unknown as MapUpdate)
           } else if (msg.type === 'acc_map') {

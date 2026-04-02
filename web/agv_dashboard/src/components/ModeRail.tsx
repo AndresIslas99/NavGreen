@@ -10,6 +10,7 @@ const MODES: { key: ModeRailType; icon: string; label: string }[] = [
   { key: 'map', icon: '🗺', label: 'Map' },
   { key: 'missions', icon: '📋', label: 'Missions' },
   { key: 'recovery', icon: '🔧', label: 'Recovery' },
+  { key: 'analytics', icon: '📊', label: 'Analytics' },
 ]
 
 export function ModeRail({ active, onChange }: Props) {

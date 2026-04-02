@@ -13,7 +13,7 @@ export type RobotState =
   | 'e_stop'
   | 'fault'
 
-export type ModeRail = 'operate' | 'map' | 'missions' | 'recovery'
+export type ModeRail = 'operate' | 'map' | 'missions' | 'recovery' | 'analytics'
 
 // ---------------------------------------------------------------------------
 // Allowed actions (computed by backend)
@@ -158,3 +158,73 @@ export type WsMessage =
   | ({ type: 'acc_map' } & MapUpdate)
   | ({ type: 'event' } & LogEntry)
   | { type: 'recording_result'; success: boolean; message: string }
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+export interface AnalyticsSummary {
+  uptime_pct: number
+  distance_m: number
+  mission_success_rate: number
+  mission_count: number
+  avg_mission_duration_s: number
+  avg_odom_hz: number
+  min_odom_hz: number
+  max_odom_hz: number
+  slam_good_pct: number
+}
+
+export interface TimeseriesPoint {
+  timestamp: number
+  value: number
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export interface AuthStatus {
+  enabled: boolean
+}
+
+export interface AuthSession {
+  token: string
+  username: string
+  role: 'viewer' | 'operator' | 'engineer'
+}
+
+// ---------------------------------------------------------------------------
+// Traffic zones
+// ---------------------------------------------------------------------------
+
+export interface TrafficZone {
+  id: string
+  type: 'exclusion' | 'one_way' | 'yield'
+  polygon: Array<{ x: number; y: number }>
+  direction?: number
+  directionTolerance?: number
+  maxRobots: number
+  priority?: number
+}
+
+export interface ZoneOccupancy {
+  zoneId: string
+  robotIds: string[]
+  waitingRobots: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Mission run (analytics)
+// ---------------------------------------------------------------------------
+
+export interface MissionRun {
+  id: string
+  mission_id: string
+  mission_name: string
+  started: number
+  ended: number | null
+  status: string
+  nodes_completed: number
+  total_nodes: number
+}

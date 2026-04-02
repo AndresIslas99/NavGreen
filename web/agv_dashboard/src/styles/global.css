@@ -608,3 +608,331 @@ input.full-width {
     box-shadow: -4px 0 12px rgba(0,0,0,0.4);
   }
 }
+
+/* ISA-101 SLAM badge colors */
+.slam-badge { font-size: 0.7rem; padding: 1px 5px; border-radius: 3px; }
+.slam-ok { color: var(--normal); }
+.slam-warn { color: var(--orange); }
+.slam-unknown { color: var(--dim); }
+
+/* ISA-101 metric label */
+.metric-label { color: var(--dim); font-size: 0.65rem; margin-right: 3px; text-transform: uppercase; }
+
+/* Focus-visible for accessibility (ISA-101 / ISA TR101.02-2019) */
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Active blue for subtle active-state backgrounds */
+:root {
+  --active-blue: rgba(30, 136, 229, 0.12);
+}
+
+/* Analytics panel */
+.analytics-panel { overflow-y: auto; }
+.analytics-loading { color: var(--dim); text-align: center; padding: 2rem 0; }
+.analytics-error {
+  color: var(--orange); font-size: 0.8rem; text-align: center; padding: 1rem 0;
+  line-height: 1.4;
+}
+.analytics-empty {
+  color: var(--dim); font-size: 0.8rem; text-align: center; padding: 1rem 0;
+  line-height: 1.4;
+}
+
+.period-btns { display: flex; gap: 4px; }
+.period-btn {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--normal-bg);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.period-btn-active {
+  background: var(--active-blue);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.kpi-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+}
+.kpi-value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.kpi-label {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.section-subtitle {
+  font-size: 0.65rem;
+  color: var(--dim);
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+/* Mission error feedback */
+.mission-error { color: var(--red); font-size: 0.7rem; display: block; margin-top: 4px; }
+
+/* Traffic zone editor */
+.traffic-zone-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+.traffic-zone-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.traffic-zone-info { flex: 1; min-width: 0; }
+.traffic-zone-name { display: block; font-size: 0.75rem; color: var(--text); }
+.traffic-zone-detail { display: block; font-size: 0.6rem; color: var(--dim); }
+
+/* Mission editor enhancements */
+.template-row { display: flex; gap: 4px; margin: 6px 0; }
+.waypoint-list { max-height: 150px; overflow-y: auto; margin: 6px 0; }
+.waypoint-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 0; font-size: 0.75rem; color: var(--dim);
+}
+.wp-idx { color: #ff9800; font-weight: 600; min-width: 16px; }
+.wp-coord { flex: 1; }
+.wp-action-badge {
+  font-size: 0.6rem; background: var(--active-blue); color: var(--blue);
+  padding: 1px 5px; border-radius: 3px;
+}
+.wp-edit-btn {
+  background: none; border: none; color: var(--dim); cursor: pointer;
+  padding: 2px 6px; font-size: 0.75rem;
+}
+.wp-edit-btn:hover { color: var(--text); }
+.node-edit-dialog {
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; padding: 8px; margin: 6px 0;
+}
+.pause-input { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 0.75rem; }
+.pause-input input { width: 60px; }
+.mission-detail { margin: 4px 0 4px 8px; }
+.mission-detail-node {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 0; font-size: 0.7rem; color: var(--dim);
+}
+
+/* Replay panel */
+.replay-panel {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 26, 46, 0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 320px;
+  z-index: 20;
+}
+.replay-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.replay-title { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.replay-range-btns { display: flex; gap: 3px; }
+.replay-timeline { width: 100%; height: 16px; border-radius: 3px; display: block; }
+.replay-slider {
+  width: 100%;
+  margin: 6px 0;
+  accent-color: var(--blue);
+}
+.replay-info {
+  display: flex;
+  gap: 12px;
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+.replay-time { color: var(--text); font-weight: 500; }
+.replay-state { font-weight: 500; }
+
+/* Mission history in analytics */
+.mission-history { max-height: 120px; overflow-y: auto; }
+.mission-history-row { display: flex; gap: 8px; font-size: 0.7rem; padding: 2px 0; align-items: center; }
+.mh-name { flex: 1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mh-status { font-weight: 500; min-width: 50px; }
+.mh-nodes { color: var(--dim); }
+.mh-dur { color: var(--dim); }
+
+/* Leaflet map container */
+.map-leaflet {
+  width: 100%;
+  height: 100%;
+  background: #1a1a2e;
+}
+.map-leaflet .leaflet-tile-pane { filter: none; }
+
+/* Robot marker */
+.robot-marker { background: none !important; border: none !important; }
+.robot-arrow {
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 20px solid #4caf50;
+  transform-origin: center center;
+  filter: drop-shadow(0 0 3px rgba(76,175,80,0.6));
+}
+
+/* Waypoint tooltip */
+.waypoint-tooltip {
+  background: rgba(255,152,0,0.9) !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: bold;
+  font-size: 11px;
+  padding: 2px 6px !important;
+  border-radius: 3px;
+}
+
+/* Map button active state */
+.map-btn-active {
+  background: var(--active-blue) !important;
+  border-color: var(--blue) !important;
+}
+
+/* Fleet overlay */
+.fleet-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(26, 26, 46, 0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 160px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 15;
+}
+.fleet-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.fleet-title { font-size: 0.75rem; font-weight: 600; color: var(--text); }
+.fleet-conn-dot { width: 8px; height: 8px; border-radius: 50%; }
+.fleet-list { display: flex; flex-direction: column; gap: 2px; }
+.fleet-robot-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 4px; cursor: pointer;
+  transition: background 0.1s;
+}
+.fleet-robot-row:hover { background: rgba(255,255,255,0.05); }
+.fleet-robot-selected { background: var(--active-blue) !important; }
+.fleet-robot-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fleet-robot-info { flex: 1; min-width: 0; }
+.fleet-robot-name { display: block; font-size: 0.7rem; color: var(--text); font-weight: 500; }
+.fleet-robot-detail { display: block; font-size: 0.6rem; color: var(--dim); }
+.fleet-error-badge {
+  background: var(--red); color: #fff; font-size: 0.55rem;
+  padding: 0 4px; border-radius: 3px; margin-left: 4px;
+}
+.fleet-robot-battery { font-size: 0.65rem; color: var(--dim); }
+
+/* Fleet robot markers on map */
+.fleet-marker { background: none !important; border: none !important; }
+.fleet-arrow {
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 14px solid #2196f3;
+  transform-origin: center center;
+  opacity: 0.8;
+}
+.fleet-arrow-error { border-bottom-color: #f44336; }
+.fleet-arrow-offline { border-bottom-color: #616161; opacity: 0.4; }
+
+/* Login page */
+.login-page {
+  display: flex; align-items: center; justify-content: center;
+  width: 100vw; height: 100vh; background: #1a1a2e;
+}
+.login-form {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 32px; width: 300px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.login-title { text-align: center; color: var(--text); margin: 0 0 8px 0; font-size: 1.2rem; }
+.login-form input {
+  padding: 10px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px; color: var(--text); font-size: 0.9rem;
+}
+.login-form button {
+  padding: 10px; background: var(--blue); color: #fff; border: none;
+  border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;
+}
+.login-form button:disabled { opacity: 0.5; cursor: default; }
+.login-error { color: var(--red); font-size: 0.8rem; text-align: center; }
+
+/* User badge in topbar */
+.user-badge {
+  font-size: 0.65rem; color: var(--dim); margin-right: 8px;
+}
+.user-badge .user-role { color: var(--blue); margin-left: 4px; }
+.logout-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--dim);
+  font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-right: 4px;
+}
+
+/* Clear button in event log */
+.log-clear {
+  background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--dim);
+  font-size: 0.65rem; padding: 2px 8px; border-radius: 3px; cursor: pointer;
+}
+.log-clear:hover { color: var(--red); border-color: var(--red); }
+
+/* Camera PIP */
+.camera-pip {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 200px;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: #111;
+  cursor: pointer;
+  z-index: 15;
+  transition: width 0.2s, height 0.2s;
+}
+.camera-pip-expanded {
+  width: 400px;
+  height: 300px;
+}
+.camera-pip-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.camera-snapshot-btn {
+  position: absolute; top: 4px; right: 4px;
+  background: rgba(0,0,0,0.6); border: none; color: #fff;
+  width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+.camera-snapshot-btn:hover { background: rgba(0,0,0,0.8); }
+.camera-pip-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+  font-size: 0.75rem;
+}

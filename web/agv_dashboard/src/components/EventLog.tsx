@@ -3,6 +3,7 @@ import type { LogEntry } from '../api/types'
 
 interface Props {
   entries: LogEntry[]
+  onClear?: () => void
 }
 
 type Filter = 'all' | 'warn' | 'crit'
@@ -19,7 +20,7 @@ const SEV_STYLE: Record<string, React.CSSProperties> = {
   crit: { background: 'rgba(211,47,47,0.15)', color: 'var(--red)' },
 }
 
-export function EventLog({ entries }: Props) {
+export function EventLog({ entries, onClear }: Props) {
   const [filter, setFilter] = useState<Filter>('all')
   const [expanded, setExpanded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -45,6 +46,9 @@ export function EventLog({ entries }: Props) {
             onClick={() => setFilter('crit')}>Crit</button>
         </div>
         <span className="log-count">{filtered.length}</span>
+        {onClear && (
+          <button className="log-clear" onClick={onClear} title="Clear events">Clear</button>
+        )}
         <button className="log-expand" onClick={() => setExpanded(!expanded)}>
           {expanded ? '▼' : '▲'}
         </button>
