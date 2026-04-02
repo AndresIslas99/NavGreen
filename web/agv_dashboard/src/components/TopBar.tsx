@@ -6,6 +6,9 @@ interface Props {
   connected: boolean
   onEStop: (active: boolean) => void
   onNavCancel: () => void
+  username?: string
+  userRole?: string
+  onLogout?: () => void
 }
 
 // ISA-101: Gray for normal. Color only for abnormalities.
@@ -45,7 +48,14 @@ function stateBadgeStyle(state: RobotState): React.CSSProperties {
   }
 }
 
-export function TopBar({ status, state, connected, onEStop, onNavCancel }: Props) {
+function slamColor(tracking: string): string {
+  if (tracking === 'good') return 'ok'
+  if (tracking === 'low' || tracking === 'medium') return 'warn'
+  if (tracking === 'unknown') return 'unknown'
+  return 'warn'
+}
+
+export function TopBar({ status, state, connected, onEStop, onNavCancel, username, userRole, onLogout }: Props) {
   const s = status
   const navActive = s?.nav_state?.active || false
   const mp = s?.mission_progress
@@ -76,12 +86,32 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel }: Props
             </span>
             <span className="metric-sep">|</span>
             <span className="metric">
+              <span className="metric-label">SLAM</span>
+              <span className={`metric-value slam-badge slam-${slamColor(s.slam_tracking)}`}>
+                {s.slam_tracking || 'N/A'}
+              </span>
+            </span>
+            <span className="metric-sep">|</span>
+            <span className="metric">
+              <span className="metric-label">BAT</span>
+              <span className="metric-value" style={{ color: 'var(--dim)' }}>N/A</span>
+            </span>
+            <span className="metric-sep">|</span>
+            <span className="metric">
               <span className="metric-value">({s.pose.x.toFixed(1)}, {s.pose.y.toFixed(1)})</span>
             </span>
           </div>
         )}
 
         <div className="top-actions">
+          {username && (
+            <>
+              <span className="user-badge">
+                {username}<span className="user-role">{userRole}</span>
+              </span>
+              {onLogout && <button className="logout-btn" onClick={onLogout}>Logout</button>}
+            </>
+          )}
           <span className="conn-dot" style={{ color: connColor }}>
             <span className="conn-circle" style={{ background: connColor }} />
             {connText}

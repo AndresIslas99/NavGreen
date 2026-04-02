@@ -12,10 +12,13 @@ export interface LogEntry {
 
 const MAX_EVENTS = 500;
 
+export type EventListener = (entry: LogEntry) => void;
+
 export class EventLog {
   private entries: LogEntry[] = [];
   private filePath: string;
   private pending: LogEntry[] = []; // events to push to WS clients
+  private listeners: EventListener[] = [];
 
   constructor(dataDir: string) {
     this.filePath = path.join(dataDir, 'events.jsonl');
@@ -53,7 +56,16 @@ export class EventLog {
       fs.appendFileSync(this.filePath, JSON.stringify(entry) + '\n');
     } catch { /* ignore */ }
 
+    // Notify listeners (e.g., telemetry store)
+    for (const listener of this.listeners) {
+      try { listener(entry); } catch { /* ignore */ }
+    }
+
     return entry;
+  }
+
+  onEvent(listener: EventListener): void {
+    this.listeners.push(listener);
   }
 
   getEntries(limit = 100, offset = 0): LogEntry[] {
