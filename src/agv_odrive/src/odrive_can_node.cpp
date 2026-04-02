@@ -154,6 +154,13 @@ void ODriveCANNode::encoder_request_loop() {
 
   can_->send_rtr(make_arb_id(left_axis_id_, cmd::GET_ENCODER_ESTIMATES));
   can_->send_rtr(make_arb_id(right_axis_id_, cmd::GET_ENCODER_ESTIMATES));
+
+  // Request temperature and voltage at 1Hz (every 10th call at 10Hz)
+  if (++diag_counter_ % 10 == 0) {
+    can_->send_rtr(make_arb_id(left_axis_id_, cmd::GET_TEMPERATURE));
+    can_->send_rtr(make_arb_id(right_axis_id_, cmd::GET_TEMPERATURE));
+    can_->send_rtr(make_arb_id(left_axis_id_, cmd::GET_VBUS_VOLTAGE));
+  }
 }
 
 // ── Read CAN messages ──
@@ -189,9 +196,26 @@ void ODriveCANNode::read_can_messages() {
       }
       case cmd::GET_ENCODER_ESTIMATES: {
         auto enc = EncoderMsg::parse(frame.data);
+        if (!enc.valid) {
+          RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "ODrive node %d: NaN/Inf in encoder feedback — ignoring", node_id);
+          break;
+        }
         double sign = (node_id == left_axis_id_) ? left_sign_ : right_sign_;
         axis->position = enc.position * sign;
         axis->velocity = enc.velocity * sign;
+        break;
+      }
+      case cmd::GET_TEMPERATURE: {
+        auto temp = TemperatureMsg::parse(frame.data);
+        axis->fet_temp = temp.fet_temperature;
+        axis->motor_temp = temp.motor_temperature;
+        break;
+      }
+      case cmd::GET_VBUS_VOLTAGE: {
+        auto vbus = VbusMsg::parse(frame.data);
+        bus_voltage_ = vbus.voltage;
+        bus_current_ = vbus.current;
         break;
       }
       default:
@@ -419,11 +443,17 @@ bool ODriveCANNode::motors_armed() const {
 
 void ODriveCANNode::publish_motor_state() {
   std_msgs::msg::String msg;
-  char buf[256];
+  char buf[512];
   std::snprintf(buf, sizeof(buf),
-    R"({"left_state":%d,"right_state":%d,"left_errors":%u,"right_errors":%u,"armed":%s})",
+    R"({"left_state":%d,"right_state":%d,"left_errors":%u,"right_errors":%u,"armed":%s,)"
+    R"("bus_voltage":%.2f,"bus_current":%.2f,)"
+    R"("left_fet_temp":%.1f,"left_motor_temp":%.1f,)"
+    R"("right_fet_temp":%.1f,"right_motor_temp":%.1f})",
     left_.state, right_.state, left_.errors, right_.errors,
-    motors_armed() ? "true" : "false");
+    motors_armed() ? "true" : "false",
+    bus_voltage_, bus_current_,
+    static_cast<double>(left_.fet_temp), static_cast<double>(left_.motor_temp),
+    static_cast<double>(right_.fet_temp), static_cast<double>(right_.motor_temp));
   msg.data = buf;
   pub_motor_state_->publish(msg);
 }

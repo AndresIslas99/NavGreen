@@ -52,7 +52,12 @@ let odomTimes: number[] = [];
 let currentMode = 'teleop';
 let navActive = false;
 let navStatus = 'idle';
-let headerId = 0;
+// Per-topic header IDs (VDA 5050 requires incrementing per topic, not globally)
+const headerIds: Record<string, number> = {
+  state: 0,
+  visualization: 0,
+  connection: 0,
+};
 
 // VDA 5050 order state
 let currentOrderId = '';
@@ -64,9 +69,10 @@ let edgeStates: EdgeState[] = [];
 let actionStates: ActionState[] = [];
 let errors: AgvError[] = [];
 
-function nextHeader(): { headerId: number; timestamp: string; version: string; manufacturer: string; serialNumber: string } {
+function nextHeader(topic: string = 'state'): { headerId: number; timestamp: string; version: string; manufacturer: string; serialNumber: string } {
+  if (!(topic in headerIds)) headerIds[topic] = 0;
   return {
-    headerId: headerId++,
+    headerId: headerIds[topic]++,
     timestamp: new Date().toISOString(),
     version: VDA_VERSION,
     manufacturer: MANUFACTURER,
@@ -112,7 +118,7 @@ async function main() {
     will: {
       topic: `${TOPIC_PREFIX}/connection`,
       payload: JSON.stringify({
-        ...nextHeader(),
+        ...nextHeader('connection'),
         connectionState: 'CONNECTIONBROKEN',
       }),
       qos: 1,
@@ -123,15 +129,23 @@ async function main() {
   mqttClient.on('connect', () => {
     console.log(`VDA 5050 adapter connected to ${MQTT_BROKER}`);
 
-    // Subscribe to incoming topics
-    mqttClient.subscribe(`${TOPIC_PREFIX}/order`, { qos: 1 });
-    mqttClient.subscribe(`${TOPIC_PREFIX}/instantActions`, { qos: 1 });
+    // Subscribe FIRST, then publish ONLINE after subscriptions confirmed
+    // This prevents race where orders arrive before we're ready
+    let subsConfirmed = 0;
+    const onSubConfirmed = () => {
+      subsConfirmed++;
+      if (subsConfirmed === 2) {
+        // Both subscriptions confirmed — now publish ONLINE
+        mqttClient.publish(`${TOPIC_PREFIX}/connection`, JSON.stringify({
+          ...nextHeader('connection'),
+          connectionState: 'ONLINE',
+        } satisfies Connection), { qos: 1, retain: true });
+        console.log('VDA 5050: subscriptions confirmed, published ONLINE');
+      }
+    };
 
-    // Publish initial connection state
-    mqttClient.publish(`${TOPIC_PREFIX}/connection`, JSON.stringify({
-      ...nextHeader(),
-      connectionState: 'ONLINE',
-    } satisfies Connection), { qos: 1, retain: true });
+    mqttClient.subscribe(`${TOPIC_PREFIX}/order`, { qos: 1 }, onSubConfirmed);
+    mqttClient.subscribe(`${TOPIC_PREFIX}/instantActions`, { qos: 1 }, onSubConfirmed);
   });
 
   mqttClient.on('error', (err) => {
@@ -382,7 +396,7 @@ async function main() {
   // State at 1Hz
   setInterval(() => {
     const state: AgvState = {
-      ...nextHeader(),
+      ...nextHeader('state'),
       orderId: currentOrderId,
       orderUpdateId: currentOrderUpdateId,
       lastNodeId,
@@ -411,7 +425,7 @@ async function main() {
   // Visualization at 5Hz
   setInterval(() => {
     const viz: Visualization = {
-      ...nextHeader(),
+      ...nextHeader('visualization'),
       agvPosition: robotPose,
       velocity: robotVelocity,
     };
@@ -421,7 +435,7 @@ async function main() {
   // Connection heartbeat
   setInterval(() => {
     mqttClient.publish(`${TOPIC_PREFIX}/connection`, JSON.stringify({
-      ...nextHeader(),
+      ...nextHeader('visualization'),
       connectionState: 'ONLINE',
     } satisfies Connection), { qos: 1, retain: true });
   }, CONNECTION_INTERVAL_MS);

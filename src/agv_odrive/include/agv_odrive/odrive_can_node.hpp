@@ -62,6 +62,8 @@ private:
     uint32_t errors = 0;
     bool heartbeat_received = false;
     float prev_cmd = 0.0f;  // previous commanded velocity for accel limiting
+    float fet_temp = 0.0f;      // FET temperature °C
+    float motor_temp = 0.0f;    // Motor temperature °C
   };
   AxisData left_;
   AxisData right_;
@@ -82,6 +84,11 @@ private:
 
   // -- cmd_vel timeout --
   rclcpp::Time last_cmd_vel_time_;
+
+  // -- Bus state --
+  double bus_voltage_ = 0.0;
+  double bus_current_ = 0.0;
+  int diag_counter_ = 0;
 
   // -- Drive debug state (for drive_debug topic) --
   double last_linear_cmd_   = 0.0;
