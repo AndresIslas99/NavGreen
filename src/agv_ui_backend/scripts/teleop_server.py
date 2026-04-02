@@ -1134,6 +1134,40 @@ def create_app(node: OperatorNode) -> FastAPI:
         return {'success': True}
 
     # =======================================================================
+    # Analytics stubs (full implementation in TypeScript backend)
+    # =======================================================================
+
+    @app.get("/api/analytics/summary")
+    async def analytics_summary(period: str = '24h'):
+        """Stub — returns zeros. Use TypeScript backend for real telemetry."""
+        return {
+            'uptime_pct': 0, 'distance_m': 0, 'mission_success_rate': 0,
+            'mission_count': 0, 'avg_mission_duration_s': 0,
+            'avg_odom_hz': 0, 'min_odom_hz': 0, 'max_odom_hz': 0,
+            'slam_good_pct': 0,
+        }
+
+    @app.get("/api/analytics/timeseries")
+    async def analytics_timeseries(metric: str = 'odom_hz'):
+        return []
+
+    @app.get("/api/analytics/missions")
+    async def analytics_missions():
+        return []
+
+    @app.get("/api/replay/samples")
+    async def replay_samples():
+        return []
+
+    @app.get("/api/replay/events")
+    async def replay_events():
+        return []
+
+    @app.get("/api/auth/status")
+    async def auth_status():
+        return {'enabled': False}
+
+    # =======================================================================
     # WebSocket — legacy teleop
     # =======================================================================
 

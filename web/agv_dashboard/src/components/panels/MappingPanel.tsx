@@ -71,6 +71,12 @@ export function MappingPanel({ state, actions, motorsArmed, onModeChange, onReco
           </button>
         )}
         {state === 'mapping' && <div className="recording-indicator">Mapping active</div>}
+        {state === 'mapping' && (
+          <button className="full-width secondary" style={{ marginTop: 6 }}
+            onClick={() => fetch('/api/acc_map', { method: 'DELETE' })}>
+            Clear Scan Map
+          </button>
+        )}
       </div>
 
       {/* Joystick — always available in mapping mode */}
