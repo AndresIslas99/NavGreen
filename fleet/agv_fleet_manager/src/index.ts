@@ -175,10 +175,23 @@ setInterval(() => {
   const now = Date.now();
   for (const [key, robot] of fleet) {
     if (now - robot.lastSeen > 60000) {
-      robot.connectionState = 'CONNECTIONBROKEN';
+      if (robot.connectionState !== 'CONNECTIONBROKEN') {
+        robot.connectionState = 'CONNECTIONBROKEN';
+        // Remove disconnected robot from traffic zones
+        trafficManager.removeRobot(key);
+      }
     }
   }
 }, 30000);
+
+// Deadlock detection every 10s
+setInterval(() => {
+  const deadlocked = trafficManager.detectDeadlocks();
+  if (deadlocked.length > 0) {
+    console.warn(`Deadlock detected: ${deadlocked.join(', ')}`);
+    trafficManager.resolveDeadlock(deadlocked);
+  }
+}, 10000);
 
 // ---------------------------------------------------------------------------
 // Fleet order dispatch

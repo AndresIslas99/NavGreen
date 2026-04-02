@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <string>
 
 namespace agv_odrive {
@@ -93,11 +94,37 @@ struct HeartbeatMsg {
 struct EncoderMsg {
   float position;  // turns
   float velocity;  // turns/s
+  bool valid;      // false if NaN/Inf detected
 
   static EncoderMsg parse(const uint8_t* data) {
     EncoderMsg msg{};
     std::memcpy(&msg.position, &data[0], 4);
     std::memcpy(&msg.velocity, &data[4], 4);
+    msg.valid = std::isfinite(msg.position) && std::isfinite(msg.velocity);
+    return msg;
+  }
+};
+
+struct TemperatureMsg {
+  float fet_temperature;    // °C
+  float motor_temperature;  // °C
+
+  static TemperatureMsg parse(const uint8_t* data) {
+    TemperatureMsg msg{};
+    std::memcpy(&msg.fet_temperature, &data[0], 4);
+    std::memcpy(&msg.motor_temperature, &data[4], 4);
+    return msg;
+  }
+};
+
+struct VbusMsg {
+  float voltage;  // V
+  float current;  // A
+
+  static VbusMsg parse(const uint8_t* data) {
+    VbusMsg msg{};
+    std::memcpy(&msg.voltage, &data[0], 4);
+    std::memcpy(&msg.current, &data[4], 4);
     return msg;
   }
 };
