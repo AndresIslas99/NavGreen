@@ -1,0 +1,20 @@
+# AGV MQTT Broker (Mosquitto via Docker)
+# Install: sudo cp agv-mosquitto.service /etc/systemd/system/
+# Enable:  sudo systemctl enable agv-mosquitto
+# Start:   sudo systemctl start agv-mosquitto
+
+[Unit]
+Description=AGV MQTT Broker (Mosquitto)
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/orza/ros2_ws/fleet
+ExecStart=/usr/bin/docker compose up mosquitto
+ExecStop=/usr/bin/docker compose stop mosquitto
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

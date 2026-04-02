@@ -1,0 +1,23 @@
+# AGV VDA 5050 Adapter — ROS2 to MQTT bridge (runs on each robot)
+# Install: sudo cp agv-vda5050-adapter.service /etc/systemd/system/
+# Enable:  sudo systemctl enable agv-vda5050-adapter
+# Start:   sudo systemctl start agv-vda5050-adapter
+
+[Unit]
+Description=AGV VDA 5050 Adapter
+After=network.target agv-mosquitto.service
+
+[Service]
+Type=simple
+User=orza
+WorkingDirectory=/home/orza/ros2_ws/fleet/agv_vda5050_adapter
+ExecStart=/usr/bin/node dist/index.js
+Environment="VDA_MQTT_BROKER=mqtt://localhost:1883"
+Environment="VDA_MANUFACTURER=agv-greenhouse"
+Environment="VDA_SERIAL_NUMBER=agv-001"
+Environment="AGV_NAMESPACE=agv"
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
