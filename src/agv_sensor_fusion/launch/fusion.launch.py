@@ -55,4 +55,19 @@ def generate_launch_description():
             ],
             output='screen',
         ),
+
+        # ── Fusion monitor: /agv/pose publisher + localization diagnostics ──
+        Node(
+            package='agv_sensor_fusion',
+            executable='fusion_monitor_node',
+            name='fusion_monitor',
+            namespace=LaunchConfiguration('namespace'),
+            parameters=[{
+                'pose_rate_hz': 10.0,
+                'covariance_warn_threshold': 0.5,
+                'covariance_error_threshold': 2.0,
+                'stale_timeout_s': 2.0,
+            }],
+            output='screen',
+        ),
     ])
