@@ -45,7 +45,7 @@
                   false, false, false,     # vx, vy, vz
                   true,  true,  true,      # vroll, vpitch, vyaw
                   true,  true,  false]     # ax, ay, az
-    imu0_differential: false
+    imu0_differential: true
     imu0_relative: false
     imu0_remove_gravitational_acceleration: true
     imu0_queue_size: 50

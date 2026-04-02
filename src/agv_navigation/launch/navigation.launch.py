@@ -29,6 +29,9 @@ def _build_nav2(context, *args, **kwargs):
     use_sim_time = use_sim_time_str.lower() in ('true', '1', 'yes')
     map_yaml = LaunchConfiguration('map').perform(context)
     nav2_params_path = LaunchConfiguration('nav2_params').perform(context)
+    nav_dir = get_package_share_directory('agv_navigation')
+    vel_smoother_params = os.path.join(nav_dir, 'config', 'velocity_smoother.yaml')
+    collision_monitor_params = os.path.join(nav_dir, 'config', 'collision_monitor.yaml')
 
     lifecycle_nodes = [
         'map_server',
@@ -36,6 +39,8 @@ def _build_nav2(context, *args, **kwargs):
         'planner_server',
         'behavior_server',
         'bt_navigator',
+        'velocity_smoother',
+        'collision_monitor',
     ]
 
     return [GroupAction(
@@ -89,6 +94,28 @@ def _build_nav2(context, *args, **kwargs):
                 executable='bt_navigator',
                 name='bt_navigator',
                 parameters=[nav2_params_path, {'use_sim_time': use_sim_time}],
+                output='screen',
+            ),
+
+            # Velocity smoother (cmd_vel → cmd_vel_smoothed)
+            Node(
+                package='nav2_velocity_smoother',
+                executable='velocity_smoother',
+                name='velocity_smoother',
+                parameters=[vel_smoother_params, {'use_sim_time': use_sim_time}],
+                output='screen',
+                remappings=[
+                    ('cmd_vel', 'cmd_vel'),
+                    ('cmd_vel_smoothed', 'cmd_vel_smoothed'),
+                ],
+            ),
+
+            # Collision monitor (cmd_vel_smoothed → cmd_vel_safe)
+            Node(
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
+                parameters=[collision_monitor_params, {'use_sim_time': use_sim_time}],
                 output='screen',
             ),
 
