@@ -41,7 +41,7 @@ export interface AppState {
 
 export interface RosBridge {
   sendCmdVel(linear: number, angular: number): void;
-  sendNavGoal(x: number, y: number, theta: number): Promise<{ success: boolean; message: string }>;
+  sendNavGoal(x: number, y: number, theta: number): { success: boolean; message: string };
   cancelNavGoal(): void;
   sendEStop(active: boolean): void;
   sendMotorEnable(active: boolean): void;

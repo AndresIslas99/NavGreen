@@ -98,7 +98,7 @@ export class ScanAccumulator {
 
   async updatePng(): Promise<void> {
     if (!this.changed) return;
-    this.changed = false;
+    // Don't reset changed here — WS loop resets after broadcasting
 
     const sz = this.size;
     const pixels = Buffer.alloc(sz * sz);
