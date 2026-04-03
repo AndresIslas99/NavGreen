@@ -14,6 +14,7 @@ export function useWebSocket() {
   const [mapData, setMapData] = useState<MapUpdate | null>(null)
   const [accMapData, setAccMapData] = useState<MapUpdate | null>(null)
   const [events, setEvents] = useState<LogEntry[]>([])
+  const [recordingResult, setRecordingResult] = useState<{ success: boolean; message: string } | null>(null)
 
   // High-frequency data stored in refs, flushed to state on debounce timer
   const scanBuf = useRef<PathPoint[]>([])
@@ -94,6 +95,9 @@ export function useWebSocket() {
           } else if (msg.type === 'event') {
             const entry = msg as unknown as LogEntry
             setEvents(prev => [entry, ...prev].slice(0, 500))
+          } else if (msg.type === 'recording_result') {
+            setRecordingResult({ success: msg.success, message: msg.message })
+            setTimeout(() => setRecordingResult(null), 5000) // clear after 5s
           }
         } catch { /* ignore */ }
       }
@@ -113,5 +117,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { connected, status, path, scanPoints, mapData, accMapData, events, send }
+  return { connected, status, path, scanPoints, mapData, accMapData, events, recordingResult, send }
 }
