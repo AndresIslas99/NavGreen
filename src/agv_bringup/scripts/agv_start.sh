@@ -11,8 +11,9 @@
 #        Environment=AGV_MODE=real
 #        Environment=AGV_MAP=/path/to/greenhouse.yaml
 
-set -euo pipefail
+set -eo pipefail
 
+# ROS2 setup.bash references unset variables — -u would fail on AMENT_TRACE_SETUP_FILES
 source /opt/ros/humble/setup.bash
 source /home/orza/ros2_ws/install/setup.bash
 

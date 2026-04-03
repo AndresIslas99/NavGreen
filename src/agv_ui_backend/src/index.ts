@@ -631,11 +631,19 @@ async function main() {
     app.use('/dashboard', express.static(dashboardDir));
   }
 
-  // Serve legacy teleop
-  const staticDir = path.resolve(__dirname, '../static');
-  if (fs.existsSync(staticDir)) {
-    app.get('/', (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
-  }
+  // Root redirect to dashboard
+  app.get('/', (_req, res) => {
+    if (fs.existsSync(dashboardDir)) {
+      res.redirect('/dashboard');
+    } else {
+      const staticDir = path.resolve(__dirname, '../static');
+      if (fs.existsSync(staticDir)) {
+        res.sendFile(path.join(staticDir, 'index.html'));
+      } else {
+        res.status(404).send('Dashboard not built. Run: cd web/agv_dashboard && npm run build');
+      }
+    }
+  });
 
   // Auth endpoints (P2.6)
   app.get('/api/auth/status', (_req, res) => {
