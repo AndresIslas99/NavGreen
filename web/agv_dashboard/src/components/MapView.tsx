@@ -123,6 +123,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   }, [mode, onGoalClick])
 
   // Update map image overlay
+  const isAccMap = useRef(false)
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapData?.png_base64) return
@@ -131,6 +132,9 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const southWest = worldToLatLng(origin_x, origin_y)
     const northEast = worldToLatLng(origin_x + width * resolution, origin_y + height * resolution)
     const bounds = L.latLngBounds(southWest, northEast)
+
+    // Detect accumulated map (large grid centered at origin, typically 500x500)
+    const isAccumulatedMap = width >= 400 && Math.abs(origin_x + (width * resolution / 2)) < 1
 
     const imageUrl = `data:image/png;base64,${mapData.png_base64}`
 
@@ -141,8 +145,15 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       const overlay = L.imageOverlay(imageUrl, bounds, { opacity: 0.9 }).addTo(map)
       imageLayerRef.current = overlay
 
-      // Fit map to image bounds on first load
-      map.fitBounds(bounds)
+      if (isAccumulatedMap) {
+        // Acc map: zoom to robot position, not full 50m grid
+        isAccMap.current = true
+        map.setView(worldToLatLng(pose.x, pose.y), 3)
+      } else {
+        // Static navigation map: fit to map bounds
+        isAccMap.current = false
+        map.fitBounds(bounds)
+      }
     }
   }, [mapData])
 
