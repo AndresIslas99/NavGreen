@@ -1,0 +1,33 @@
+# Scan-based occupancy grid mapper parameters
+#
+# Builds a 2D occupancy grid from LaserScan data using Bayesian log-odds update.
+# Used during mapping commissioning — the output can be saved with map_saver_cli.
+
+/**/scan_grid_mapper:
+  ros__parameters:
+    # Grid dimensions
+    resolution: 0.05          # meters per cell (5cm, matches Nav2 costmap)
+    width: 400                # cells (400 × 0.05 = 20m)
+    height: 400               # cells
+    origin_x: -10.0           # meters (grid starts at -10m)
+    origin_y: -10.0           # meters
+
+    # Publishing
+    publish_rate_hz: 1.0      # OccupancyGrid publish rate
+    map_frame: "map"          # frame_id for the published map
+
+    # Log-odds update parameters
+    l_occupied: 0.85          # log-odds increase for occupied evidence
+    l_free: -0.4              # log-odds decrease for free evidence (ray pass-through)
+    l_min: -5.0               # clamp minimum (prevents overconfidence in free)
+    l_max: 5.0                # clamp maximum (prevents overconfidence in occupied)
+
+    # Thresholds for OccupancyGrid values
+    occupied_threshold: 0.65  # probability above this → occupied (100)
+    free_threshold: 0.35      # probability below this → free (0)
+    # Between thresholds → scaled value [1-99]
+    # Untouched cells (log-odds ≈ 0) → unknown (-1)
+
+    # Scan processing
+    max_range: 8.0            # ignore rays beyond this (meters)
+    min_range: 0.3            # ignore rays closer than this
