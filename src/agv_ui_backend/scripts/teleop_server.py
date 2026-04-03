@@ -822,6 +822,10 @@ def create_app(node: OperatorNode) -> FastAPI:
 
     @app.get("/")
     async def index():
+        # Redirect root to React dashboard (production UI)
+        if dashboard_dir and dashboard_dir.is_dir():
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url="/dashboard")
         return FileResponse(static_dir / "index.html")
 
     # =======================================================================
