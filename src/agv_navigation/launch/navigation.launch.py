@@ -29,9 +29,15 @@ def _build_nav2(context, *args, **kwargs):
     use_sim_time = use_sim_time_str.lower() in ('true', '1', 'yes')
     map_yaml = LaunchConfiguration('map').perform(context)
     nav2_params_path = LaunchConfiguration('nav2_params').perform(context)
+    nav2_override_path = LaunchConfiguration('nav2_params_override').perform(context)
     nav_dir = get_package_share_directory('agv_navigation')
     vel_smoother_params = os.path.join(nav_dir, 'config', 'velocity_smoother.yaml')
     collision_monitor_params = os.path.join(nav_dir, 'config', 'collision_monitor.yaml')
+
+    # Build nav2 params list: base + optional override
+    nav2_params_list = [nav2_params_path]
+    if nav2_override_path and os.path.isfile(nav2_override_path):
+        nav2_params_list.append(nav2_override_path)
 
     lifecycle_nodes = [
         'map_server',
@@ -65,7 +71,7 @@ def _build_nav2(context, *args, **kwargs):
                 package='nav2_controller',
                 executable='controller_server',
                 name='controller_server',
-                parameters=[nav2_params_path, {'use_sim_time': use_sim_time}],
+                parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
                 remappings=[('cmd_vel', 'cmd_vel')],
             ),
@@ -75,7 +81,7 @@ def _build_nav2(context, *args, **kwargs):
                 package='nav2_planner',
                 executable='planner_server',
                 name='planner_server',
-                parameters=[nav2_params_path, {'use_sim_time': use_sim_time}],
+                parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
             ),
 
@@ -84,7 +90,7 @@ def _build_nav2(context, *args, **kwargs):
                 package='nav2_behaviors',
                 executable='behavior_server',
                 name='behavior_server',
-                parameters=[nav2_params_path, {'use_sim_time': use_sim_time}],
+                parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
             ),
 
@@ -93,7 +99,7 @@ def _build_nav2(context, *args, **kwargs):
                 package='nav2_bt_navigator',
                 executable='bt_navigator',
                 name='bt_navigator',
-                parameters=[nav2_params_path, {'use_sim_time': use_sim_time}],
+                parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
             ),
 
@@ -146,7 +152,9 @@ def generate_launch_description():
         DeclareLaunchArgument('map', default_value='',
                               description='Path to map YAML file'),
         DeclareLaunchArgument('nav2_params', default_value=default_params,
-                              description='Path to Nav2 params YAML (use nav2_params_hil.yaml for sim)'),
+                              description='Path to Nav2 base params YAML'),
+        DeclareLaunchArgument('nav2_params_override', default_value='',
+                              description='Optional override YAML (HIL differences)'),
 
         OpaqueFunction(function=_build_nav2),
     ])

@@ -49,9 +49,11 @@ def generate_launch_description():
     fusion_dir = get_package_share_directory('agv_sensor_fusion')
     nav_dir = get_package_share_directory('agv_navigation')
 
-    ekf_local_hil = os.path.join(fusion_dir, 'config', 'ekf_local_hil.yaml')
-    ekf_global_hil = os.path.join(fusion_dir, 'config', 'ekf_global_hil.yaml')
-    nav2_params_hil = os.path.join(nav_dir, 'config', 'nav2_params_hil.yaml')
+    # Use production configs as base, override only what differs for HIL
+    ekf_local_base = os.path.join(fusion_dir, 'config', 'ekf_local.yaml')
+    ekf_global_base = os.path.join(fusion_dir, 'config', 'ekf_global.yaml')
+    nav2_params_base = os.path.join(nav_dir, 'config', 'nav2_params.yaml')
+    nav2_hil_overrides = os.path.join(nav_dir, 'config', 'nav2_hil_overrides.yaml')
 
     return LaunchDescription([
         # ── Arguments ──
@@ -72,23 +74,29 @@ def generate_launch_description():
         ),
 
         # ── Local EKF: sim wheel_odom + sim IMU → odom→base_link ──
+        # Base config + HIL overrides (frequency=40Hz, sim IMU topic)
         Node(
             package='robot_localization',
             executable='ekf_node',
             name='ekf_local',
             namespace=ns,
-            parameters=[ekf_local_hil, {'use_sim_time': True}],
+            parameters=[ekf_local_base, {
+                'use_sim_time': True,
+                'frequency': 40.0,
+                'imu0': '/agv/imu/data',
+            }],
             remappings=[('odometry/filtered', 'odometry/local')],
             output='log',
         ),
 
         # ── Global EKF: local + sim visual odom → map→odom ──
+        # Base config (identical to production for global EKF)
         Node(
             package='robot_localization',
             executable='ekf_node',
             name='ekf_global',
             namespace=ns,
-            parameters=[ekf_global_hil, {'use_sim_time': True}],
+            parameters=[ekf_global_base, {'use_sim_time': True}],
             remappings=[('odometry/filtered', 'odometry/global')],
             output='log',
         ),
@@ -109,7 +117,8 @@ def generate_launch_description():
                 'namespace': ns,
                 'use_sim_time': 'true',
                 'map': map_yaml,
-                'nav2_params': nav2_params_hil,
+                'nav2_params': nav2_params_base,
+                'nav2_params_override': nav2_hil_overrides,
             }.items(),
         ),
 
