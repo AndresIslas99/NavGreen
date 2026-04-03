@@ -34,6 +34,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image as PILImage
 
+# Extracted modules
+import sys, importlib
+_mod_dir = str(Path(__file__).resolve().parent.parent / 'agv_ui_backend')
+if _mod_dir not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from agv_ui_backend.py_state_machine import derive_state, allowed_actions
+from agv_ui_backend.py_event_log import EventLog
+from agv_ui_backend.py_scan_accumulator import ScanAccumulator
+from agv_ui_backend.py_camera_handler import CameraHandler
+
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
