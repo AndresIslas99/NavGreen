@@ -1340,13 +1340,23 @@ def main():
     app = create_app(node)
     node.get_logger().info(f'Starting web server on http://0.0.0.0:{node.port}')
 
-    try:
-        uvicorn.run(app, host='0.0.0.0', port=node.port, log_level='warning')
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    # Retry port binding (previous instance may still be releasing port)
+    import time as _time
+    for attempt in range(5):
+        try:
+            uvicorn.run(app, host='0.0.0.0', port=node.port, log_level='warning')
+            break
+        except OSError as e:
+            if 'Address already in use' in str(e) and attempt < 4:
+                node.get_logger().warn(f'Port {node.port} busy, retrying in 3s (attempt {attempt+1}/5)')
+                _time.sleep(3)
+            else:
+                raise
+        except KeyboardInterrupt:
+            break
+
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
