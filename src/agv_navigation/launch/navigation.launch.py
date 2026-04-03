@@ -46,8 +46,9 @@ def _build_nav2(context, *args, **kwargs):
         'behavior_server',
         'bt_navigator',
         'velocity_smoother',
-        'collision_monitor',
     ]
+    # collision_monitor excluded from lifecycle — it runs independently
+    # and must not block the entire Nav2 stack on config errors
 
     return [GroupAction(
         actions=[
