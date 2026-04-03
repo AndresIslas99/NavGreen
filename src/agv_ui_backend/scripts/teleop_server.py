@@ -174,6 +174,7 @@ class OperatorNode(Node):
         self.create_subscription(Odometry, 'odometry/global', self._global_odom_cb, best_effort)
         self.create_subscription(NavPath, 'plan', self._plan_cb, 10)
         self.create_subscription(OccupancyGrid, 'map', self._map_cb, transient_local)
+        self.create_subscription(OccupancyGrid, 'live_map', self._live_map_cb, transient_local)
         self.create_subscription(LaserScan, 'scan', self._scan_cb, best_effort)
 
         # Camera image (try multiple topics — sim vs real)
@@ -221,6 +222,9 @@ class OperatorNode(Node):
         self.map_png = None
         self.map_meta = None
         self.map_changed = False
+        self.live_map_png = None
+        self.live_map_meta = None
+        self.live_map_changed = False
         self.scan_points = []
 
         # =====================================================================
@@ -528,6 +532,22 @@ class OperatorNode(Node):
                 f'Map received: {info.width}x{info.height} @ {info.resolution}m/px')
         except Exception as e:
             self.get_logger().error(f'Map conversion failed: {e}')
+
+    def _live_map_cb(self, msg):
+        """Receive live occupancy grid from scan_grid_mapper during commissioning."""
+        try:
+            self.live_map_png = occupancy_grid_to_png(msg)
+            info = msg.info
+            self.live_map_meta = {
+                'resolution': info.resolution,
+                'origin_x': info.origin.position.x,
+                'origin_y': info.origin.position.y,
+                'width': info.width,
+                'height': info.height,
+            }
+            self.live_map_changed = True
+        except Exception:
+            pass
 
     def _scan_cb(self, msg):
         try:
@@ -1263,6 +1283,11 @@ def create_app(node: OperatorNode) -> FastAPI:
     async def auth_status():
         return {'enabled': False}
 
+    @app.post("/api/auth/login")
+    async def auth_login(body: dict):
+        """Stub login — auth disabled in Python backend. Returns dummy token."""
+        return {'token': 'dev-token', 'username': body.get('username', 'dev'), 'role': 'engineer'}
+
     # =======================================================================
     # Camera stream (MJPEG)
     # =======================================================================
@@ -1384,6 +1409,15 @@ def create_app(node: OperatorNode) -> FastAPI:
                             'type': 'map_update',
                             'png_base64': base64.b64encode(node.map_png).decode(),
                             **node.map_meta,
+                        }))
+
+                    # Live map from scan_grid_mapper (commissioning)
+                    if node.live_map_changed and node.live_map_png:
+                        node.live_map_changed = False
+                        await ws.send_text(json.dumps({
+                            'type': 'map_update',
+                            'png_base64': base64.b64encode(node.live_map_png).decode(),
+                            **node.live_map_meta,
                         }))
 
                     # Scan points

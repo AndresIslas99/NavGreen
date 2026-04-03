@@ -73,7 +73,7 @@ export function MappingPanel({ state, actions, motorsArmed, onModeChange, onReco
         {state === 'mapping' && <div className="recording-indicator">Mapping active</div>}
         {state === 'mapping' && (
           <button className="full-width secondary" style={{ marginTop: 6 }}
-            onClick={() => fetch('/api/acc_map', { method: 'DELETE' })}>
+            onClick={() => api.clearAccMap()}>
             Clear Scan Map
           </button>
         )}
