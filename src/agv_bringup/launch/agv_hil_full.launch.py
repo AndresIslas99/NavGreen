@@ -122,6 +122,25 @@ def generate_launch_description():
             }.items(),
         ),
 
+        # ── Scan grid mapper (live occupancy grid for commissioning) ──
+        Node(
+            package='agv_scan_mapper',
+            executable='scan_grid_mapper_node',
+            name='scan_grid_mapper',
+            namespace=ns,
+            parameters=[{
+                'resolution': 0.05,
+                'width': 400,
+                'height': 400,
+                'origin_x': -10.0,
+                'origin_y': -10.0,
+                'publish_rate_hz': 1.0,
+                'map_frame': 'map',
+                'use_sim_time': True,
+            }],
+            output='log',
+        ),
+
         # ── Operator backend (dashboard + teleop + REST + WS) ──
         Node(
             package='agv_ui_backend',
