@@ -920,6 +920,34 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   height: 100%;
   object-fit: cover;
 }
+/* Depth heatmap PIP */
+.depth-pip {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  z-index: 12;
+  background: #111;
+}
+.depth-pip .camera-pip-img {
+  width: 100%;
+  display: block;
+}
+.depth-label {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 0.6rem;
+  color: #fff;
+  background: rgba(0,0,0,0.5);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
 .camera-snapshot-btn {
   position: absolute; top: 4px; right: 4px;
   background: rgba(0,0,0,0.6); border: none; color: #fff;

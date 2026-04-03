@@ -176,6 +176,12 @@ class OperatorNode(Node):
         ]:
             self.create_subscription(Image, cam_topic, self._camera_cb, best_effort)
 
+        # Depth heatmap
+        self._depth_jpeg = None
+        self._depth_lock = threading.Lock()
+        self.create_subscription(Image, '/zed/zed_node/depth/depth_registered',
+                                 self._depth_cb, best_effort)
+
         # --- Action client ---
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
@@ -417,7 +423,8 @@ class OperatorNode(Node):
         """Convert accumulated scan grid to PNG for dashboard (0.5Hz)."""
         if not self._acc_changed:
             return
-        self._acc_changed = False
+        # Don't reset _acc_changed here — WS loop needs it to know there's new data
+        # WS loop will reset it after broadcasting
         try:
             grid = self._acc_grid
             # Thresholds:
@@ -602,6 +609,42 @@ class OperatorNode(Node):
             pil_img.save(buf, format='JPEG', quality=70)
             with self._camera_lock:
                 self._camera_jpeg = buf.getvalue()
+        except Exception:
+            pass
+
+    def _depth_cb(self, msg):
+        """Convert 32FC1 depth image to colorized heatmap JPEG."""
+        try:
+            import numpy as np
+            if msg.encoding != '32FC1':
+                return
+            depth = np.frombuffer(msg.data, dtype=np.float32).reshape(msg.height, msg.width)
+
+            # Downsample first for speed (1/4 resolution)
+            depth_small = depth[::4, ::4]
+
+            # Clamp and normalize (0.3m to 10m)
+            valid = np.isfinite(depth_small)
+            depth_clamped = np.clip(depth_small, 0.3, 10.0)
+            depth_clamped[~valid] = 10.0
+            norm = ((depth_clamped - 0.3) / 9.7).clip(0, 1)
+
+            # Fast heatmap: near=red(255,0,0) → mid=yellow(255,255,0) → far=blue(0,0,255)
+            r = np.where(norm < 0.5, 255, (255 * (1 - norm) * 2).clip(0, 255)).astype(np.uint8)
+            g = np.where(norm < 0.5, (255 * norm * 2).clip(0, 255), (255 * (1 - norm) * 2).clip(0, 255)).astype(np.uint8)
+            b = np.where(norm > 0.5, (255 * (norm - 0.5) * 2).clip(0, 255), 0).astype(np.uint8)
+            # Invalid = dark gray
+            r[~valid] = 30; g[~valid] = 30; b[~valid] = 30
+
+            rgb = np.stack([r, g, b], axis=-1)
+            from PIL import Image as PILImage
+            pil_img = PILImage.fromarray(rgb)
+
+            import io
+            buf = io.BytesIO()
+            pil_img.save(buf, format='JPEG', quality=60)
+            with self._depth_lock:
+                self._depth_jpeg = buf.getvalue()
         except Exception:
             pass
 
@@ -1241,6 +1284,31 @@ def create_app(node: OperatorNode) -> FastAPI:
             return Response(content=frame, media_type='image/jpeg')
         return JSONResponse({'error': 'No camera frame available'}, status_code=404)
 
+    @app.get("/api/depth/stream")
+    async def depth_stream():
+        """MJPEG stream of depth heatmap."""
+        async def generate():
+            while True:
+                with node._depth_lock:
+                    frame = node._depth_jpeg
+                if frame:
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                await asyncio.sleep(0.2)  # ~5 FPS
+
+        return StreamingResponse(
+            generate(),
+            media_type='multipart/x-mixed-replace; boundary=frame')
+
+    @app.get("/api/depth/snapshot")
+    async def depth_snapshot():
+        """Latest depth heatmap as JPEG."""
+        with node._depth_lock:
+            frame = node._depth_jpeg
+        if frame:
+            return Response(content=frame, media_type='image/jpeg')
+        return JSONResponse({'error': 'No depth frame available'}, status_code=404)
+
     # =======================================================================
     # WebSocket — legacy teleop
     # =======================================================================
@@ -1321,6 +1389,7 @@ def create_app(node: OperatorNode) -> FastAPI:
                             'png_base64': base64.b64encode(node._acc_png).decode(),
                             **node._acc_meta,
                         }))
+                        node._acc_changed = False
 
                     # Pending events (Improvement 1: real-time event push)
                     while node._pending_ws_events:
