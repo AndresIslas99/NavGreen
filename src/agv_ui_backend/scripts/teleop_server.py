@@ -32,7 +32,7 @@ from collections import deque
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image as PILImage
 
 import rclpy
 from rclpy.node import Node
@@ -87,7 +87,7 @@ def occupancy_grid_to_png(grid_msg):
     img[data == 0] = 254
     img[data == 100] = 0
     img = np.flipud(img)
-    pil_img = Image.fromarray(img, mode='L')
+    pil_img = PILImage.fromarray(img, mode='L')
     buf = io.BytesIO()
     pil_img.save(buf, format='PNG')
     return buf.getvalue()
@@ -438,7 +438,7 @@ class OperatorNode(Node):
             transition = (grid >= -0.5) & (grid <= 1.5) & (grid != 0.0)
             img[transition] = (170 - (grid[transition] * 60)).clip(40, 210).astype(np.uint8)
             img = np.flipud(img)
-            pil_img = Image.fromarray(img, mode='L')
+            pil_img = PILImage.fromarray(img, mode='L')
             buf = io.BytesIO()
             pil_img.save(buf, format='PNG', optimize=True)
             self._acc_png = buf.getvalue()
@@ -1007,7 +1007,7 @@ def create_app(node: OperatorNode) -> FastAPI:
         pgm_path = maps_dir / pgm_name
         if not pgm_path.exists():
             return JSONResponse({'error': f'PGM not found: {pgm_name}'}, 404)
-        img = Image.open(pgm_path)
+        img = PILImage.open(pgm_path)
         buf = io.BytesIO()
         img.save(buf, format='PNG')
         return Response(content=buf.getvalue(), media_type='image/png')
