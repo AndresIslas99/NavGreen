@@ -45,7 +45,7 @@ from rclpy.qos import (
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool, String
 from nav_msgs.msg import Odometry, OccupancyGrid, Path as NavPath
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, Image
 from std_srvs.srv import Trigger
 from nav2_msgs.action import NavigateToPose
 from nav2_msgs.srv import LoadMap
@@ -165,6 +165,16 @@ class OperatorNode(Node):
         self.create_subscription(NavPath, 'plan', self._plan_cb, 10)
         self.create_subscription(OccupancyGrid, 'map', self._map_cb, transient_local)
         self.create_subscription(LaserScan, 'scan', self._scan_cb, best_effort)
+
+        # Camera image (try multiple topics — sim vs real)
+        self._camera_jpeg = None  # Latest JPEG frame
+        self._camera_lock = threading.Lock()
+        for cam_topic in [
+            '/zed/zed_node/left/image_rect_color',
+            '/zed/zed_node/right/image_rect_color',
+            'camera/image_raw',
+        ]:
+            self.create_subscription(Image, cam_topic, self._camera_cb, best_effort)
 
         # --- Action client ---
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
@@ -565,6 +575,35 @@ class OperatorNode(Node):
                 grid[gy, gx] = max(-5.0, grid[gy, gx] - 0.5)
             cx += sx * step
             cy += sy * step
+
+    def _camera_cb(self, msg):
+        """Convert raw Image to JPEG for streaming."""
+        try:
+            import numpy as np
+            if msg.encoding in ('rgb8', 'bgr8', 'rgba8'):
+                channels = 4 if msg.encoding == 'rgba8' else 3
+                img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, channels)
+                if msg.encoding == 'bgr8':
+                    img = img[:, :, ::-1]
+                elif msg.encoding == 'rgba8':
+                    img = img[:, :, :3]
+            else:
+                return
+
+            # Downsample for bandwidth
+            from PIL import Image as PILImage
+            pil_img = PILImage.fromarray(img)
+            if pil_img.width > 640:
+                scale = 640 / pil_img.width
+                pil_img = pil_img.resize((640, int(pil_img.height * scale)))
+
+            import io
+            buf = io.BytesIO()
+            pil_img.save(buf, format='JPEG', quality=70)
+            with self._camera_lock:
+                self._camera_jpeg = buf.getvalue()
+        except Exception:
+            pass
 
     # =====================================================================
     # Watchdog + Teleop
@@ -1170,6 +1209,37 @@ def create_app(node: OperatorNode) -> FastAPI:
     @app.get("/api/auth/status")
     async def auth_status():
         return {'enabled': False}
+
+    # =======================================================================
+    # Camera stream (MJPEG)
+    # =======================================================================
+
+    from fastapi.responses import StreamingResponse
+
+    @app.get("/api/camera/stream")
+    async def camera_stream():
+        """MJPEG stream from ZED camera."""
+        async def generate():
+            while True:
+                with node._camera_lock:
+                    frame = node._camera_jpeg
+                if frame:
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                await asyncio.sleep(0.1)  # ~10 FPS
+
+        return StreamingResponse(
+            generate(),
+            media_type='multipart/x-mixed-replace; boundary=frame')
+
+    @app.get("/api/camera/snapshot")
+    async def camera_snapshot():
+        """Latest camera frame as JPEG."""
+        with node._camera_lock:
+            frame = node._camera_jpeg
+        if frame:
+            return Response(content=frame, media_type='image/jpeg')
+        return JSONResponse({'error': 'No camera frame available'}, status_code=404)
 
     # =======================================================================
     # WebSocket — legacy teleop
