@@ -25,7 +25,10 @@
                    false, false, false,    # vx, vy, vz
                    false, false, false,    # vroll, vpitch, vyaw
                    false, false, false]    # ax, ay, az
-    odom0_differential: false
+    # Differential mode prevents double-counting wheel odometry drift.
+    # The global EKF only uses velocity-like increments from the local EKF,
+    # allowing cuVSLAM and AprilTag absolute corrections to dominate position estimation.
+    odom0_differential: true
     odom0_relative: false
     odom0_queue_size: 10
 
@@ -57,13 +60,16 @@
     pose0_queue_size: 1
     pose0_rejection_threshold: 3.0         # reject outlier detections
 
-    # Override zero covariances from sim for cuVSLAM
-    odom1_pose_covariance: [0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
-                            0.0,   0.01,  0.0,   0.0,   0.0,   0.0,
-                            0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
-                            0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
-                            0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
-                            0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
+    # REMOVED: cuVSLAM provides meaningful state-dependent covariances that
+    # indicate tracking quality. Overriding with fixed values prevents the EKF
+    # from down-weighting cuVSLAM during poor tracking conditions.
+    # Use covariance_override_node in simulation only.
+    # odom1_pose_covariance: [0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
+    #                         0.0,   0.01,  0.0,   0.0,   0.0,   0.0,
+    #                         0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
+    #                         0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
+    #                         0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
+    #                         0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
 
     # ── Process noise covariance (2x local — gradual corrections) ──
     process_noise_covariance:
