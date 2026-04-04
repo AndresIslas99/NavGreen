@@ -16,10 +16,12 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <robot_localization/srv/set_pose.hpp>
 
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 
@@ -38,12 +40,16 @@ public:
     declare_parameter("max_detection_range", 5.0);
     declare_parameter("covariance_xy", 0.01);
     declare_parameter("covariance_yaw", 0.03);
-    declare_parameter("tag_size", 0.16);  // meters (tag36h11 typical)
+    declare_parameter("tag_size", 0.16);
+    declare_parameter("relocalization_threshold", 2.0);  // meters — force reset above this
+    declare_parameter("min_confidence", 50.0);            // decision_margin minimum for reloc
 
     max_range_ = get_parameter("max_detection_range").as_double();
     cov_xy_ = get_parameter("covariance_xy").as_double();
     cov_yaw_ = get_parameter("covariance_yaw").as_double();
     tag_size_ = get_parameter("tag_size").as_double();
+    reloc_threshold_ = get_parameter("relocalization_threshold").as_double();
+    min_confidence_ = get_parameter("min_confidence").as_double();
 
     auto registry_file = get_parameter("markers_registry_file").as_string();
     if (!registry_file.empty()) load_registry(registry_file);
@@ -73,8 +79,20 @@ public:
         }
       });
 
-    RCLCPP_INFO(get_logger(), "Marker correction: %zu markers, tag_size=%.3fm, max_range=%.1fm",
-      registry_.size(), tag_size_, max_range_);
+    // Subscribe to global EKF output for current pose (relocalization check)
+    ekf_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+      "odometry/global", rclcpp::SensorDataQoS(),
+      [this](nav_msgs::msg::Odometry::SharedPtr msg) {
+        current_ekf_x_ = msg->pose.pose.position.x;
+        current_ekf_y_ = msg->pose.pose.position.y;
+        has_ekf_pose_ = true;
+      });
+
+    // Service client to force-relocalize EKF when drift is catastrophic
+    set_pose_client_ = create_client<robot_localization::srv::SetPose>("set_pose");
+
+    RCLCPP_INFO(get_logger(), "Marker correction: %zu markers, tag_size=%.3fm, reloc_threshold=%.1fm",
+      registry_.size(), tag_size_, reloc_threshold_);
   }
 
 private:
@@ -188,7 +206,7 @@ private:
       double robot_x = marker.x - (tag_fwd * cos_yaw - tag_left * sin_yaw);
       double robot_y = marker.y - (tag_fwd * sin_yaw + tag_left * cos_yaw);
 
-      // Publish correction
+      // Build correction message
       geometry_msgs::msg::PoseWithCovarianceStamped correction;
       correction.header.stamp = now();
       correction.header.frame_id = "map";
@@ -199,31 +217,59 @@ private:
       correction.pose.pose.orientation.z = std::sin(half_yaw);
       correction.pose.pose.orientation.w = std::cos(half_yaw);
 
-      // Covariance — scales with distance (farther = less accurate)
       double range_factor = range / 2.0;
       correction.pose.covariance[0] = cov_xy_ * range_factor;
       correction.pose.covariance[7] = cov_xy_ * range_factor;
       correction.pose.covariance[35] = cov_yaw_ * range_factor;
 
-      pose_pub_->publish(correction);
+      // Check if relocalization needed (large drift detected)
+      double drift = 0.0;
+      if (has_ekf_pose_) {
+        drift = std::sqrt(
+          std::pow(robot_x - current_ekf_x_, 2) +
+          std::pow(robot_y - current_ekf_y_, 2));
+      }
+
+      if (drift >= reloc_threshold_ && det.decision_margin >= min_confidence_) {
+        // RELOCALIZATION: drift too large for normal EKF correction
+        // Force-reset EKF pose via set_pose service
+        if (set_pose_client_->service_is_ready()) {
+          auto request = std::make_shared<robot_localization::srv::SetPose::Request>();
+          request->pose = correction;
+          set_pose_client_->async_send_request(request);
+          RCLCPP_WARN(get_logger(),
+            "RELOCALIZATION: Tag %d, drift=%.1fm (threshold=%.1fm), "
+            "resetting EKF to (%.2f, %.2f)",
+            det.id, drift, reloc_threshold_, robot_x, robot_y);
+        }
+      } else {
+        // Normal correction — let EKF fuse smoothly
+        pose_pub_->publish(correction);
+      }
 
       std_msgs::msg::String det_msg;
       det_msg.data = "tag_" + std::to_string(det.id);
       detected_pub_->publish(det_msg);
 
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
-        "Tag %d at %.2fm → robot (%.2f, %.2f) correction published",
-        det.id, range, robot_x, robot_y);
+        "Tag %d at %.2fm → (%.2f, %.2f) drift=%.1fm %s",
+        det.id, range, robot_x, robot_y, drift,
+        drift >= reloc_threshold_ ? "RELOC" : "smooth");
     }
   }
 
   // Registry
   std::map<int, MarkerPose> registry_;
   double max_range_, cov_xy_, cov_yaw_, tag_size_;
+  double reloc_threshold_, min_confidence_;
 
   // Camera intrinsics
   bool has_caminfo_{false};
   double fx_{0}, fy_{0}, cx_{0}, cy_{0};
+
+  // Current EKF pose (for drift detection)
+  bool has_ekf_pose_{false};
+  double current_ekf_x_{0}, current_ekf_y_{0};
 
   // TF
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -234,6 +280,8 @@ private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr detected_pub_;
   rclcpp::Subscription<apriltag_msgs::msg::AprilTagDetectionArray>::SharedPtr detection_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ekf_sub_;
+  rclcpp::Client<robot_localization::srv::SetPose>::SharedPtr set_pose_client_;
 };
 
 int main(int argc, char** argv) {
