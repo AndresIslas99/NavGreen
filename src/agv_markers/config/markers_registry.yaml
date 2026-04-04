@@ -1,32 +1,16 @@
 # AprilTag marker registry — known marker poses in map frame
 # Family: tag36h11
-# Each marker has a unique ID and a fixed pose in the map.
-# The marker_correction_node uses this to compute robot pose corrections.
-#
-# Format:
-#   markers:
-#     - id: <tag_id>
-#       x: <meters>
-#       y: <meters>
-#       z: <meters>
-#       yaw: <radians>
-#
-# These positions must be measured during commissioning.
+# Positions from Gazebo Harmonic greenhouse sim.
+# Tags at z=0.3m height on corridor walls.
 
 markers:
-  # Example markers — replace with actual measured positions
-  - id: 0
-    x: 0.0
-    y: 0.0
+  - id: 8
+    x: 7.4
+    y: -1.1
     z: 0.3
-    yaw: 0.0
-  - id: 1
-    x: 5.0
-    y: 0.0
+    yaw: 3.14159
+  - id: 9
+    x: 7.4
+    y: 1.1
     z: 0.3
-    yaw: 0.0
-  - id: 2
-    x: 5.0
-    y: 3.0
-    z: 0.3
-    yaw: 1.5708
+    yaw: 3.14159
