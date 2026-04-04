@@ -225,6 +225,8 @@ def generate_launch_description():
                 'tag_size': 0.2,
                 'covariance_xy': 0.01,
                 'covariance_yaw': 0.03,
+                'relocalization_threshold': 1.5,
+                'min_confidence': 50.0,
                 'use_sim_time': True,
             }],
             output='log',
