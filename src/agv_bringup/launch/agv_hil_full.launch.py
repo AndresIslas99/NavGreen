@@ -114,7 +114,7 @@ def generate_launch_description():
             namespace=ns,
             parameters=[ekf_local_base, {
                 'use_sim_time': True,
-                'frequency': 10.0,               # sim runs at ~67% realtime; 10Hz sim = ~7Hz wall
+                'frequency': 15.0,               # sim at ~100% realtime now
                 'odom0': 'wheel_odom_cov',        # from covariance_override relay
                 'imu0': '/agv/imu/data_cov',      # from covariance_override relay
             }],
