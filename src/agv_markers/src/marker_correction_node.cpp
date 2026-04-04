@@ -44,7 +44,8 @@ public:
     declare_parameter("max_detection_range", 5.0);
     declare_parameter("covariance_xy", 0.01);
     declare_parameter("covariance_yaw", 0.03);
-    declare_parameter("tag_size", 0.16);
+    // Must match physical tag size. Registry uses 0.2m (20cm) tags.
+    declare_parameter("tag_size", 0.2);
     declare_parameter("relocalization_threshold", 2.0);  // meters — force reset above this
     declare_parameter("min_confidence", 50.0);            // decision_margin minimum for reloc
 
@@ -203,18 +204,42 @@ private:
       double tag_fwd  = tag_in_base.x();  // forward in base_link
       double tag_left = tag_in_base.y();   // left in base_link (ROS base_link Y = left)
 
-      // Get robot yaw from map→base_link (not odom→base_link, since pose is published in map frame)
-      geometry_msgs::msg::TransformStamped map_to_base;
-      try {
-        map_to_base = tf_buffer_->lookupTransform("map", "base_link",
-          rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
-      } catch (...) { continue; }
+      // Derive robot heading from the AprilTag observation instead of odometry.
+      // rvec from solvePnP gives tag orientation in camera frame. Combined with
+      // the tag's known yaw in the map (marker.yaw), we get an independent heading
+      // estimate that can actually correct heading drift.
+      double robot_yaw = 0.0;
+      bool yaw_from_tag = false;
+      {
+        cv::Mat R_ct;
+        cv::Rodrigues(rvec, R_ct);
+        // Extract yaw of the tag as seen in the camera frame
+        // R_ct columns: tag X/Y/Z axes in camera coords (optical: X-right, Y-down, Z-forward)
+        // Tag yaw in camera = atan2(R_ct[0][0], R_ct[2][0]) projected onto camera XZ plane
+        double tag_yaw_in_camera = std::atan2(R_ct.at<double>(0, 0), R_ct.at<double>(2, 0));
+        // Robot heading = tag's known map yaw - observed yaw in camera + PI
+        // The +PI accounts for the tag facing toward the approaching robot
+        robot_yaw = marker.yaw - tag_yaw_in_camera + M_PI;
+        // Normalize to [-PI, PI]
+        while (robot_yaw > M_PI) robot_yaw -= 2.0 * M_PI;
+        while (robot_yaw < -M_PI) robot_yaw += 2.0 * M_PI;
+        yaw_from_tag = true;
+      }
 
-      double robot_yaw = std::atan2(
-        2.0 * (map_to_base.transform.rotation.w * map_to_base.transform.rotation.z +
-               map_to_base.transform.rotation.x * map_to_base.transform.rotation.y),
-        1.0 - 2.0 * (map_to_base.transform.rotation.y * map_to_base.transform.rotation.y +
-                      map_to_base.transform.rotation.z * map_to_base.transform.rotation.z));
+      // Fallback: use map→base_link TF heading if rvec extraction failed
+      if (!yaw_from_tag) {
+        geometry_msgs::msg::TransformStamped map_to_base;
+        try {
+          map_to_base = tf_buffer_->lookupTransform("map", "base_link",
+            rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
+          robot_yaw = std::atan2(
+            2.0 * (map_to_base.transform.rotation.w * map_to_base.transform.rotation.z +
+                   map_to_base.transform.rotation.x * map_to_base.transform.rotation.y),
+            1.0 - 2.0 * (map_to_base.transform.rotation.y * map_to_base.transform.rotation.y +
+                          map_to_base.transform.rotation.z * map_to_base.transform.rotation.z));
+          RCLCPP_WARN(get_logger(), "Tag %d: rvec yaw extraction failed, falling back to map TF heading", det.id);
+        } catch (...) { continue; }
+      }
 
       // Robot position = tag position - offset rotated by robot heading
       // (tag is at known map position, robot sees it at angle relative to heading)
@@ -234,10 +259,13 @@ private:
       correction.pose.pose.orientation.z = std::sin(half_yaw);
       correction.pose.pose.orientation.w = std::cos(half_yaw);
 
-      double range_factor = std::max(range / 2.0, 1.0);
-      correction.pose.covariance[0] = cov_xy_ * range_factor;
-      correction.pose.covariance[7] = cov_xy_ * range_factor;
-      correction.pose.covariance[35] = cov_yaw_ * range_factor;
+      // Quadratic range model: uncertainty grows with distance squared
+      // At ref_range (2.0m), factor = 2.0. At 5m, factor = 7.25
+      double ref_range = 2.0;
+      double range_factor = 1.0 + (range / ref_range) * (range / ref_range);
+      correction.pose.covariance[0] = 0.02 * range_factor;
+      correction.pose.covariance[7] = 0.02 * range_factor;
+      correction.pose.covariance[35] = 0.05 * range_factor;
 
       // Check if relocalization needed (large drift detected)
       double drift = 0.0;
