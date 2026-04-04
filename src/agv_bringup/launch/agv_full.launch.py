@@ -51,7 +51,7 @@ def generate_launch_description():
         # ── Arguments ──
         DeclareLaunchArgument('namespace', default_value='agv'),
         DeclareLaunchArgument('map', description='Path to map YAML file (required)'),
-        DeclareLaunchArgument('enable_markers', default_value='false',
+        DeclareLaunchArgument('enable_markers', default_value='true',
                               description='Enable AprilTag marker correction'),
         DeclareLaunchArgument('enable_behaviors', default_value='false',
                               description='Enable behavior tree executor'),
@@ -192,18 +192,39 @@ def generate_launch_description():
             ],
         ),
 
-        # ── Marker correction (t=7s, optional) ──
+        # ── AprilTag detection + marker correction (t=7s, optional) ──
         TimerAction(
             period=7.0,
             actions=[
+                Node(
+                    package='apriltag_ros',
+                    executable='apriltag_node',
+                    name='apriltag_node',
+                    namespace=ns,
+                    parameters=[{
+                        'family': '36h11',
+                        'size': 0.2,
+                        'max_hamming': 0,
+                        'detector.threads': 2,
+                        'detector.quad_decimate': 2.0,
+                    }],
+                    remappings=[
+                        ('image_rect', '/zed/zed_node/left/image_rect_color'),
+                        ('camera_info', '/zed/zed_node/left/camera_info'),
+                    ],
+                    output='log',
+                    condition=IfCondition(enable_markers),
+                ),
                 Node(
                     package='agv_markers',
                     executable='marker_correction_node',
                     name='marker_correction',
                     namespace=ns,
                     parameters=[{
-                        'markers_registry_file': '',
-                        'max_detection_range': 3.0,
+                        'markers_registry_file': os.path.join(
+                            get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
+                        'max_detection_range': 5.0,
+                        'tag_size': 0.2,
                         'covariance_xy': 0.01,
                         'covariance_yaw': 0.03,
                     }],

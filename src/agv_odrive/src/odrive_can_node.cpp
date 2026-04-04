@@ -24,6 +24,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   this->declare_parameter("stiction_torque_ff", 0.0);
   this->declare_parameter("max_wheel_accel", 1.0);
   this->declare_parameter("zero_vel_epsilon", 0.03);
+  // gear_ratio = motor_turns / wheel_turns. Set to 1.0 if ODrive firmware already
+  // has gear_ratio configured. Set to 10.0 for a 10:1 planetary gearbox with raw
+  // encoder feedback.
+  this->declare_parameter("gear_ratio", 1.0);
 
   // -- Read parameters --
   can_interface_ = this->get_parameter("can_interface").as_string();
@@ -45,6 +49,7 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   stiction_torque_ff_ = static_cast<float>(this->get_parameter("stiction_torque_ff").as_double());
   max_wheel_accel_ = static_cast<float>(this->get_parameter("max_wheel_accel").as_double());
   zero_vel_epsilon_ = static_cast<float>(this->get_parameter("zero_vel_epsilon").as_double());
+  gear_ratio_ = this->get_parameter("gear_ratio").as_double();
 
   // -- Validate --
   if (wheel_radius_ <= 0.0) {
@@ -54,6 +59,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   if (track_width_ <= 0.0) {
     RCLCPP_FATAL(get_logger(), "track_width must be > 0, got %f", track_width_);
     throw std::runtime_error("Invalid track_width");
+  }
+  if (gear_ratio_ <= 0.0) {
+    RCLCPP_FATAL(get_logger(), "gear_ratio must be > 0, got %f", gear_ratio_);
+    throw std::runtime_error("Invalid gear_ratio");
   }
 
   // -- Publishers --
@@ -84,7 +93,8 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   timer_main_ = this->create_wall_timer(main_period,
     std::bind(&ODriveCANNode::main_loop, this));
 
-  timer_encoder_ = this->create_wall_timer(std::chrono::milliseconds(100),
+  // Encoder polling must match main loop rate to avoid stale-sample staircase artifacts
+  timer_encoder_ = this->create_wall_timer(std::chrono::milliseconds(20),
     std::bind(&ODriveCANNode::encoder_request_loop, this));
 
   timer_motor_state_ = this->create_wall_timer(std::chrono::milliseconds(500),
@@ -95,8 +105,8 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
 
   RCLCPP_INFO(get_logger(), "ODrive CAN node started on %s (left=%d, right=%d)",
               can_interface_.c_str(), left_axis_id_, right_axis_id_);
-  RCLCPP_INFO(get_logger(), "wheel_radius=%.4f m, track_width=%.4f m, rate=%d Hz",
-              wheel_radius_, track_width_, publish_rate_hz_);
+  RCLCPP_INFO(get_logger(), "wheel_radius=%.4f m, track_width=%.4f m, rate=%d Hz, gear_ratio=%.2f",
+              wheel_radius_, track_width_, publish_rate_hz_, gear_ratio_);
   RCLCPP_INFO(get_logger(), "invert_left=%s, invert_right=%s",
               invert_left_ ? "true" : "false", invert_right_ ? "true" : "false");
 }
@@ -147,7 +157,7 @@ void ODriveCANNode::main_loop() {
   publish_joint_states();
 }
 
-// ── Encoder request (10 Hz) ──
+// ── Encoder request (50 Hz) ──
 
 void ODriveCANNode::encoder_request_loop() {
   if (!can_ || !can_->is_open()) return;
@@ -155,8 +165,8 @@ void ODriveCANNode::encoder_request_loop() {
   can_->send_rtr(make_arb_id(left_axis_id_, cmd::GET_ENCODER_ESTIMATES));
   can_->send_rtr(make_arb_id(right_axis_id_, cmd::GET_ENCODER_ESTIMATES));
 
-  // Request temperature and voltage at 1Hz (every 10th call at 10Hz)
-  if (++diag_counter_ % 10 == 0) {
+  // Request temperature and voltage at 1Hz (every 50th call at 50Hz)
+  if (++diag_counter_ % 50 == 0) {
     can_->send_rtr(make_arb_id(left_axis_id_, cmd::GET_TEMPERATURE));
     can_->send_rtr(make_arb_id(right_axis_id_, cmd::GET_TEMPERATURE));
     can_->send_rtr(make_arb_id(left_axis_id_, cmd::GET_VBUS_VOLTAGE));
@@ -240,9 +250,9 @@ void ODriveCANNode::integrate_odometry() {
     return;
   }
 
-  // Compute wheel travel in meters (position is in turns)
-  double delta_left  = (left_.position - left_.prev_position) * wheel_radius_ * 2.0 * M_PI;
-  double delta_right = (right_.position - right_.prev_position) * wheel_radius_ * 2.0 * M_PI;
+  // Compute wheel travel in meters (position is in motor turns; divide by gear_ratio for wheel turns)
+  double delta_left  = (left_.position - left_.prev_position) / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;
+  double delta_right = (right_.position - right_.prev_position) / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;
 
   left_.prev_position = left_.position;
   right_.prev_position = right_.position;
@@ -278,9 +288,9 @@ void ODriveCANNode::publish_odometry() {
   msg.pose.pose.orientation.z = std::sin(half_yaw);
   msg.pose.pose.orientation.w = std::cos(half_yaw);
 
-  // Twist (from current encoder velocities)
-  double v_left  = left_.velocity * wheel_radius_ * 2.0 * M_PI;   // m/s
-  double v_right = right_.velocity * wheel_radius_ * 2.0 * M_PI;  // m/s
+  // Twist (from current encoder velocities — motor turns/s divided by gear_ratio for wheel turns/s)
+  double v_left  = left_.velocity / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;   // m/s
+  double v_right = right_.velocity / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;  // m/s
   double v_linear = (v_left + v_right) / 2.0;
   double v_angular = (v_right - v_left) / track_width_;
   msg.twist.twist.linear.x  = v_linear;
@@ -343,9 +353,9 @@ void ODriveCANNode::on_cmd_vel(const geometry_msgs::msg::Twist& msg) {
   last_linear_cmd_  = linear_x;
   last_angular_cmd_ = angular_z;
 
-  // Differential drive inverse kinematics: m/s → turns/s
-  double v_left  = (linear_x - angular_z * track_width_ / 2.0) / (wheel_radius_ * 2.0 * M_PI);
-  double v_right = (linear_x + angular_z * track_width_ / 2.0) / (wheel_radius_ * 2.0 * M_PI);
+  // Differential drive inverse kinematics: m/s → motor turns/s (multiply by gear_ratio)
+  double v_left  = (linear_x - angular_z * track_width_ / 2.0) / (wheel_radius_ * 2.0 * M_PI) * gear_ratio_;
+  double v_right = (linear_x + angular_z * track_width_ / 2.0) / (wheel_radius_ * 2.0 * M_PI) * gear_ratio_;
 
   // Apply shaping: inversion → scale → accel limit → min effective → torque_ff
   float left_cmd  = apply_wheel_shaping(static_cast<float>(v_left), left_.prev_cmd, left_sign_ * left_scale_);

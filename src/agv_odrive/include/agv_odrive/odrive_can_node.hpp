@@ -41,6 +41,7 @@ private:
   float stiction_torque_ff_;
   float max_wheel_accel_;
   float zero_vel_epsilon_;
+  double gear_ratio_;  // motor_turns / wheel_turns (see odrive_can_node.cpp for docs)
 
   // -- CAN --
   std::unique_ptr<CANSocket> can_;
