@@ -44,6 +44,19 @@
     odom1_pose_rejection_threshold: 5.0
     odom1_twist_rejection_threshold: 3.0
 
+    # ── AprilTag marker corrections ──
+    # Absolute pose in map frame from marker_correction_node
+    odom2: marker_pose
+    odom2_config: [true,  true,  false,    # x, y, z
+                   false, false, true,     # roll, pitch, yaw
+                   false, false, false,    # vx, vy, vz
+                   false, false, false,    # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    odom2_differential: false              # absolute pose (not differential)
+    odom2_relative: false
+    odom2_queue_size: 1
+    odom2_pose_rejection_threshold: 3.0    # reject outlier detections
+
     # Override zero covariances from sim for cuVSLAM
     odom1_pose_covariance: [0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
                             0.0,   0.01,  0.0,   0.0,   0.0,   0.0,

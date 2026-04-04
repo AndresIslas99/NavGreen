@@ -10,22 +10,18 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
-# isaac_ros_apriltag_interfaces may not be installed — build conditionally
-find_package(isaac_ros_apriltag_interfaces QUIET)
+find_package(tf2_ros REQUIRED)
+find_package(apriltag_msgs REQUIRED)
+find_package(OpenCV REQUIRED)
 
-if(isaac_ros_apriltag_interfaces_FOUND)
-  add_executable(marker_correction_node src/marker_correction_node.cpp)
-  ament_target_dependencies(marker_correction_node
-    rclcpp geometry_msgs std_msgs tf2 tf2_geometry_msgs
-    isaac_ros_apriltag_interfaces)
-  install(TARGETS marker_correction_node DESTINATION lib/${PROJECT_NAME})
-else()
-  message(WARNING "isaac_ros_apriltag_interfaces not found — marker_correction_node will not be built")
-endif()
+add_executable(marker_correction_node src/marker_correction_node.cpp)
+ament_target_dependencies(marker_correction_node
+  rclcpp geometry_msgs sensor_msgs std_msgs tf2_ros apriltag_msgs)
+target_link_libraries(marker_correction_node ${OpenCV_LIBS})
 
+install(TARGETS marker_correction_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 
