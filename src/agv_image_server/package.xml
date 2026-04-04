@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>agv_image_server</name>
+  <version>1.0.0</version>
+  <description>C++ MJPEG image server — camera and depth heatmap streams via HTTP</description>
+  <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

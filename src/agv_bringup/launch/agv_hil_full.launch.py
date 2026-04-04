@@ -177,6 +177,23 @@ def generate_launch_description():
             output='log',
         ),
 
+        # ── C++ Image Server (camera + depth MJPEG on port 8091) ──
+        Node(
+            package='agv_image_server',
+            executable='image_server_node',
+            name='image_server',
+            namespace=ns,
+            parameters=[{
+                'port': 8091,
+                'camera_topic': '/zed/zed_node/right/image_rect_color',
+                'depth_topic': '/zed/zed_node/depth/depth_registered',
+                'jpeg_quality': 70,
+                'max_width': 640,
+                'use_sim_time': True,
+            }],
+            output='log',
+        ),
+
         # ── Operator backend (dashboard + teleop + REST + WS) ──
         Node(
             package='agv_ui_backend',
