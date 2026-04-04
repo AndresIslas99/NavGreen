@@ -40,12 +40,15 @@ def generate_launch_description():
     map_yaml = LaunchConfiguration('map')
     enable_markers = LaunchConfiguration('enable_markers')
     enable_behaviors = LaunchConfiguration('enable_behaviors')
+    enable_slam_localization = LaunchConfiguration('enable_slam_localization')
+    slam_map_file = LaunchConfiguration('slam_map_file')
 
     bringup_dir = get_package_share_directory('agv_bringup')
     nav_dir = get_package_share_directory('agv_navigation')
     cuvslam_no_tf = os.path.join(bringup_dir, 'config', 'cuvslam_no_tf.yaml')
     maps_dir = os.path.join(nav_dir, 'maps')
     missions_file = os.path.join(nav_dir, 'missions', 'missions.json')
+    slam_loc_config = os.path.join(nav_dir, 'config', 'slam_toolbox_localization.yaml')
 
     return LaunchDescription([
         # ── Arguments ──
@@ -55,6 +58,10 @@ def generate_launch_description():
                               description='Enable AprilTag marker correction'),
         DeclareLaunchArgument('enable_behaviors', default_value='false',
                               description='Enable behavior tree executor'),
+        DeclareLaunchArgument('enable_slam_localization', default_value='true',
+                              description='Enable SLAM Toolbox in localization mode for loop closure'),
+        DeclareLaunchArgument('slam_map_file', default_value='',
+                              description='Path to serialized SLAM Toolbox map (without extension)'),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -141,6 +148,28 @@ def generate_launch_description():
                             FindPackageShare('agv_sensor_fusion'), 'launch', 'fusion.launch.py'
                         ])),
                     launch_arguments={'namespace': ns}.items(),
+                ),
+            ],
+        ),
+
+        # ── SLAM Toolbox localization mode (t=5s, optional — provides loop closure) ──
+        TimerAction(
+            period=5.0,
+            actions=[
+                Node(
+                    package='slam_toolbox',
+                    executable='localization_slam_toolbox_node',
+                    name='slam_toolbox_localization',
+                    namespace=ns,
+                    parameters=[
+                        slam_loc_config,
+                        {'map_file_name': slam_map_file},
+                    ],
+                    remappings=[
+                        ('scan', 'scan'),
+                    ],
+                    output='log',
+                    condition=IfCondition(enable_slam_localization),
                 ),
             ],
         ),
