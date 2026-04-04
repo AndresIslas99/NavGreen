@@ -32,8 +32,8 @@ slam_toolbox:
     tf_buffer_duration: 30.0
 
     # Keyframe thresholds — don't create new node until robot moves enough
-    minimum_travel_distance: 0.3    # meters
-    minimum_travel_heading: 0.3     # radians (~17°)
+    minimum_travel_distance: 0.15    # meters — 2x more keyframes for loop closure
+    minimum_travel_heading: 0.15     # radians (~8.6°) — detect turns earlier
 
     # Scan matching
     use_scan_matching: true

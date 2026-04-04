@@ -217,7 +217,7 @@ private:
       correction.pose.pose.orientation.z = std::sin(half_yaw);
       correction.pose.pose.orientation.w = std::cos(half_yaw);
 
-      double range_factor = range / 2.0;
+      double range_factor = std::max(range / 2.0, 1.0);
       correction.pose.covariance[0] = cov_xy_ * range_factor;
       correction.pose.covariance[7] = cov_xy_ * range_factor;
       correction.pose.covariance[35] = cov_yaw_ * range_factor;
