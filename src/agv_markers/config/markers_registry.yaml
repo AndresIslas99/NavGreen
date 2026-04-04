@@ -1,16 +1,205 @@
 # AprilTag marker registry — known marker poses in map frame
-# Family: tag36h11
+# Family: tag36h11, size: 0.2m
 # Positions from Gazebo Harmonic greenhouse sim.
-# Tags at z=0.3m height on corridor walls.
+# Wall tags at z=0.145m, floor tags at z=0.002m.
+# ID 32 does not exist (removed from sim).
 
 markers:
+  # Pared oeste
+  - id: 0
+    x: -16.88
+    y: 0.00
+    z: 0.145
+    yaw: 0.0
+  - id: 5
+    x: -16.88
+    y: -5.00
+    z: 0.145
+    yaw: 0.0
+  - id: 21
+    x: -16.88
+    y: -4.40
+    z: 0.145
+    yaw: 0.0
+  - id: 22
+    x: -16.88
+    y: -2.20
+    z: 0.145
+    yaw: 0.0
+  - id: 23
+    x: -16.88
+    y: 0.00
+    z: 0.145
+    yaw: 0.0
+  - id: 24
+    x: -16.88
+    y: 2.20
+    z: 0.145
+    yaw: 0.0
+  - id: 25
+    x: -16.88
+    y: 4.40
+    z: 0.145
+    yaw: 0.0
+
+  # Pared este
+  - id: 1
+    x: 27.88
+    y: 0.00
+    z: 0.145
+    yaw: 3.14159
+  - id: 16
+    x: 27.88
+    y: -4.40
+    z: 0.145
+    yaw: 3.14159
+  - id: 17
+    x: 27.88
+    y: -2.20
+    z: 0.145
+    yaw: 3.14159
+  - id: 18
+    x: 27.88
+    y: 0.00
+    z: 0.145
+    yaw: 3.14159
+  - id: 19
+    x: 27.88
+    y: 2.20
+    z: 0.145
+    yaw: 3.14159
+  - id: 20
+    x: 27.88
+    y: 4.40
+    z: 0.145
+    yaw: 3.14159
+
+  # Pared norte/sur
+  - id: 14
+    x: 15.00
+    y: 7.38
+    z: 0.145
+    yaw: -1.5708
+  - id: 15
+    x: 15.00
+    y: -7.38
+    z: 0.145
+    yaw: 1.5708
+
+  # Inicio hileras (frente, x=7.40)
+  - id: 6
+    x: 7.40
+    y: -5.50
+    z: 0.145
+    yaw: 3.14159
+  - id: 7
+    x: 7.40
+    y: -3.30
+    z: 0.145
+    yaw: 3.14159
   - id: 8
-    x: 7.4
-    y: -1.1
-    z: 0.3
+    x: 7.40
+    y: -1.10
+    z: 0.145
     yaw: 3.14159
   - id: 9
-    x: 7.4
-    y: 1.1
-    z: 0.3
+    x: 7.40
+    y: 1.10
+    z: 0.145
     yaw: 3.14159
+  - id: 10
+    x: 7.40
+    y: 3.30
+    z: 0.145
+    yaw: 3.14159
+  - id: 11
+    x: 7.40
+    y: 5.50
+    z: 0.145
+    yaw: 3.14159
+
+  # Inicio hileras (atrás, x=3.60)
+  - id: 26
+    x: 3.60
+    y: -5.50
+    z: 0.145
+    yaw: 0.0
+  - id: 27
+    x: 3.60
+    y: -3.30
+    z: 0.145
+    yaw: 0.0
+  - id: 28
+    x: 3.60
+    y: -1.10
+    z: 0.145
+    yaw: 0.0
+  - id: 29
+    x: 3.60
+    y: 1.10
+    z: 0.145
+    yaw: 0.0
+  - id: 30
+    x: 3.60
+    y: 3.30
+    z: 0.145
+    yaw: 0.0
+  - id: 31
+    x: 3.60
+    y: 5.50
+    z: 0.145
+    yaw: 0.0
+
+  # Suelo pasillos (frente, x=7.00)
+  - id: 2
+    x: 7.00
+    y: -4.40
+    z: 0.002
+    yaw: 0.0
+  - id: 3
+    x: 7.00
+    y: -2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 4
+    x: 7.00
+    y: 0.00
+    z: 0.002
+    yaw: 0.0
+  - id: 12
+    x: 7.00
+    y: 2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 13
+    x: 7.00
+    y: 4.40
+    z: 0.002
+    yaw: 0.0
+
+  # Suelo pasillos (atrás, x=4.00)
+  - id: 33
+    x: 4.00
+    y: -4.40
+    z: 0.002
+    yaw: 0.0
+  - id: 34
+    x: 4.00
+    y: -2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 35
+    x: 4.00
+    y: 0.00
+    z: 0.002
+    yaw: 0.0
+  - id: 36
+    x: 4.00
+    y: 2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 37
+    x: 4.00
+    y: 4.40
+    z: 0.002
+    yaw: 0.0
