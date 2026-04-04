@@ -25,8 +25,11 @@ interface Props {
 }
 
 // Robot icon as rotated div
+// In Leaflet CRS.Simple: X→right (lng), Y→up (lat)
+// In ROS: theta=0 means facing X+ (right). CSS rotate(0)=up.
+// So we need -90° offset: theta=0 → arrow points right
 function robotIcon(theta: number): L.DivIcon {
-  const deg = -(theta * 180 / Math.PI)
+  const deg = -(theta * 180 / Math.PI) + 90
   return L.divIcon({
     className: 'robot-marker',
     html: `<div class="robot-arrow" style="transform: rotate(${deg}deg)"></div>`,
@@ -133,8 +136,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const northEast = worldToLatLng(origin_x + width * resolution, origin_y + height * resolution)
     const bounds = L.latLngBounds(southWest, northEast)
 
-    // Detect accumulated map (large grid centered at origin, typically 500x500)
-    const isAccumulatedMap = width >= 400 && Math.abs(origin_x + (width * resolution / 2)) < 1
+    // Detect accumulated map: 500x500 grid from scan_accumulator (not the 400x400 nav map)
+    const isAccumulatedMap = width >= 500
 
     const imageUrl = `data:image/png;base64,${mapData.png_base64}`
 
