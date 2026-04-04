@@ -25,6 +25,10 @@
 
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 
+#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Vector3.h>
+#include <tf2/LinearMath/Quaternion.h>
+
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 
@@ -171,33 +175,46 @@ private:
       double range = cv::norm(tvec);
       if (range > max_range_ || range < 0.1) continue;
 
-      // Get camera→base_link transform from TF
-      geometry_msgs::msg::TransformStamped cam_to_base;
+      // Get camera→base_link transform from TF to account for camera mounting offset
+      geometry_msgs::msg::TransformStamped cam_to_base_msg;
       try {
-        cam_to_base = tf_buffer_->lookupTransform("base_link", "zed_left_camera_frame",
+        cam_to_base_msg = tf_buffer_->lookupTransform("base_link", "zed_left_camera_frame",
           rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
       } catch (...) { continue; }
 
-      // Compute robot pose in map frame:
-      // T_map_robot = T_map_tag × inverse(T_camera_tag) × T_camera_base
-      // Simplified for 2D: use tag's known (x,y,yaw) and detected offset
+      // Build tf2 transform from the looked-up camera→base_link
+      tf2::Quaternion cam_to_base_q(
+        cam_to_base_msg.transform.rotation.x,
+        cam_to_base_msg.transform.rotation.y,
+        cam_to_base_msg.transform.rotation.z,
+        cam_to_base_msg.transform.rotation.w);
+      tf2::Transform cam_to_base(cam_to_base_q, tf2::Vector3(
+        cam_to_base_msg.transform.translation.x,
+        cam_to_base_msg.transform.translation.y,
+        cam_to_base_msg.transform.translation.z));
+
       const auto& marker = it->second;
 
-      // Tag pose in camera frame: tvec = (x_right, y_down, z_forward) in camera optical
-      // Convert to base_link: forward = tvec[2], left = -tvec[0]
-      double tag_fwd = tvec[2];   // forward distance to tag
-      double tag_left = -tvec[0]; // lateral offset
+      // tvec is in camera optical frame (x_right, y_down, z_forward).
+      // Transform tag position from camera frame to base_link frame using the full
+      // cam_to_base transform, which accounts for the camera mounting offset (e.g. 700mm forward).
+      tf2::Vector3 tag_in_cam(tvec[0], tvec[1], tvec[2]);
+      tf2::Vector3 tag_in_base = cam_to_base * tag_in_cam;
+      double tag_fwd  = tag_in_base.x();  // forward in base_link
+      double tag_left = tag_in_base.y();   // left in base_link (ROS base_link Y = left)
 
-      // Get robot yaw from TF (odom frame)
-      geometry_msgs::msg::TransformStamped odom_to_base;
+      // Get robot yaw from map→base_link (not odom→base_link, since pose is published in map frame)
+      geometry_msgs::msg::TransformStamped map_to_base;
       try {
-        odom_to_base = tf_buffer_->lookupTransform("odom", "base_link",
+        map_to_base = tf_buffer_->lookupTransform("map", "base_link",
           rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
       } catch (...) { continue; }
 
       double robot_yaw = std::atan2(
-        2.0 * (odom_to_base.transform.rotation.w * odom_to_base.transform.rotation.z),
-        1.0 - 2.0 * odom_to_base.transform.rotation.z * odom_to_base.transform.rotation.z);
+        2.0 * (map_to_base.transform.rotation.w * map_to_base.transform.rotation.z +
+               map_to_base.transform.rotation.x * map_to_base.transform.rotation.y),
+        1.0 - 2.0 * (map_to_base.transform.rotation.y * map_to_base.transform.rotation.y +
+                      map_to_base.transform.rotation.z * map_to_base.transform.rotation.z));
 
       // Robot position = tag position - offset rotated by robot heading
       // (tag is at known map position, robot sees it at angle relative to heading)
