@@ -16,6 +16,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <std_srvs/srv/empty.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 // Manual yaw extraction (avoids tf2::getYaw linker issues)
@@ -75,6 +77,25 @@ public:
     // Publisher (transient local so late subscribers get the latest map)
     auto qos = rclcpp::QoS(1).transient_local().reliable();
     map_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("live_map", qos);
+
+    // Clear service (resets the grid)
+    clear_srv_ = create_service<std_srvs::srv::Empty>(
+      "clear_map",
+      [this](const std::shared_ptr<std_srvs::srv::Empty::Request>,
+             std::shared_ptr<std_srvs::srv::Empty::Response>) {
+        std::fill(grid_.begin(), grid_.end(), 0.0);
+        has_data_ = false;
+        RCLCPP_INFO(get_logger(), "Map cleared (service)");
+      });
+
+    // Clear via topic (more reliable across DDS middleware)
+    clear_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "clear_map", 10,
+      [this](const std_msgs::msg::Bool::SharedPtr /*msg*/) {
+        std::fill(grid_.begin(), grid_.end(), 0.0);
+        has_data_ = false;
+        RCLCPP_INFO(get_logger(), "Map cleared (topic)");
+      });
 
     // Publish timer
     double rate = get_parameter("publish_rate_hz").as_double();
@@ -210,6 +231,8 @@ private:
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub_;
+  rclcpp::Service<std_srvs::srv::Empty>::SharedPtr clear_srv_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr clear_sub_;
   rclcpp::TimerBase::SharedPtr pub_timer_;
 };
 
