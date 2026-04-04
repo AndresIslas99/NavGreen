@@ -187,6 +187,7 @@ class OperatorNode(Node):
         self.start_rec_client = self.create_client(Trigger, '/session/start_recording')
         self.stop_rec_client = self.create_client(Trigger, '/session/stop_recording')
         self.load_map_client = self.create_client(LoadMap, 'map_server/load_map')
+        self.clear_map_pub = self.create_publisher(Bool, 'clear_map', 10)
 
         # =====================================================================
         # State: raw sensor data
@@ -803,6 +804,8 @@ def create_app(node: OperatorNode) -> FastAPI:
 
     @app.delete("/api/acc_map")
     async def clear_acc_map():
+        """Clear the live scan grid map via topic."""
+        node.clear_map_pub.publish(Bool(data=True))
         return {'success': True}
 
     @app.get("/api/events")
