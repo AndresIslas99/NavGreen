@@ -140,7 +140,7 @@ class OperatorNode(Node):
         # Parameters
         self.declare_parameter('port', 8090)
         self.declare_parameter('max_linear', 0.5)
-        self.declare_parameter('max_angular', 1.0)
+        self.declare_parameter('max_angular', 0.3)
         self.declare_parameter('cmd_vel_timeout', 0.5)
         self.declare_parameter('deadband', 0.08)
         self.declare_parameter('expo', 0.5)
