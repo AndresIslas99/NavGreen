@@ -12,10 +12,12 @@ find_package(geometry_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
+find_package(std_msgs REQUIRED)
+
 # Fusion monitor node
 add_executable(fusion_monitor_node src/fusion_monitor_node.cpp)
 ament_target_dependencies(fusion_monitor_node
-  rclcpp nav_msgs geometry_msgs diagnostic_msgs)
+  rclcpp nav_msgs geometry_msgs diagnostic_msgs sensor_msgs std_msgs)
 target_compile_features(fusion_monitor_node PUBLIC cxx_std_17)
 
 # Covariance override node (fixes zero-covariance from sim)
