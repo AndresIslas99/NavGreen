@@ -1,8 +1,8 @@
 # Local EKF: wheel odometry + IMU → odom→base_link
 #
 # This filter owns the odom→base_link transform.
-# It fuses wheel encoder odometry (50Hz) with ZED IMU (200Hz)
-# to produce a smooth, continuous local pose estimate.
+# It fuses wheel encoder odometry with IMU to produce a smooth,
+# continuous local pose estimate.
 #
 # This filter must remain functional even when visual SLAM degrades.
 
@@ -13,15 +13,16 @@
     publish_tf: true
     print_diagnostics: true
 
+    # Enable dynamic process noise — scales Q by velocity.
+    # Critical for rotation: higher angular velocity = more uncertainty.
+    dynamic_process_noise_covariance: true
+
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link
     world_frame: odom               # local filter operates in odom frame
 
-    # ── Wheel odometry (from agv_odrive) ──
-    # Topic: wheel_odom (namespaced by launch)
-    # Message: nav_msgs/Odometry
-    # frame_id: odom, child_frame_id: base_link
+    # ── Wheel odometry (from agv_odrive or sim bridge) ──
     odom0: wheel_odom
     odom0_config: [true,  true,  false,    # x, y, z
                    false, false, true,     # roll, pitch, yaw
@@ -32,10 +33,25 @@
     odom0_relative: false
     odom0_queue_size: 10
 
-    # ── ZED 2i IMU ──
-    # Topic: /zed/zed_node/imu/data (absolute path, not namespaced)
-    # Message: sensor_msgs/Imu
-    # Provides: orientation, angular velocity, linear acceleration
+    # Override zero covariances from sim (Gazebo bridge sends all zeros).
+    # Without this, EKF treats sim odom as infinitely precise → no correction possible.
+    # Values from diff_drive_controller defaults: [0.001, 0.001, inf, inf, inf, 0.01]
+    odom0_pose_covariance: [0.001, 0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.001, 0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.01]
+    odom0_twist_covariance: [0.001, 0.0,   0.0,   0.0,   0.0,   0.0,
+                             0.0,   0.001, 0.0,   0.0,   0.0,   0.0,
+                             0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
+                             0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
+                             0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
+                             0.0,   0.0,   0.0,   0.0,   0.0,   0.01]
+
+    # ── ZED 2i IMU (or sim IMU) ──
+    # On real hardware: /zed/zed_node/imu/data at 200Hz
+    # In HIL sim: /agv/imu/data at ~20Hz (overridden via launch param)
     imu0: /zed/zed_node/imu/data
     imu0_config: [false, false, false,     # x, y, z
                   true,  true,  true,      # roll, pitch, yaw
@@ -47,9 +63,23 @@
     imu0_remove_gravitational_acceleration: true
     imu0_queue_size: 50
 
+    # Override IMU covariance (sim sends zeros)
+    imu0_pose_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.001, 0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.001, 0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.005]
+    imu0_twist_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0005, 0.0,  0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0005, 0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.001]
+
     # ── Process noise covariance ──
-    # Diagonal values: conservative starting point, tune on hardware
     # Order: x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
+    # With dynamic_process_noise_covariance=true, these scale by velocity.
     process_noise_covariance:
       [0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
