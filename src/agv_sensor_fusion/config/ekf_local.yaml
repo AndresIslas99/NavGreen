@@ -36,18 +36,20 @@
     # Override zero covariances from sim (Gazebo bridge sends all zeros).
     # Without this, EKF treats sim odom as infinitely precise → no correction possible.
     # Values from diff_drive_controller defaults: [0.001, 0.001, inf, inf, inf, 0.01]
+    # Yaw covariance widened from 0.01 to 0.05 to allow absolute IMU yaw to
+    # correct wheel-odometry heading drift over time.
     odom0_pose_covariance: [0.001, 0.0,   0.0,   0.0,   0.0,   0.0,
                             0.0,   0.001, 0.0,   0.0,   0.0,   0.0,
                             0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
                             0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
                             0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
-                            0.0,   0.0,   0.0,   0.0,   0.0,   0.01]
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
     odom0_twist_covariance: [0.001, 0.0,   0.0,   0.0,   0.0,   0.0,
                              0.0,   0.001, 0.0,   0.0,   0.0,   0.0,
                              0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
                              0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
                              0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
-                             0.0,   0.0,   0.0,   0.0,   0.0,   0.01]
+                             0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
 
     # ── ZED 2i IMU (or sim IMU) ──
     # On real hardware: /zed/zed_node/imu/data at 200Hz
@@ -58,7 +60,10 @@
                   false, false, false,     # vx, vy, vz
                   true,  true,  true,      # vroll, vpitch, vyaw
                   true,  true,  false]     # ax, ay, az
-    imu0_differential: true
+    # Absolute IMU yaw provides a global heading reference that can correct
+    # wheel-odometry heading drift. Covariance set wider (0.1) to account for
+    # potential magnetic interference in greenhouse.
+    imu0_differential: false
     imu0_relative: false
     imu0_remove_gravitational_acceleration: true
     imu0_queue_size: 50
@@ -69,7 +74,7 @@
                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                            0.0,   0.0,   0.0,   0.001, 0.0,   0.0,
                            0.0,   0.0,   0.0,   0.0,   0.001, 0.0,
-                           0.0,   0.0,   0.0,   0.0,   0.0,   0.005]
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.1]
     imu0_twist_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                             0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                             0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
@@ -80,9 +85,11 @@
     # ── Process noise covariance ──
     # Order: x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
     # With dynamic_process_noise_covariance=true, these scale by velocity.
+    # Symmetric X/Y noise: differential drive can face any direction in the odom
+    # frame, so process noise should be direction-independent.
     process_noise_covariance:
-      [0.03,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
-       0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      [0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.03,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.03,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
