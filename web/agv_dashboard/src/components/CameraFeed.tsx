@@ -13,7 +13,7 @@ export function CameraFeed({ visible }: Props) {
   const handleSnapshot = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
     try {
-      const res = await fetch('/api/camera/snapshot')
+      const res = await fetch(`${location.protocol}//${location.hostname}:8091/camera/snapshot`)
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -27,8 +27,10 @@ export function CameraFeed({ visible }: Props) {
 
   if (!visible) return null
 
-  const cameraUrl = `${location.protocol}//${location.host}/api/camera/stream`
-  const depthUrl = `${location.protocol}//${location.host}/api/depth/stream`
+  // C++ image server on port 8091 (OpenCV JPEG, 3-5x faster than Python PIL)
+  const imageHost = `${location.protocol}//${location.hostname}:8091`
+  const cameraUrl = `${imageHost}/camera/stream`
+  const depthUrl = `${imageHost}/depth/stream`
 
   return (
     <>
