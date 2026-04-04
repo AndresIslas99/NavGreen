@@ -114,7 +114,7 @@ def generate_launch_description():
             namespace=ns,
             parameters=[ekf_local_base, {
                 'use_sim_time': True,
-                'frequency': 15.0,               # sim at ~100% realtime now
+                'frequency': 50.0,               # high freq so EKF processes data on arrival, not timer-bound
                 'odom0': 'wheel_odom_cov',        # from covariance_override relay
                 'imu0': '/agv/imu/data_cov',      # from covariance_override relay
             }],
@@ -123,7 +123,6 @@ def generate_launch_description():
         ),
 
         # ── Global EKF: local + sim visual odom → map→odom ──
-        # Uses covariance-overridden visual_slam topic
         Node(
             package='robot_localization',
             executable='ekf_node',
@@ -131,6 +130,7 @@ def generate_launch_description():
             namespace=ns,
             parameters=[ekf_global_base, {
                 'use_sim_time': True,
+                'frequency': 20.0,
                 'odom1': '/visual_slam/tracking/odometry_cov',
             }],
             remappings=[('odometry/filtered', 'odometry/global')],
