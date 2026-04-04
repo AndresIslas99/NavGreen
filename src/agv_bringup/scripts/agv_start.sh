@@ -13,22 +13,23 @@
 
 set -eo pipefail
 
-# Wait for network interface to be available (WiFi takes seconds after boot)
-IFACE="${AGV_IFACE:-wlP1p1s0}"
-echo "Waiting for network interface $IFACE..."
-for i in $(seq 1 30); do
-    if ip link show "$IFACE" 2>/dev/null | grep -q "state UP"; then
-        echo "Interface $IFACE is UP (attempt $i)"
-        break
+# Wait for network — USB (l4tbr0) is always up, WiFi may take longer
+echo "Checking network interfaces..."
+for iface in l4tbr0 wlP1p1s0; do
+    if ip link show "$iface" 2>/dev/null | grep -q "state UP"; then
+        echo "  $iface: UP"
+    else
+        echo "  $iface: waiting..."
+        for i in $(seq 1 15); do
+            if ip link show "$iface" 2>/dev/null | grep -q "state UP"; then
+                echo "  $iface: UP (attempt $i)"
+                break
+            fi
+            sleep 1
+        done
     fi
-    if [ "$i" -eq 30 ]; then
-        echo "WARNING: $IFACE not UP after 30s, launching anyway"
-    fi
-    sleep 1
 done
-
-# Extra wait for IP assignment
-sleep 2
+sleep 1
 
 # ROS2 setup.bash references unset variables — -u would fail on AMENT_TRACE_SETUP_FILES
 source /opt/ros/humble/setup.bash
