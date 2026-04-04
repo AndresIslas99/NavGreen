@@ -108,15 +108,31 @@ public:
   }
 
 private:
+  int scan_total_{0};
+  int scan_processed_{0};
+
   void scan_cb(const sensor_msgs::msg::LaserScan::SharedPtr msg)
   {
-    // Get robot pose in map frame via TF
+    scan_total_++;
+
+    // Get robot pose — use latest TF (TimePointZero) instead of exact stamp.
+    // Exact stamp often fails with sim_time jitter over USB, dropping >90% of scans.
+    // For mapping, slight pose lag is acceptable.
     geometry_msgs::msg::TransformStamped tf;
     try {
       tf = tf_buffer_->lookupTransform(map_frame_, msg->header.frame_id,
-        msg->header.stamp, rclcpp::Duration::from_seconds(0.2));
+        rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
     } catch (...) {
-      return; // TF not available yet
+      if (scan_total_ % 50 == 0) {
+        RCLCPP_WARN(get_logger(), "TF not available — %d/%d scans processed", scan_processed_, scan_total_);
+      }
+      return;
+    }
+    scan_processed_++;
+
+    if (scan_total_ % 100 == 0) {
+      RCLCPP_INFO(get_logger(), "Scans: %d/%d processed (%.0f%%)",
+        scan_processed_, scan_total_, scan_processed_ * 100.0 / scan_total_);
     }
 
     double rx = tf.transform.translation.x;

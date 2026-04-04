@@ -36,6 +36,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -54,11 +55,14 @@ def generate_launch_description():
     ekf_global_base = os.path.join(fusion_dir, 'config', 'ekf_global.yaml')
     nav2_params_base = os.path.join(nav_dir, 'config', 'nav2_params.yaml')
     nav2_hil_overrides = os.path.join(nav_dir, 'config', 'nav2_hil_overrides.yaml')
+    slam_toolbox_config = os.path.join(nav_dir, 'config', 'slam_toolbox.yaml')
 
     return LaunchDescription([
         # ── Arguments ──
         DeclareLaunchArgument('namespace', default_value='agv'),
         DeclareLaunchArgument('map', description='Path to map YAML file (required)'),
+        DeclareLaunchArgument('enable_slam_toolbox', default_value='true',
+                              description='Enable SLAM Toolbox for mapping'),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -175,6 +179,17 @@ def generate_launch_description():
                 'use_sim_time': True,
             }],
             output='log',
+        ),
+
+        # ── SLAM Toolbox (loop-closed occupancy grid for commissioning) ──
+        Node(
+            package='slam_toolbox',
+            executable='async_slam_toolbox_node',
+            name='slam_toolbox',
+            namespace=ns,
+            parameters=[slam_toolbox_config, {'use_sim_time': True}],
+            output='log',
+            condition=IfCondition(LaunchConfiguration('enable_slam_toolbox')),
         ),
 
         # ── C++ Image Server (camera + depth MJPEG on port 8091) ──
