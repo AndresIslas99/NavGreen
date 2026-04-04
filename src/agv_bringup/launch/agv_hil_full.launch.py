@@ -73,6 +73,36 @@ def generate_launch_description():
             }.items(),
         ),
 
+        # ── Covariance override (fixes zero-covariance from Gazebo bridge) ──
+        # Sim publishes wheel_odom and imu/data with all-zero covariances.
+        # This relay reads the raw topics and publishes with realistic covariance
+        # on _cov topics that the EKF subscribes to.
+        Node(
+            package='agv_sensor_fusion',
+            executable='covariance_override_node',
+            name='covariance_override',
+            namespace=ns,
+            parameters=[{
+                'use_sim_time': True,
+                'odom_pos_cov_xy': 0.001,
+                'odom_pos_cov_yaw': 0.01,
+                'odom_twist_cov_xy': 0.001,
+                'odom_twist_cov_yaw': 0.01,
+                'vslam_pos_cov_xy': 0.01,
+                'vslam_pos_cov_yaw': 0.05,
+                'imu_orient_cov': 0.001,
+                'imu_gyro_cov': 0.0005,
+                'imu_accel_cov': 0.01,
+            }],
+            remappings=[
+                ('wheel_odom_raw', 'wheel_odom'),        # reads sim odom
+                ('wheel_odom', 'wheel_odom_cov'),        # publishes with covariance
+                ('imu_raw', 'imu/data'),                 # reads sim IMU
+                ('imu/data', 'imu/data_cov'),            # publishes with covariance
+            ],
+            output='log',
+        ),
+
         # ── Local EKF: sim wheel_odom + sim IMU → odom→base_link ──
         # Base config + HIL overrides:
         #   frequency: 20Hz (sim rates ~11Hz odom, ~17Hz IMU — 40Hz was too high)
@@ -85,20 +115,24 @@ def generate_launch_description():
             parameters=[ekf_local_base, {
                 'use_sim_time': True,
                 'frequency': 20.0,
-                'imu0': '/agv/imu/data',
+                'odom0': 'wheel_odom_cov',       # from covariance_override relay
+                'imu0': '/agv/imu/data_cov',     # from covariance_override relay
             }],
             remappings=[('odometry/filtered', 'odometry/local')],
             output='log',
         ),
 
         # ── Global EKF: local + sim visual odom → map→odom ──
-        # Base config (identical to production for global EKF)
+        # Uses covariance-overridden visual_slam topic
         Node(
             package='robot_localization',
             executable='ekf_node',
             name='ekf_global',
             namespace=ns,
-            parameters=[ekf_global_base, {'use_sim_time': True}],
+            parameters=[ekf_global_base, {
+                'use_sim_time': True,
+                'odom1': '/visual_slam/tracking/odometry_cov',
+            }],
             remappings=[('odometry/filtered', 'odometry/global')],
             output='log',
         ),
