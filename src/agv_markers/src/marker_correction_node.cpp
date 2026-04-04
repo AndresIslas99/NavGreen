@@ -58,7 +58,7 @@ public:
 
     // Subscribers
     detection_sub_ = create_subscription<apriltag_msgs::msg::AprilTagDetectionArray>(
-      "/detections", 10,
+      "detections", 10,
       std::bind(&MarkerCorrectionNode::on_detection, this, std::placeholders::_1));
 
     caminfo_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
