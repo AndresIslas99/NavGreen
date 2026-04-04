@@ -48,6 +48,7 @@ public:
     declare_parameter("tag_size", 0.2);
     declare_parameter("relocalization_threshold", 2.0);  // meters — force reset above this
     declare_parameter("min_confidence", 50.0);            // decision_margin minimum for reloc
+    declare_parameter("relocalization_cooldown_ms", 500); // pause corrections after set_pose
 
     max_range_ = get_parameter("max_detection_range").as_double();
     cov_xy_ = get_parameter("covariance_xy").as_double();
@@ -55,6 +56,7 @@ public:
     tag_size_ = get_parameter("tag_size").as_double();
     reloc_threshold_ = get_parameter("relocalization_threshold").as_double();
     min_confidence_ = get_parameter("min_confidence").as_double();
+    reloc_cooldown_ms_ = get_parameter("relocalization_cooldown_ms").as_int();
 
     auto registry_file = get_parameter("markers_registry_file").as_string();
     if (!registry_file.empty()) load_registry(registry_file);
@@ -96,8 +98,9 @@ public:
     // Service client to force-relocalize EKF when drift is catastrophic
     set_pose_client_ = create_client<robot_localization::srv::SetPose>("set_pose");
 
-    RCLCPP_INFO(get_logger(), "Marker correction: %zu markers, tag_size=%.3fm, reloc_threshold=%.1fm",
-      registry_.size(), tag_size_, reloc_threshold_);
+    RCLCPP_INFO(get_logger(),
+      "Marker correction: %zu markers, tag_size=%.3fm, reloc_threshold=%.1fm, cooldown=%ldms",
+      registry_.size(), tag_size_, reloc_threshold_, reloc_cooldown_ms_);
   }
 
 private:
@@ -143,6 +146,19 @@ private:
   void on_detection(const apriltag_msgs::msg::AprilTagDetectionArray::SharedPtr msg)
   {
     if (!has_caminfo_) return;
+
+    // After set_pose, pause corrections for N EKF cycles to let the reset settle.
+    // Without this, odom/cuVSLAM updates between the async call and EKF processing
+    // can immediately "correct" the reset back to the drifted position.
+    if (relocalization_pending_) {
+      auto elapsed = (now() - reloc_request_time_).nanoseconds() / 1000000;
+      if (elapsed < reloc_cooldown_ms_) {
+        return;  // still in cooldown — skip all corrections
+      }
+      // Cooldown expired, resume normal operation
+      relocalization_pending_ = false;
+      RCLCPP_INFO(get_logger(), "Relocalization cooldown expired, resuming corrections");
+    }
 
     for (const auto& det : msg->detections) {
       auto it = registry_.find(det.id);
@@ -281,11 +297,32 @@ private:
         if (set_pose_client_->service_is_ready()) {
           auto request = std::make_shared<robot_localization::srv::SetPose::Request>();
           request->pose = correction;
-          set_pose_client_->async_send_request(request);
+
+          // Set cooldown flag BEFORE sending request to block corrections immediately
+          relocalization_pending_ = true;
+          reloc_request_time_ = now();
+
+          auto future = set_pose_client_->async_send_request(request,
+            [this, robot_x, robot_y, det_id = det.id](
+              rclcpp::Client<robot_localization::srv::SetPose>::SharedFuture result) {
+              try {
+                result.get();  // throws if service call failed
+                RCLCPP_INFO(get_logger(),
+                  "RELOCALIZATION SUCCESS: Tag %d, EKF reset to (%.2f, %.2f)",
+                  det_id, robot_x, robot_y);
+              } catch (const std::exception& e) {
+                RCLCPP_ERROR(get_logger(),
+                  "RELOCALIZATION FAILED: Tag %d, set_pose error: %s — "
+                  "clearing cooldown to resume corrections",
+                  det_id, e.what());
+                relocalization_pending_ = false;
+              }
+            });
+
           RCLCPP_WARN(get_logger(),
             "RELOCALIZATION: Tag %d, drift=%.1fm (threshold=%.1fm), "
-            "resetting EKF to (%.2f, %.2f)",
-            det.id, drift, reloc_threshold_, robot_x, robot_y);
+            "resetting EKF to (%.2f, %.2f), cooldown %ldms",
+            det.id, drift, reloc_threshold_, robot_x, robot_y, reloc_cooldown_ms_);
         }
       } else {
         // Normal correction — let EKF fuse smoothly
@@ -307,6 +344,11 @@ private:
   std::map<int, MarkerPose> registry_;
   double max_range_, cov_xy_, cov_yaw_, tag_size_;
   double reloc_threshold_, min_confidence_;
+  int64_t reloc_cooldown_ms_;
+
+  // Relocalization cooldown state
+  bool relocalization_pending_{false};
+  rclcpp::Time reloc_request_time_{0, 0, RCL_ROS_TIME};
 
   // Camera intrinsics
   bool has_caminfo_{false};
