@@ -83,10 +83,10 @@ public:
     auto cuvslam_topic = this->get_parameter("cuvslam_status_topic").as_string();
 
     // Initialize per-sensor health trackers (M6)
-    sensor_wheel_odom_ = {"wheel_odom", 50.0, 2.0};
-    sensor_cuvslam_ = {"cuVSLAM", 10.0, 2.0};
-    sensor_imu_ = {"IMU", 200.0, 2.0};
-    sensor_markers_ = {"AprilTag", 0.0, 0.0};  // event-driven, no rate expectation
+    sensor_wheel_odom_ = {"wheel_odom", 50.0, 2.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};
+    sensor_cuvslam_ = {"cuVSLAM", 10.0, 2.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};
+    sensor_imu_ = {"IMU", 200.0, 2.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};
+    sensor_markers_ = {"AprilTag", 0.0, 0.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};  // event-driven
 
     // ── Subscribers ──
 
