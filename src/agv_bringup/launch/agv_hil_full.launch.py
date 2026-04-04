@@ -192,6 +192,44 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration('enable_slam_toolbox')),
         ),
 
+        # ── AprilTag detection + marker correction (drift correction) ──
+        Node(
+            package='apriltag_ros',
+            executable='apriltag_node',
+            name='apriltag_node',
+            namespace=ns,
+            parameters=[{
+                'family': '36h11',
+                'size': 0.16,
+                'max_hamming': 0,
+                'detector.threads': 2,
+                'detector.quad_decimate': 2.0,
+                'use_sim_time': True,
+            }],
+            remappings=[
+                ('image_rect', '/zed/zed_node/left/image_rect_color'),
+                ('camera_info', '/zed/zed_node/left/camera_info'),
+            ],
+            output='log',
+        ),
+
+        Node(
+            package='agv_markers',
+            executable='marker_correction_node',
+            name='marker_correction',
+            namespace=ns,
+            parameters=[{
+                'markers_registry_file': os.path.join(
+                    get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
+                'max_detection_range': 5.0,
+                'tag_size': 0.16,
+                'covariance_xy': 0.01,
+                'covariance_yaw': 0.03,
+                'use_sim_time': True,
+            }],
+            output='log',
+        ),
+
         # ── C++ Image Server (camera + depth MJPEG on port 8091) ──
         Node(
             package='agv_image_server',
