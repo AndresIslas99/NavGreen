@@ -13,12 +13,14 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(apriltag_msgs REQUIRED)
+find_package(robot_localization REQUIRED)
 find_package(OpenCV REQUIRED)
 
 add_executable(marker_correction_node src/marker_correction_node.cpp)
 ament_target_dependencies(marker_correction_node
-  rclcpp geometry_msgs sensor_msgs std_msgs tf2_ros apriltag_msgs)
+  rclcpp geometry_msgs sensor_msgs nav_msgs std_msgs tf2_ros apriltag_msgs robot_localization)
 target_link_libraries(marker_correction_node ${OpenCV_LIBS})
 
 install(TARGETS marker_correction_node DESTINATION lib/${PROJECT_NAME})
