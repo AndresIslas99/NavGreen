@@ -74,7 +74,9 @@ def generate_launch_description():
         ),
 
         # ── Local EKF: sim wheel_odom + sim IMU → odom→base_link ──
-        # Base config + HIL overrides (frequency=40Hz, sim IMU topic)
+        # Base config + HIL overrides:
+        #   frequency: 20Hz (sim rates ~11Hz odom, ~17Hz IMU — 40Hz was too high)
+        #   imu0: /agv/imu/data (sim IMU, not /zed/zed_node/imu/data)
         Node(
             package='robot_localization',
             executable='ekf_node',
@@ -82,7 +84,7 @@ def generate_launch_description():
             namespace=ns,
             parameters=[ekf_local_base, {
                 'use_sim_time': True,
-                'frequency': 40.0,
+                'frequency': 20.0,
                 'imu0': '/agv/imu/data',
             }],
             remappings=[('odometry/filtered', 'odometry/local')],

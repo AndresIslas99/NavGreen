@@ -2,10 +2,7 @@
 #
 # This filter owns the map→odom transform.
 # It fuses the local EKF output (continuous odom) with cuVSLAM
-# visual odometry (absolute pose in map frame) to correct drift.
-#
-# When visual SLAM loses tracking, this filter holds the last
-# known map→odom correction while the local filter continues.
+# visual odometry to correct drift in the map frame.
 
 /**:
   ros__parameters:
@@ -14,14 +11,14 @@
     publish_tf: true
     print_diagnostics: true
 
+    dynamic_process_noise_covariance: true
+
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link
     world_frame: map                # global filter operates in map frame
 
     # ── Local EKF output (continuous odometry) ──
-    # Topic: odometry/local (namespaced by launch)
-    # This provides continuous pose updates from wheel+IMU
     odom0: odometry/local
     odom0_config: [true,  true,  false,    # x, y, z
                    false, false, true,     # roll, pitch, yaw
@@ -33,8 +30,6 @@
     odom0_queue_size: 10
 
     # ── cuVSLAM visual odometry ──
-    # Topic: /visual_slam/tracking/odometry (absolute path)
-    # Provides absolute pose in map frame from visual SLAM
     odom1: /visual_slam/tracking/odometry
     odom1_config: [true,  true,  false,    # x, y, z
                    false, false, true,     # roll, pitch, yaw
@@ -45,14 +40,19 @@
     odom1_relative: false
     odom1_queue_size: 5
 
-    # Reject cuVSLAM outliers via Mahalanobis distance (prevents zero-covariance crashes)
+    # Reject cuVSLAM outliers via Mahalanobis distance
     odom1_pose_rejection_threshold: 5.0
     odom1_twist_rejection_threshold: 3.0
 
-    # ── Process noise covariance ──
-    # 2x higher than local filter — global corrections should be gradual.
-    # This prevents the global EKF from reacting too aggressively to
-    # cuVSLAM corrections, keeping the map→odom transform smooth.
+    # Override zero covariances from sim for cuVSLAM
+    odom1_pose_covariance: [0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.01,  0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
+
+    # ── Process noise covariance (2x local — gradual corrections) ──
     process_noise_covariance:
       [0.10,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.10,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
