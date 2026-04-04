@@ -261,29 +261,14 @@ class OperatorNode(Node):
         self._mission_pause = False
         self.mission_progress = None  # {mission_id, current_node, total_nodes, status}
 
-        # =====================================================================
-        # Scan Accumulation Grid (live mapping visualization)
-        # =====================================================================
-        self._acc_resolution = 0.1  # meters per cell
-        self._acc_size = 500  # cells per side → 50m x 50m
-        self._acc_origin = -25.0  # meters (centered)
-        # Probabilistic grid: 0=unknown, positive=occupied evidence, negative=free evidence
-        self._acc_grid = np.zeros(
-            (self._acc_size, self._acc_size), dtype=np.float32)
+        # Scan accumulation removed — C++ scan_grid_mapper handles occupancy grid.
+        # Stubs for WS broadcast compat (acc_map messages no longer sent from Python).
         self._acc_changed = False
         self._acc_png = None
-        self._acc_meta = {
-            'resolution': self._acc_resolution,
-            'origin_x': self._acc_origin,
-            'origin_y': self._acc_origin,
-            'width': self._acc_size,
-            'height': self._acc_size,
-        }
 
         # --- Timers ---
         self.create_timer(0.1, self._watchdog)
         self.create_timer(1.0, self._update_health)
-        self.create_timer(2.0, self._update_acc_png)  # convert accumulated grid to PNG at 0.5Hz
 
         self.emit_event('info', 'SYSTEM', 'Operator backend started')
         self.get_logger().info(
@@ -433,37 +418,7 @@ class OperatorNode(Node):
         dt = times_deque[-1] - times_deque[0]
         return round((len(times_deque) - 1) / dt, 1) if dt > 0 else 0.0
 
-    def _update_acc_png(self):
-        """Convert accumulated scan grid to PNG for dashboard (0.5Hz)."""
-        if not self._acc_changed:
-            return
-        # Don't reset _acc_changed here — WS loop needs it to know there's new data
-        # WS loop will reset it after broadcasting
-        try:
-            grid = self._acc_grid
-            # Thresholds:
-            #   < -0.5  → free (rays passed through) → light
-            #   > 1.5   → occupied (multiple hits) → dark
-            #   else    → unknown → medium gray background
-            img = np.full(grid.shape, 140, dtype=np.uint8)  # unknown
-            img[grid < -0.5] = 220   # free = light
-            img[grid > 1.5] = 25     # occupied = dark
-            # Gradient for in-between
-            transition = (grid >= -0.5) & (grid <= 1.5) & (grid != 0.0)
-            img[transition] = (170 - (grid[transition] * 60)).clip(40, 210).astype(np.uint8)
-            img = np.flipud(img)
-            pil_img = PILImage.fromarray(img, mode='L')
-            buf = io.BytesIO()
-            pil_img.save(buf, format='PNG', optimize=True)
-            self._acc_png = buf.getvalue()
-        except Exception:
-            pass
-
-    def clear_accumulated_map(self):
-        """Reset the scan accumulation grid."""
-        self._acc_grid.fill(0.0)
-        self._acc_changed = True
-        self._acc_png = None
+    # _update_acc_png and clear_accumulated_map removed — C++ scan_grid_mapper handles this.
 
     # =====================================================================
     # Callbacks
@@ -550,68 +505,32 @@ class OperatorNode(Node):
             pass
 
     def _scan_cb(self, msg):
+        """Extract world-frame scan points for dashboard red dots.
+        Grid accumulation removed — handled by C++ scan_grid_mapper_node."""
         try:
             pose = self.robot_pose
             px, py, pt = pose['x'], pose['y'], pose['theta']
             cos_t = math.cos(pt)
             sin_t = math.sin(pt)
             points = []
-            res = self._acc_resolution
-            orig = self._acc_origin
-            sz = self._acc_size
-            grid = self._acc_grid
-            rx = int((px - orig) / res)
-            ry = int((py - orig) / res)
 
             angle = msg.angle_min
             ray_idx = 0
             for r in msg.ranges:
                 ray_idx += 1
-                if msg.range_min < r < msg.range_max:
+                if msg.range_min < r < msg.range_max and ray_idx % 2 == 0:
                     lx = r * math.cos(angle)
                     ly = r * math.sin(angle)
                     mx = px + cos_t * lx - sin_t * ly
                     my = py + sin_t * lx + cos_t * ly
                     points.append({'x': round(mx, 3), 'y': round(my, 3)})
-
-                    # Only process every 3rd ray for grid accumulation
-                    if ray_idx % 3 == 0:
-                        gx = int((mx - orig) / res)
-                        gy = int((my - orig) / res)
-
-                        # Endpoint: increase occupied evidence (+2.0, fast detection)
-                        if 0 <= gx < sz and 0 <= gy < sz:
-                            grid[gy, gx] = min(10.0, grid[gy, gx] + 2.0)
-
-                        # Free ray: decrease evidence along ray
-                        self._raycast_free(rx, ry, gx, gy)
-
                 angle += msg.angle_increment
 
             self.scan_points = points
-            self._acc_changed = True
         except Exception:
             pass
 
-    def _raycast_free(self, x0, y0, x1, y1):
-        """Mark cells along ray as free (decrease evidence)."""
-        sz = self._acc_size
-        grid = self._acc_grid
-        dx = abs(x1 - x0)
-        dy = abs(y1 - y0)
-        steps = max(dx, dy)
-        if steps == 0:
-            return
-        step = max(3, steps // 20)  # coarse stepping for performance
-        sx = (x1 - x0) / steps
-        sy = (y1 - y0) / steps
-        cx, cy = float(x0), float(y0)
-        for _ in range(0, steps - 1, step):
-            gx, gy = int(cx), int(cy)
-            if 0 <= gx < sz and 0 <= gy < sz:
-                grid[gy, gx] = max(-5.0, grid[gy, gx] - 0.5)
-            cx += sx * step
-            cy += sy * step
+    # _raycast_free removed — C++ scan_grid_mapper handles Bresenham raycast.
 
     def _camera_cb(self, msg):
         """Convert raw Image to JPEG for streaming."""
@@ -954,14 +873,11 @@ def create_app(node: OperatorNode) -> FastAPI:
 
     @app.get("/api/acc_map/image")
     async def get_acc_map_image():
-        if node._acc_png:
-            return Response(content=node._acc_png, media_type='image/png')
-        return JSONResponse({'error': 'No accumulated map yet'}, 404)
+        # Scan accumulator removed — use /agv/live_map from scan_grid_mapper
+        return JSONResponse({'error': 'Use /agv/live_map from scan_grid_mapper'}, 404)
 
     @app.delete("/api/acc_map")
     async def clear_acc_map():
-        node.clear_accumulated_map()
-        node.emit_event('info', 'MAPPING', 'Accumulated map cleared')
         return {'success': True}
 
     @app.get("/api/events")
