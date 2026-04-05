@@ -9,11 +9,10 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <exec_depend>rclpy</exec_depend>
+  <!-- Runtime deps are TypeScript (rclnodejs); ROS msg deps resolved at build time -->
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>std_srvs</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
 
   <export>
