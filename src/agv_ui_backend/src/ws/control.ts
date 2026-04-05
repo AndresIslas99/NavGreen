@@ -1,5 +1,8 @@
 /**
  * WebSocket /ws/control handler — 5Hz status broadcast + message handlers.
+ *
+ * Auth: When auth is enabled, clients must pass ?token=<jwt> in the WS URL.
+ * Viewers receive status only; operators/engineers can send commands.
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
@@ -7,6 +10,7 @@ import * as http from 'http';
 import * as rclnodejs from 'rclnodejs';
 import type { AppDeps } from '../app_deps';
 import { allowedActions } from '../state_machine';
+import type { Role } from '../auth';
 
 function calcHz(times: number[]): number {
   if (times.length < 2) return 0;
@@ -38,10 +42,34 @@ function getStatus(deps: AppDeps) {
   };
 }
 
+/**
+ * Verify WebSocket auth token from query string.
+ * Returns role if valid (or 'operator' if auth disabled), null if rejected.
+ */
+function verifyWsAuth(req: http.IncomingMessage, deps: AppDeps): Role | null {
+  if (!deps.authManager.enabled) return 'operator';
+  try {
+    const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+    const token = url.searchParams.get('token');
+    if (!token) return null;
+    const user = deps.authManager.verify(token);
+    return user ? user.role : null;
+  } catch {
+    return null;
+  }
+}
+
 export function setupControlWs(server: http.Server, deps: AppDeps): void {
   const wss = new WebSocketServer({ server, path: '/ws/control' });
 
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+    const role = verifyWsAuth(req, deps);
+    if (role === null) {
+      ws.close(4401, 'Unauthorized — pass ?token=<jwt> in WebSocket URL');
+      return;
+    }
+    const canCommand = role === 'operator' || role === 'engineer';
+
     deps.state.activeClients++;
     console.log(`Dashboard client connected (${deps.state.activeClients})`);
 
@@ -93,6 +121,13 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
     ws.on('message', (data: Buffer) => {
       try {
         const msg = JSON.parse(data.toString());
+
+        // Viewers can only receive status; reject commands
+        if (!canCommand) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Viewer role cannot send commands' }));
+          return;
+        }
+
         switch (msg.type) {
           case 'cmd_vel':
             deps.ros.sendCmdVel(msg.linear || 0, msg.angular || 0);
@@ -153,7 +188,17 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
 export function setupTeleopWs(server: http.Server, deps: AppDeps): void {
   const wss = new WebSocketServer({ server, path: '/ws/teleop' });
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+    const role = verifyWsAuth(req, deps);
+    if (role === null) {
+      ws.close(4401, 'Unauthorized');
+      return;
+    }
+    if (role === 'viewer') {
+      ws.close(4403, 'Viewer role cannot use teleop');
+      return;
+    }
+
     deps.state.activeClients++;
     ws.on('message', (data: Buffer) => {
       try {
