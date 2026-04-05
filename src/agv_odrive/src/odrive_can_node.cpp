@@ -28,6 +28,9 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   // has gear_ratio configured. Set to 10.0 for a 10:1 planetary gearbox with raw
   // encoder feedback.
   this->declare_parameter("gear_ratio", 1.0);
+  this->declare_parameter("max_fet_temp", 70.0);
+  this->declare_parameter("max_motor_temp", 80.0);
+  this->declare_parameter("critical_temp_offset", 10.0);
 
   // -- Read parameters --
   can_interface_ = this->get_parameter("can_interface").as_string();
@@ -50,6 +53,9 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   max_wheel_accel_ = static_cast<float>(this->get_parameter("max_wheel_accel").as_double());
   zero_vel_epsilon_ = static_cast<float>(this->get_parameter("zero_vel_epsilon").as_double());
   gear_ratio_ = this->get_parameter("gear_ratio").as_double();
+  max_fet_temp_ = this->get_parameter("max_fet_temp").as_double();
+  max_motor_temp_ = this->get_parameter("max_motor_temp").as_double();
+  critical_temp_offset_ = this->get_parameter("critical_temp_offset").as_double();
 
   // -- Validate --
   if (wheel_radius_ <= 0.0) {
@@ -128,12 +134,46 @@ bool ODriveCANNode::init_can() {
   return true;
 }
 
+void ODriveCANNode::check_temperature(const AxisData& axis) {
+  double max_temp = std::max(
+    static_cast<double>(axis.fet_temp),
+    static_cast<double>(axis.motor_temp));
+
+  if (max_temp > max_fet_temp_ + critical_temp_offset_ ||
+      axis.motor_temp > max_motor_temp_ + critical_temp_offset_) {
+    thermal_state_ = "critical";
+    RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
+      "CRITICAL: Temperature limit exceeded (FET=%.1f Motor=%.1f), disabling motors",
+      axis.fet_temp, axis.motor_temp);
+    stop_motors();
+  } else if (axis.fet_temp > max_fet_temp_ || axis.motor_temp > max_motor_temp_) {
+    thermal_state_ = "warning";
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+      "Temperature warning: FET=%.1f (limit %.1f) Motor=%.1f (limit %.1f)",
+      axis.fet_temp, max_fet_temp_, axis.motor_temp, max_motor_temp_);
+  } else {
+    thermal_state_ = "ok";
+  }
+}
+
 // ── Main loop (50 Hz) ──
 
 void ODriveCANNode::main_loop() {
-  // Retry CAN if not connected
+  // Retry CAN with exponential backoff
   if (!can_ || !can_->is_open()) {
-    if (!init_can()) return;
+    auto now = this->now();
+    auto elapsed = (now - last_can_retry_).nanoseconds() / 1000000;
+    if (elapsed < can_retry_delay_ms_) return;
+    last_can_retry_ = now;
+    if (!init_can()) {
+      can_retry_delay_ms_ = std::min(can_retry_delay_ms_ * 2, 3000);
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+        "CAN init failed on %s, next retry in %dms",
+        can_interface_.c_str(), can_retry_delay_ms_);
+      return;
+    }
+    RCLCPP_INFO(get_logger(), "CAN connection restored on %s", can_interface_.c_str());
+    can_retry_delay_ms_ = 100;
   }
 
   // Read all pending CAN messages
@@ -220,6 +260,7 @@ void ODriveCANNode::read_can_messages() {
         auto temp = TemperatureMsg::parse(frame.data);
         axis->fet_temp = temp.fet_temperature;
         axis->motor_temp = temp.motor_temperature;
+        check_temperature(*axis);
         break;
       }
       case cmd::GET_VBUS_VOLTAGE: {
@@ -458,12 +499,13 @@ void ODriveCANNode::publish_motor_state() {
     R"({"left_state":%d,"right_state":%d,"left_errors":%u,"right_errors":%u,"armed":%s,)"
     R"("bus_voltage":%.2f,"bus_current":%.2f,)"
     R"("left_fet_temp":%.1f,"left_motor_temp":%.1f,)"
-    R"("right_fet_temp":%.1f,"right_motor_temp":%.1f})",
+    R"("right_fet_temp":%.1f,"right_motor_temp":%.1f,"thermal_state":"%s"})",
     left_.state, right_.state, left_.errors, right_.errors,
     motors_armed() ? "true" : "false",
     bus_voltage_, bus_current_,
     static_cast<double>(left_.fet_temp), static_cast<double>(left_.motor_temp),
-    static_cast<double>(right_.fet_temp), static_cast<double>(right_.motor_temp));
+    static_cast<double>(right_.fet_temp), static_cast<double>(right_.motor_temp),
+    thermal_state_.c_str());
   msg.data = buf;
   pub_motor_state_->publish(msg);
 }

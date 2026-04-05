@@ -49,6 +49,11 @@ public:
     declare_parameter("relocalization_threshold", 2.0);  // meters — force reset above this
     declare_parameter("min_confidence", 50.0);            // decision_margin minimum for reloc
     declare_parameter("relocalization_cooldown_ms", 500); // pause corrections after set_pose
+    declare_parameter("camera_frame", std::string("zed_left_camera_frame"));
+    declare_parameter("base_frame", std::string("base_link"));
+    declare_parameter("map_frame", std::string("map"));
+    declare_parameter("camera_info_topic", std::string("/zed/zed_node/left/camera_info"));
+    declare_parameter("camera_info_timeout_s", 10.0);
 
     max_range_ = get_parameter("max_detection_range").as_double();
     cov_xy_ = get_parameter("covariance_xy").as_double();
@@ -57,6 +62,11 @@ public:
     reloc_threshold_ = get_parameter("relocalization_threshold").as_double();
     min_confidence_ = get_parameter("min_confidence").as_double();
     reloc_cooldown_ms_ = get_parameter("relocalization_cooldown_ms").as_int();
+    camera_frame_ = get_parameter("camera_frame").as_string();
+    base_frame_ = get_parameter("base_frame").as_string();
+    map_frame_ = get_parameter("map_frame").as_string();
+    auto camera_info_topic = get_parameter("camera_info_topic").as_string();
+    auto camera_info_timeout = get_parameter("camera_info_timeout_s").as_double();
 
     auto registry_file = get_parameter("markers_registry_file").as_string();
     if (!registry_file.empty()) load_registry(registry_file);
@@ -75,7 +85,7 @@ public:
       std::bind(&MarkerCorrectionNode::on_detection, this, std::placeholders::_1));
 
     caminfo_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-      "/zed/zed_node/left/camera_info", 10,
+      camera_info_topic, 10,
       [this](sensor_msgs::msg::CameraInfo::SharedPtr msg) {
         if (!has_caminfo_) {
           fx_ = msg->k[0]; fy_ = msg->k[4];
@@ -83,8 +93,24 @@ public:
           has_caminfo_ = true;
           RCLCPP_INFO(get_logger(), "Camera intrinsics: fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
             fx_, fy_, cx_, cy_);
+          if (caminfo_timeout_timer_) caminfo_timeout_timer_->cancel();
         }
       });
+
+    // One-shot timer to warn if camera_info never arrives
+    if (camera_info_timeout > 0.0) {
+      caminfo_timeout_timer_ = create_wall_timer(
+        std::chrono::duration<double>(camera_info_timeout),
+        [this, camera_info_topic]() {
+          if (!has_caminfo_) {
+            RCLCPP_WARN(get_logger(),
+              "No camera_info received after timeout on topic '%s'. "
+              "AprilTag detections will be ignored until camera_info is available.",
+              camera_info_topic.c_str());
+          }
+          caminfo_timeout_timer_->cancel();
+        });
+    }
 
     // Subscribe to global EKF output for current pose (relocalization check)
     ekf_sub_ = create_subscription<nav_msgs::msg::Odometry>(
@@ -160,6 +186,15 @@ private:
       RCLCPP_INFO(get_logger(), "Relocalization cooldown expired, resuming corrections");
     }
 
+    // Candidate pose from each detected tag (for multi-tag voting)
+    struct PoseCandidate {
+      double x, y, yaw, range;
+      double range_factor;
+      int tag_id;
+      double decision_margin;
+    };
+    std::vector<PoseCandidate> candidates;
+
     for (const auto& det : msg->detections) {
       auto it = registry_.find(det.id);
       if (it == registry_.end()) continue;
@@ -195,7 +230,7 @@ private:
       // Get camera→base_link transform from TF to account for camera mounting offset
       geometry_msgs::msg::TransformStamped cam_to_base_msg;
       try {
-        cam_to_base_msg = tf_buffer_->lookupTransform("base_link", "zed_left_camera_frame",
+        cam_to_base_msg = tf_buffer_->lookupTransform(base_frame_, camera_frame_,
           rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
       } catch (...) { continue; }
 
@@ -246,7 +281,7 @@ private:
       if (!yaw_from_tag) {
         geometry_msgs::msg::TransformStamped map_to_base;
         try {
-          map_to_base = tf_buffer_->lookupTransform("map", "base_link",
+          map_to_base = tf_buffer_->lookupTransform(map_frame_, base_frame_,
             rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
           robot_yaw = std::atan2(
             2.0 * (map_to_base.transform.rotation.w * map_to_base.transform.rotation.z +
@@ -264,80 +299,147 @@ private:
       double robot_x = marker.x - (tag_fwd * cos_yaw - tag_left * sin_yaw);
       double robot_y = marker.y - (tag_fwd * sin_yaw + tag_left * cos_yaw);
 
-      // Build correction message
-      geometry_msgs::msg::PoseWithCovarianceStamped correction;
-      correction.header.stamp = now();
-      correction.header.frame_id = "map";
-      correction.pose.pose.position.x = robot_x;
-      correction.pose.pose.position.y = robot_y;
-
-      double half_yaw = robot_yaw / 2.0;
-      correction.pose.pose.orientation.z = std::sin(half_yaw);
-      correction.pose.pose.orientation.w = std::cos(half_yaw);
-
-      // Quadratic range model: uncertainty grows with distance squared
-      // At ref_range (2.0m), factor = 2.0. At 5m, factor = 7.25
       double ref_range = 2.0;
       double range_factor = 1.0 + (range / ref_range) * (range / ref_range);
-      correction.pose.covariance[0] = 0.02 * range_factor;
-      correction.pose.covariance[7] = 0.02 * range_factor;
-      correction.pose.covariance[35] = 0.05 * range_factor;
 
-      // Check if relocalization needed (large drift detected)
-      double drift = 0.0;
-      if (has_ekf_pose_) {
-        drift = std::sqrt(
-          std::pow(robot_x - current_ekf_x_, 2) +
-          std::pow(robot_y - current_ekf_y_, 2));
-      }
-
-      if (drift >= reloc_threshold_ && det.decision_margin >= min_confidence_) {
-        // RELOCALIZATION: drift too large for normal EKF correction
-        // Force-reset EKF pose via set_pose service
-        if (set_pose_client_->service_is_ready()) {
-          auto request = std::make_shared<robot_localization::srv::SetPose::Request>();
-          request->pose = correction;
-
-          // Set cooldown flag BEFORE sending request to block corrections immediately
-          relocalization_pending_ = true;
-          reloc_request_time_ = now();
-
-          auto future = set_pose_client_->async_send_request(request,
-            [this, robot_x, robot_y, det_id = det.id](
-              rclcpp::Client<robot_localization::srv::SetPose>::SharedFuture result) {
-              try {
-                result.get();  // throws if service call failed
-                RCLCPP_INFO(get_logger(),
-                  "RELOCALIZATION SUCCESS: Tag %d, EKF reset to (%.2f, %.2f)",
-                  det_id, robot_x, robot_y);
-              } catch (const std::exception& e) {
-                RCLCPP_ERROR(get_logger(),
-                  "RELOCALIZATION FAILED: Tag %d, set_pose error: %s — "
-                  "clearing cooldown to resume corrections",
-                  det_id, e.what());
-                relocalization_pending_ = false;
-              }
-            });
-
-          RCLCPP_WARN(get_logger(),
-            "RELOCALIZATION: Tag %d, drift=%.1fm (threshold=%.1fm), "
-            "resetting EKF to (%.2f, %.2f), cooldown %ldms",
-            det.id, drift, reloc_threshold_, robot_x, robot_y, reloc_cooldown_ms_);
-        }
-      } else {
-        // Normal correction — let EKF fuse smoothly
-        pose_pub_->publish(correction);
-      }
+      candidates.push_back({robot_x, robot_y, robot_yaw, range, range_factor,
+                            det.id, det.decision_margin});
 
       std_msgs::msg::String det_msg;
       det_msg.data = "tag_" + std::to_string(det.id);
       detected_pub_->publish(det_msg);
+    }
+
+    if (candidates.empty()) return;
+
+    // ── Multi-tag voting: if 2+ candidates, reject outliers ──
+    double final_x, final_y, final_yaw, final_range_factor;
+    int best_tag_id;
+    double best_decision_margin;
+
+    if (candidates.size() >= 2) {
+      // Compute median position as robust center
+      std::vector<double> xs, ys;
+      for (const auto& c : candidates) {
+        xs.push_back(c.x);
+        ys.push_back(c.y);
+      }
+      std::sort(xs.begin(), xs.end());
+      std::sort(ys.begin(), ys.end());
+      double median_x = xs[xs.size() / 2];
+      double median_y = ys[ys.size() / 2];
+
+      // Filter outliers: reject candidates > multi_tag_outlier_threshold from median
+      double outlier_thresh = 1.0;  // 1.0m threshold
+      std::vector<const PoseCandidate*> inliers;
+      for (const auto& c : candidates) {
+        double dist = std::sqrt(std::pow(c.x - median_x, 2) + std::pow(c.y - median_y, 2));
+        if (dist <= outlier_thresh) {
+          inliers.push_back(&c);
+        } else {
+          RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+            "Tag %d rejected as outlier (%.2fm from median)", c.tag_id, dist);
+        }
+      }
+      if (inliers.empty()) inliers.push_back(&candidates[0]);  // fallback
+
+      // Weighted average: closer tags get more weight (1/range_factor)
+      double sum_w = 0.0;
+      final_x = 0.0; final_y = 0.0;
+      double sum_sin = 0.0, sum_cos = 0.0;
+      final_range_factor = 0.0;
+      best_tag_id = inliers[0]->tag_id;
+      best_decision_margin = 0.0;
+      for (const auto* c : inliers) {
+        double w = 1.0 / c->range_factor;
+        final_x += c->x * w;
+        final_y += c->y * w;
+        sum_sin += std::sin(c->yaw) * w;
+        sum_cos += std::cos(c->yaw) * w;
+        final_range_factor += c->range_factor * w;
+        if (c->decision_margin > best_decision_margin) {
+          best_decision_margin = c->decision_margin;
+          best_tag_id = c->tag_id;
+        }
+        sum_w += w;
+      }
+      final_x /= sum_w;
+      final_y /= sum_w;
+      final_yaw = std::atan2(sum_sin / sum_w, sum_cos / sum_w);
+      final_range_factor /= sum_w;
 
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
-        "Tag %d at %.2fm → (%.2f, %.2f) drift=%.1fm %s",
-        det.id, range, robot_x, robot_y, drift,
-        drift >= reloc_threshold_ ? "RELOC" : "smooth");
+        "Multi-tag vote: %zu/%zu inliers, weighted pose (%.2f, %.2f)",
+        inliers.size(), candidates.size(), final_x, final_y);
+    } else {
+      // Single tag — use directly (existing behavior)
+      final_x = candidates[0].x;
+      final_y = candidates[0].y;
+      final_yaw = candidates[0].yaw;
+      final_range_factor = candidates[0].range_factor;
+      best_tag_id = candidates[0].tag_id;
+      best_decision_margin = candidates[0].decision_margin;
     }
+
+    // Build correction message
+    geometry_msgs::msg::PoseWithCovarianceStamped correction;
+    correction.header.stamp = now();
+    correction.header.frame_id = "map";
+    correction.pose.pose.position.x = final_x;
+    correction.pose.pose.position.y = final_y;
+
+    double half_yaw = final_yaw / 2.0;
+    correction.pose.pose.orientation.z = std::sin(half_yaw);
+    correction.pose.pose.orientation.w = std::cos(half_yaw);
+
+    correction.pose.covariance[0] = 0.02 * final_range_factor;
+    correction.pose.covariance[7] = 0.02 * final_range_factor;
+    correction.pose.covariance[35] = 0.05 * final_range_factor;
+
+    // Check if relocalization needed
+    double drift = 0.0;
+    if (has_ekf_pose_) {
+      drift = std::sqrt(
+        std::pow(final_x - current_ekf_x_, 2) +
+        std::pow(final_y - current_ekf_y_, 2));
+    }
+
+    if (drift >= reloc_threshold_ && best_decision_margin >= min_confidence_) {
+      if (set_pose_client_->service_is_ready()) {
+        auto request = std::make_shared<robot_localization::srv::SetPose::Request>();
+        request->pose = correction;
+
+        relocalization_pending_ = true;
+        reloc_request_time_ = now();
+
+        auto future = set_pose_client_->async_send_request(request,
+          [this, final_x, final_y, best_tag_id](
+            rclcpp::Client<robot_localization::srv::SetPose>::SharedFuture result) {
+            try {
+              result.get();
+              RCLCPP_INFO(get_logger(),
+                "RELOCALIZATION SUCCESS: Tag %d, EKF reset to (%.2f, %.2f)",
+                best_tag_id, final_x, final_y);
+            } catch (const std::exception& e) {
+              RCLCPP_ERROR(get_logger(),
+                "RELOCALIZATION FAILED: Tag %d, set_pose error: %s",
+                best_tag_id, e.what());
+              relocalization_pending_ = false;
+            }
+          });
+
+        RCLCPP_WARN(get_logger(),
+          "RELOCALIZATION: Tag %d, drift=%.1fm, resetting EKF to (%.2f, %.2f)",
+          best_tag_id, drift, final_x, final_y);
+      }
+    } else {
+      pose_pub_->publish(correction);
+    }
+
+    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
+      "Correction: %zu tags, best=%d, range_factor=%.1f, pos=(%.2f, %.2f), drift=%.1fm %s",
+      candidates.size(), best_tag_id, final_range_factor, final_x, final_y, drift,
+      drift >= reloc_threshold_ ? "RELOC" : "smooth");
   }
 
   // Registry
@@ -345,6 +447,7 @@ private:
   double max_range_, cov_xy_, cov_yaw_, tag_size_;
   double reloc_threshold_, min_confidence_;
   int64_t reloc_cooldown_ms_;
+  std::string camera_frame_, base_frame_, map_frame_;
 
   // Relocalization cooldown state
   bool relocalization_pending_{false};
@@ -369,6 +472,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ekf_sub_;
   rclcpp::Client<robot_localization::srv::SetPose>::SharedPtr set_pose_client_;
+  rclcpp::TimerBase::SharedPtr caminfo_timeout_timer_;
 };
 
 int main(int argc, char** argv) {
