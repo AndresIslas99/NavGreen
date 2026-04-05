@@ -42,6 +42,9 @@ private:
   float max_wheel_accel_;
   float zero_vel_epsilon_;
   double gear_ratio_;  // motor_turns / wheel_turns (see odrive_can_node.cpp for docs)
+  double max_fet_temp_;
+  double max_motor_temp_;
+  double critical_temp_offset_;
 
   // -- CAN --
   std::unique_ptr<CANSocket> can_;
@@ -97,6 +100,14 @@ private:
   float  last_left_target_  = 0.0f;
   float  last_right_target_ = 0.0f;
   bool   zero_cmd_active_   = false;
+
+  // -- Temperature monitoring --
+  void check_temperature(const AxisData& axis);
+  std::string thermal_state_{"ok"};
+
+  // -- CAN retry backoff --
+  int can_retry_delay_ms_{100};
+  rclcpp::Time last_can_retry_{0, 0, RCL_ROS_TIME};
 
   // -- Motor readiness --
   bool motors_armed() const;

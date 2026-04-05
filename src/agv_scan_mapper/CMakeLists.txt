@@ -23,4 +23,12 @@ target_compile_features(scan_grid_mapper_node PUBLIC cxx_std_17)
 install(TARGETS scan_grid_mapper_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_grid_math test/test_grid_math.cpp)
+  target_include_directories(test_grid_math PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+  target_compile_features(test_grid_math PUBLIC cxx_std_17)
+endif()
+
 ament_package()

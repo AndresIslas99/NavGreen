@@ -49,6 +49,11 @@ public:
     declare_parameter("relocalization_threshold", 2.0);  // meters — force reset above this
     declare_parameter("min_confidence", 50.0);            // decision_margin minimum for reloc
     declare_parameter("relocalization_cooldown_ms", 500); // pause corrections after set_pose
+    declare_parameter("camera_frame", std::string("zed_left_camera_frame"));
+    declare_parameter("base_frame", std::string("base_link"));
+    declare_parameter("map_frame", std::string("map"));
+    declare_parameter("camera_info_topic", std::string("/zed/zed_node/left/camera_info"));
+    declare_parameter("camera_info_timeout_s", 10.0);
 
     max_range_ = get_parameter("max_detection_range").as_double();
     cov_xy_ = get_parameter("covariance_xy").as_double();
@@ -57,6 +62,11 @@ public:
     reloc_threshold_ = get_parameter("relocalization_threshold").as_double();
     min_confidence_ = get_parameter("min_confidence").as_double();
     reloc_cooldown_ms_ = get_parameter("relocalization_cooldown_ms").as_int();
+    camera_frame_ = get_parameter("camera_frame").as_string();
+    base_frame_ = get_parameter("base_frame").as_string();
+    map_frame_ = get_parameter("map_frame").as_string();
+    auto camera_info_topic = get_parameter("camera_info_topic").as_string();
+    auto camera_info_timeout = get_parameter("camera_info_timeout_s").as_double();
 
     auto registry_file = get_parameter("markers_registry_file").as_string();
     if (!registry_file.empty()) load_registry(registry_file);
@@ -75,7 +85,7 @@ public:
       std::bind(&MarkerCorrectionNode::on_detection, this, std::placeholders::_1));
 
     caminfo_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-      "/zed/zed_node/left/camera_info", 10,
+      camera_info_topic, 10,
       [this](sensor_msgs::msg::CameraInfo::SharedPtr msg) {
         if (!has_caminfo_) {
           fx_ = msg->k[0]; fy_ = msg->k[4];
@@ -83,8 +93,24 @@ public:
           has_caminfo_ = true;
           RCLCPP_INFO(get_logger(), "Camera intrinsics: fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
             fx_, fy_, cx_, cy_);
+          if (caminfo_timeout_timer_) caminfo_timeout_timer_->cancel();
         }
       });
+
+    // One-shot timer to warn if camera_info never arrives
+    if (camera_info_timeout > 0.0) {
+      caminfo_timeout_timer_ = create_wall_timer(
+        std::chrono::duration<double>(camera_info_timeout),
+        [this, camera_info_topic]() {
+          if (!has_caminfo_) {
+            RCLCPP_WARN(get_logger(),
+              "No camera_info received after timeout on topic '%s'. "
+              "AprilTag detections will be ignored until camera_info is available.",
+              camera_info_topic.c_str());
+          }
+          caminfo_timeout_timer_->cancel();
+        });
+    }
 
     // Subscribe to global EKF output for current pose (relocalization check)
     ekf_sub_ = create_subscription<nav_msgs::msg::Odometry>(
@@ -195,7 +221,7 @@ private:
       // Get camera→base_link transform from TF to account for camera mounting offset
       geometry_msgs::msg::TransformStamped cam_to_base_msg;
       try {
-        cam_to_base_msg = tf_buffer_->lookupTransform("base_link", "zed_left_camera_frame",
+        cam_to_base_msg = tf_buffer_->lookupTransform(base_frame_, camera_frame_,
           rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
       } catch (...) { continue; }
 
@@ -246,7 +272,7 @@ private:
       if (!yaw_from_tag) {
         geometry_msgs::msg::TransformStamped map_to_base;
         try {
-          map_to_base = tf_buffer_->lookupTransform("map", "base_link",
+          map_to_base = tf_buffer_->lookupTransform(map_frame_, base_frame_,
             rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
           robot_yaw = std::atan2(
             2.0 * (map_to_base.transform.rotation.w * map_to_base.transform.rotation.z +
@@ -345,6 +371,7 @@ private:
   double max_range_, cov_xy_, cov_yaw_, tag_size_;
   double reloc_threshold_, min_confidence_;
   int64_t reloc_cooldown_ms_;
+  std::string camera_frame_, base_frame_, map_frame_;
 
   // Relocalization cooldown state
   bool relocalization_pending_{false};
@@ -369,6 +396,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ekf_sub_;
   rclcpp::Client<robot_localization::srv::SetPose>::SharedPtr set_pose_client_;
+  rclcpp::TimerBase::SharedPtr caminfo_timeout_timer_;
 };
 
 int main(int argc, char** argv) {
