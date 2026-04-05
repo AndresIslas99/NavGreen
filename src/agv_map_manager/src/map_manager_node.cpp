@@ -179,6 +179,28 @@ private:
     }
 
     if (!req->remove) {
+      // Validate polygon geometry
+      if (req->polygon_x.size() < 3) {
+        res->success = false;
+        res->message = "Polygon must have at least 3 vertices";
+        return;
+      }
+      if (req->polygon_x.size() != req->polygon_y.size()) {
+        res->success = false;
+        res->message = "polygon_x and polygon_y must have the same length";
+        return;
+      }
+      if (req->zone_type != "keepout" && req->zone_type != "speed") {
+        res->success = false;
+        res->message = "zone_type must be 'keepout' or 'speed'";
+        return;
+      }
+      if (req->zone_type == "speed" && req->max_speed <= 0.0) {
+        res->success = false;
+        res->message = "Speed zone requires max_speed > 0";
+        return;
+      }
+
       // Add/update zone
       std::string zone_json = "{\"zone_id\":\"" + req->zone_id
         + "\",\"zone_type\":\"" + req->zone_type

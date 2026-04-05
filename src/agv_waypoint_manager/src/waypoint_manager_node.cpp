@@ -5,17 +5,22 @@
 //   waypoint_manager/list     — return all stored missions
 //   waypoint_manager/execute  — execute mission via sequential navigate_to_pose goals
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <agv_interfaces/srv/save_waypoint.hpp>
 #include <agv_interfaces/srv/list_missions.hpp>
 #include <agv_interfaces/srv/execute_mission.hpp>
@@ -103,7 +108,25 @@ public:
     // Nav2 action client
     nav_client_ = rclcpp_action::create_client<NavigateToPose>(this, "navigate_to_pose");
 
+    // Mission status publisher (JSON: mission_id, current_waypoint, total, state)
+    status_pub_ = this->create_publisher<std_msgs::msg::String>("waypoint_manager/status", 10);
+
+    // Cancel subscription
+    cancel_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+      "waypoint_manager/cancel", 10,
+      [this](std_msgs::msg::Bool::SharedPtr msg) {
+        if (msg->data && mission_running_.load()) {
+          mission_cancel_.store(true);
+          RCLCPP_WARN(get_logger(), "Mission cancel requested");
+        }
+      });
+
     RCLCPP_INFO(get_logger(), "Waypoint manager ready, file=%s", missions_file_.c_str());
+  }
+
+  ~WaypointManagerNode() override {
+    mission_cancel_.store(true);
+    if (exec_thread_.joinable()) exec_thread_.join();
   }
 
 private:
@@ -168,11 +191,17 @@ private:
     RCLCPP_INFO(get_logger(), "Listed %zu missions", res->missions.size());
   }
 
-  // ── Execute mission ──
+  // ── Execute mission (non-blocking) ──
   void on_execute(
     const agv_interfaces::srv::ExecuteMission::Request::SharedPtr req,
     agv_interfaces::srv::ExecuteMission::Response::SharedPtr res)
   {
+    if (mission_running_.load()) {
+      res->success = false;
+      res->message = "A mission is already running";
+      return;
+    }
+
     // Find mission by ID
     std::ifstream in(missions_file_);
     std::string line;
@@ -190,14 +219,7 @@ private:
       return;
     }
 
-    if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
-      res->success = false;
-      res->message = "Nav2 action server not available";
-      return;
-    }
-
-    // Parse waypoints from the found line (simplified — extract x,y,theta)
-    // In production, use nlohmann::json or similar
+    // Parse waypoints
     std::vector<std::tuple<double, double, double>> waypoints;
     auto wp_pos = found_line.find("\"waypoints\":[");
     if (wp_pos != std::string::npos) {
@@ -222,12 +244,57 @@ private:
       return;
     }
 
-    RCLCPP_INFO(get_logger(), "Executing mission %s (%zu waypoints)",
-                req->mission_id.c_str(), waypoints.size());
+    // Respond immediately — execution runs in background
+    res->success = true;
+    res->message = "Mission started (" + std::to_string(waypoints.size()) + " waypoints)";
 
-    // Execute sequentially (blocking — service call blocks until done)
+    // Launch execution thread
+    if (exec_thread_.joinable()) exec_thread_.join();
+    mission_cancel_.store(false);
+    mission_running_.store(true);
+    std::string mission_id = req->mission_id;
+
+    exec_thread_ = std::thread([this, waypoints, mission_id]() {
+      execute_mission_thread(waypoints, mission_id);
+    });
+  }
+
+  void publish_status(const std::string& mission_id, size_t current, size_t total,
+                      const std::string& state) {
+    std_msgs::msg::String msg;
+    char buf[256];
+    std::snprintf(buf, sizeof(buf),
+      R"({"mission_id":"%s","current_waypoint":%zu,"total":%zu,"state":"%s"})",
+      mission_id.c_str(), current, total, state.c_str());
+    msg.data = buf;
+    status_pub_->publish(msg);
+  }
+
+  void execute_mission_thread(
+    const std::vector<std::tuple<double, double, double>>& waypoints,
+    const std::string& mission_id)
+  {
+    RCLCPP_INFO(get_logger(), "Executing mission %s (%zu waypoints)",
+                mission_id.c_str(), waypoints.size());
+
+    if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
+      RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
+      publish_status(mission_id, 0, waypoints.size(), "failed");
+      mission_running_.store(false);
+      return;
+    }
+
     for (size_t i = 0; i < waypoints.size(); ++i) {
+      if (mission_cancel_.load()) {
+        RCLCPP_WARN(get_logger(), "Mission %s cancelled at waypoint %zu/%zu",
+                    mission_id.c_str(), i + 1, waypoints.size());
+        publish_status(mission_id, i, waypoints.size(), "cancelled");
+        mission_running_.store(false);
+        return;
+      }
+
       auto [x, y, theta] = waypoints[i];
+      publish_status(mission_id, i + 1, waypoints.size(), "navigating");
       RCLCPP_INFO(get_logger(), "  Goal %zu/%zu: (%.2f, %.2f)", i + 1, waypoints.size(), x, y);
 
       auto goal = NavigateToPose::Goal();
@@ -242,15 +309,17 @@ private:
       if (rclcpp::spin_until_future_complete(this->get_node_base_interface(),
                                               goal_handle_future, std::chrono::seconds(10)) !=
           rclcpp::FutureReturnCode::SUCCESS) {
-        res->success = false;
-        res->message = "Failed to send goal " + std::to_string(i + 1);
+        RCLCPP_ERROR(get_logger(), "Failed to send goal %zu", i + 1);
+        publish_status(mission_id, i + 1, waypoints.size(), "failed");
+        mission_running_.store(false);
         return;
       }
 
       auto goal_handle = goal_handle_future.get();
       if (!goal_handle) {
-        res->success = false;
-        res->message = "Goal " + std::to_string(i + 1) + " rejected";
+        RCLCPP_ERROR(get_logger(), "Goal %zu rejected", i + 1);
+        publish_status(mission_id, i + 1, waypoints.size(), "failed");
+        mission_running_.store(false);
         return;
       }
 
@@ -258,24 +327,26 @@ private:
       if (rclcpp::spin_until_future_complete(this->get_node_base_interface(),
                                               result_future, std::chrono::minutes(5)) !=
           rclcpp::FutureReturnCode::SUCCESS) {
-        res->success = false;
-        res->message = "Goal " + std::to_string(i + 1) + " timed out";
+        RCLCPP_ERROR(get_logger(), "Goal %zu timed out", i + 1);
+        publish_status(mission_id, i + 1, waypoints.size(), "failed");
+        mission_running_.store(false);
         return;
       }
 
       auto result = result_future.get();
       if (result.code != rclcpp_action::ResultCode::SUCCEEDED) {
-        res->success = false;
-        res->message = "Goal " + std::to_string(i + 1) + " failed";
+        RCLCPP_ERROR(get_logger(), "Goal %zu failed", i + 1);
+        publish_status(mission_id, i + 1, waypoints.size(), "failed");
+        mission_running_.store(false);
         return;
       }
 
       RCLCPP_INFO(get_logger(), "  Goal %zu/%zu reached", i + 1, waypoints.size());
     }
 
-    res->success = true;
-    res->message = "Mission completed (" + std::to_string(waypoints.size()) + " waypoints)";
-    RCLCPP_INFO(get_logger(), "Mission %s completed", req->mission_id.c_str());
+    publish_status(mission_id, waypoints.size(), waypoints.size(), "completed");
+    RCLCPP_INFO(get_logger(), "Mission %s completed", mission_id.c_str());
+    mission_running_.store(false);
   }
 
   std::string missions_file_;
@@ -284,6 +355,13 @@ private:
   rclcpp::Service<agv_interfaces::srv::ListMissions>::SharedPtr list_srv_;
   rclcpp::Service<agv_interfaces::srv::ExecuteMission>::SharedPtr execute_srv_;
   rclcpp_action::Client<NavigateToPose>::SharedPtr nav_client_;
+
+  // Non-blocking execution
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr cancel_sub_;
+  std::thread exec_thread_;
+  std::atomic<bool> mission_running_{false};
+  std::atomic<bool> mission_cancel_{false};
 };
 
 int main(int argc, char** argv) {
