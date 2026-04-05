@@ -14,10 +14,11 @@ find_package(behaviortree_cpp_v3 REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(agv_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(behavior_executor_node src/behavior_executor_node.cpp)
 ament_target_dependencies(behavior_executor_node
-  rclcpp rclcpp_action behaviortree_cpp_v3 nav2_msgs geometry_msgs agv_interfaces)
+  rclcpp rclcpp_action behaviortree_cpp_v3 nav2_msgs geometry_msgs agv_interfaces std_msgs)
 
 install(TARGETS behavior_executor_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY trees/ DESTINATION share/${PROJECT_NAME}/trees)
