@@ -18,4 +18,12 @@ target_compile_features(image_server_node PUBLIC cxx_std_17)
 
 install(TARGETS image_server_node DESTINATION lib/${PROJECT_NAME})
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_image_pipeline test/test_image_pipeline.cpp)
+  target_link_libraries(test_image_pipeline ${OpenCV_LIBS})
+  target_include_directories(test_image_pipeline PRIVATE ${OpenCV_INCLUDE_DIRS})
+  target_compile_features(test_image_pipeline PUBLIC cxx_std_17)
+endif()
+
 ament_package()
