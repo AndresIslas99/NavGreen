@@ -30,4 +30,12 @@ install(TARGETS fusion_monitor_node covariance_override_node DESTINATION lib/${P
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_sensor_health test/test_sensor_health.cpp)
+  target_include_directories(test_sensor_health PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+  target_compile_features(test_sensor_health PUBLIC cxx_std_17)
+endif()
+
 ament_package()
