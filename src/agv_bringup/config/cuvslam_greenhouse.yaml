@@ -1,0 +1,39 @@
+# cuVSLAM greenhouse overlay (includes TF disable for fusion mode)
+# Applied on top of base cuvslam.yaml via slam_params_override
+# Optimized for: repetitive crop rows, variable lighting, wet surfaces
+#
+# Field tuning guide:
+#   img_mask_top:  Reduce to 72 if tracking degrades (fewer features)
+#   img_mask_bottom: Increase to 108 if ground reflections persist
+#   slam_max_map_size: Increase for very large greenhouses (memory cost)
+#   slam_throttling_time_ms: Increase to 500 if CPU thermal throttle
+visual_slam_node:
+  ros__parameters:
+    # ── TF disable (EKF owns transforms in fusion mode) ──
+    publish_odom_to_base_tf: false
+    publish_map_to_odom_tf: false
+
+    # ── Image masking (exclude non-informative regions) ──
+    img_mask_top:                  108       # 15% of 720px — greenhouse roof/beams
+    img_mask_bottom:               72        # 10% of 720px — ground reflections
+    img_mask_left:                 0
+    img_mask_right:                0
+
+    # ── Tracking robustness ──
+    enable_image_denoising:        true      # GPU denoising for low/variable light
+    enable_ground_constraint_in_slam: true   # Constrain loop closures to ground plane
+
+    # ── Keyframe management (larger greenhouse coverage) ──
+    path_max_size:                 500       # More trajectory history
+    slam_max_map_size:             500       # More keyframes before eviction
+    slam_throttling_time_ms:       300       # Insert keyframes more often
+
+    # ── Map persistence (configure via launch arguments) ──
+    save_map_folder_path:          ''
+    load_map_folder_path:          ''
+    localize_on_startup:           false
+    localizer_horizontal_radius:   3.0       # Greenhouse start position variance
+    localizer_vertical_radius:     0.3
+    localizer_horizontal_step:     0.5
+    localizer_vertical_step:       0.25
+    localizer_angular_step:        0.1745    # ~10 degrees
