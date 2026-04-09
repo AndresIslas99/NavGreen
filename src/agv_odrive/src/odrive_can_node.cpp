@@ -16,8 +16,8 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   this->declare_parameter("base_frame_id", "base_link");
   this->declare_parameter("publish_rate_hz", 50);
   this->declare_parameter("cmd_vel_timeout_ms", 500);
-  this->declare_parameter("invert_left", false);
-  this->declare_parameter("invert_right", true);
+  this->declare_parameter("invert_left", true);
+  this->declare_parameter("invert_right", false);
   this->declare_parameter("left_scale", 1.0);
   this->declare_parameter("right_scale", 1.0);
   this->declare_parameter("min_effective_vel", 0.0);
@@ -31,6 +31,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   this->declare_parameter("max_fet_temp", 70.0);
   this->declare_parameter("max_motor_temp", 80.0);
   this->declare_parameter("critical_temp_offset", 10.0);
+  this->declare_parameter("caster_enable_compensation", true);
+  this->declare_parameter("caster_settling_tau", 0.5);
+  this->declare_parameter("caster_covariance_multiplier", 10.0);
+  this->declare_parameter("caster_angular_accel_threshold", 1.0);
 
   // -- Read parameters --
   can_interface_ = this->get_parameter("can_interface").as_string();
@@ -56,6 +60,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   max_fet_temp_ = this->get_parameter("max_fet_temp").as_double();
   max_motor_temp_ = this->get_parameter("max_motor_temp").as_double();
   critical_temp_offset_ = this->get_parameter("critical_temp_offset").as_double();
+  caster_enable_compensation_ = this->get_parameter("caster_enable_compensation").as_bool();
+  caster_settling_tau_ = this->get_parameter("caster_settling_tau").as_double();
+  caster_covariance_multiplier_ = this->get_parameter("caster_covariance_multiplier").as_double();
+  caster_angular_accel_threshold_ = this->get_parameter("caster_angular_accel_threshold").as_double();
 
   // -- Validate --
   if (wheel_radius_ <= 0.0) {
@@ -69,6 +77,15 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   if (gear_ratio_ <= 0.0) {
     RCLCPP_FATAL(get_logger(), "gear_ratio must be > 0, got %f", gear_ratio_);
     throw std::runtime_error("Invalid gear_ratio");
+  }
+  if (caster_settling_tau_ <= 0.0) {
+    RCLCPP_FATAL(get_logger(), "caster_settling_tau must be > 0, got %f", caster_settling_tau_);
+    throw std::runtime_error("Invalid caster_settling_tau");
+  }
+  if (caster_covariance_multiplier_ < 1.0) {
+    RCLCPP_FATAL(get_logger(), "caster_covariance_multiplier must be >= 1.0, got %f",
+                 caster_covariance_multiplier_);
+    throw std::runtime_error("Invalid caster_covariance_multiplier");
   }
 
   // -- Publishers --
@@ -103,7 +120,9 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   timer_encoder_ = this->create_wall_timer(std::chrono::milliseconds(20),
     std::bind(&ODriveCANNode::encoder_request_loop, this));
 
-  timer_motor_state_ = this->create_wall_timer(std::chrono::milliseconds(500),
+  // Motor state at 10 Hz (100ms) — higher frequency ensures reliable DDS
+  // discovery between C++ and rclnodejs subscribers on same machine.
+  timer_motor_state_ = this->create_wall_timer(std::chrono::milliseconds(100),
     std::bind(&ODriveCANNode::publish_motor_state, this));
 
   timer_debug_ = this->create_wall_timer(std::chrono::milliseconds(100),
@@ -115,6 +134,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
               wheel_radius_, track_width_, publish_rate_hz_, gear_ratio_);
   RCLCPP_INFO(get_logger(), "invert_left=%s, invert_right=%s",
               invert_left_ ? "true" : "false", invert_right_ ? "true" : "false");
+  if (caster_enable_compensation_) {
+    RCLCPP_INFO(get_logger(), "Caster compensation: tau=%.2fs, multiplier=%.1f, accel_thresh=%.2f rad/s²",
+                caster_settling_tau_, caster_covariance_multiplier_, caster_angular_accel_threshold_);
+  }
 }
 
 ODriveCANNode::~ODriveCANNode() {
@@ -309,6 +332,51 @@ void ODriveCANNode::integrate_odometry() {
   odom_theta_ += delta_theta;
 }
 
+// ── Caster disturbance tracking ──
+
+void ODriveCANNode::update_caster_disturbance(double v_linear, double v_angular, double dt) {
+  if (!caster_enable_compensation_ || dt <= 0.0) return;
+
+  bool direction_change = false;
+
+  // Check linear velocity sign change (forward <-> backward)
+  constexpr double vel_noise_floor = 0.02;  // m/s
+  if (std::abs(prev_v_linear_) > vel_noise_floor &&
+      std::abs(v_linear) > vel_noise_floor &&
+      prev_v_linear_ * v_linear < 0.0) {
+    direction_change = true;
+  }
+
+  // Check angular velocity sign change (left <-> right turn)
+  if (std::abs(prev_v_angular_) > vel_noise_floor &&
+      std::abs(v_angular) > vel_noise_floor &&
+      prev_v_angular_ * v_angular < 0.0) {
+    direction_change = true;
+  }
+
+  // Check angular acceleration (abrupt turn initiation from straight line)
+  double angular_accel = (v_angular - prev_v_angular_) / dt;
+  if (std::abs(angular_accel) > caster_angular_accel_threshold_) {
+    direction_change = true;
+  }
+
+  prev_v_linear_ = v_linear;
+  prev_v_angular_ = v_angular;
+
+  // On direction change, reset disturbance to peak
+  if (direction_change) {
+    caster_disturbance_level_ = caster_covariance_multiplier_;
+  }
+
+  // Exponential decay
+  caster_disturbance_level_ *= std::exp(-dt / caster_settling_tau_);
+
+  // Clamp to zero when negligible
+  if (caster_disturbance_level_ < 0.01) {
+    caster_disturbance_level_ = 0.0;
+  }
+}
+
 // ── Publish odometry ──
 
 void ODriveCANNode::publish_odometry() {
@@ -337,18 +405,24 @@ void ODriveCANNode::publish_odometry() {
   msg.twist.twist.linear.x  = v_linear;
   msg.twist.twist.angular.z = v_angular;
 
-  // Pose covariance — grows with angular velocity (turns are less accurate)
+  // Update caster disturbance model (direction change detection + decay)
+  double caster_dt = 1.0 / static_cast<double>(publish_rate_hz_);
+  update_caster_disturbance(v_linear, v_angular, caster_dt);
+
+  // Pose covariance — grows with angular velocity and caster disturbance
   double base_xy_cov = 0.01;
   double base_yaw_cov = 0.03;
-  double angular_factor = 1.0 + 2.0 * std::abs(v_angular);  // higher when turning
-  msg.pose.covariance[0]  = base_xy_cov * angular_factor;    // x
-  msg.pose.covariance[7]  = base_xy_cov * angular_factor;    // y
-  msg.pose.covariance[35] = base_yaw_cov * angular_factor;   // yaw
+  double angular_factor = 1.0 + 2.0 * std::abs(v_angular);
+  double caster_factor = 1.0 + caster_disturbance_level_;
+  double total_cov_factor = angular_factor * caster_factor;
+  msg.pose.covariance[0]  = base_xy_cov * total_cov_factor;    // x
+  msg.pose.covariance[7]  = base_xy_cov * total_cov_factor;    // y
+  msg.pose.covariance[35] = base_yaw_cov * total_cov_factor;   // yaw
 
-  // Twist covariance — velocity-dependent (less certain at higher speeds)
+  // Twist covariance — velocity-dependent + caster disturbance
   double speed_factor = 1.0 + std::abs(v_linear);
-  msg.twist.covariance[0]  = 0.01 * speed_factor;
-  msg.twist.covariance[35] = 0.03 * speed_factor;
+  msg.twist.covariance[0]  = 0.01 * speed_factor * caster_factor;
+  msg.twist.covariance[35] = 0.03 * speed_factor * caster_factor;
 
   pub_odom_->publish(msg);
 }
@@ -518,7 +592,8 @@ void ODriveCANNode::publish_drive_debug() {
   char buf[512];
   std::snprintf(buf, sizeof(buf),
     R"({"cmd_linear":%.4f,"cmd_angular":%.4f,"left_target":%.4f,"right_target":%.4f,)"
-    R"("left_meas":%.4f,"right_meas":%.4f,"armed":%s,"e_stop":%s,"cmd_valid":%s,"zero_cmd":%s})",
+    R"("left_meas":%.4f,"right_meas":%.4f,"armed":%s,"e_stop":%s,"cmd_valid":%s,"zero_cmd":%s,)"
+    R"("caster_disturbance":%.4f})",
     last_linear_cmd_, last_angular_cmd_,
     static_cast<double>(last_left_target_),
     static_cast<double>(last_right_target_),
@@ -527,7 +602,8 @@ void ODriveCANNode::publish_drive_debug() {
     motors_armed() ? "true" : "false",
     e_stop_active_ ? "true" : "false",
     cmd_valid ? "true" : "false",
-    zero_cmd_active_ ? "true" : "false");
+    zero_cmd_active_ ? "true" : "false",
+    caster_disturbance_level_);
   msg.data = buf;
   pub_drive_debug_->publish(msg);
 }
