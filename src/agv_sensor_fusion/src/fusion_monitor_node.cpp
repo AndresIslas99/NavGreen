@@ -113,7 +113,7 @@ public:
       });
 
     sub_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(
-      "/zed/zed_node/imu/data", rclcpp::SensorDataQoS(),
+      "/agv/zed/imu/data", rclcpp::SensorDataQoS(),
       [this](const sensor_msgs::msg::Imu::SharedPtr /*msg*/) {
         sensor_imu_.record(this->now());
       });
