@@ -38,7 +38,9 @@ function getStatus(deps: AppDeps) {
     pose: s.robotPose,
     nav_state: s.navState,
     health: s.health,
+    battery_pct: s.batteryPct,
     mission_progress: s.missionProgress,
+    mapping_coverage: deps.scanAccumulator.coveragePercent,
   };
 }
 
@@ -60,7 +62,16 @@ function verifyWsAuth(req: http.IncomingMessage, deps: AppDeps): Role | null {
 }
 
 export function setupControlWs(server: http.Server, deps: AppDeps): void {
-  const wss = new WebSocketServer({ server, path: '/ws/control' });
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
+    if (pathname === '/ws/control') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+  });
 
   wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
     const role = verifyWsAuth(req, deps);
@@ -74,6 +85,29 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
     console.log(`Dashboard client connected (${deps.state.activeClients})`);
 
     let lastPathSnapshot = '';
+    let clientMapVersion = deps.state.mapVersion;  // start at current so we don't re-send on connect
+    let clientAccMapVersion = deps.scanAccumulator.version || 0;
+    let clientLiveMapVersion = deps.state.liveMapVersion;
+
+    // Send current maps immediately on connect so reconnecting clients don't see blank
+    if (deps.state.mapPng && deps.state.mapMeta) {
+      try {
+        ws.send(JSON.stringify({
+          type: 'map_update',
+          png_base64: deps.state.mapPng.toString('base64'),
+          ...deps.state.mapMeta,
+        }));
+      } catch { /* ignore */ }
+    }
+    if (deps.state.liveMapPng && deps.state.liveMapMeta) {
+      try {
+        ws.send(JSON.stringify({
+          type: 'acc_map',
+          png_base64: deps.state.liveMapPng.toString('base64'),
+          ...deps.state.liveMapMeta,
+        }));
+      } catch { /* ignore */ }
+    }
 
     // 5Hz status broadcast
     const statusInterval = setInterval(() => {
@@ -93,8 +127,9 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
           }
         }
 
-        if (deps.state.mapChanged && deps.state.mapPng) {
-          deps.state.mapChanged = false;
+        // Per-client map version tracking (fixes multi-client race condition)
+        if (clientMapVersion < deps.state.mapVersion && deps.state.mapPng) {
+          clientMapVersion = deps.state.mapVersion;
           ws.send(JSON.stringify({
             type: 'map_update',
             png_base64: deps.state.mapPng.toString('base64'),
@@ -102,13 +137,26 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
           }));
         }
 
-        if (deps.scanAccumulator.pngBuffer && deps.scanAccumulator.changed) {
+        // Prefer live_map from scan_grid_mapper (proper Bayesian grid) over
+        // ScanAccumulator (JS approximation). Fall back to ScanAccumulator if
+        // scan_grid_mapper isn't publishing.
+        if (clientLiveMapVersion < deps.state.liveMapVersion && deps.state.liveMapPng) {
+          clientLiveMapVersion = deps.state.liveMapVersion;
           ws.send(JSON.stringify({
             type: 'acc_map',
-            png_base64: deps.scanAccumulator.pngBuffer.toString('base64'),
-            ...deps.scanAccumulator.meta,
+            png_base64: deps.state.liveMapPng.toString('base64'),
+            ...deps.state.liveMapMeta,
           }));
-          deps.scanAccumulator.changed = false;
+        } else {
+          const accVer = deps.scanAccumulator.version || 0;
+          if (clientAccMapVersion < accVer && deps.scanAccumulator.pngBuffer) {
+            clientAccMapVersion = accVer;
+            ws.send(JSON.stringify({
+              type: 'acc_map',
+              png_base64: deps.scanAccumulator.pngBuffer.toString('base64'),
+              ...deps.scanAccumulator.meta,
+            }));
+          }
         }
 
         for (const evt of deps.eventLog.popPending()) {
@@ -187,7 +235,17 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 }
 
 export function setupTeleopWs(server: http.Server, deps: AppDeps): void {
-  const wss = new WebSocketServer({ server, path: '/ws/teleop' });
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
+    if (pathname === '/ws/teleop') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+  });
+
   wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
     const role = verifyWsAuth(req, deps);
     if (role === null) {

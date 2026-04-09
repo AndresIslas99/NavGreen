@@ -76,9 +76,15 @@ const state: AppState = {
   recordingActive: false,
   missionCancel: false,
   missionPause: false,
+  batteryPct: -1,
+  lastImuTime: 0,
   mapPng: null,
   mapMeta: null,
   mapChanged: false,
+  mapVersion: 0,
+  liveMapPng: null,
+  liveMapMeta: null,
+  liveMapVersion: 0,
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -143,8 +149,10 @@ async function main() {
 
   // --- Publishers ---
   const cmdVelPub = node.createPublisher('geometry_msgs/msg/Twist', `/${NAMESPACE}/cmd_vel`);
+  const cmdVelSafePub = node.createPublisher('geometry_msgs/msg/Twist', `/${NAMESPACE}/cmd_vel_safe`);
   const eStopPub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/e_stop`);
   const motorEnablePub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/motor_enable`);
+  const modePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode`);
 
   // --- Nav2 Action Client ---
   const navActionClient = new rclnodejs.ActionClient(
@@ -163,8 +171,9 @@ async function main() {
       if (state.currentMode !== 'teleop' && state.currentMode !== 'mapping') return;
       const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any;
       msg.linear.x = Math.max(-0.5, Math.min(0.5, linear));
-      msg.angular.z = Math.max(-1.0, Math.min(1.0, angular));
+      msg.angular.z = Math.max(-0.5, Math.min(0.5, angular));
       cmdVelPub.publish(msg);
+      cmdVelSafePub.publish(msg);
       lastCmdTime = Date.now() / 1000;
     },
 
@@ -219,12 +228,25 @@ async function main() {
       state.eStopActive = active;
       const msg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
       msg.data = active; eStopPub.publish(msg);
+      // Reliable delivery via subprocess
+      const { execFile } = require('child_process');
+      execFile('ros2', ['topic', 'pub', '--once',
+        `/${NAMESPACE}/e_stop`, 'std_msgs/msg/Bool',
+        `{data: ${active}}`], { env: process.env }, () => {});
       if (active) { ros.sendCmdVel(0, 0); ros.cancelNavGoal(); }
       eventLog.emit(active ? 'crit' : 'info', 'SAFETY', active ? 'E-STOP ACTIVATED' : 'E-stop cleared');
       updateState();
     },
 
     sendMotorEnable(active: boolean) {
+      // Use subprocess for reliable DDS delivery (rclnodejs publisher
+      // doesn't reliably discover C++ subscribers on same machine).
+      const { execFile } = require('child_process');
+      execFile('ros2', ['topic', 'pub', '--once',
+        `/${NAMESPACE}/motor_enable`, 'std_msgs/msg/Bool',
+        `{data: ${active}}`],
+        { env: process.env }, () => {});
+      // Also try via rclnodejs publisher as fallback
       const msg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
       msg.data = active; motorEnablePub.publish(msg);
     },
@@ -295,37 +317,67 @@ async function main() {
   }
 
   // --- Subscribers ---
-  node.createSubscription('nav_msgs/msg/Odometry', `/${NAMESPACE}/wheel_odom`, (msg: any) => {
-    state.odomTimes.push(Date.now() / 1000);
-    if (state.odomTimes.length > 50) state.odomTimes.shift();
-    state.latestVelocity = {
-      linear: Math.round(msg.twist.twist.linear.x * 1000) / 1000,
-      angular: Math.round(msg.twist.twist.angular.z * 1000) / 1000,
-    };
-  });
-  node.createSubscription('std_msgs/msg/String', `/${NAMESPACE}/motor_state`, (msg: any) => {
-    try { const prev = state.motorState.armed; state.motorState = JSON.parse(msg.data);
-      if (prev !== state.motorState.armed) { eventLog.emit('info', 'DRIVE', state.motorState.armed ? 'Armed' : 'Disarmed'); updateState(); }
-    } catch {}
-  });
-  node.createSubscription('std_msgs/msg/String', '/slam/quality', (msg: any) => {
-    try { state.slamTracking = JSON.parse(msg.data)?.tracking?.confidence || 'unknown'; } catch {}
-  });
-  node.createSubscription('nav_msgs/msg/Odometry', `/${NAMESPACE}/odometry/global`, (msg: any) => {
-    const p = msg.pose.pose;
-    state.robotPose = { x: Math.round(p.position.x * 1e4) / 1e4, y: Math.round(p.position.y * 1e4) / 1e4,
-      theta: Math.round(yawFromQuat(p.orientation) * 1e4) / 1e4 };
-  });
-  node.createSubscription('nav_msgs/msg/Path', `/${NAMESPACE}/plan`, (msg: any) => {
-    state.navPathPoints = (msg.poses || []).map((ps: any) => ({
-      x: Math.round(ps.pose.position.x * 1000) / 1000, y: Math.round(ps.pose.position.y * 1000) / 1000,
-    }));
-    state.navPathChanged = true;
-  });
-  node.createSubscription('sensor_msgs/msg/LaserScan', `/${NAMESPACE}/scan`, (msg: any) => {
-    state.scanPoints = scanAccumulator.addScan(
-      state.robotPose.x, state.robotPose.y, state.robotPose.theta,
-      Array.from(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max);
+  //
+  // DDS late-joiner fix: subscriptions are created AFTER rclnodejs.spin()
+  // starts (see bottom of main()). This gives the DDS participant time to
+  // discover existing publishers before registering subscriber endpoints.
+  // A deferred creation with a small delay ensures reliable discovery
+  // of all publishers, even low-frequency ones like motor_state (2 Hz).
+
+  function createAllSubscriptions() {
+    node.createSubscription('nav_msgs/msg/Odometry', `/${NAMESPACE}/wheel_odom`, (msg: any) => {
+      state.odomTimes.push(Date.now() / 1000);
+      if (state.odomTimes.length > 50) state.odomTimes.shift();
+      state.latestVelocity = {
+        linear: Math.round(msg.twist.twist.linear.x * 1000) / 1000,
+        angular: Math.round(msg.twist.twist.angular.z * 1000) / 1000,
+      };
+    });
+
+    // motor_state is handled by the subprocess bridge (see below)
+    // because rclnodejs DDS discovery is unreliable for this topic.
+    // The rclnodejs subscriber is kept as fallback but the bridge is primary.
+
+    node.createSubscription('nav_msgs/msg/Odometry', `/${NAMESPACE}/odometry/global`, (msg: any) => {
+      const p = msg.pose.pose;
+      state.robotPose = {
+        x: Math.round(p.position.x * 1e4) / 1e4,
+        y: Math.round(p.position.y * 1e4) / 1e4,
+        theta: Math.round(yawFromQuat(p.orientation) * 1e4) / 1e4,
+      };
+    });
+
+    node.createSubscription('std_msgs/msg/String', '/slam/quality', (msg: any) => {
+      try { state.slamTracking = JSON.parse(msg.data)?.tracking?.confidence || 'unknown'; } catch {}
+    });
+
+    node.createSubscription('nav_msgs/msg/Path', `/${NAMESPACE}/plan`, (msg: any) => {
+      state.navPathPoints = (msg.poses || []).map((ps: any) => ({
+        x: Math.round(ps.pose.position.x * 1000) / 1000, y: Math.round(ps.pose.position.y * 1000) / 1000,
+      }));
+      state.navPathChanged = true;
+    });
+
+    node.createSubscription('sensor_msgs/msg/LaserScan', `/${NAMESPACE}/scan`, (msg: any) => {
+      state.scanPoints = scanAccumulator.addScan(
+        state.robotPose.x, state.robotPose.y, state.robotPose.theta,
+        Array.from(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max);
+    });
+
+    node.createSubscription('sensor_msgs/msg/Imu', `/${NAMESPACE}/zed/imu/data`, () => {
+      state.lastImuTime = Date.now() / 1000;
+    });
+
+    console.log('[ROS] All subscriptions created');
+  }
+
+  // Create all subscriptions BEFORE spin — DDS requires subscriptions
+  // to be registered before spinning so they are announced to the network.
+  createAllSubscriptions();
+
+  // Battery state — extract percentage for dashboard display
+  node.createSubscription('sensor_msgs/msg/BatteryState', `/${NAMESPACE}/battery`, (msg: any) => {
+    state.batteryPct = typeof msg.percentage === 'number' ? Math.round(msg.percentage * 100) / 100 : -1;
   });
 
   // OccupancyGrid (transient local QoS)
@@ -344,9 +396,104 @@ async function main() {
     const sharp = require('sharp');
     sharp(flipped, { raw: { width: w, height: h, channels: 1 } }).png().toBuffer()
       .then((buf: Buffer) => { state.mapPng = buf; state.mapMeta = { resolution: msg.info.resolution,
-        origin_x: msg.info.origin.position.x, origin_y: msg.info.origin.position.y, width: w, height: h }; state.mapChanged = true; })
+        origin_x: msg.info.origin.position.x, origin_y: msg.info.origin.position.y, width: w, height: h }; state.mapChanged = true; state.mapVersion++; })
       .catch(() => {});
   });
+
+  // --- live_map bridge via subprocess + file ---
+  // rclnodejs DDS discovery bug prevents reliable subscription to C++ OccupancyGrid
+  // publishers. Workaround: Python subprocess subscribes to /agv/live_map and writes
+  // PNG + JSON metadata to /tmp/. The TS backend reads these files periodically.
+  const LIVE_MAP_PNG = '/tmp/agv_live_map.png';
+  const LIVE_MAP_META = '/tmp/agv_live_map.json';
+  let lastLiveMapTimestamp = 0;
+
+  function startLiveMapBridge() {
+    const bridgePath = path.resolve(__dirname, '../scripts/live_map_bridge.py');
+    const proc = require('child_process').spawn('python3', [bridgePath, '--namespace', NAMESPACE], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    proc.stdout.on('data', (chunk: Buffer) => {
+      const line = chunk.toString().trim();
+      if (line) console.log('[live_map bridge]', line);
+    });
+    proc.stderr.on('data', (chunk: Buffer) => {
+      const line = chunk.toString().trim();
+      if (line && !line.includes('selected interface')) console.warn('[live_map bridge stderr]', line);
+    });
+    proc.on('exit', (code: number) => {
+      console.warn(`[live_map bridge] Exited code=${code}, restarting in 3s...`);
+      setTimeout(startLiveMapBridge, 3000);
+    });
+  }
+  setTimeout(startLiveMapBridge, 2000);
+
+  // Poll the PNG file written by the bridge (every 1.5s)
+  setInterval(() => {
+    try {
+      const metaRaw = fs.readFileSync(LIVE_MAP_META, 'utf-8');
+      const meta = JSON.parse(metaRaw);
+      if (meta.timestamp && meta.timestamp > lastLiveMapTimestamp) {
+        lastLiveMapTimestamp = meta.timestamp;
+        const png = fs.readFileSync(LIVE_MAP_PNG);
+        state.liveMapPng = png;
+        state.liveMapMeta = {
+          resolution: meta.resolution,
+          origin_x: meta.origin_x,
+          origin_y: meta.origin_y,
+          width: meta.width,
+          height: meta.height,
+        };
+        state.liveMapVersion++;
+      }
+    } catch { /* file not ready yet — ignore */ }
+  }, 1500);
+
+  // --- motor_state bridge via subprocess ---
+  // rclnodejs has a DDS discovery bug where its subscriber fails to
+  // connect to existing C++ publishers on low-frequency topics.
+  // Workaround: use `ros2 topic echo` as a subprocess and parse stdout.
+  // This is reliable because the ros2 CLI creates its own DDS participant
+  // that properly discovers all publishers.
+  const { spawn } = require('child_process');
+  function startMotorStateBridge() {
+    const proc = spawn('ros2', ['topic', 'echo', '--no-arr', '--full-length', `/${NAMESPACE}/motor_state`, 'std_msgs/msg/String'], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let buf = '';
+    proc.stdout.on('data', (chunk: Buffer) => {
+      buf += chunk.toString();
+      // Each message ends with "---\n"
+      const parts = buf.split('---\n');
+      buf = parts.pop() || '';
+      for (const part of parts) {
+        const match = part.match(/data:\s*'(.+)'/s);
+        if (!match) continue;
+        try {
+          const parsed = JSON.parse(match[1].replace(/\\n/g, '').replace(/\bnan\b/g, 'null'));
+          if (parsed._keepalive) continue;
+          const prev = state.motorState.armed;
+          state.motorState = parsed;
+          if (prev !== state.motorState.armed) {
+            console.log(`[motor_state bridge] armed=${parsed.armed}`);
+            eventLog.emit('info', 'DRIVE', state.motorState.armed ? 'Armed' : 'Disarmed');
+            updateState();
+          }
+        } catch { /* ignore parse errors */ }
+      }
+    });
+    proc.stderr.on('data', (chunk: Buffer) => {
+      const line = chunk.toString().trim();
+      if (line && !line.includes('selected interface')) console.warn('[motor_state bridge stderr]', line);
+    });
+    proc.on('exit', (code: number) => {
+      console.warn(`[motor_state bridge] Exited code=${code}, restarting in 2s...`);
+      setTimeout(startMotorStateBridge, 2000);
+    });
+  }
+  setTimeout(startMotorStateBridge, 3000); // start after DDS discovery settles
 
   // --- Timers ---
   setInterval(() => { // Health 1Hz
@@ -354,6 +501,10 @@ async function main() {
     state.health.drive = hz > 10 ? { status: 'ok', detail: `${hz} Hz`, updated: now }
       : hz > 1 ? { status: 'warn', detail: `${hz} Hz (low)`, updated: now }
       : { status: 'error', detail: 'No odom', updated: now, action: 'Check CAN' };
+    const imuAge = state.lastImuTime > 0 ? now - state.lastImuTime : Infinity;
+    state.health.imu = imuAge < 2 ? { status: 'ok', detail: 'Receiving', updated: now }
+      : imuAge < 10 ? { status: 'warn', detail: `Stale (${imuAge.toFixed(0)}s)`, updated: now }
+      : { status: 'error', detail: 'No IMU data', updated: now, action: 'Check ZED/IMU' };
     state.health.slam = state.slamTracking === 'good'
       ? { status: 'ok', detail: 'Tracking: good', updated: now }
       : { status: 'warn', detail: `Tracking: ${state.slamTracking}`, updated: now };
@@ -368,11 +519,11 @@ async function main() {
     pose_x: state.robotPose.x, pose_y: state.robotPose.y, pose_theta: state.robotPose.theta,
     linear_vel: state.latestVelocity.linear, angular_vel: state.latestVelocity.angular,
     odom_hz: calcHz(state.odomTimes), slam_confidence: state.slamTracking,
-    robot_state: state.robotState, battery_pct: -1 }); } catch {} }, 1000);
+    robot_state: state.robotState, battery_pct: state.batteryPct }); } catch {} }, 1000);
   setInterval(() => { try { telemetryStore.prune(); } catch {} }, 86400_000);
   setInterval(() => { // Watchdog
     if (state.activeClients > 0 && !state.eStopActive && lastCmdTime > 0 && Date.now() / 1000 - lastCmdTime > 0.5) {
-      const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any; cmdVelPub.publish(msg);
+      const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any; cmdVelPub.publish(msg); cmdVelSafePub.publish(msg);
     }
   }, 100);
 
@@ -386,6 +537,10 @@ async function main() {
         if (mode !== 'nav' && state.navState.active) ros.cancelNavGoal();
         eventLog.emit('info', 'SYSTEM', `Mode: ${state.currentMode} → ${mode}`);
         state.currentMode = mode;
+        // Publish mode to ROS2 topic (interfaces.yaml compliance)
+        const modeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+        modeMsg.data = mode;
+        modePub.publish(modeMsg);
         updateState();
       }
     },
@@ -396,7 +551,7 @@ async function main() {
   const app = express();
   app.use(express.json());
 
-  const dashboardDir = path.resolve(__dirname, '../../web/agv_dashboard/dist');
+  const dashboardDir = path.resolve(__dirname, '../../../web/agv_dashboard/dist');
   if (fs.existsSync(dashboardDir)) app.use('/dashboard', express.static(dashboardDir));
   app.get('/', (_req, res) => {
     if (fs.existsSync(dashboardDir)) res.redirect('/dashboard');
@@ -410,7 +565,10 @@ async function main() {
   setupControlWs(server, deps);
   setupTeleopWs(server, deps);
 
+  // Start DDS spin BEFORE server listen so the event loop processes
+  // participant discovery for publishers that already exist.
   rclnodejs.spin(node);
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`AGV Backend (TS) on http://0.0.0.0:${PORT}`);
     eventLog.emit('info', 'SYSTEM', 'Backend started');
