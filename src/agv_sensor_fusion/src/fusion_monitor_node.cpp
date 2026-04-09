@@ -20,6 +20,8 @@
 #include <std_msgs/msg/string.hpp>
 #include <cmath>
 #include <deque>
+#include <array>
+#include <vector>
 
 struct SensorHealth {
   std::string name;
@@ -75,18 +77,35 @@ public:
     this->declare_parameter("stale_timeout_s", 2.0);
     this->declare_parameter("cuvslam_status_topic",
       std::string("/visual_slam/status"));
+    this->declare_parameter("cuvslam_lost_noise_multiplier", 3.0);
+    this->declare_parameter("cuvslam_degraded_noise_multiplier", 1.5);
+    this->declare_parameter("cuvslam_recovery_delay_s", 2.0);
+    this->declare_parameter("cuvslam_cov_degraded_threshold", 0.1);
+    this->declare_parameter("cuvslam_cov_critical_threshold", 0.5);
+    this->declare_parameter("ekf_global_node_name",
+      std::string("ekf_global"));
 
     pose_rate_hz_ = this->get_parameter("pose_rate_hz").as_double();
     cov_warn_ = this->get_parameter("covariance_warn_threshold").as_double();
     cov_error_ = this->get_parameter("covariance_error_threshold").as_double();
     stale_timeout_ = this->get_parameter("stale_timeout_s").as_double();
     auto cuvslam_topic = this->get_parameter("cuvslam_status_topic").as_string();
+    lost_noise_mult_ = this->get_parameter("cuvslam_lost_noise_multiplier").as_double();
+    degraded_noise_mult_ = this->get_parameter("cuvslam_degraded_noise_multiplier").as_double();
+    recovery_delay_ = this->get_parameter("cuvslam_recovery_delay_s").as_double();
+    cov_degraded_thresh_ = this->get_parameter("cuvslam_cov_degraded_threshold").as_double();
+    cov_critical_thresh_ = this->get_parameter("cuvslam_cov_critical_threshold").as_double();
+    auto ekf_global_name = this->get_parameter("ekf_global_node_name").as_string();
 
     // Initialize per-sensor health trackers (M6)
     sensor_wheel_odom_ = {"wheel_odom", 50.0, 2.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};
     sensor_cuvslam_ = {"cuVSLAM", 10.0, 2.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};
     sensor_imu_ = {"IMU", 200.0, 2.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};
     sensor_markers_ = {"AprilTag", 0.0, 0.0, {0, 0, RCL_ROS_TIME}, {}, 5.0, 0};  // event-driven
+
+    // ── EKF parameter client for adaptive process noise ──
+    ekf_param_client_ = std::make_shared<rclcpp::AsyncParametersClient>(
+      this, ekf_global_name);
 
     // ── Subscribers ──
 
@@ -108,8 +127,15 @@ public:
 
     sub_cuvslam_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "/visual_slam/tracking/odometry", rclcpp::SensorDataQoS(),
-      [this](const nav_msgs::msg::Odometry::SharedPtr /*msg*/) {
+      [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
         sensor_cuvslam_.record(this->now());
+        // Extract cuVSLAM pose covariance for quality gating
+        double max_cov = 0.0;
+        for (int i : {0, 7, 35}) {  // x, y, yaw diagonal
+          max_cov = std::max(max_cov, std::abs(msg->pose.covariance[i]));
+        }
+        cuvslam_max_cov_ = max_cov;
+        update_cuvslam_quality_level();
       });
 
     sub_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(
@@ -178,7 +204,6 @@ private:
   {
     // cuVSLAM status strings vary by version. Common values:
     //   "TRACKING", "LOST", "INITIALIZING", "SUCCESS"
-    // Treat anything other than TRACKING/SUCCESS as degraded.
     std::string status = msg->data;
     bool was_ok = cuvslam_tracking_ok_;
 
@@ -188,9 +213,23 @@ private:
 
     if (!cuvslam_tracking_ok_ && was_ok) {
       RCLCPP_WARN(this->get_logger(),
-        "cuVSLAM tracking lost — global EKF falling back to wheel odometry + AprilTags");
+        "cuVSLAM tracking lost — inflating global EKF process noise x%.1f",
+        lost_noise_mult_);
+      apply_noise_multiplier(lost_noise_mult_);
     } else if (cuvslam_tracking_ok_ && !was_ok) {
-      RCLCPP_INFO(this->get_logger(), "cuVSLAM tracking recovered");
+      RCLCPP_INFO(this->get_logger(),
+        "cuVSLAM tracking recovered — restoring EKF noise after %.1fs delay",
+        recovery_delay_);
+      // Schedule noise restoration after recovery delay
+      recovery_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>(recovery_delay_),
+        [this]() {
+          if (cuvslam_tracking_ok_ && cuvslam_quality_level_ == QualityLevel::TRACKING) {
+            apply_noise_multiplier(1.0);
+            RCLCPP_INFO(this->get_logger(), "Global EKF process noise restored to baseline");
+          }
+          recovery_timer_->cancel();
+        });
     }
 
     last_cuvslam_status_ = status;
@@ -199,6 +238,92 @@ private:
     std_msgs::msg::Bool ok_msg;
     ok_msg.data = cuvslam_tracking_ok_;
     pub_cuvslam_ok_->publish(ok_msg);
+  }
+
+  // 3-level quality assessment based on cuVSLAM covariance
+  enum class QualityLevel { TRACKING, DEGRADED, LOST };
+
+  void update_cuvslam_quality_level()
+  {
+    QualityLevel prev = cuvslam_quality_level_;
+    if (!cuvslam_tracking_ok_) {
+      cuvslam_quality_level_ = QualityLevel::LOST;
+    } else if (cuvslam_max_cov_ > cov_critical_thresh_) {
+      cuvslam_quality_level_ = QualityLevel::LOST;
+    } else if (cuvslam_max_cov_ > cov_degraded_thresh_) {
+      cuvslam_quality_level_ = QualityLevel::DEGRADED;
+    } else {
+      cuvslam_quality_level_ = QualityLevel::TRACKING;
+    }
+
+    // Apply appropriate noise multiplier on transitions
+    if (cuvslam_quality_level_ != prev) {
+      switch (cuvslam_quality_level_) {
+        case QualityLevel::DEGRADED:
+          RCLCPP_WARN(this->get_logger(),
+            "cuVSLAM quality DEGRADED (cov=%.3f) — inflating EKF noise x%.1f",
+            cuvslam_max_cov_, degraded_noise_mult_);
+          apply_noise_multiplier(degraded_noise_mult_);
+          break;
+        case QualityLevel::LOST:
+          // Only apply if status-based handler hasn't already applied lost multiplier
+          if (prev == QualityLevel::DEGRADED) {
+            RCLCPP_WARN(this->get_logger(),
+              "cuVSLAM quality CRITICAL (cov=%.3f) — inflating EKF noise x%.1f",
+              cuvslam_max_cov_, lost_noise_mult_);
+            apply_noise_multiplier(lost_noise_mult_);
+          }
+          break;
+        case QualityLevel::TRACKING:
+          if (prev == QualityLevel::DEGRADED) {
+            RCLCPP_INFO(this->get_logger(), "cuVSLAM quality restored to TRACKING");
+            apply_noise_multiplier(1.0);
+          }
+          break;
+      }
+    }
+  }
+
+  void apply_noise_multiplier(double multiplier)
+  {
+    if (!ekf_param_client_->service_is_ready()) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+        "EKF global parameter service not ready — cannot adjust process noise");
+      return;
+    }
+
+    // Capture baseline on first call
+    if (!has_baseline_noise_) {
+      auto future = ekf_param_client_->get_parameters(
+        {"process_noise_covariance"});
+      // Non-blocking: store baseline when result arrives
+      future.wait_for(std::chrono::milliseconds(500));
+      if (future.valid()) {
+        try {
+          auto results = future.get();
+          if (!results.empty()) {
+            baseline_process_noise_ = results[0].as_double_array();
+            has_baseline_noise_ = true;
+          }
+        } catch (const std::exception& e) {
+          RCLCPP_WARN(this->get_logger(),
+            "Failed to get baseline process noise: %s", e.what());
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    // Apply multiplier to diagonal entries only
+    std::vector<double> adjusted = baseline_process_noise_;
+    for (size_t i = 0; i < 15 && i * 15 + i < adjusted.size(); ++i) {
+      adjusted[i * 15 + i] *= multiplier;
+    }
+
+    auto param = rclcpp::Parameter("process_noise_covariance", adjusted);
+    ekf_param_client_->set_parameters({param});
+    current_noise_mult_ = multiplier;
   }
 
   void publish_pose()
@@ -334,12 +459,31 @@ private:
       ok_kv.value = cuvslam_tracking_ok_ ? "true" : "false";
       status.values.push_back(ok_kv);
 
+      diagnostic_msgs::msg::KeyValue quality_kv;
+      quality_kv.key = "quality_level";
+      quality_kv.value = (cuvslam_quality_level_ == QualityLevel::TRACKING) ? "TRACKING" :
+                         (cuvslam_quality_level_ == QualityLevel::DEGRADED) ? "DEGRADED" : "LOST";
+      status.values.push_back(quality_kv);
+
+      diagnostic_msgs::msg::KeyValue cov_kv;
+      cov_kv.key = "max_covariance";
+      cov_kv.value = std::to_string(cuvslam_max_cov_);
+      status.values.push_back(cov_kv);
+
+      diagnostic_msgs::msg::KeyValue mult_kv;
+      mult_kv.key = "noise_multiplier";
+      mult_kv.value = std::to_string(current_noise_mult_);
+      status.values.push_back(mult_kv);
+
       if (last_cuvslam_status_.empty()) {
         status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
         status.message = "No cuVSLAM status received yet";
-      } else if (!cuvslam_tracking_ok_) {
+      } else if (cuvslam_quality_level_ == QualityLevel::LOST) {
         status.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
-        status.message = "cuVSLAM tracking lost: " + last_cuvslam_status_;
+        status.message = "cuVSLAM LOST: " + last_cuvslam_status_;
+      } else if (cuvslam_quality_level_ == QualityLevel::DEGRADED) {
+        status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+        status.message = "cuVSLAM DEGRADED (cov=" + std::to_string(cuvslam_max_cov_) + ")";
       } else {
         status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
         status.message = "cuVSLAM tracking OK";
@@ -390,11 +534,27 @@ private:
   bool cuvslam_tracking_ok_{true};  // assume OK until told otherwise
   std::string last_cuvslam_status_;
 
+  // cuVSLAM quality gating
+  double cuvslam_max_cov_{0.0};
+  QualityLevel cuvslam_quality_level_{QualityLevel::TRACKING};
+
+  // Adaptive EKF process noise
+  std::shared_ptr<rclcpp::AsyncParametersClient> ekf_param_client_;
+  std::vector<double> baseline_process_noise_;
+  bool has_baseline_noise_{false};
+  double current_noise_mult_{1.0};
+  rclcpp::TimerBase::SharedPtr recovery_timer_;
+
   // Parameters
   double pose_rate_hz_;
   double cov_warn_;
   double cov_error_;
   double stale_timeout_;
+  double lost_noise_mult_;
+  double degraded_noise_mult_;
+  double recovery_delay_;
+  double cov_degraded_thresh_;
+  double cov_critical_thresh_;
 };
 
 int main(int argc, char** argv)
