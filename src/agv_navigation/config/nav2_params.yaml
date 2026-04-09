@@ -50,7 +50,7 @@
       min_lookahead_dist: 0.2            # [TUNABLE] [0.15-0.3] m — floor for lookahead scaling
       max_lookahead_dist: 0.7            # [TUNABLE] [0.5-1.0] m — ceiling for lookahead scaling
       lookahead_time: 1.2                # [TUNABLE] [0.8-2.0] s — higher = smoother but less reactive
-      rotate_to_heading_angular_vel: 0.3 # [TUNABLE] [0.2-0.5] rad/s — in-place rotation speed
+      rotate_to_heading_angular_vel: 0.2 # [TUNABLE] [0.2-0.5] rad/s — in-place rotation speed
       transform_tolerance: 0.2           # [ARCHITECTURAL] Must match TF publish rates; 0.5 for sim
       use_velocity_scaled_lookahead_dist: true   # [ARCHITECTURAL] Scales lookahead with speed
       min_approach_linear_velocity: 0.05 # [TUNABLE] [0.03-0.10] m/s — final approach creep speed

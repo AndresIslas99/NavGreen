@@ -32,7 +32,7 @@ public:
   ImageServerNode() : Node("image_server")
   {
     declare_parameter("port", 8091);
-    declare_parameter("camera_topic", "/zed/zed_node/right/image_rect_color");
+    declare_parameter("camera_topic", "/zed/zed_node/left/image_rect_color");
     declare_parameter("depth_topic", "/zed/zed_node/depth/depth_registered");
     declare_parameter("jpeg_quality", 70);
     declare_parameter("max_width", 640);
@@ -70,13 +70,27 @@ private:
   void on_camera(sensor_msgs::msg::Image::SharedPtr msg)
   {
     try {
-      auto cv_img = cv_bridge::toCvCopy(msg, "bgr8");
-      cv::Mat resized;
-      if (cv_img->image.cols > max_width_) {
-        double scale = static_cast<double>(max_width_) / cv_img->image.cols;
-        cv::resize(cv_img->image, resized, cv::Size(), scale, scale, cv::INTER_AREA);
+      // Accept any color encoding — convert to BGR for JPEG output
+      auto cv_img = cv_bridge::toCvCopy(msg);
+      cv::Mat bgr;
+      if (msg->encoding == "rgb8") {
+        cv::cvtColor(cv_img->image, bgr, cv::COLOR_RGB2BGR);
+      } else if (msg->encoding == "bgr8") {
+        bgr = cv_img->image;
+      } else if (msg->encoding == "rgba8") {
+        cv::cvtColor(cv_img->image, bgr, cv::COLOR_RGBA2BGR);
+      } else if (msg->encoding == "bgra8") {
+        cv::cvtColor(cv_img->image, bgr, cv::COLOR_BGRA2BGR);
       } else {
-        resized = cv_img->image;
+        bgr = cv_img->image;  // best effort
+      }
+
+      cv::Mat resized;
+      if (bgr.cols > max_width_) {
+        double scale = static_cast<double>(max_width_) / bgr.cols;
+        cv::resize(bgr, resized, cv::Size(), scale, scale, cv::INTER_AREA);
+      } else {
+        resized = bgr;
       }
 
       std::vector<uchar> buf;
@@ -85,7 +99,10 @@ private:
 
       std::lock_guard<std::mutex> lock(cam_mutex_);
       cam_jpeg_ = std::move(buf);
-    } catch (...) {}
+    } catch (const std::exception& e) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+        "Camera frame error: %s (encoding: %s)", e.what(), msg->encoding.c_str());
+    }
   }
 
   void on_depth(sensor_msgs::msg::Image::SharedPtr msg)
@@ -94,9 +111,9 @@ private:
       auto cv_img = cv_bridge::toCvCopy(msg, "32FC1");
       cv::Mat depth = cv_img->image;
 
-      // Downsample 4x
+      // Downsample 2x (was 4x — better resolution for greenhouse mapping feedback)
       cv::Mat small;
-      cv::resize(depth, small, cv::Size(depth.cols / 4, depth.rows / 4), 0, 0, cv::INTER_NEAREST);
+      cv::resize(depth, small, cv::Size(depth.cols / 2, depth.rows / 2), 0, 0, cv::INTER_NEAREST);
 
       // Normalize to 0-255
       cv::Mat norm;
@@ -111,7 +128,7 @@ private:
       cv::applyColorMap(255 - norm, colored, cv::COLORMAP_JET);
 
       std::vector<uchar> buf;
-      std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 60};
+      std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 75};
       cv::imencode(".jpg", colored, buf, params);
 
       std::lock_guard<std::mutex> lock(depth_mutex_);

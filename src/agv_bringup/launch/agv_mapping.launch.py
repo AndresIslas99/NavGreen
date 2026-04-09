@@ -20,6 +20,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -47,8 +48,65 @@ def generate_launch_description():
             launch_arguments={'namespace': ns}.items(),
         ),
 
-        # SLAM pipeline (cuVSLAM + nvblox)
-        # Delayed 2s to let TF settle
+        # Ground-filtered LaserScan from ZED point cloud
+        Node(
+            package='pointcloud_to_laserscan',
+            executable='pointcloud_to_laserscan_node',
+            name='pointcloud_to_laserscan',
+            namespace=ns,
+            parameters=[{
+                'min_height': 0.08,
+                'max_height': 2.0,
+                'angle_min': -1.0472,
+                'angle_max': 1.0472,
+                'angle_increment': 0.005,
+                'scan_time': 0.1,
+                'range_min': 0.3,
+                'range_max': 8.0,
+                'use_inf': True,
+                'inf_epsilon': 1.0,
+                'target_frame': 'base_link',
+            }],
+            remappings=[
+                ('cloud_in', '/agv/zed/point_cloud/cloud_registered'),
+                ('scan', 'scan'),
+            ],
+            output='log',
+        ),
+
+        # C++ Image Server (camera + depth MJPEG on port 8091)
+        Node(
+            package='agv_image_server',
+            executable='image_server_node',
+            name='image_server',
+            namespace=ns,
+            parameters=[{
+                'port': 8091,
+                'camera_topic': '/agv/zed/left/image_rect_color',
+                'depth_topic': '/agv/zed/depth/depth_registered',
+                'jpeg_quality': 70,
+                'max_width': 640,
+            }],
+            output='log',
+        ),
+
+        # Live occupancy grid from scan data
+        Node(
+            package='agv_scan_mapper',
+            executable='scan_grid_mapper_node',
+            name='scan_grid_mapper',
+            namespace=ns,
+            parameters=[
+                PathJoinSubstitution([
+                    FindPackageShare('agv_scan_mapper'), 'config', 'scan_mapper_params.yaml'
+                ]),
+            ],
+            respawn=True,
+            respawn_delay=2.0,
+            output='log',
+        ),
+
+        # SLAM pipeline (cuVSLAM + nvblox) — delayed 2s for TF settle
         TimerAction(
             period=2.0,
             actions=[
@@ -65,12 +123,22 @@ def generate_launch_description():
             ],
         ),
 
-        # Teleop web server
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                PathJoinSubstitution([
-                    FindPackageShare('agv_ui_backend'), 'launch', 'teleop_web.launch.py'
-                ])),
-            launch_arguments={'namespace': ns}.items(),
+        # Operator backend (TypeScript) — delayed 5s for DDS discovery
+        TimerAction(
+            period=5.0,
+            actions=[
+                Node(
+                    package='agv_ui_backend',
+                    executable='teleop_backend',
+                    name='teleop_server',
+                    namespace=ns,
+                    additional_env={
+                        'AGV_PORT': '8090',
+                        'AGV_NAMESPACE': 'agv',
+                        'AGV_DATA_DIR': '/home/orza/agv_data',
+                    },
+                    output='log',
+                ),
+            ],
         ),
     ])
