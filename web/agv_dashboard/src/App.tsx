@@ -64,7 +64,7 @@ export default function App() {
 }
 
 function Dashboard({ username, userRole, onLogout }: { username: string; userRole: string; onLogout: () => void }) {
-  const { connected, status, path, scanPoints, mapData, accMapData, events, send } = useWebSocket()
+  const { connected, status, path, scanPoints, mapData, accMapData, events, recordingResult, send } = useWebSocket()
   const { fleetConnected, robots: fleetRobots, selectedRobot, selectRobot } = useFleetSocket()
 
   const [rail, setRail] = useState<ModeRailType>('operate')
@@ -139,6 +139,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             onModeChange={handleModeChange}
             onRecording={handleRecording}
             onCmdVel={handleCmdVel}
+            recordingResult={recordingResult}
           />
         )
       case 'missions':
@@ -185,7 +186,8 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
       <div className="body">
         <ModeRail active={rail} onChange={setRail} />
 
-        <div className="map-area">
+        <div className={`map-area ${state === 'mapping' ? 'mapping-layout' : ''}`}>
+          <div className="map-section">
           {USE_LEAFLET ? (
             <MapView
               mapData={state === 'mapping' && accMapData ? accMapData : mapData}
@@ -198,6 +200,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
               fleetRobots={fleetRobots}
               selectedRobot={selectedRobot}
               ghostPose={rail === 'analytics' ? ghostPose : null}
+              mappingCoverage={status?.mapping_coverage}
             />
           ) : (
             <MapCanvas
@@ -216,11 +219,19 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             onSelectRobot={selectRobot}
             connected={fleetConnected}
           />
-          <CameraFeed visible={rail === 'operate' || rail === 'map'} />
+          {state !== 'mapping' && <CameraFeed visible={rail === 'operate' || rail === 'map'} expanded={false} />}
           <ReplaySlider
             visible={rail === 'analytics'}
             onGhostPose={setGhostPose}
           />
+          </div>
+
+          {/* Expanded camera panel during mapping */}
+          {state === 'mapping' && (
+            <div className="mapping-camera-panel">
+              <CameraFeed visible={true} expanded={true} />
+            </div>
+          )}
         </div>
 
         <div className="right-panel">

@@ -10,9 +10,10 @@ interface Props {
   onModeChange: (mode: string) => void
   onRecording: (action: 'start' | 'stop') => void
   onCmdVel: (linear: number, angular: number) => void
+  recordingResult?: { success: boolean; message: string } | null
 }
 
-export function MappingPanel({ state, actions, motorsArmed, onModeChange, onRecording, onCmdVel }: Props) {
+export function MappingPanel({ state, actions, motorsArmed, onModeChange, onRecording, onCmdVel, recordingResult }: Props) {
   const [maps, setMaps] = useState<MapInfo[]>([])
   const [saveName, setSaveName] = useState('')
   const [selectedMap, setSelectedMap] = useState('')
@@ -71,6 +72,11 @@ export function MappingPanel({ state, actions, motorsArmed, onModeChange, onReco
           </button>
         )}
         {state === 'mapping' && <div className="recording-indicator">Mapping active</div>}
+        {recordingResult && (
+          <span className={`toolbar-msg ${recordingResult.success ? '' : 'toolbar-msg-error'}`}>
+            {recordingResult.success ? 'Recording saved' : `Error: ${recordingResult.message}`}
+          </span>
+        )}
         {state === 'mapping' && (
           <button className="full-width secondary" style={{ marginTop: 6 }}
             onClick={() => api.clearAccMap()}>
