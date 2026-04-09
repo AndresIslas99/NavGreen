@@ -1,8 +1,12 @@
 # AprilTag marker registry — known marker poses in map frame
-# Family: tag36h11, size: 0.2m
+# Family: tag36h11, size: 0.2m (default; per-tag override via tag_size field)
 # Positions from Gazebo Harmonic greenhouse sim.
 # Wall tags at z=0.145m, floor tags at z=0.002m.
 # ID 32 does not exist (removed from sim).
+#
+# Types: wall (drift correction), floor (drift correction), rail_start (precision approach).
+# rail_start tags are floor-mounted and used by agv_rail_approach for ±3mm servoing.
+# The type field is optional — defaults to wall/floor based on z height.
 
 markers:
   # Pared oeste
@@ -203,3 +207,18 @@ markers:
     y: 4.40
     z: 0.002
     yaw: 0.0
+
+  # ── Rail start points (floor-mounted, precision approach targets) ──
+  # These tags mark the entry point of each greenhouse rail.
+  # yaw = approach heading (direction robot faces when aligned).
+  # tag_size = physical tag size override (smaller tags for rail markers).
+  # Used by agv_rail_approach node for ±3mm visual servoing.
+  #
+  # Example entries — replace with real surveyed positions for production:
+  # - id: 50
+  #   x: 7.00
+  #   y: -4.40
+  #   z: 0.002
+  #   yaw: 1.5708
+  #   type: rail_start
+  #   tag_size: 0.15

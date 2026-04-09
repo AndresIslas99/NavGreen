@@ -240,7 +240,7 @@ def generate_launch_description():
             namespace=ns,
             parameters=[{
                 'port': 8091,
-                'camera_topic': '/zed/zed_node/right/image_rect_color',
+                'camera_topic': '/zed/zed_node/left/image_rect_color',
                 'depth_topic': '/zed/zed_node/depth/depth_registered',
                 'jpeg_quality': 70,
                 'max_width': 640,
@@ -249,16 +249,17 @@ def generate_launch_description():
             output='log',
         ),
 
-        # ── Operator backend (dashboard + teleop + REST + WS) ──
+        # ── Operator backend (TypeScript, dashboard + teleop + REST + WS) ──
         Node(
             package='agv_ui_backend',
-            executable='teleop_server.py',
+            executable='teleop_backend',
             name='teleop_server',
             namespace=ns,
-            parameters=[{
-                'port': 8090,
-                'use_sim_time': True,
-            }],
+            additional_env={
+                'AGV_PORT': '8090',
+                'AGV_NAMESPACE': 'agv',
+                'AGV_DATA_DIR': '/home/orza/agv_data',
+            },
             output='log',
         ),
     ])
