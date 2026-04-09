@@ -2,13 +2,15 @@ import { useState, useCallback } from 'react'
 
 interface Props {
   visible: boolean
+  expanded?: boolean
 }
 
-export function CameraFeed({ visible }: Props) {
+export function CameraFeed({ visible, expanded: forceExpanded }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [depthExpanded, setDepthExpanded] = useState(false)
+  const isExpanded = forceExpanded || expanded
   const [hasError, setHasError] = useState(false)
   const [depthError, setDepthError] = useState(false)
-  const [showDepth, setShowDepth] = useState(true)
 
   const handleSnapshot = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -32,11 +34,39 @@ export function CameraFeed({ visible }: Props) {
   const cameraUrl = `${imageHost}/camera/stream`
   const depthUrl = `${imageHost}/depth/stream`
 
+  if (forceExpanded) {
+    // Full panel mode during mapping — stacked camera + depth
+    return (
+      <div className="camera-panel-full">
+        <div className="camera-panel-stream">
+          {hasError ? (
+            <div className="camera-pip-placeholder"><span>No camera</span></div>
+          ) : (
+            <img src={cameraUrl} alt="Camera" className="camera-panel-img" onError={() => setHasError(true)} />
+          )}
+          {!hasError && (
+            <button className="camera-snapshot-btn" onClick={handleSnapshot} title="Save snapshot">
+              &#128247;
+            </button>
+          )}
+        </div>
+        <div className="camera-panel-stream">
+          {depthError ? (
+            <div className="camera-pip-placeholder"><span>No depth</span></div>
+          ) : (
+            <img src={depthUrl} alt="Depth" className="camera-panel-img" onError={() => setDepthError(true)} />
+          )}
+          <span className="depth-label">Depth</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       {/* Camera PIP */}
       <div
-        className={`camera-pip ${expanded ? 'camera-pip-expanded' : ''}`}
+        className={`camera-pip ${isExpanded ? 'camera-pip-expanded' : ''}`}
         onClick={() => setExpanded(!expanded)}
       >
         {hasError ? (
@@ -59,27 +89,25 @@ export function CameraFeed({ visible }: Props) {
       </div>
 
       {/* Depth heatmap PIP */}
-      {showDepth && (
-        <div
-          className="depth-pip"
-          onClick={() => setShowDepth(false)}
-          title="Depth heatmap (click to hide)"
-        >
-          {depthError ? (
-            <div className="camera-pip-placeholder">
-              <span>No depth</span>
-            </div>
-          ) : (
-            <img
-              src={depthUrl}
-              alt="Depth"
-              className="camera-pip-img"
-              onError={() => setDepthError(true)}
-            />
-          )}
-          <span className="depth-label">Depth</span>
-        </div>
-      )}
+      <div
+        className={`depth-pip ${depthExpanded ? 'depth-pip-expanded' : ''}`}
+        onClick={() => setDepthExpanded(!depthExpanded)}
+        title="Depth heatmap (click to expand)"
+      >
+        {depthError ? (
+          <div className="camera-pip-placeholder">
+            <span>No depth</span>
+          </div>
+        ) : (
+          <img
+            src={depthUrl}
+            alt="Depth"
+            className="camera-pip-img"
+            onError={() => setDepthError(true)}
+          />
+        )}
+        <span className="depth-label">Depth</span>
+      </div>
     </>
   )
 }

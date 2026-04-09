@@ -94,7 +94,13 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
             <span className="metric-sep">|</span>
             <span className="metric">
               <span className="metric-label">BAT</span>
-              <span className="metric-value" style={{ color: 'var(--dim)' }}>N/A</span>
+              <span className="metric-value" style={{
+                color: s.battery_pct != null && s.battery_pct >= 0
+                  ? s.battery_pct < 20 ? 'var(--red)' : s.battery_pct < 40 ? 'var(--orange)' : 'var(--dim)'
+                  : 'var(--dim)'
+              }}>
+                {s.battery_pct != null && s.battery_pct >= 0 ? `${Math.round(s.battery_pct)}%` : 'N/A'}
+              </span>
             </span>
             <span className="metric-sep">|</span>
             <span className="metric">
