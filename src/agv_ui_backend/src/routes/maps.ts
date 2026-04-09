@@ -47,7 +47,7 @@ export function register(app: Express, deps: AppDeps): void {
 
   app.post('/api/maps/save', async (req, res) => {
     const name = (req.body?.name || '').trim();
-    const result = await ros.saveMap(name, config.mapsDir, `/${config.namespace}/map`);
+    const result = await ros.saveMap(name, config.mapsDir, `/${config.namespace}/live_map`);
     if (result.success) res.json(result);
     else res.status(500).json(result);
   });
@@ -56,10 +56,19 @@ export function register(app: Express, deps: AppDeps): void {
     const name = (req.body?.name || '').trim();
     const yamlPath = path.join(config.mapsDir, `${name}.yaml`);
     if (!fs.existsSync(yamlPath)) return res.status(404).json({ error: 'Map not found' });
-    // Use ROS service client to load
-    const result = await ros.callTriggerService(ros.loadMapClient, 'load_map');
-    if (result.success) eventLog.emit('info', 'MAPPING', `Map "${name}" loaded`);
-    res.json(result);
+    // LoadMap service expects {map_url: string}, not Trigger's empty request
+    if (!ros.loadMapClient.isServiceServerAvailable()) {
+      return res.status(503).json({ success: false, message: 'map_server not available' });
+    }
+    try {
+      const r = await ros.loadMapClient.sendRequestAsync({ map_url: yamlPath }, { timeout: 10000 });
+      const success = r.result === 0; // nav2_msgs/srv/LoadMap: RESULT_SUCCESS = 0
+      if (success) eventLog.emit('info', 'MAPPING', `Map "${name}" loaded`);
+      else eventLog.emit('warn', 'MAPPING', `Map load failed: ${name}`);
+      res.json({ success, message: success ? 'Loaded' : 'Load failed' });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Load service call failed' });
+    }
   });
 
   // Accumulated map
@@ -73,6 +82,11 @@ export function register(app: Express, deps: AppDeps): void {
 
   app.delete('/api/acc_map', (_req, res) => {
     scanAccumulator.clear();
+    // Also clear the ROS scan_grid_mapper via subprocess
+    const { execFile } = require('child_process');
+    execFile('ros2', ['service', 'call',
+      `/${config.namespace}/scan_grid_mapper/clear_map`, 'std_srvs/srv/Empty'],
+      { env: process.env, timeout: 5000 }, () => {});
     eventLog.emit('info', 'MAPPING', 'Accumulated map cleared');
     res.json({ success: true });
   });
