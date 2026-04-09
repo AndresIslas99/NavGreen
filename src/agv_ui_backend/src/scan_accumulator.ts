@@ -7,6 +7,7 @@ export class ScanAccumulator {
   private size: number;
   private origin: number;
   changed = false;
+  version = 0;
   pngBuffer: Buffer | null = null;
 
   constructor(resolution = 0.1, size = 500, origin = -25.0) {
@@ -70,6 +71,7 @@ export class ScanAccumulator {
     }
 
     this.changed = true;
+    this.version++;
     return points;
   }
 
@@ -96,31 +98,64 @@ export class ScanAccumulator {
     }
   }
 
+  /** Fraction of explored area that has evidence (0.0–1.0) */
+  get coveragePercent(): number {
+    const grid = this.grid;
+    let explored = 0;
+    let total = 0;
+    for (let i = 0; i < grid.length; i++) {
+      const v = grid[i];
+      if (v !== 0) { explored++; total++; }
+      // Count cells within bounding box of explored area
+    }
+    // Use a simpler metric: % of non-zero cells vs total grid
+    if (explored === 0) return 0;
+    // Estimate useful area as 2x the explored area (accounts for unknown gaps)
+    return Math.min(100, Math.round(explored / grid.length * 100 * 10) / 10);
+  }
+
   async updatePng(): Promise<void> {
     if (!this.changed) return;
-    // Don't reset changed here — WS loop resets after broadcasting
+    this.changed = false;
 
     const sz = this.size;
-    const pixels = Buffer.alloc(sz * sz);
+    // RGBA: 4 channels for transparency support
+    const pixels = Buffer.alloc(sz * sz * 4);
     const grid = this.grid;
 
     for (let i = 0; i < sz * sz; i++) {
       const v = grid[i];
-      if (v < -0.5) pixels[i] = 220;      // free
-      else if (v > 1.5) pixels[i] = 25;    // occupied
-      else if (v === 0) pixels[i] = 140;   // unknown
-      else pixels[i] = Math.max(40, Math.min(210, Math.round(170 - v * 60))); // gradient
+      const p = i * 4;
+      if (v === 0) {
+        // Unknown — transparent (shows Leaflet grid background)
+        pixels[p] = 0; pixels[p + 1] = 0; pixels[p + 2] = 0; pixels[p + 3] = 0;
+      } else if (v < -0.5) {
+        // Free space — white, semi-transparent
+        pixels[p] = 240; pixels[p + 1] = 245; pixels[p + 2] = 240; pixels[p + 3] = 180;
+      } else if (v > 1.5) {
+        // Occupied — dark, opaque
+        pixels[p] = 20; pixels[p + 1] = 20; pixels[p + 2] = 25; pixels[p + 3] = 240;
+      } else if (v > 0) {
+        // Partial occupied evidence — warm yellow
+        const a = Math.min(200, Math.round(80 + v * 60));
+        pixels[p] = 200; pixels[p + 1] = 170; pixels[p + 2] = 50; pixels[p + 3] = a;
+      } else {
+        // Partial free evidence — light with low alpha
+        const a = Math.min(150, Math.round(50 + Math.abs(v) * 50));
+        pixels[p] = 220; pixels[p + 1] = 230; pixels[p + 2] = 220; pixels[p + 3] = a;
+      }
     }
 
-    // Flip vertically
-    const flipped = Buffer.alloc(sz * sz);
+    // Flip vertically (row-by-row, 4 bytes per pixel)
+    const rowBytes = sz * 4;
+    const flipped = Buffer.alloc(sz * sz * 4);
     for (let row = 0; row < sz; row++) {
-      pixels.copy(flipped, (sz - 1 - row) * sz, row * sz, (row + 1) * sz);
+      pixels.copy(flipped, (sz - 1 - row) * rowBytes, row * rowBytes, (row + 1) * rowBytes);
     }
 
     try {
       const sharp = require('sharp');
-      this.pngBuffer = await sharp(flipped, { raw: { width: sz, height: sz, channels: 1 } })
+      this.pngBuffer = await sharp(flipped, { raw: { width: sz, height: sz, channels: 4 } })
         .png()
         .toBuffer();
     } catch {
@@ -131,6 +166,7 @@ export class ScanAccumulator {
   clear(): void {
     this.grid.fill(0);
     this.changed = true;
+    this.version++;
     this.pngBuffer = null;
   }
 }

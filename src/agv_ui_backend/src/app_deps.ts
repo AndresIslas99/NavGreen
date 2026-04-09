@@ -33,9 +33,15 @@ export interface AppState {
   recordingActive: boolean;
   missionCancel: boolean;
   missionPause: boolean;
+  batteryPct: number;
+  lastImuTime: number;
   mapPng: Buffer | null;
   mapMeta: any;
   mapChanged: boolean;
+  mapVersion: number;
+  liveMapPng: Buffer | null;
+  liveMapMeta: any;
+  liveMapVersion: number;
   health: Record<string, any>;
 }
 
