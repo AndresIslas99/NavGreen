@@ -22,6 +22,7 @@ interface Props {
   fleetRobots?: FleetRobot[]
   selectedRobot?: string | null
   ghostPose?: { x: number; y: number; theta: number } | null
+  mappingCoverage?: number
 }
 
 // Robot icon as rotated div
@@ -43,7 +44,7 @@ function worldToLatLng(x: number, y: number): L.LatLng {
   return L.latLng(y, x)
 }
 
-export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose }: Props) {
+export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
 
@@ -362,6 +363,11 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           ({pose.x.toFixed(2)}, {pose.y.toFixed(2)}) {(pose.theta * 180 / Math.PI).toFixed(0)}&deg;
         </span>
       </div>
+      {mappingCoverage != null && mappingCoverage > 0 && (
+        <div className="coverage-badge">
+          Cobertura: {mappingCoverage.toFixed(1)}%
+        </div>
+      )}
       <div className="map-overlay-bl">
         <button
           className={`map-btn ${followRobot ? 'map-btn-active' : ''}`}
