@@ -30,6 +30,17 @@ credentials.json
 # Claude internal
 .claude/
 
+# Backend build artifacts
+src/agv_ui_backend/dist/
+src/agv_ui_backend/node_modules/
+
+# Debug/temp graph outputs
+src/agv_ui_backend/frames_*.gv
+src/agv_ui_backend/frames_*.pdf
+
+# Dev tooling locks
+.agent_locks.yaml
+
 # Third-party ROS packages (clone separately)
 src/agv_slam/
 src/ethz_nvblox/
