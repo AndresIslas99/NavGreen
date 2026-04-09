@@ -46,6 +46,12 @@ private:
   double max_motor_temp_;
   double critical_temp_offset_;
 
+  // -- Caster compensation --
+  bool caster_enable_compensation_;
+  double caster_settling_tau_;
+  double caster_covariance_multiplier_;
+  double caster_angular_accel_threshold_;
+
   // -- CAN --
   std::unique_ptr<CANSocket> can_;
   bool init_can();
@@ -79,9 +85,15 @@ private:
   bool odom_initialized_ = false;
   rclcpp::Time last_odom_time_;
 
+  // -- Caster disturbance state --
+  double caster_disturbance_level_ = 0.0;
+  double prev_v_linear_ = 0.0;
+  double prev_v_angular_ = 0.0;
+
   void integrate_odometry();
   void publish_odometry();
   void publish_joint_states();
+  void update_caster_disturbance(double v_linear, double v_angular, double dt);
 
   // -- E-stop --
   bool e_stop_active_ = false;
