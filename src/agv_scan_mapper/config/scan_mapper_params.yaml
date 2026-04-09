@@ -5,20 +5,19 @@
 
 /**/scan_grid_mapper:
   ros__parameters:
-    # Grid dimensions
+    # Grid dimensions (auto-expands as scan data arrives)
     resolution: 0.05          # meters per cell (5cm, matches Nav2 costmap)
-    width: 400                # cells (400 × 0.05 = 20m)
-    height: 400               # cells
-    origin_x: -10.0           # meters (grid starts at -10m)
-    origin_y: -10.0           # meters
+    initial_width: 200        # starting cells (200 × 0.05 = 10m), grows dynamically
+    initial_height: 200       # starting cells, grows dynamically
+    expand_margin_cells: 40   # cells of margin added on each expansion (40 × 0.05 = 2m)
 
     # Publishing
-    publish_rate_hz: 1.0      # OccupancyGrid publish rate
+    publish_rate_hz: 5.0      # OccupancyGrid publish rate (faster feedback during mapping)
     map_frame: "map"          # frame_id for the published map
 
     # Log-odds update parameters
     l_occupied: 0.85          # log-odds increase for occupied evidence
-    l_free: -0.4              # log-odds decrease for free evidence (ray pass-through)
+    l_free: -0.55             # log-odds decrease for free (more symmetric clearing)
     l_min: -5.0               # clamp minimum (prevents overconfidence in free)
     l_max: 5.0                # clamp maximum (prevents overconfidence in occupied)
 
@@ -31,3 +30,5 @@
     # Scan processing
     max_range: 8.0            # ignore rays beyond this (meters)
     min_range: 0.3            # ignore rays closer than this
+    ray_subsample: 2          # process every Nth ray (2 = skip alternating, halves CPU)
+    min_travel_distance: 0.10   # meters — skip scan if robot moved less (avoids noise updates)

@@ -33,28 +33,14 @@
     odom0_relative: false
     odom0_queue_size: 10
 
-    # Override zero covariances from sim (Gazebo bridge sends all zeros).
-    # Without this, EKF treats sim odom as infinitely precise → no correction possible.
-    # Values from diff_drive_controller defaults: [0.001, 0.001, inf, inf, inf, 0.01]
-    # Yaw covariance widened from 0.01 to 0.05 to allow absolute IMU yaw to
-    # correct wheel-odometry heading drift over time.
-    odom0_pose_covariance: [0.001, 0.0,   0.0,   0.0,   0.0,   0.0,
-                            0.0,   0.001, 0.0,   0.0,   0.0,   0.0,
-                            0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
-                            0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
-                            0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
-                            0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
-    odom0_twist_covariance: [0.001, 0.0,   0.0,   0.0,   0.0,   0.0,
-                             0.0,   0.001, 0.0,   0.0,   0.0,   0.0,
-                             0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
-                             0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
-                             0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
-                             0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
+    # Covariance: use the dynamic values published by odrive_can_node
+    # (scales with angular velocity). The covariance_override_node handles
+    # the sim-only zero-covariance problem separately.
 
     # ── ZED 2i IMU (or sim IMU) ──
-    # On real hardware: /zed/zed_node/imu/data at 200Hz
+    # On real hardware: /agv/zed/imu/data at 200Hz (ZED in namespace /agv)
     # In HIL sim: /agv/imu/data at ~20Hz (overridden via launch param)
-    imu0: /zed/zed_node/imu/data
+    imu0: /agv/zed/imu/data
     imu0_config: [false, false, false,     # x, y, z
                   true,  true,  true,      # roll, pitch, yaw
                   false, false, false,     # vx, vy, vz
