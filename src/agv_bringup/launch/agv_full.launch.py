@@ -49,7 +49,7 @@ def generate_launch_description():
 
     bringup_dir = get_package_share_directory('agv_bringup')
     nav_dir = get_package_share_directory('agv_navigation')
-    cuvslam_no_tf = os.path.join(bringup_dir, 'config', 'cuvslam_no_tf.yaml')
+    cuvslam_no_tf = os.path.join(bringup_dir, 'config', 'cuvslam_greenhouse.yaml')
     maps_dir = os.path.join(nav_dir, 'maps')
     missions_file = os.path.join(nav_dir, 'missions', 'missions.json')
     slam_loc_config = os.path.join(nav_dir, 'config', 'slam_toolbox_localization.yaml')
