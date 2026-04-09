@@ -91,8 +91,10 @@ export interface RobotStatus {
   clients: number
   mode: 'teleop' | 'mapping' | 'nav'
   pose: { x: number; y: number; theta: number }
+  battery_pct: number | null
   nav_state: { active: boolean; distance_remaining: number; status: string }
   health: HealthMap
+  mapping_coverage: number
   mission_progress: MissionProgress | null
 }
 
