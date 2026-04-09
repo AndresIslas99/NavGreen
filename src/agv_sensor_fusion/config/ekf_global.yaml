@@ -44,8 +44,8 @@
     odom1_queue_size: 5
 
     # Reject cuVSLAM outliers via Mahalanobis distance
-    odom1_pose_rejection_threshold: 5.0
-    odom1_twist_rejection_threshold: 3.0
+    odom1_pose_rejection_threshold: 3.5     # Tighter for greenhouse aliasing
+    odom1_twist_rejection_threshold: 2.5
 
     # ── AprilTag marker corrections ──
     # PoseWithCovarianceStamped in map frame from marker_correction_node
@@ -78,7 +78,7 @@
        0.0,   0.0,   0.12,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
-       0.0,   0.0,   0.0,   0.0,   0.0,   0.12,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
