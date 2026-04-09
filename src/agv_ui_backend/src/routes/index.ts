@@ -12,10 +12,9 @@ import * as recordingRoutes from './recording';
 import * as mapsRoutes from './maps';
 import * as missionsRoutes from './missions';
 import * as navRoutes from './nav';
-import * as cameraRoutes from './camera';
 import * as analyticsRoutes from './analytics';
 
-export function registerAllRoutes(app: Express, deps: AppDeps, rosNode: any): void {
+export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): void {
   statusRoutes.register(app, deps);
   authRoutes.register(app, deps);
   eventsRoutes.register(app, deps);
@@ -23,6 +22,6 @@ export function registerAllRoutes(app: Express, deps: AppDeps, rosNode: any): vo
   mapsRoutes.register(app, deps);
   missionsRoutes.register(app, deps);
   navRoutes.register(app, deps);
-  cameraRoutes.register(app, deps, rosNode);
+  // Camera streams served directly by C++ image_server_node on port 8091
   analyticsRoutes.register(app, deps);
 }
