@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CycloneDDS xmlns="https://cdds.io/config"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+  <Domain id="any">
+    <General>
+      <Interfaces>
+        <!-- USB bridge: always up, multicast-capable for same-machine IPC -->
+        <NetworkInterface name="l4tbr0" priority="default" multicast="true" />
+        <!-- Ethernet: production site network for dashboard access -->
+        <NetworkInterface name="eno1" priority="default" multicast="true" />
+      </Interfaces>
+      <AllowMulticast>true</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
+      <FragmentSize>32768B</FragmentSize>
+    </General>
+
+    <Discovery>
+      <LeaseDuration>30s</LeaseDuration>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer address="localhost"/>
+        <Peer address="192.168.55.100"/>
+      </Peers>
+    </Discovery>
+
+    <Internal>
+      <SocketReceiveBufferSize min="26MB" />
+      <Watermarks>
+        <WhcHigh>500kB</WhcHigh>
+      </Watermarks>
+    </Internal>
+
+    <Tracing>
+      <OutputFile>/tmp/cyclonedds.log</OutputFile>
+      <Verbosity>warning</Verbosity>
+    </Tracing>
+  </Domain>
+</CycloneDDS>
