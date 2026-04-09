@@ -51,6 +51,7 @@ install(PROGRAMS
   scripts/odrive_gui.py
   scripts/validate.py
   scripts/simple_test.py
+  scripts/calibrate_odom.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
