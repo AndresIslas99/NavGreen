@@ -172,7 +172,7 @@ async function main() {
       const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any;
       // Mapping mode: tighter limits to keep cuVSLAM tracking stable
       const maxLin = state.currentMode === 'mapping' ? 0.4 : 0.5;
-      const maxAng = state.currentMode === 'mapping' ? 0.3 : 0.5;
+      const maxAng = state.currentMode === 'mapping' ? 0.2 : 0.5;
       msg.linear.x = Math.max(-maxLin, Math.min(maxLin, linear));
       msg.angular.z = Math.max(-maxAng, Math.min(maxAng, angular));
       cmdVelPub.publish(msg);
