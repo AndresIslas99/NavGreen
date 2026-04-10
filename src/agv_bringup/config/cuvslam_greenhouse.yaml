@@ -7,7 +7,7 @@
 #   img_mask_bottom: Increase to 108 if ground reflections persist
 #   slam_max_map_size: Increase for very large greenhouses (memory cost)
 #   slam_throttling_time_ms: Increase to 500 if CPU thermal throttle
-visual_slam_node:
+/**:
   ros__parameters:
     # ── TF disable (EKF owns transforms in fusion mode) ──
     publish_odom_to_base_tf: false
