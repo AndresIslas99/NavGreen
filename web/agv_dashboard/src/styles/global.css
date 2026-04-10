@@ -16,29 +16,41 @@
   --surface: #232323;
   --surface-2: #2a2a2a;
   --border: #363636;
-  --text: #c8c8c8;
-  --text-secondary: #808080;
-  --dim: #5a5a5a;
+  --text: #e0e0e0;             /* Was #c8c8c8 — bumped for outdoor glare */
+  --text-secondary: #a8a8a8;   /* Was #808080 — now passes WCAG AAA */
+  --dim: #8a8a8a;              /* Was #5a5a5a — now passes WCAG AA (4.6:1) */
   /* ISA-101: color reserved for abnormalities */
   --green: #43a047;
   --red: #d32f2f;
   --orange: #ef6c00;
   --blue: #1e88e5;
   --amber: #f9a825;
+  --estop-engaged: #ffeb3b;    /* Bright yellow — highest visibility under sun */
   /* Normal state indicators */
-  --normal: #707070;
+  --normal: #8a8a8a;            /* Was #707070 — bumped for visibility */
   --normal-bg: #333;
-  --rail-w: 64px;
-  --panel-w: 280px;
-  --topbar-h: 44px;
-  --log-h: 120px;
+  --rail-w: 72px;               /* Was 64px — larger touch targets */
+  --panel-w: 300px;             /* Was 280px — accommodate larger buttons */
+  --topbar-h: 64px;             /* Was 44px — accommodate larger E-stop */
+  --log-h: 140px;               /* Was 120px — larger log readability */
+  /* Touch targets (WCAG AAA = 44px+) */
+  --tap-min: 44px;
+  --tap-small: 36px;
+  --tap-large: 56px;
+  /* Font scale (outdoor-readable baseline) */
+  --font-base: 15px;
+  --font-sm: 13px;
+  --font-xs: 11px;
+  --font-lg: 18px;
+  --font-xl: 22px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
-  font-size: 13px;
+  font-size: var(--font-base);
+  line-height: 1.4;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
@@ -72,8 +84,8 @@ body {
 .top-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px;
+  gap: 14px;
+  padding: 0 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   min-height: var(--topbar-h);
@@ -81,62 +93,67 @@ body {
 
 .brand {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 18px;
   letter-spacing: 0.5px;
   color: var(--text);
   white-space: nowrap;
 }
 
 .state-badge {
-  padding: 3px 10px;
-  border-radius: 3px;
-  font-size: 11px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   white-space: nowrap;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .top-metrics {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   margin-left: 8px;
   overflow: hidden;
   align-items: center;
 }
 .metric {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   align-items: baseline;
   white-space: nowrap;
 }
-.metric-value { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text); }
-.metric-unit { font-size: 10px; color: var(--dim); }
-.metric-sep { color: var(--border); font-size: 10px; }
+.metric-value { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+.metric-unit { font-size: 11px; color: var(--text-secondary); }
+.metric-sep { color: var(--border); font-size: 11px; }
 
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-left: auto;
 }
 
 .conn-dot {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10px;
+  gap: 6px;
+  font-size: 12px;
   letter-spacing: 0.3px;
+  font-weight: 500;
 }
 .conn-circle {
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 10px; height: 10px; border-radius: 50%;
   display: inline-block;
+  border: 1px solid rgba(255,255,255,0.2);
 }
 
 /* Mission progress bar (OTTO-style at-a-glance) */
 .mission-bar {
   position: relative;
-  height: 20px;
+  height: 32px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   overflow: hidden;
@@ -154,44 +171,73 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
   letter-spacing: 0.3px;
   z-index: 1;
 }
 
 .top-btn {
-  padding: 4px 10px;
-  font-size: 11px;
-  border-radius: 3px;
-  min-height: 28px;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 4px;
+  min-height: 40px;
+  font-weight: 600;
 }
 
 .cancel-btn {
   background: var(--orange);
   color: #000;
   border-color: var(--orange);
-  font-weight: 600;
+  font-weight: 700;
 }
 
+/* ── E-stop: ISO 13850-inspired prominent button ──
+ * - Always visible in topbar
+ * - Triple contrast layer: red bg + white border + red halo
+ * - Engaged state: bright yellow (highest visibility under sun)
+ * - Direct toggle (no hold-to-activate) — operator decision: AGV is slow,
+ *   immediate response is more important than accidental-press protection
+ */
 .estop-top {
-  padding: 4px 14px;
-  min-height: 32px;
-  font-size: 12px;
-  font-weight: 700;
+  padding: 12px 24px;
+  min-height: 56px;
+  min-width: 140px;
+  font-size: 16px;
+  font-weight: 800;
   background: var(--red);
   color: #fff;
-  border: 2px solid var(--red);
-  border-radius: 4px;
+  border: 3px solid #fff;
+  border-radius: 8px;
   cursor: pointer;
-  letter-spacing: 0.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  box-shadow: 0 0 0 2px var(--red),
+              0 4px 12px rgba(211, 47, 47, 0.5);
+  transition: transform 0.05s ease;
+}
+.estop-top:active {
+  transform: scale(0.97);
 }
 .estop-top.engaged {
-  background: var(--orange);
-  border-color: var(--orange);
-  animation: pulse 1s infinite;
+  background: var(--estop-engaged);
+  color: #000;
+  border-color: #f57f17;
+  box-shadow: 0 0 0 2px var(--estop-engaged),
+              0 4px 16px rgba(255, 235, 59, 0.7);
+  animation: estopPulse 0.8s ease-in-out infinite;
 }
-@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
+@keyframes estopPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--estop-engaged),
+                0 4px 16px rgba(255, 235, 59, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--estop-engaged),
+                0 4px 24px rgba(255, 235, 59, 1);
+  }
+}
 
 /* =========================================================================
    Left mode rail
@@ -210,23 +256,23 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 4px;
+  gap: 4px;
+  padding: 12px 4px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
   cursor: pointer;
-  color: var(--dim);
-  min-height: 52px;
+  color: var(--text-secondary);
+  min-height: 68px;
 }
-.rail-btn:hover { background: var(--surface-2); }
+.rail-btn:hover { background: var(--surface-2); color: var(--text); }
 .rail-btn.active {
   background: var(--surface-2);
-  border-color: var(--border);
+  border-color: var(--blue);
   color: var(--text);
 }
-.rail-icon { font-size: 18px; line-height: 1; }
-.rail-label { font-size: 9px; letter-spacing: 0.3px; }
+.rail-icon { font-size: 24px; line-height: 1; }
+.rail-label { font-size: 11px; letter-spacing: 0.3px; font-weight: 500; }
 
 /* =========================================================================
    Center map
@@ -311,18 +357,19 @@ body {
 }
 
 .section-title {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--dim);
-  margin-bottom: 8px;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
 }
 
 .panel-hint {
-  padding: 8px 12px;
+  padding: 10px 14px;
   color: var(--blue);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* =========================================================================
@@ -330,54 +377,65 @@ body {
    ========================================================================= */
 
 button {
-  padding: 6px 12px;
+  padding: 10px 16px;
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
-  min-height: 32px;
-  transition: border-color 0.15s;
+  font-size: 14px;
+  min-height: var(--tap-min);  /* 44px */
+  font-weight: 500;
+  transition: border-color 0.15s, background-color 0.15s;
 }
-button:hover:not(:disabled) { border-color: var(--text-secondary); }
-button:disabled { opacity: 0.35; cursor: default; }
+button:hover:not(:disabled) {
+  border-color: var(--text-secondary);
+  background: #333;
+}
+button:disabled { opacity: 0.4; cursor: default; }
 button.full-width { width: 100%; }
-button.small { padding: 3px 8px; min-height: 24px; font-size: 11px; }
-button.secondary { color: var(--dim); }
+button.small {
+  padding: 6px 12px;
+  min-height: var(--tap-small);  /* 36px */
+  font-size: 12px;
+}
+button.secondary { color: var(--text-secondary); }
 
-.btn-row { display: flex; gap: 6px; }
+.btn-row { display: flex; gap: 8px; }
 
 .mode-toggle {
   flex: 1;
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  min-height: var(--tap-min);
+  font-weight: 600;
 }
 .mode-toggle.active {
   background: var(--blue);
   color: #000;
   border-color: var(--blue);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .action-btn {
   background: var(--blue);
   color: #000;
   border-color: var(--blue);
-  font-weight: 600;
+  font-weight: 700;
 }
 .stop-btn {
   background: var(--red);
   color: #fff;
   border-color: var(--red);
-  font-weight: 600;
+  font-weight: 700;
 }
 .armed {
   border-color: var(--green);
   color: var(--green);
+  border-width: 2px;
 }
 
-.icon-btn { padding: 4px 8px; min-width: 28px; }
+.icon-btn { padding: 8px 12px; min-width: 40px; min-height: var(--tap-min); }
 
 /* Input rows */
 .input-row {
@@ -450,16 +508,18 @@ input.full-width {
 .diag-value.warn { color: var(--orange); font-weight: 600; }
 
 /* Health grid (Improvement 3) */
-.health-grid { display: flex; flex-direction: column; gap: 6px; }
-.health-row { display: flex; align-items: flex-start; gap: 8px; }
+.health-grid { display: flex; flex-direction: column; gap: 8px; }
+.health-row { display: flex; align-items: flex-start; gap: 10px; }
 .health-dot {
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 14px; height: 14px; border-radius: 50%;
   margin-top: 4px; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
 }
-.health-info { display: flex; flex-direction: column; gap: 1px; }
-.health-name { font-size: 12px; font-weight: 500; }
-.health-detail { font-size: 11px; color: var(--dim); }
-.health-action { font-size: 10px; color: var(--orange); font-style: italic; }
+.health-info { display: flex; flex-direction: column; gap: 2px; }
+.health-name { font-size: 14px; font-weight: 600; }
+.health-detail { font-size: 12px; color: var(--text-secondary); }
+.health-action { font-size: 12px; color: var(--orange); font-style: italic; font-weight: 500; }
 
 /* Mission active + progress bar (Improvement 4) */
 .mission-active { display: flex; flex-direction: column; gap: 4px; }
@@ -561,23 +621,28 @@ input.full-width {
 .log-entry:hover { background: rgba(255,255,255,0.02); }
 
 .log-entry.even { background: rgba(255,255,255,0.015); }
-.log-time { color: var(--dim); white-space: nowrap; }
+.log-time { color: var(--text-secondary); white-space: nowrap; font-size: 12px; }
 .log-sev-pill {
-  font-size: 8px; font-weight: 700;
-  padding: 1px 6px; border-radius: 2px;
-  letter-spacing: 0.3px; white-space: nowrap;
-  min-width: 32px; text-align: center;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 3px;
+  letter-spacing: 0.5px; white-space: nowrap;
+  min-width: 48px; text-align: center;
 }
 .log-sub {
-  color: var(--dim); font-size: 10px; width: 52px;
+  color: var(--text-secondary); font-size: 12px; width: 64px; font-weight: 500;
 }
-.log-text { color: var(--text); }
+.log-text { color: var(--text); font-size: 13px; }
+
+/* Event log entry vertical spacing */
+.log-entry {
+  padding: 6px 14px !important;  /* override existing 2px 12px */
+}
 
 /* =========================================================================
    Utility
    ========================================================================= */
 
-.dim { color: var(--dim); font-size: 12px; }
+.dim { color: var(--text-secondary); font-size: 13px; }
 
 /* =========================================================================
    Mobile / narrow tablet
@@ -610,7 +675,14 @@ input.full-width {
 }
 
 /* ISA-101 SLAM badge colors */
-.slam-badge { font-size: 0.7rem; padding: 1px 5px; border-radius: 3px; }
+.slam-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
 .slam-ok { color: var(--normal); }
 .slam-warn { color: var(--orange); }
 .slam-unknown { color: var(--dim); }
