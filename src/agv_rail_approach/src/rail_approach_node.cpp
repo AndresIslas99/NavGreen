@@ -12,6 +12,7 @@ namespace agv_rail_approach {
 RailApproachNode::RailApproachNode() : Node("rail_approach") {
   // Parameters
   declare_parameter("registry_file", "");
+  declare_parameter("runtime_registry_file", "");
   declare_parameter("tag_size", 0.2);
   declare_parameter("coarse_standoff_distance", 0.5);
   declare_parameter("default_offset_x", 0.3);
@@ -33,6 +34,7 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   declare_parameter("detections_topic", "detections");
 
   registry_file_ = get_parameter("registry_file").as_string();
+  runtime_registry_file_ = get_parameter("runtime_registry_file").as_string();
   default_tag_size_ = get_parameter("tag_size").as_double();
   coarse_standoff_ = get_parameter("coarse_standoff_distance").as_double();
   default_offset_x_ = get_parameter("default_offset_x").as_double();
@@ -95,22 +97,44 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
     std::chrono::milliseconds(500),
     std::bind(&RailApproachNode::publish_status, this));
 
-  load_registry();
+  // Hot reload trigger from ui_backend (when operator assigns/removes tags)
+  auto reload_qos = rclcpp::QoS(1).transient_local().reliable();
+  reload_sub_ = create_subscription<std_msgs::msg::Empty>(
+    "markers/registry_reload", reload_qos,
+    [this](std_msgs::msg::Empty::SharedPtr) {
+      RCLCPP_INFO(get_logger(), "Reloading rail starts from disk");
+      reload_all_registries();
+    });
+
+  reload_all_registries();
 
   RCLCPP_INFO(get_logger(), "Rail approach node ready, %zu rail starts loaded", rail_starts_.size());
 }
 
+// Reload from both static (registry_file) and runtime (runtime_registry_file) sources
+void RailApproachNode::reload_all_registries() {
+  rail_starts_.clear();
+  if (!registry_file_.empty()) load_registry_from(registry_file_);
+  if (!runtime_registry_file_.empty()) {
+    std::ifstream test(runtime_registry_file_);
+    if (test.is_open()) {
+      test.close();
+      load_registry_from(runtime_registry_file_);
+    }
+  }
+}
+
+// Original load_registry() now wraps load_registry_from for backward compatibility
+void RailApproachNode::load_registry() {
+  if (!registry_file_.empty()) load_registry_from(registry_file_);
+}
+
 // ── Registry loading ──
 
-void RailApproachNode::load_registry() {
-  if (registry_file_.empty()) {
-    RCLCPP_WARN(get_logger(), "No registry_file specified, no rail starts loaded");
-    return;
-  }
-
-  std::ifstream file(registry_file_);
+void RailApproachNode::load_registry_from(const std::string& path) {
+  std::ifstream file(path);
   if (!file.is_open()) {
-    RCLCPP_ERROR(get_logger(), "Cannot open registry: %s", registry_file_.c_str());
+    RCLCPP_WARN(get_logger(), "Cannot open registry: %s", path.c_str());
     return;
   }
 

@@ -3,6 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/empty.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -61,6 +62,7 @@ private:
 
   // Parameters
   std::string registry_file_;
+  std::string runtime_registry_file_;
   double default_tag_size_;
   double coarse_standoff_;
   double default_offset_x_;
@@ -87,6 +89,7 @@ private:
   rclcpp::Service<agv_interfaces::srv::RailApproach>::SharedPtr execute_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr abort_srv_;
   rclcpp::Service<agv_interfaces::srv::ListRailStarts>::SharedPtr list_srv_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reload_sub_;
   rclcpp::TimerBase::SharedPtr status_timer_;
 
   using NavAction = nav2_msgs::action::NavigateToPose;
@@ -125,6 +128,8 @@ private:
 
   // Registry
   void load_registry();
+  void reload_all_registries();
+  void load_registry_from(const std::string& path);
 
   // Helpers
   std::string state_name() const;

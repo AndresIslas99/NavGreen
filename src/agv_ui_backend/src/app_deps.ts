@@ -43,6 +43,11 @@ export interface AppState {
   liveMapMeta: any;
   liveMapVersion: number;
   health: Record<string, any>;
+  // Set when a nav goal is sent to a rail_start tag — backend triggers
+  // rail_approach/execute when Nav2 succeeds.
+  pendingRailApproach: { hardware_id: number; defined_id: number } | null;
+  // Latest rail_approach state for waypoint action gating
+  railApproachState: string;
 }
 
 export interface RosBridge {
