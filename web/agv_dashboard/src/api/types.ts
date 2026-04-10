@@ -126,14 +126,17 @@ export interface Waypoint {
   theta: number
 }
 
+export type WaypointAction = 'none' | 'pause' | 'signal' | 'start_recording' | 'stop_recording'
+
 export interface MissionNode {
   id: string
   type: string
   x: number
   y: number
   theta: number
-  action: 'none' | 'pause' | 'signal'
+  action: WaypointAction
   pause_sec?: number
+  apriltag_id?: number  // Optional: snap to a defined AprilTag
 }
 
 export interface MissionEdge {
@@ -166,10 +169,13 @@ export type WsMessage =
 // AprilTags
 // ---------------------------------------------------------------------------
 
+export type TagType = 'wall' | 'rail_start'
+
 export interface DefinedTag {
   id: number
   label: string
   description: string
+  type: TagType
   x: number
   y: number
   z: number

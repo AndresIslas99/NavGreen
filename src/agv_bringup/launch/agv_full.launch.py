@@ -321,6 +321,8 @@ def generate_launch_description():
                     parameters=[{
                         'registry_file': os.path.join(
                             get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
+                        # Runtime registry — operator-defined rail_start tags from dashboard
+                        'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
                         'tag_size': 0.2,
                         'camera_info_topic': '/agv/zed/left/camera_info',
                     }],

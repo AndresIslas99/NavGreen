@@ -87,6 +87,8 @@ const state: AppState = {
   liveMapPng: null,
   liveMapMeta: null,
   liveMapVersion: 0,
+  pendingRailApproach: null,
+  railApproachState: 'idle',
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -223,11 +225,31 @@ async function main() {
         updateState();
         gh.getResult().then(() => {
           const s = gh.status;
+          const succeeded = s === 4;
           state.navState = { active: false, distance_remaining: 0,
-            status: s === 4 ? 'succeeded' : s === 5 ? 'canceled' : 'aborted' };
+            status: succeeded ? 'succeeded' : s === 5 ? 'canceled' : 'aborted' };
           navGoalHandle = null; state.navPathPoints = []; state.navPathChanged = true;
           updateState();
-        }).catch(() => { state.navState = { active: false, distance_remaining: 0, status: 'aborted' }; navGoalHandle = null; updateState(); });
+
+          // Auto-trigger rail_approach if this nav goal targeted a rail_start tag
+          if (succeeded && state.pendingRailApproach) {
+            const { hardware_id, defined_id } = state.pendingRailApproach;
+            state.pendingRailApproach = null;
+            eventLog.emit('info', 'NAV',
+              `Nav2 reached rail_start vicinity, triggering precision approach for tag ${hardware_id}`);
+            const { execFile } = require('child_process');
+            execFile('ros2', ['service', 'call',
+              `/${NAMESPACE}/rail_approach/execute`,
+              'agv_interfaces/srv/RailApproach',
+              `{tag_id: ${hardware_id}, offset_x: 0.3, offset_y: 0.0}`],
+              { env: process.env, timeout: 10000 }, (err: any) => {
+                if (err) {
+                  eventLog.emit('warn', 'NAV', `rail_approach service call failed: ${err.message}`);
+                }
+              });
+            void defined_id;  // available for future logging
+          }
+        }).catch(() => { state.navState = { active: false, distance_remaining: 0, status: 'aborted' }; navGoalHandle = null; state.pendingRailApproach = null; updateState(); });
       }).catch(() => { state.navState = { active: false, distance_remaining: 0, status: 'aborted' }; updateState(); });
 
       state.navState = { active: true, distance_remaining: 0, status: 'sending' };
@@ -303,10 +325,55 @@ async function main() {
         if (state.missionCancel) { state.missionProgress!.status = 'canceled'; completed = false; break; }
         state.missionProgress!.current_node = i; state.missionProgress!.status = 'running';
         const nd = nodes[i];
+
+        // If waypoint is snapped to an AprilTag, check if it's a rail_start
+        // and set up auto-trigger for rail_approach precision alignment.
+        let railTag: any = null;
+        if (nd.apriltag_id) {
+          const tag = apriltagManager.getDefinedTag(nd.apriltag_id);
+          if (tag && tag.type === 'rail_start') {
+            // Find hardware ID assigned to this defined tag
+            for (const [hw, def] of Object.entries(apriltagManager.getHardwareAssignments())) {
+              if (def === nd.apriltag_id) {
+                state.pendingRailApproach = { hardware_id: parseInt(hw, 10), defined_id: nd.apriltag_id };
+                railTag = tag;
+                break;
+              }
+            }
+          }
+        }
+
         ros.sendNavGoal(parseFloat(nd.x || 0), parseFloat(nd.y || 0), parseFloat(nd.theta || 0));
         while (state.navState.active) { await new Promise(r => setTimeout(r, 500)); if (state.missionCancel) { ros.cancelNavGoal(); break; } }
         if (state.navState.status !== 'succeeded') { state.missionProgress!.status = 'failed'; completed = false; break; }
-        if (nd.action === 'pause') await new Promise(r => setTimeout(r, (parseFloat(nd.pause_sec || 3)) * 1000));
+
+        // If this waypoint snapped to a rail_start tag, wait for rail_approach to settle
+        if (railTag) {
+          eventLog.emit('info', 'MISSION', `Waiting for rail_approach alignment at "${railTag.label}"`);
+          // Wait up to 30s for FINE_SERVOING → settle (state returns to 'idle' after success)
+          const start = Date.now();
+          while (Date.now() - start < 30000) {
+            if (state.missionCancel) break;
+            // After rail_approach finishes, status returns to 'idle'
+            // We need to wait for it to LEAVE idle (meaning service was called) and return
+            if (state.railApproachState === 'idle' && Date.now() - start > 2000) break;
+            await new Promise(r => setTimeout(r, 200));
+          }
+          if (state.missionCancel) { completed = false; break; }
+        }
+
+        // Execute action after navigation (and rail alignment if applicable)
+        if (nd.action === 'pause') {
+          await new Promise(r => setTimeout(r, (parseFloat(nd.pause_sec || 3)) * 1000));
+        } else if (nd.action === 'start_recording') {
+          eventLog.emit('info', 'MISSION', `Starting recording at waypoint ${i + 1}`);
+          await ros.callTriggerService(ros.startRecClient, 'start_recording').catch(() => {});
+          state.recordingActive = true;
+        } else if (nd.action === 'stop_recording') {
+          eventLog.emit('info', 'MISSION', `Stopping recording at waypoint ${i + 1}`);
+          await ros.callTriggerService(ros.stopRecClient, 'stop_recording').catch(() => {});
+          state.recordingActive = false;
+        }
       }
       if (completed) { state.missionProgress!.status = 'completed'; telemetryStore.endMissionRun(runId, 'completed', nodes.length); }
       else { telemetryStore.endMissionRun(runId, state.missionProgress!.status, state.missionProgress!.current_node); }
@@ -402,6 +469,16 @@ async function main() {
       const id = parseInt(m[1], 10);
       if (isNaN(id) || id < 0) return;
       apriltagManager.recordPendingDetection(id);
+    });
+
+    // Rail approach status — subscribed to track state for waypoint action gating.
+    // Format: '{"state":"settled","target_tag":7}'
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/rail_approach/status`, (msg: any) => {
+      try {
+        const parsed = JSON.parse(msg.data);
+        state.railApproachState = parsed.state || 'unknown';
+      } catch { /* ignore parse errors */ }
     });
 
     console.log('[ROS] All subscriptions created');
