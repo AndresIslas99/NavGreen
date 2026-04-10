@@ -173,7 +173,14 @@
       height: 3                          # [TUNABLE] [2-5] m — local costmap height
       resolution: 0.05                   # [FIXED] 5cm cells (matches map resolution)
       footprint: "[[0.50, 0.37], [0.50, -0.37], [-0.30, -0.37], [-0.30, 0.37]]"  # [FIXED] Robot outline
-      plugins: ["voxel_layer", "inflation_layer"]
+      plugins: ["voxel_layer", "nvblox_layer", "inflation_layer"]
+      nvblox_layer:
+        plugin: "nvblox::nav2::NvbloxCostmapLayer"
+        enabled: true
+        nvblox_map_slice_topic: "/nvblox_node/static_map_slice"
+        max_obstacle_distance: 1.0       # [TUNABLE] m — max ESDF distance considered obstacle
+        inflation_distance: 0.5          # [TUNABLE] m — inflation radius for nvblox-derived obstacles
+        convert_to_binary_costmap: false # [TUNABLE] true = lethal/free only, false = gradient
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: true
@@ -222,7 +229,14 @@
       resolution: 0.05                  # [FIXED] Must match map resolution
       track_unknown_space: true         # [TUNABLE] Track vs ignore unknown cells
       footprint: "[[0.50, 0.37], [0.50, -0.37], [-0.30, -0.37], [-0.30, 0.37]]"  # [FIXED]
-      plugins: ["static_layer", "voxel_layer", "inflation_layer"]
+      plugins: ["static_layer", "voxel_layer", "nvblox_layer", "inflation_layer"]
+      nvblox_layer:
+        plugin: "nvblox::nav2::NvbloxCostmapLayer"
+        enabled: true
+        nvblox_map_slice_topic: "/nvblox_node/static_map_slice"
+        max_obstacle_distance: 5.0       # [TUNABLE] m — wider for global planning
+        inflation_distance: 0.5          # [TUNABLE] m — inflation radius
+        convert_to_binary_costmap: false # [TUNABLE] true = lethal/free only, false = gradient
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: true   # [ARCHITECTURAL] Late subscriber support

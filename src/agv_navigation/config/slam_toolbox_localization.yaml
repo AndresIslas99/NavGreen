@@ -1,20 +1,26 @@
-# SLAM Toolbox — localization mode (loop closure during navigation)
+# SLAM Toolbox — lifelong mapping mode with loop closure
 #
-# Runs alongside the dual-EKF during autonomous navigation to provide
-# scan-matching loop closure.  This bounds drift that cuVSLAM visual
-# odometry alone cannot correct (featureless corridors, long routes).
+# Runs alongside the dual-EKF during all operations. Continuously builds
+# and refines the 2D occupancy map from /agv/scan, detecting loop closures
+# automatically as the robot revisits known areas.
 #
-# TF publishing is DISABLED — the global EKF owns map→odom.
-# The node's corrected pose feeds the global EKF as an additional
+# Why mapping mode (not localization mode):
+#   - Doesn't require pre-built map (works from scratch)
+#   - Loop closures actively re-optimize the pose graph
+#   - Provides scan-matching backbone independent of cuVSLAM
+#   - Bounds drift accumulated by cuVSLAM in featureless corridors
+#
+# TF publishing is DISABLED — the global EKF / factor graph owns map→odom.
+# SLAM Toolbox publishes /map (the corrected occupancy grid) which can be
+# consumed by Nav2 and dashboard. The /agv/pose output reflects loop-closure
+# corrections and can optionally be fed to ekf_global as an additional
 # absolute pose source.
-#
-# Requires a pre-built serialized map:
-#   map_file_name: /path/to/greenhouse_map   (without extension — _posegraph.data expected)
 
 /**:
   ros__parameters:
     # ── Mode ──
-    mode: localization
+    # lifelong mapping = continuous map building with loop closure
+    mode: mapping
 
     # Solver (same as mapping)
     solver_plugin: solver_plugins::CeresSolver
