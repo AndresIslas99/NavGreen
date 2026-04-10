@@ -21,8 +21,8 @@
     # Low-speed control shaping
     zero_vel_epsilon: 0.03     # turns/s — below this, bypass all shaping and send exact zero
     min_effective_vel: 0.0     # turns/s — disabled; re-enable (e.g. 0.05) if stiction observed
-    stiction_torque_ff: 0.0    # Nm — disabled; re-enable (e.g. 0.05) if motor hesitates at start
-    max_wheel_accel: 1.0       # turns/s² — conservative rate limiter per wheel
+    stiction_torque_ff: 0.03   # Nm — compensates caster wheel static friction
+    max_wheel_accel: 0.5       # turns/s² — gentler ramp reduces wheel slip on caster resistance
     # Caster wheel resistance compensation — inflates odometry covariance during
     # direction changes when caster wheels resist and then realign, corrupting
     # wheel encoder accuracy. The EKF then naturally shifts weight to IMU/VSLAM.
@@ -30,3 +30,9 @@
     caster_settling_tau: 0.5             # seconds — exponential decay time constant
     caster_covariance_multiplier: 10.0   # peak covariance inflation factor on direction change
     caster_angular_accel_threshold: 1.0  # rad/s² — angular acceleration trigger threshold
+    # Encoder velocity filter (EMA low-pass)
+    velocity_filter_alpha: 0.3           # 0.0=max smooth, 1.0=no filter. 0.3 ≈ 8Hz cutoff at 50Hz
+    # Wheel slip detection (caster resistance during straight-line motion)
+    slip_velocity_threshold: 0.5         # turns/s — encoder velocity difference to trigger slip detection
+    slip_reduction_factor: 0.7           # scale cmd_vel by this factor during slip
+    slip_cooldown_ms: 200.0              # ms — hold reduction after slip clears

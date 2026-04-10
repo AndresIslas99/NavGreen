@@ -35,6 +35,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   this->declare_parameter("caster_settling_tau", 0.5);
   this->declare_parameter("caster_covariance_multiplier", 10.0);
   this->declare_parameter("caster_angular_accel_threshold", 1.0);
+  this->declare_parameter("velocity_filter_alpha", 0.3);
+  this->declare_parameter("slip_velocity_threshold", 0.5);
+  this->declare_parameter("slip_reduction_factor", 0.7);
+  this->declare_parameter("slip_cooldown_ms", 200.0);
 
   // -- Read parameters --
   can_interface_ = this->get_parameter("can_interface").as_string();
@@ -64,6 +68,10 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   caster_settling_tau_ = this->get_parameter("caster_settling_tau").as_double();
   caster_covariance_multiplier_ = this->get_parameter("caster_covariance_multiplier").as_double();
   caster_angular_accel_threshold_ = this->get_parameter("caster_angular_accel_threshold").as_double();
+  velocity_filter_alpha_ = std::clamp(this->get_parameter("velocity_filter_alpha").as_double(), 0.01, 1.0);
+  slip_velocity_threshold_ = this->get_parameter("slip_velocity_threshold").as_double();
+  slip_reduction_factor_ = this->get_parameter("slip_reduction_factor").as_double();
+  slip_cooldown_ms_ = this->get_parameter("slip_cooldown_ms").as_double();
 
   // -- Validate --
   if (wheel_radius_ <= 0.0) {
@@ -314,12 +322,32 @@ void ODriveCANNode::integrate_odometry() {
     return;
   }
 
+  // Filter encoder velocities (EMA low-pass — smooths noise for twist + rotation detection)
+  left_vel_filtered_  = velocity_filter_alpha_ * left_.velocity
+                      + (1.0 - velocity_filter_alpha_) * left_vel_filtered_;
+  right_vel_filtered_ = velocity_filter_alpha_ * right_.velocity
+                      + (1.0 - velocity_filter_alpha_) * right_vel_filtered_;
+
   // Compute wheel travel in meters (position is in motor turns; divide by gear_ratio for wheel turns)
   double delta_left  = (left_.position - left_.prev_position) / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;
   double delta_right = (right_.position - right_.prev_position) / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;
 
   left_.prev_position = left_.position;
   right_.prev_position = right_.position;
+
+  // Detect pure rotation: wheels spinning opposite directions with similar magnitude.
+  // During pure rotation, encoder noise asymmetry creates false translation (delta_s ≠ 0).
+  // Fix: force symmetric deltas so translation cancels exactly.
+  double v_sum = left_vel_filtered_ + right_vel_filtered_;
+  double v_diff = std::abs(left_vel_filtered_) + std::abs(right_vel_filtered_);
+  pure_rotation_ = (v_diff > 0.1) && (std::abs(v_sum) / v_diff < 0.15);
+  if (pure_rotation_) {
+    double avg_mag = (std::abs(delta_left) + std::abs(delta_right)) / 2.0;
+    double sign_l = (delta_left >= 0.0) ? 1.0 : -1.0;
+    double sign_r = (delta_right >= 0.0) ? 1.0 : -1.0;
+    delta_left  = avg_mag * sign_l;
+    delta_right = avg_mag * sign_r;
+  }
 
   // Differential drive kinematics
   double delta_s     = (delta_left + delta_right) / 2.0;
@@ -363,6 +391,14 @@ void ODriveCANNode::update_caster_disturbance(double v_linear, double v_angular,
   prev_v_linear_ = v_linear;
   prev_v_angular_ = v_angular;
 
+  // Sustained pure rotation also disturbs caster alignment
+  // (caster wheels scrub sideways during continuous in-place rotation)
+  constexpr double sustained_rotation_threshold = 0.3;  // rad/s
+  if (std::abs(v_angular) > sustained_rotation_threshold && std::abs(v_linear) < 0.05) {
+    caster_disturbance_level_ = std::max(caster_disturbance_level_,
+                                          caster_covariance_multiplier_ * 0.3);
+  }
+
   // On direction change, reset disturbance to peak
   if (direction_change) {
     caster_disturbance_level_ = caster_covariance_multiplier_;
@@ -397,9 +433,9 @@ void ODriveCANNode::publish_odometry() {
   msg.pose.pose.orientation.z = std::sin(half_yaw);
   msg.pose.pose.orientation.w = std::cos(half_yaw);
 
-  // Twist (from current encoder velocities — motor turns/s divided by gear_ratio for wheel turns/s)
-  double v_left  = left_.velocity / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;   // m/s
-  double v_right = right_.velocity / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;  // m/s
+  // Twist from filtered velocities (smoother signal for EKF)
+  double v_left  = left_vel_filtered_ / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;   // m/s
+  double v_right = right_vel_filtered_ / gear_ratio_ * wheel_radius_ * 2.0 * M_PI;  // m/s
   double v_linear = (v_left + v_right) / 2.0;
   double v_angular = (v_right - v_left) / track_width_;
   msg.twist.twist.linear.x  = v_linear;
@@ -409,10 +445,10 @@ void ODriveCANNode::publish_odometry() {
   double caster_dt = 1.0 / static_cast<double>(publish_rate_hz_);
   update_caster_disturbance(v_linear, v_angular, caster_dt);
 
-  // Pose covariance — grows with angular velocity and caster disturbance
-  double base_xy_cov = 0.01;
+  // Pose covariance — grows with angular velocity, caster disturbance, and wheel slip
+  double base_xy_cov = (pure_rotation_ || wheel_slip_active_) ? 0.05 : 0.01;
   double base_yaw_cov = 0.03;
-  double angular_factor = 1.0 + 2.0 * std::abs(v_angular);
+  double angular_factor = 1.0 + 5.0 * std::abs(v_angular);  // 5x per rad/s (was 2x)
   double caster_factor = 1.0 + caster_disturbance_level_;
   double total_cov_factor = angular_factor * caster_factor;
   msg.pose.covariance[0]  = base_xy_cov * total_cov_factor;    // x
@@ -467,6 +503,27 @@ void ODriveCANNode::on_cmd_vel(const geometry_msgs::msg::Twist& msg) {
   double angular_z = msg.angular.z;
   last_linear_cmd_  = linear_x;
   last_angular_cmd_ = angular_z;
+
+  // Wheel slip detection: if encoder velocities diverge during straight-line command,
+  // reduce command to prevent one wheel from exceeding friction coefficient.
+  double vel_diff = std::abs(left_vel_filtered_ - right_vel_filtered_);
+  bool commanding_straight = std::abs(angular_z) < 0.05 && std::abs(linear_x) > 0.01;
+  if (commanding_straight && vel_diff > slip_velocity_threshold_) {
+    if (!wheel_slip_active_) {
+      wheel_slip_active_ = true;
+      slip_start_time_ = this->now();
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "Wheel slip detected (vel_diff=%.2f turns/s), reducing speed", vel_diff);
+    }
+    linear_x *= slip_reduction_factor_;
+  } else if (wheel_slip_active_) {
+    double elapsed_ms = (this->now() - slip_start_time_).seconds() * 1000.0;
+    if (elapsed_ms > slip_cooldown_ms_) {
+      wheel_slip_active_ = false;
+    } else {
+      linear_x *= slip_reduction_factor_;
+    }
+  }
 
   // Differential drive inverse kinematics: m/s → motor turns/s (multiply by gear_ratio)
   double v_left  = (linear_x - angular_z * track_width_ / 2.0) / (wheel_radius_ * 2.0 * M_PI) * gear_ratio_;

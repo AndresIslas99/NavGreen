@@ -26,7 +26,14 @@ ament_target_dependencies(covariance_override_node
   rclcpp nav_msgs sensor_msgs)
 target_compile_features(covariance_override_node PUBLIC cxx_std_17)
 
-install(TARGETS fusion_monitor_node covariance_override_node DESTINATION lib/${PROJECT_NAME})
+# IMU vibration filter (Butterworth low-pass on gyro + accel)
+add_executable(imu_filter_node src/imu_filter_node.cpp)
+target_include_directories(imu_filter_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+ament_target_dependencies(imu_filter_node rclcpp sensor_msgs)
+target_compile_features(imu_filter_node PUBLIC cxx_std_17)
+
+install(TARGETS fusion_monitor_node covariance_override_node imu_filter_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 

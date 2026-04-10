@@ -37,10 +37,10 @@
     # (scales with angular velocity). The covariance_override_node handles
     # the sim-only zero-covariance problem separately.
 
-    # ── ZED 2i IMU (or sim IMU) ──
-    # On real hardware: /agv/zed/imu/data at 200Hz (ZED in namespace /agv)
+    # ── ZED 2i IMU (filtered — vibration noise removed) ──
+    # Raw: /agv/zed/imu/data at 200Hz → imu_filter_node → /agv/imu/filtered
     # In HIL sim: /agv/imu/data at ~20Hz (overridden via launch param)
-    imu0: /agv/zed/imu/data
+    imu0: /agv/imu/filtered
     imu0_config: [false, false, false,     # x, y, z
                   true,  true,  true,      # roll, pitch, yaw
                   false, false, false,     # vx, vy, vz
@@ -55,18 +55,23 @@
     imu0_queue_size: 50
 
     # Override IMU covariance (sim sends zeros)
+    # IMU yaw covariance: 0.02 rad² — tighter than wheel odom (0.03 base) so
+    # EKF trusts gyro heading over encoder-derived yaw. BMI088 gyro is not
+    # affected by magnetic interference (only magnetometer is, which we don't use).
     imu0_pose_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                            0.0,   0.0,   0.0,   0.001, 0.0,   0.0,
                            0.0,   0.0,   0.0,   0.0,   0.001, 0.0,
-                           0.0,   0.0,   0.0,   0.0,   0.0,   0.1]
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.02]
+    # Gyro rate covariance: tighter values reflect BMI088 spec (noise density
+    # 0.000244 rad/s/√Hz). vroll/vpitch=0.0003, vyaw=0.0005 (conservative).
     imu0_twist_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                             0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
                             0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
-                            0.0,   0.0,   0.0,   0.0005, 0.0,  0.0,
-                            0.0,   0.0,   0.0,   0.0,   0.0005, 0.0,
-                            0.0,   0.0,   0.0,   0.0,   0.0,   0.001]
+                            0.0,   0.0,   0.0,   0.0003, 0.0,  0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0003, 0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0005]
 
     # ── Process noise covariance ──
     # Order: x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az

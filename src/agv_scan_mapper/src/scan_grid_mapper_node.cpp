@@ -48,6 +48,8 @@ public:
     declare_parameter("expand_margin_cells", 40);
     declare_parameter("ray_subsample", 2);
     declare_parameter("min_travel_distance", 0.025);
+    declare_parameter("warmup_seconds", 5.0);
+    declare_parameter("warmup_min_scans", 30);
 
     res_        = static_cast<float>(get_parameter("resolution").as_double());
     width_      = get_parameter("initial_width").as_int();
@@ -65,6 +67,8 @@ public:
     ray_subsample_     = std::max(1, static_cast<int>(get_parameter("ray_subsample").as_int()));
     min_travel_dist_sq_= get_parameter("min_travel_distance").as_double();
     min_travel_dist_sq_ *= min_travel_dist_sq_; // store squared to avoid sqrt
+    warmup_seconds_    = get_parameter("warmup_seconds").as_double();
+    warmup_min_scans_  = static_cast<int>(get_parameter("warmup_min_scans").as_int());
 
     initial_width_  = width_;
     initial_height_ = height_;
@@ -94,21 +98,25 @@ public:
     auto qos = rclcpp::QoS(1).transient_local().reliable();
     map_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("live_map", qos);
 
-    // Clear service (resets the grid to initial size)
+    // Clear service (resets the grid centered on current robot position)
     clear_srv_ = create_service<std_srvs::srv::Empty>(
       "clear_map_srv",
       [this](const std::shared_ptr<std_srvs::srv::Empty::Request>,
              std::shared_ptr<std_srvs::srv::Empty::Response>) {
-        reset_grid();
-        RCLCPP_INFO(get_logger(), "Map cleared (service)");
+        auto center = get_robot_position();
+        reset_grid(center.first, center.second);
+        RCLCPP_INFO(get_logger(), "Map cleared (service), centered on (%.2f, %.2f)",
+                    center.first, center.second);
       });
 
     // Clear via topic (used by dashboard backend)
     clear_sub_ = create_subscription<std_msgs::msg::Bool>(
       "clear_map", 10,
       [this](const std_msgs::msg::Bool::SharedPtr /*msg*/) {
-        reset_grid();
-        RCLCPP_INFO(get_logger(), "Map cleared (topic)");
+        auto center = get_robot_position();
+        reset_grid(center.first, center.second);
+        RCLCPP_INFO(get_logger(), "Map cleared (topic), centered on (%.2f, %.2f)",
+                    center.first, center.second);
       });
 
     // Publish timer
@@ -153,12 +161,25 @@ private:
     dirty_max_y_ = std::max(dirty_max_y_, gy);
   }
 
-  void reset_grid()
+  /// Get current robot position in map frame (falls back to 0,0 if TF unavailable).
+  std::pair<double, double> get_robot_position()
+  {
+    try {
+      auto tf = tf_buffer_->lookupTransform(map_frame_, "base_link",
+        rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.1));
+      return {tf.transform.translation.x, tf.transform.translation.y};
+    } catch (...) {
+      return {0.0, 0.0};
+    }
+  }
+
+  /// Reset grid centered on (center_x, center_y) in map frame.
+  void reset_grid(double center_x = 0.0, double center_y = 0.0)
   {
     width_ = initial_width_;
     height_ = initial_height_;
-    origin_x_ = -(width_ * res_) / 2.0;
-    origin_y_ = -(height_ * res_) / 2.0;
+    origin_x_ = center_x - (width_ * res_) / 2.0;
+    origin_y_ = center_y - (height_ * res_) / 2.0;
     grid_.assign(static_cast<size_t>(width_) * height_, 0.0f);
     pub_data_.assign(grid_.size(), -1);
     full_rebuild_needed_ = true;
@@ -166,13 +187,34 @@ private:
     has_data_ = false;
     last_rx_ = std::nan("");
     last_ry_ = std::nan("");
+
+    // Force-publish the empty map immediately so the transient_local cache
+    // is replaced. Without this, late subscribers (or dashboard reconnects)
+    // see the stale pre-clear map.
+    publish_map_force();
+  }
+
+  /// Publish map unconditionally (bypasses has_data_ check).
+  void publish_map_force()
+  {
+    nav_msgs::msg::OccupancyGrid msg;
+    msg.header.stamp = this->now();
+    msg.header.frame_id = map_frame_;
+    msg.info.resolution = res_;
+    msg.info.width = width_;
+    msg.info.height = height_;
+    msg.info.origin.position.x = origin_x_;
+    msg.info.origin.position.y = origin_y_;
+    msg.info.origin.orientation.w = 1.0;
+    msg.data = pub_data_;  // all -1 (unknown) after reset
+    map_pub_->publish(msg);
   }
 
   void scan_cb(const sensor_msgs::msg::LaserScan::SharedPtr msg)
   {
     scan_total_++;
 
-    // Get robot pose �� use latest TF (TimePointZero) instead of exact stamp.
+    // Get robot pose — use latest TF (TimePointZero) instead of exact stamp.
     // Exact stamp often fails with sim_time jitter over USB, dropping >90% of scans.
     // For mapping, slight pose lag is acceptable.
     geometry_msgs::msg::TransformStamped tf;
@@ -184,6 +226,28 @@ private:
         RCLCPP_WARN(get_logger(), "TF not available — %d/%d scans processed", scan_processed_, scan_total_);
       }
       return;
+    }
+
+    // Warm-up gate: skip early scans while cuVSLAM stabilizes (noisy initial poses)
+    if (!warmup_complete_) {
+      if (!first_tf_received_) {
+        first_tf_received_ = true;
+        first_tf_time_ = this->now();
+        RCLCPP_INFO(get_logger(), "First TF received, warm-up started (%.1fs)", warmup_seconds_);
+      }
+      warmup_scans_skipped_++;
+      double elapsed = (this->now() - first_tf_time_).seconds();
+      if (elapsed >= warmup_seconds_ && warmup_scans_skipped_ >= warmup_min_scans_) {
+        warmup_complete_ = true;
+        double rx0 = tf.transform.translation.x;
+        double ry0 = tf.transform.translation.y;
+        reset_grid(rx0, ry0);
+        RCLCPP_INFO(get_logger(),
+                    "Warm-up complete (%.1fs, %d scans skipped), grid centered on (%.2f, %.2f)",
+                    elapsed, warmup_scans_skipped_, rx0, ry0);
+      } else {
+        return;
+      }
     }
 
     double rx = tf.transform.translation.x;
@@ -399,6 +463,14 @@ private:
   int world_to_grid_x(double wx) const { return static_cast<int>((wx - origin_x_) / res_); }
   int world_to_grid_y(double wy) const { return static_cast<int>((wy - origin_y_) / res_); }
   bool in_bounds(int gx, int gy) const { return gx >= 0 && gx < width_ && gy >= 0 && gy < height_; }
+
+  // Warm-up state (skip early noisy scans while cuVSLAM stabilizes)
+  bool warmup_complete_{false};
+  bool first_tf_received_{false};
+  rclcpp::Time first_tf_time_;
+  int warmup_scans_skipped_{0};
+  double warmup_seconds_;
+  int warmup_min_scans_;
 
   // Parameters
   float res_;
