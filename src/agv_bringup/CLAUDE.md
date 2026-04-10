@@ -22,15 +22,18 @@ launch files with sequenced startup to ensure correct initialization order.
 | Delay | Component | Package |
 |-------|-----------|---------|
 | 0s | robot_state_publisher | agv_description |
-| 0s | odrive_can_node | agv_odrive |
-| 0s | pointcloud_to_laserscan | external |
-| 0s | teleop_server | agv_ui_backend |
-| 2s | cuVSLAM | agv_slam (external) |
-| 4s | ekf_local + ekf_global | agv_sensor_fusion |
+| 0s | odrive_can_node (cmd_vel_safe) | agv_odrive |
+| 0s | pointcloud_to_laserscan (FOV ±90°, min_height 0.03m) | external |
+| 0s | image_server (port 8091, MJPEG camera+depth) | agv_image_server |
+| 0s | scan_grid_mapper (live occupancy grid, 0.025m res) | agv_scan_mapper |
+| 3s | cuVSLAM (TF DISABLED via cuvslam_greenhouse.yaml) | agv_slam |
+| 3.5s | imu_filter (Butterworth vibration filter) | agv_sensor_fusion |
+| 4s | ekf_local + ekf_global + fusion_monitor | agv_sensor_fusion |
+| 5s | slam_toolbox_localization (optional, TF DISABLED) | slam_toolbox |
 | 5s | map_manager + waypoint_manager | agv_map_manager, agv_waypoint_manager |
-| 6s | Nav2 stack | agv_navigation |
-| 7s | AprilTag detection (optional) | agv_markers |
-| 7s | Behavior executor (optional) | agv_behaviors |
+| 6s | Nav2 stack (if map provided) | agv_navigation |
+| 7s | AprilTag + marker_correction + rail_approach (optional) | agv_markers, agv_rail_approach |
+| 8s | teleop_server (dashboard on :8090) | agv_ui_backend |
 
 ## Common Launch Arguments
 
@@ -45,15 +48,20 @@ launch files with sequenced startup to ensure correct initialization order.
 
 ## TF Ownership (Critical)
 
-- `odom -> base_link`: ekf_local (agv_sensor_fusion)
-- `map -> odom`: ekf_global (agv_sensor_fusion)
+- `odom -> base_link`: ekf_local ONLY (agv_sensor_fusion)
+- `map -> odom`: ekf_global ONLY (agv_sensor_fusion)
 - `base_link -> wheels`: robot_state_publisher (agv_description)
-- cuVSLAM: **topic-only**, does NOT publish TF
+- cuVSLAM: **topic-only** — TF disabled via `cuvslam_greenhouse.yaml` (`/**:` key, not node name)
+- SLAM Toolbox: **topic-only** — TF disabled via `transform_publish_period: 0.0`
+- ZED wrapper: `publish_tf: false`, `publish_imu_tf: true` (IMU calibration TF only)
+
+**WARNING**: YAML override files MUST use `/**:` as the parameter key, not the node name. The node name in ROS2 may differ from the YAML key. Using the wrong key silently fails to apply parameters.
 
 ## Configuration
 
 - `config/cyclonedds_hil.xml` — DDS config for HIL mode
-- `config/cuvslam_no_tf.yaml` — cuVSLAM parameters with TF publishing disabled
+- `config/cuvslam_no_tf.yaml` — cuVSLAM TF disable override (`/**:` key)
+- `config/cuvslam_greenhouse.yaml` — cuVSLAM greenhouse tuning + TF disable (`/**:` key)
 
 ## Dependencies
 
