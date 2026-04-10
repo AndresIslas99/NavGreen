@@ -13,7 +13,7 @@ export type RobotState =
   | 'e_stop'
   | 'fault'
 
-export type ModeRail = 'operate' | 'map' | 'missions' | 'recovery' | 'analytics'
+export type ModeRail = 'operate' | 'map' | 'missions' | 'recovery' | 'analytics' | 'apriltags'
 
 // ---------------------------------------------------------------------------
 // Allowed actions (computed by backend)
@@ -160,6 +160,28 @@ export type WsMessage =
   | ({ type: 'acc_map' } & MapUpdate)
   | ({ type: 'event' } & LogEntry)
   | { type: 'recording_result'; success: boolean; message: string }
+  | { type: 'apriltag_pending'; hardware_id: number; first_seen: number }
+
+// ---------------------------------------------------------------------------
+// AprilTags
+// ---------------------------------------------------------------------------
+
+export interface DefinedTag {
+  id: number
+  label: string
+  description: string
+  x: number
+  y: number
+  z: number
+  yaw: number
+  created_at: number
+}
+
+export interface AprilTagState {
+  defined_tags: DefinedTag[]
+  hardware_assignments: Record<string, number>
+  pending_detections: Array<{ hardware_id: number; first_seen: number }>
+}
 
 // ---------------------------------------------------------------------------
 // Analytics
