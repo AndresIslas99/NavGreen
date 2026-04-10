@@ -11,7 +11,7 @@
 # Requires a pre-built serialized map:
 #   map_file_name: /path/to/greenhouse_map   (without extension — _posegraph.data expected)
 
-slam_toolbox:
+/**:
   ros__parameters:
     # ── Mode ──
     mode: localization
