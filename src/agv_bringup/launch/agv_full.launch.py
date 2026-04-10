@@ -222,18 +222,20 @@ def generate_launch_description():
             ],
         ),
 
-        # ── SLAM Toolbox localization mode (t=5s, optional — provides loop closure) ──
+        # ── SLAM Toolbox lifelong mapping with loop closure (t=5s) ──
+        # Async mode = optimizer runs in background, scan ingestion stays real-time.
+        # Provides loop closure that bounds cuVSLAM drift. Doesn't publish TF
+        # (transform_publish_period=0.0 in YAML); ekf_global owns map→odom.
         TimerAction(
             period=5.0,
             actions=[
                 Node(
                     package='slam_toolbox',
-                    executable='localization_slam_toolbox_node',
+                    executable='async_slam_toolbox_node',
                     name='slam_toolbox_localization',
                     namespace=ns,
                     parameters=[
                         slam_loc_config,
-                        {'map_file_name': slam_map_file},
                     ],
                     remappings=[
                         ('scan', 'scan'),
