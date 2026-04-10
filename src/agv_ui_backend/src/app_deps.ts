@@ -5,7 +5,6 @@
 
 import type { RobotState, MotorState, NavState, MissionProgress } from './state_machine';
 import type { EventLog } from './event_log';
-import type { ScanAccumulator } from './scan_accumulator';
 import type { TelemetryStore } from './telemetry_store';
 import type { AuthManager } from './auth';
 
@@ -62,7 +61,6 @@ export interface AppDeps {
   state: AppState;
   ros: RosBridge;
   eventLog: EventLog;
-  scanAccumulator: ScanAccumulator;
   telemetryStore: TelemetryStore;
   authManager: AuthManager;
   config: {
