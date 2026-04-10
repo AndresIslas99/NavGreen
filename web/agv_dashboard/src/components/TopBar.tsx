@@ -128,8 +128,10 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
           )}
 
           <button
-            className="estop-top"
+            className={`estop-top ${s?.e_stop ? 'engaged' : ''}`}
             onClick={() => onEStop(!s?.e_stop)}
+            aria-label={s?.e_stop ? 'Clear emergency stop' : 'Activate emergency stop'}
+            title={s?.e_stop ? 'Click to clear E-Stop' : 'EMERGENCY STOP — click to halt'}
           >
             {s?.e_stop ? 'CLEAR' : 'E-STOP'}
           </button>
