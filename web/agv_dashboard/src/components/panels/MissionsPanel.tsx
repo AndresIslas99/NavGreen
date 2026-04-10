@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Mission, Waypoint, AllowedActions, MissionProgress, MissionNode } from '../../api/types'
+import type { Mission, Waypoint, AllowedActions, MissionProgress, MissionNode, DefinedTag, WaypointAction } from '../../api/types'
 import * as api from '../../api/client'
 
 interface Props {
@@ -26,31 +26,65 @@ export function MissionsPanel({
   const [missions, setMissions] = useState<Mission[]>([])
   const [missionName, setMissionName] = useState('')
   const [editingNode, setEditingNode] = useState<number | null>(null)
-  const [nodeAction, setNodeAction] = useState<'none' | 'pause' | 'signal'>('none')
+  const [nodeAction, setNodeAction] = useState<WaypointAction>('none')
   const [nodePauseSec, setNodePauseSec] = useState(3)
   const [selectedTemplate, setSelectedTemplate] = useState('linear')
   const [expandedMission, setExpandedMission] = useState<string | null>(null)
+  const [definedTags, setDefinedTags] = useState<DefinedTag[]>([])
 
   const refresh = () => api.listMissions().then(setMissions).catch(() => {})
   useEffect(() => { refresh() }, [])
 
+  // Fetch defined AprilTags so waypoints can snap to them
+  useEffect(() => {
+    fetch('/api/apriltags')
+      .then(r => r.json())
+      .then(s => setDefinedTags(s.defined_tags || []))
+      .catch(() => {})
+    const id = setInterval(() => {
+      fetch('/api/apriltags').then(r => r.json()).then(s => setDefinedTags(s.defined_tags || [])).catch(() => {})
+    }, 5000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Find nearest defined tag within snap radius
+  const findNearestTag = (x: number, y: number, radiusM = 0.5): DefinedTag | null => {
+    let nearest: DefinedTag | null = null
+    let nearestDist = Infinity
+    for (const tag of definedTags) {
+      const dx = tag.x - x
+      const dy = tag.y - y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < radiusM && dist < nearestDist) {
+        nearest = tag
+        nearestDist = dist
+      }
+    }
+    return nearest
+  }
+
   // Build nodes from waypoints with node actions
-  const [nodeConfigs, setNodeConfigs] = useState<Map<number, { action: string; pause_sec: number }>>(new Map())
+  const [nodeConfigs, setNodeConfigs] = useState<Map<number, { action: WaypointAction; pause_sec: number; apriltag_id?: number }>>(new Map())
 
   const handleSave = async () => {
     if (!missionName.trim() || pendingWaypoints.length === 0) return
 
-    // Build nodes with configured actions
+    // Build nodes with configured actions; auto-snap to nearby AprilTag if no manual override
     const nodes: MissionNode[] = pendingWaypoints.map((wp, i) => {
       const config = nodeConfigs.get(i)
+      const snapped = config?.apriltag_id !== undefined
+        ? definedTags.find(t => t.id === config!.apriltag_id) || null
+        : findNearestTag(wp.x, wp.y)
       return {
         id: `n${i}`,
         type: 'waypoint',
-        x: wp.x,
-        y: wp.y,
-        theta: wp.theta || 0,
-        action: (config?.action || 'none') as 'none' | 'pause' | 'signal',
+        // If snapped, use exact tag coordinates (operator click was approximate)
+        x: snapped ? snapped.x : wp.x,
+        y: snapped ? snapped.y : wp.y,
+        theta: snapped ? snapped.yaw : (wp.theta || 0),
+        action: (config?.action || 'none') as WaypointAction,
         pause_sec: config?.pause_sec || 3,
+        ...(snapped ? { apriltag_id: snapped.id } : {}),
       }
     })
 
@@ -75,19 +109,34 @@ export function MissionsPanel({
     refresh()
   }
 
+  const [nodeApriltagId, setNodeApriltagId] = useState<number | null>(null)
+
   const handleEditNode = (idx: number) => {
     setEditingNode(idx)
     const config = nodeConfigs.get(idx)
-    setNodeAction((config?.action || 'none') as 'none' | 'pause' | 'signal')
+    setNodeAction((config?.action || 'none') as WaypointAction)
     setNodePauseSec(config?.pause_sec || 3)
+    // Default snap to nearest tag if not already configured
+    if (config?.apriltag_id !== undefined) {
+      setNodeApriltagId(config.apriltag_id)
+    } else {
+      const wp = pendingWaypoints[idx]
+      const nearest = wp ? findNearestTag(wp.x, wp.y) : null
+      setNodeApriltagId(nearest ? nearest.id : null)
+    }
   }
 
   const handleSaveNodeEdit = () => {
     if (editingNode === null) return
     const newConfigs = new Map(nodeConfigs)
-    newConfigs.set(editingNode, { action: nodeAction, pause_sec: nodePauseSec })
+    newConfigs.set(editingNode, {
+      action: nodeAction,
+      pause_sec: nodePauseSec,
+      ...(nodeApriltagId !== null ? { apriltag_id: nodeApriltagId } : {}),
+    })
     setNodeConfigs(newConfigs)
     setEditingNode(null)
+    setNodeApriltagId(null)
   }
 
   const [actionError, setActionError] = useState('')
@@ -207,16 +256,39 @@ export function MissionsPanel({
             {/* Node edit dialog */}
             {editingNode !== null && (
               <div className="node-edit-dialog">
-                <div className="section-title">Node {editingNode + 1} Action</div>
-                <select
-                  value={nodeAction}
-                  onChange={e => setNodeAction(e.target.value as 'none' | 'pause' | 'signal')}
-                  className="full-width"
-                >
-                  <option value="none">None</option>
-                  <option value="pause">Pause</option>
-                  <option value="signal">Signal</option>
-                </select>
+                <div className="section-title">Node {editingNode + 1}</div>
+
+                {/* Snap to defined AprilTag */}
+                <label className="form-field">
+                  Snap to AprilTag (optional)
+                  <select
+                    value={nodeApriltagId ?? ''}
+                    onChange={e => setNodeApriltagId(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                    className="full-width"
+                  >
+                    <option value="">— None (use waypoint coordinates) —</option>
+                    {definedTags.map(t => (
+                      <option key={t.id} value={t.id}>
+                        #{t.id} {t.label} ({t.type === 'rail_start' ? '⏸ rail' : '🟦 wall'})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="form-field">
+                  Action
+                  <select
+                    value={nodeAction}
+                    onChange={e => setNodeAction(e.target.value as WaypointAction)}
+                    className="full-width"
+                  >
+                    <option value="none">None</option>
+                    <option value="pause">Pause (wait N seconds)</option>
+                    <option value="signal">Signal</option>
+                    <option value="start_recording">Start recording</option>
+                    <option value="stop_recording">Stop recording</option>
+                  </select>
+                </label>
                 {nodeAction === 'pause' && (
                   <div className="pause-input">
                     <label>Duration (s):</label>
