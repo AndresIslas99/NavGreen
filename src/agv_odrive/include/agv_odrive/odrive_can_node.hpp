@@ -40,6 +40,7 @@ private:
   float min_effective_vel_;
   float stiction_torque_ff_;
   float max_wheel_accel_;
+  float max_wheel_decel_;
   float zero_vel_epsilon_;
   double gear_ratio_;  // motor_turns / wheel_turns (see odrive_can_node.cpp for docs)
   double max_fet_temp_;
