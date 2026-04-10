@@ -202,6 +202,26 @@ def generate_launch_description():
             ],
         ),
 
+        # ── Factor graph estimator (t=4.5s, parallel to ekf_global) ──
+        # Runs alongside ekf_global with publish_tf=false. Compare on
+        # /agv/factor_graph/odometry vs /agv/odometry/global to validate.
+        # Set publish_tf:=true to perform cutover from ekf_global.
+        TimerAction(
+            period=4.5,
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        PathJoinSubstitution([
+                            FindPackageShare('agv_factor_graph'), 'launch', 'factor_graph.launch.py'
+                        ])),
+                    launch_arguments={
+                        'namespace': ns,
+                        'publish_tf': 'false',  # Parallel mode — ekf_global owns TF
+                    }.items(),
+                ),
+            ],
+        ),
+
         # ── SLAM Toolbox localization mode (t=5s, optional — provides loop closure) ──
         TimerAction(
             period=5.0,

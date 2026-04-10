@@ -43,28 +43,98 @@
       xy_goal_tolerance: 0.15            # [TUNABLE] [0.10-0.25] m — tighten for precision, loosen for speed
       yaw_goal_tolerance: 0.25           # [TUNABLE] [0.15-0.40] rad — tighten if heading matters at goal
 
+    # MPPI Controller — Model Predictive Path Integral
+    # Sampling-based MPC, GPU-friendly on Jetson Orin
+    # Better than RegulatedPurePursuit for: smoothness, dynamic obstacles, narrow corridors
     FollowPath:
-      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.3            # [TUNABLE] [0.1-0.5] m/s — reduce for tight rows or wet floors
-      lookahead_dist: 0.4               # [TUNABLE] [0.2-0.7] m — increase for straighter paths in open areas
-      min_lookahead_dist: 0.2            # [TUNABLE] [0.15-0.3] m — floor for lookahead scaling
-      max_lookahead_dist: 0.7            # [TUNABLE] [0.5-1.0] m — ceiling for lookahead scaling
-      lookahead_time: 1.2                # [TUNABLE] [0.8-2.0] s — higher = smoother but less reactive
-      rotate_to_heading_angular_vel: 0.2 # [TUNABLE] [0.2-0.5] rad/s — in-place rotation speed
-      transform_tolerance: 0.2           # [ARCHITECTURAL] Must match TF publish rates; 0.5 for sim
-      use_velocity_scaled_lookahead_dist: true   # [ARCHITECTURAL] Scales lookahead with speed
-      min_approach_linear_velocity: 0.05 # [TUNABLE] [0.03-0.10] m/s — final approach creep speed
-      approach_velocity_scaling_dist: 0.6 # [TUNABLE] [0.3-1.0] m — distance to start slowing for goal
-      use_collision_detection: true       # [ARCHITECTURAL] Required for safe operation
-      max_allowed_time_to_collision_up_to_carrot: 1.5  # [ARCHITECTURAL] Collision lookahead (s)
-      use_regulated_linear_velocity_scaling: true       # [ARCHITECTURAL] Scale speed near obstacles
-      use_cost_regulated_linear_velocity_scaling: true   # [ARCHITECTURAL] Scale speed by costmap cost
-      cost_scaling_dist: 0.6             # [ARCHITECTURAL] Costmap cost influence distance
-      cost_scaling_gain: 1.0             # [ARCHITECTURAL] Costmap cost scaling factor
-      regulated_linear_scaling_min_radius: 0.9   # [ARCHITECTURAL] Min turn radius for speed scaling
-      regulated_linear_scaling_min_speed: 0.1    # [TUNABLE] [0.05-0.15] m/s — minimum regulated speed
-      max_angular_accel: 0.8             # [TUNABLE] [0.5-1.5] rad/s^2 — limit angular jerk
-      allow_reversing: false             # [FIXED] Differential drive forward-only in greenhouse rows
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 56                     # [ARCHITECTURAL] Number of trajectory time steps
+      model_dt: 0.05                     # [ARCHITECTURAL] Time step duration (s)
+      batch_size: 2000                   # [ARCHITECTURAL] Number of sampled trajectories per cycle
+      vx_std: 0.2                        # [TUNABLE] Std dev for linear velocity sampling
+      vy_std: 0.0                        # [FIXED] Differential drive: no lateral motion
+      wz_std: 0.4                        # [TUNABLE] Std dev for angular velocity sampling
+      vx_max: 0.4                        # [TUNABLE] Max forward velocity (m/s)
+      vx_min: -0.2                       # [TUNABLE] Max reverse velocity (m/s, negative)
+      vy_max: 0.0                        # [FIXED] Differential drive
+      wz_max: 0.5                        # [TUNABLE] Max angular velocity (rad/s)
+      iteration_count: 1                 # [ARCHITECTURAL] Optimizer iterations per cycle
+      prune_distance: 1.7                # [TUNABLE] [1.0-3.0] m — path lookahead pruning
+      transform_tolerance: 0.2           # [ARCHITECTURAL] TF lookup tolerance
+      temperature: 0.3                   # [ARCHITECTURAL] Softmax temperature for trajectory weighting
+      gamma: 0.015                       # [ARCHITECTURAL] Discount factor
+      motion_model: "DiffDrive"          # [FIXED] Differential drive kinematics
+      visualize: false                   # [TUNABLE] Publish trajectory candidates (debug)
+      regenerate_noises: false           # [ARCHITECTURAL] Regenerate noise samples each cycle
+
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+
+      AckermannConstraints:
+        min_turning_r: 0.0               # [FIXED] DiffDrive: 0 = in-place rotation OK
+
+      # Critics — weighted cost terms that shape trajectory selection
+      critics: ["ConstraintCritic", "ObstaclesCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
+
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+
+      ObstaclesCritic:
+        enabled: true
+        cost_power: 1
+        repulsion_weight: 1.5            # [TUNABLE] Higher = stay further from obstacles
+        critical_weight: 20.0            # [TUNABLE] Penalty for collision-imminent paths
+        consider_footprint: true
+        collision_cost: 10000.0
+        collision_margin_distance: 0.10
+        near_goal_distance: 0.5
+
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0                # [TUNABLE] Higher = follow path more closely
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
 
 /**/planner_server:
   ros__parameters:
