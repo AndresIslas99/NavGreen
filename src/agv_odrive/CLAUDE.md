@@ -35,24 +35,38 @@ Publishes differential-drive wheel odometry at 50 Hz and converts `cmd_vel` to m
 | `can_interface` | `"can0"` | SocketCAN interface |
 | `left_axis_id` | `0` | CAN node ID left motor |
 | `right_axis_id` | `1` | CAN node ID right motor |
-| `wheel_radius` | `0.0625` | Wheel radius (m) |
-| `track_width` | `0.735` | Wheel-to-wheel distance (m) |
-| `gear_ratio` | `1.0` | Motor turns / wheel turns |
+| `wheel_radius` | `0.0781` | Wheel radius (m) — calibrated 2026-04-08 |
+| `track_width` | `0.960` | Effective wheel-to-wheel distance (m) — calibrated |
+| `gear_ratio` | `10.0` | Motor turns / wheel turns (10:1 planetary) |
 | `publish_rate_hz` | `50` | Main loop frequency |
-| `cmd_vel_timeout_ms` | `500` | Stop motors if no cmd_vel |
-| `invert_left` | `false` | Negate left motor direction |
-| `invert_right` | `true` | Negate right motor direction |
+| `cmd_vel_timeout_ms` | `200` | Stop motors if no cmd_vel (was 500) |
+| `invert_left` | `true` | Negate left motor direction |
+| `invert_right` | `false` | Negate right motor direction |
 | `left_scale` / `right_scale` | `1.0` | Per-wheel velocity trim |
-| `max_wheel_accel` | `1.0` | Rate limiter (turns/s^2) |
+| `max_wheel_accel` | `0.5` | Acceleration rate limiter (turns/s²) |
+| `max_wheel_decel` | `1.5` | Deceleration rate limiter (turns/s²) — 3x faster than accel |
 | `zero_vel_epsilon` | `0.03` | Velocity deadband (turns/s) |
 | `min_effective_vel` | `0.0` | Stiction compensation minimum |
-| `stiction_torque_ff` | `0.0` | Torque feedforward (Nm) |
+| `stiction_torque_ff` | `0.03` | Torque feedforward (Nm) — compensates caster friction |
+| `velocity_filter_alpha` | `0.3` | EMA low-pass coefficient (0=smooth, 1=raw). ~8Hz cutoff at 50Hz |
+| `slip_velocity_threshold` | `0.5` | Encoder diff to trigger slip detection (turns/s) |
+| `slip_reduction_factor` | `0.7` | Scale cmd_vel by this during slip |
+| `slip_cooldown_ms` | `200.0` | Hold slip reduction after clearance (ms) |
+| `caster_enable_compensation` | `true` | Enable caster disturbance covariance inflation |
+| `caster_settling_tau` | `0.5` | Caster disturbance decay time constant (s) |
+| `caster_covariance_multiplier` | `10.0` | Peak covariance inflation factor |
+| `caster_angular_accel_threshold` | `1.0` | Angular accel trigger for caster (rad/s²) |
 
 ## Key Algorithms
 
 - **Odometry**: Mid-angle integration (more accurate than Euler for curved paths)
+- **EMA velocity filter**: Low-pass on encoder velocities (α=0.3) to smooth noise before twist and rotation detection
+- **Pure rotation gate**: When wheels spin opposite with similar magnitude, forces symmetric deltas to eliminate phantom translation (delta_s=0 exactly)
+- **Wheel slip detection**: If encoder velocity difference exceeds threshold during straight-line command, reduces cmd_vel to 70% and inflates odometry covariance
+- **Asymmetric accel limiter**: Deceleration (1.5 turns/s²) is 3x faster than acceleration (0.5 turns/s²) for responsive stopping
+- **Caster compensation**: Inflates odometry covariance during direction changes AND sustained rotation (>0.3 rad/s), signaling EKF to trust IMU more
 - **Inverse kinematics**: `v_left/right = (linear_x -/+ angular_z * track_width/2) / (wheel_radius * 2pi) * gear_ratio`
-- **Wheel shaping pipeline**: Zero bypass -> acceleration limiter -> stiction compensation -> torque feedforward
+- **Wheel shaping pipeline**: Zero bypass -> asymmetric accel/decel limiter -> stiction compensation -> torque feedforward
 - **CAN protocol**: Arbitration ID = `(node_id << 5) | cmd_id`, commands: HEARTBEAT, GET_ENCODER_ESTIMATES, SET_INPUT_VEL, SET_AXIS_STATE, GET_TEMPERATURE, GET_VBUS_VOLTAGE
 
 ## Configuration
