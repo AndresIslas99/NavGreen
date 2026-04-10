@@ -4,7 +4,7 @@ import type { Express } from 'express';
 import type { AppDeps } from '../app_deps';
 
 export function register(app: Express, deps: AppDeps): void {
-  const { config, eventLog, ros, scanAccumulator } = deps;
+  const { config, eventLog, ros, state } = deps;
 
   function listMapFiles() {
     try {
@@ -71,21 +71,20 @@ export function register(app: Express, deps: AppDeps): void {
     }
   });
 
-  // Accumulated map
+  // Live accumulated map (from scan_grid_mapper via rclnodejs)
   app.get('/api/acc_map/image', (_req, res) => {
-    if (scanAccumulator.pngBuffer) {
-      res.type('image/png').send(scanAccumulator.pngBuffer);
+    if (state.liveMapPng) {
+      res.type('image/png').send(state.liveMapPng);
     } else {
       res.status(404).json({ error: 'No accumulated map' });
     }
   });
 
   app.delete('/api/acc_map', (_req, res) => {
-    scanAccumulator.clear();
-    // Also clear the ROS scan_grid_mapper via subprocess
+    // Clear the ROS scan_grid_mapper via topic
     const { execFile } = require('child_process');
-    execFile('ros2', ['service', 'call',
-      `/${config.namespace}/scan_grid_mapper/clear_map`, 'std_srvs/srv/Empty'],
+    execFile('ros2', ['topic', 'pub', '--once',
+      `/${config.namespace}/clear_map`, 'std_msgs/msg/Bool', '{data: true}'],
       { env: process.env, timeout: 5000 }, () => {});
     eventLog.emit('info', 'MAPPING', 'Accumulated map cleared');
     res.json({ success: true });

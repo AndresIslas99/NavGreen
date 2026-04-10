@@ -96,11 +96,11 @@ def generate_launch_description():
             name='pointcloud_to_laserscan',
             namespace=ns,
             parameters=[{
-                'min_height': 0.08,
+                'min_height': 0.03,
                 'max_height': 2.0,
-                'angle_min': -1.0472,
-                'angle_max': 1.0472,
-                'angle_increment': 0.005,
+                'angle_min': -1.5708,
+                'angle_max': 1.5708,
+                'angle_increment': 0.003,
                 'scan_time': 0.1,
                 'range_min': 0.3,
                 'range_max': 8.0,
@@ -147,9 +147,9 @@ def generate_launch_description():
             output='log',
         ),
 
-        # ── SLAM pipeline (t=2s, TF DISABLED — EKF owns transforms) ──
+        # ── SLAM pipeline (t=3s, TF DISABLED — EKF owns transforms) ──
         TimerAction(
-            period=2.0,
+            period=3.0,
             actions=[
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource(
@@ -161,6 +161,29 @@ def generate_launch_description():
                         'enable_gui': 'false',
                         'slam_params_override': cuvslam_no_tf,
                     }.items(),
+                ),
+            ],
+        ),
+
+        # ── IMU vibration filter (t=3.5s — must start before EKF) ──
+        TimerAction(
+            period=3.5,
+            actions=[
+                Node(
+                    package='agv_sensor_fusion',
+                    executable='imu_filter_node',
+                    name='imu_filter',
+                    namespace=ns,
+                    parameters=[
+                        PathJoinSubstitution([
+                            FindPackageShare('agv_sensor_fusion'), 'config', 'imu_filter.yaml'
+                        ]),
+                    ],
+                    remappings=[
+                        ('imu/raw', '/agv/zed/imu/data'),
+                        ('imu/filtered', 'imu/filtered'),
+                    ],
+                    output='log',
                 ),
             ],
         ),
