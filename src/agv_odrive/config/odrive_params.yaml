@@ -10,7 +10,7 @@
     odom_frame_id: "odom"
     base_frame_id: "base_link"
     publish_rate_hz: 50
-    cmd_vel_timeout_ms: 500    # stop motors if no cmd_vel for this long
+    cmd_vel_timeout_ms: 200    # stop motors if no cmd_vel for this long (was 500 — faster stop)
     # Motor direction inversion (differential drive: one side faces opposite)
     # Set to true for the motor that needs its CAN velocity negated
     invert_left: true          # CAN 0
