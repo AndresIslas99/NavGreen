@@ -408,10 +408,24 @@ async function main() {
 
   // --- Live occupancy grid (direct rclnodejs subscription) ---
   // Same pattern as static map subscription above — no Python subprocess needed.
+  // Uses a sequence counter to prevent race conditions: sharp PNG compression is
+  // async, so a newer OccupancyGrid may arrive before the previous PNG finishes.
+  // Without the guard, a stale PNG could overwrite the current metadata, causing
+  // the frontend to display the map at incorrect bounds.
+  let liveMapSeq = 0;
+  let liveMapCompressing = false;
   node.createSubscription('nav_msgs/msg/OccupancyGrid', `/${NAMESPACE}/live_map`,
     { qos: tlQos }, (msg: any) => {
+    // Drop this frame if previous PNG is still compressing — prevents queue buildup
+    if (liveMapCompressing) return;
+
+    const seq = ++liveMapSeq;
     const w = msg.info.width, h = msg.info.height, data = msg.data;
-    const pixels = Buffer.alloc(w * h * 4); // RGBA for transparency
+    const meta = { resolution: msg.info.resolution,
+      origin_x: msg.info.origin.position.x, origin_y: msg.info.origin.position.y,
+      width: w, height: h };
+
+    const pixels = Buffer.alloc(w * h * 4);
     for (let i = 0; i < w * h; i++) {
       const v = typeof data[i] === 'number' ? data[i] : -1;
       const p = i * 4;
@@ -431,15 +445,18 @@ async function main() {
     const flipped = Buffer.alloc(w * h * 4);
     for (let row = 0; row < h; row++)
       pixels.copy(flipped, (h - 1 - row) * rowBytes, row * rowBytes, (row + 1) * rowBytes);
+
+    liveMapCompressing = true;
     const sharp = require('sharp');
     sharp(flipped, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer()
       .then((buf: Buffer) => {
+        liveMapCompressing = false;
+        // Only apply if this is still the latest frame (discard stale completions)
+        if (seq !== liveMapSeq) return;
         state.liveMapPng = buf;
-        state.liveMapMeta = { resolution: msg.info.resolution,
-          origin_x: msg.info.origin.position.x, origin_y: msg.info.origin.position.y,
-          width: w, height: h };
+        state.liveMapMeta = meta;
         state.liveMapVersion++;
-      }).catch(() => {});
+      }).catch(() => { liveMapCompressing = false; });
   });
 
   // --- motor_state bridge via subprocess ---
