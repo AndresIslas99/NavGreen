@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import type { DefinedTag, AprilTagState } from '../../api/types'
+import type { DefinedTag, AprilTagState, TagType } from '../../api/types'
 
 export function AprilTagsPanel() {
   const [state, setState] = useState<AprilTagState | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [form, setForm] = useState({ label: '', description: '', x: 0, y: 0, yaw: 0 })
+  const [form, setForm] = useState({ label: '', description: '', type: 'wall' as TagType, x: 0, y: 0, yaw: 0 })
 
   const fetchState = useCallback(async () => {
     try {
@@ -22,7 +22,7 @@ export function AprilTagsPanel() {
   }, [fetchState])
 
   const resetForm = () => {
-    setForm({ label: '', description: '', x: 0, y: 0, yaw: 0 })
+    setForm({ label: '', description: '', type: 'wall', x: 0, y: 0, yaw: 0 })
     setShowAddForm(false)
     setEditingId(null)
   }
@@ -57,11 +57,24 @@ export function AprilTagsPanel() {
     setForm({
       label: tag.label,
       description: tag.description,
+      type: tag.type,
       x: tag.x,
       y: tag.y,
       yaw: (tag.yaw * 180) / Math.PI,  // radians → degrees for display
     })
     setShowAddForm(true)
+  }
+
+  const handleNavigate = async (tag: DefinedTag) => {
+    try {
+      const r = await fetch(`/api/apriltags/${tag.id}/navigate`, { method: 'POST' })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        alert(`Failed to send goal: ${err.error || 'unknown'}`)
+      }
+    } catch (e: any) {
+      alert(`Network error: ${e?.message}`)
+    }
   }
 
   const handleDelete = async (id: number) => {
@@ -110,6 +123,14 @@ export function AprilTagsPanel() {
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
             />
+            <label className="form-field">
+              Type
+              <select value={form.type}
+                onChange={e => setForm({ ...form, type: e.target.value as TagType })}>
+                <option value="wall">Wall (vertical — drift correction)</option>
+                <option value="rail_start">Rail start (horizontal — precision approach)</option>
+              </select>
+            </label>
             <div className="form-row">
               <label>X (m)<input type="number" step="0.01" value={form.x}
                 onChange={e => setForm({ ...form, x: parseFloat(e.target.value) || 0 })} /></label>
@@ -131,15 +152,21 @@ export function AprilTagsPanel() {
 
         {state && state.defined_tags.map(tag => {
           const hwId = getHardwareForDefined(tag.id)
+          const typeIcon = tag.type === 'rail_start' ? '⏸' : '🟦'
+          const typeLabel = tag.type === 'rail_start' ? 'Rail start' : 'Wall'
           return (
-            <div key={tag.id} className="apriltag-item">
+            <div key={tag.id} className={`apriltag-item apriltag-${tag.type}`}>
               <div className="apriltag-header">
-                <strong>#{tag.id} {tag.label}</strong>
+                <strong>{typeIcon} #{tag.id} {tag.label}</strong>
                 <div className="apriltag-actions">
+                  <button className="btn-small" onClick={() => handleNavigate(tag)} title="Send AGV to this tag">
+                    Send AGV
+                  </button>
                   <button className="btn-small" onClick={() => handleEdit(tag)}>Edit</button>
                   <button className="btn-small btn-danger" onClick={() => handleDelete(tag.id)}>Delete</button>
                 </div>
               </div>
+              <div className="apriltag-type-badge">{typeLabel}</div>
               {tag.description && <div className="dim">{tag.description}</div>}
               <div className="apriltag-coords">
                 ({tag.x.toFixed(2)}, {tag.y.toFixed(2)}) yaw={(tag.yaw * 180 / Math.PI).toFixed(0)}°
