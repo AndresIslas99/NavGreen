@@ -23,6 +23,7 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   this->declare_parameter("min_effective_vel", 0.0);
   this->declare_parameter("stiction_torque_ff", 0.0);
   this->declare_parameter("max_wheel_accel", 1.0);
+  this->declare_parameter("max_wheel_decel", 1.5);
   this->declare_parameter("zero_vel_epsilon", 0.03);
   // gear_ratio = motor_turns / wheel_turns. Set to 1.0 if ODrive firmware already
   // has gear_ratio configured. Set to 10.0 for a 10:1 planetary gearbox with raw
@@ -59,6 +60,7 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
   min_effective_vel_ = static_cast<float>(this->get_parameter("min_effective_vel").as_double());
   stiction_torque_ff_ = static_cast<float>(this->get_parameter("stiction_torque_ff").as_double());
   max_wheel_accel_ = static_cast<float>(this->get_parameter("max_wheel_accel").as_double());
+  max_wheel_decel_ = static_cast<float>(this->get_parameter("max_wheel_decel").as_double());
   zero_vel_epsilon_ = static_cast<float>(this->get_parameter("zero_vel_epsilon").as_double());
   gear_ratio_ = this->get_parameter("gear_ratio").as_double();
   max_fet_temp_ = this->get_parameter("max_fet_temp").as_double();
@@ -574,9 +576,10 @@ float ODriveCANNode::apply_wheel_shaping(float target, float& prev_cmd, double s
 
   float vel = target * static_cast<float>(sign_and_scale);
 
-  // Accel limiter
+  // Asymmetric accel limiter: decel is faster than accel for responsive stopping
   float dt = 1.0f / static_cast<float>(publish_rate_hz_);
-  float max_dv = max_wheel_accel_ * dt;
+  bool decelerating = (std::abs(vel) < std::abs(prev_cmd));
+  float max_dv = (decelerating ? max_wheel_decel_ : max_wheel_accel_) * dt;
   vel = prev_cmd + std::clamp(vel - prev_cmd, -max_dv, max_dv);
 
   // Min effective velocity (stiction compensation) — disabled by default (min_effective_vel=0)
