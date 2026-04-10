@@ -6,12 +6,9 @@ import * as api from './api/client'
 import { LoginPage } from './components/LoginPage'
 import { TopBar } from './components/TopBar'
 import { ModeRail } from './components/ModeRail'
-import { MapCanvas } from './components/MapCanvas'
 import { MapView } from './components/MapView'
 import { CameraFeed } from './components/CameraFeed'
 import { EventLog } from './components/EventLog'
-
-const USE_LEAFLET = true
 
 import { OperatePanel } from './components/panels/OperatePanel'
 import { MappingPanel } from './components/panels/MappingPanel'
@@ -188,31 +185,19 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
 
         <div className={`map-area ${state === 'mapping' ? 'mapping-layout' : ''}`}>
           <div className="map-section">
-          {USE_LEAFLET ? (
-            <MapView
-              mapData={state === 'mapping' && accMapData ? accMapData : mapData}
-              pose={pose}
-              path={path}
-              scanPoints={scanPoints}
-              mode={capturingWaypoints ? 'nav' : mode}
-              onGoalClick={handleGoalClick}
-              waypoints={capturingWaypoints ? pendingWaypoints : undefined}
-              fleetRobots={fleetRobots}
-              selectedRobot={selectedRobot}
-              ghostPose={rail === 'analytics' ? ghostPose : null}
-              mappingCoverage={status?.mapping_coverage}
-            />
-          ) : (
-            <MapCanvas
-              mapData={state === 'mapping' && accMapData ? accMapData : mapData}
-              pose={pose}
-              path={path}
-              scanPoints={scanPoints}
-              mode={capturingWaypoints ? 'nav' : mode}
-              onGoalClick={handleGoalClick}
-              waypoints={capturingWaypoints ? pendingWaypoints : undefined}
-            />
-          )}
+          <MapView
+            mapData={state === 'mapping' && accMapData ? accMapData : mapData}
+            pose={pose}
+            path={path}
+            scanPoints={scanPoints}
+            mode={capturingWaypoints ? 'nav' : mode}
+            onGoalClick={handleGoalClick}
+            waypoints={capturingWaypoints ? pendingWaypoints : undefined}
+            fleetRobots={fleetRobots}
+            selectedRobot={selectedRobot}
+            ghostPose={rail === 'analytics' ? ghostPose : null}
+            mappingCoverage={status?.mapping_coverage}
+          />
           <FleetOverlay
             robots={fleetRobots}
             selectedRobot={selectedRobot}

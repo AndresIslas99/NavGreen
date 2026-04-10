@@ -40,7 +40,7 @@ function getStatus(deps: AppDeps) {
     health: s.health,
     battery_pct: s.batteryPct,
     mission_progress: s.missionProgress,
-    mapping_coverage: deps.scanAccumulator.coveragePercent,
+    mapping_coverage: 0,
   };
 }
 
@@ -86,7 +86,6 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
     let lastPathSnapshot = '';
     let clientMapVersion = deps.state.mapVersion;  // start at current so we don't re-send on connect
-    let clientAccMapVersion = deps.scanAccumulator.version || 0;
     let clientLiveMapVersion = deps.state.liveMapVersion;
 
     // Send current maps immediately on connect so reconnecting clients don't see blank
@@ -137,9 +136,7 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
           }));
         }
 
-        // Prefer live_map from scan_grid_mapper (proper Bayesian grid) over
-        // ScanAccumulator (JS approximation). Fall back to ScanAccumulator if
-        // scan_grid_mapper isn't publishing.
+        // Live map from scan_grid_mapper (proper Bayesian grid via live_map_bridge)
         if (clientLiveMapVersion < deps.state.liveMapVersion && deps.state.liveMapPng) {
           clientLiveMapVersion = deps.state.liveMapVersion;
           ws.send(JSON.stringify({
@@ -147,16 +144,6 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
             png_base64: deps.state.liveMapPng.toString('base64'),
             ...deps.state.liveMapMeta,
           }));
-        } else {
-          const accVer = deps.scanAccumulator.version || 0;
-          if (clientAccMapVersion < accVer && deps.scanAccumulator.pngBuffer) {
-            clientAccMapVersion = accVer;
-            ws.send(JSON.stringify({
-              type: 'acc_map',
-              png_base64: deps.scanAccumulator.pngBuffer.toString('base64'),
-              ...deps.scanAccumulator.meta,
-            }));
-          }
         }
 
         for (const evt of deps.eventLog.popPending()) {

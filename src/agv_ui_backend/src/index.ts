@@ -18,7 +18,7 @@ import * as rclnodejs from 'rclnodejs';
 
 import { deriveState, allowedActions, RobotState, MotorState, NavState, MissionProgress } from './state_machine';
 import { EventLog } from './event_log';
-import { ScanAccumulator } from './scan_accumulator';
+// ScanAccumulator removed — live map comes directly from scan_grid_mapper via rclnodejs
 import { TelemetryStore } from './telemetry_store';
 import { AuthManager } from './auth';
 import { registerAllRoutes } from './routes';
@@ -45,7 +45,7 @@ if (!fs.existsSync(MISSIONS_FILE)) fs.writeFileSync(MISSIONS_FILE, '[]');
 // ---------------------------------------------------------------------------
 
 const eventLog = new EventLog(DATA_DIR);
-const scanAccumulator = new ScanAccumulator();
+// scanAccumulator removed — live map pipeline is now direct rclnodejs subscription
 const telemetryStore = new TelemetryStore(DATA_DIR, parseInt(process.env.AGV_RETENTION_DAYS || '30'));
 const authManager = new AuthManager(DATA_DIR);
 
@@ -228,25 +228,12 @@ async function main() {
       state.eStopActive = active;
       const msg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
       msg.data = active; eStopPub.publish(msg);
-      // Reliable delivery via subprocess
-      const { execFile } = require('child_process');
-      execFile('ros2', ['topic', 'pub', '--once',
-        `/${NAMESPACE}/e_stop`, 'std_msgs/msg/Bool',
-        `{data: ${active}}`], { env: process.env }, () => {});
       if (active) { ros.sendCmdVel(0, 0); ros.cancelNavGoal(); }
       eventLog.emit(active ? 'crit' : 'info', 'SAFETY', active ? 'E-STOP ACTIVATED' : 'E-stop cleared');
       updateState();
     },
 
     sendMotorEnable(active: boolean) {
-      // Use subprocess for reliable DDS delivery (rclnodejs publisher
-      // doesn't reliably discover C++ subscribers on same machine).
-      const { execFile } = require('child_process');
-      execFile('ros2', ['topic', 'pub', '--once',
-        `/${NAMESPACE}/motor_enable`, 'std_msgs/msg/Bool',
-        `{data: ${active}}`],
-        { env: process.env }, () => {});
-      // Also try via rclnodejs publisher as fallback
       const msg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
       msg.data = active; motorEnablePub.publish(msg);
     },
@@ -359,9 +346,28 @@ async function main() {
     });
 
     node.createSubscription('sensor_msgs/msg/LaserScan', `/${NAMESPACE}/scan`, (msg: any) => {
-      state.scanPoints = scanAccumulator.addScan(
-        state.robotPose.x, state.robotPose.y, state.robotPose.theta,
-        Array.from(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max);
+      // Extract scan points for real-time visualization (red dots on map)
+      const points: Array<{x: number; y: number}> = [];
+      const cosT = Math.cos(state.robotPose.theta);
+      const sinT = Math.sin(state.robotPose.theta);
+      const ranges: number[] = Array.from(msg.ranges);
+      let angle = msg.angle_min as number;
+      const inc = msg.angle_increment as number;
+      const rMin = msg.range_min as number;
+      const rMax = msg.range_max as number;
+      for (let i = 0; i < ranges.length; i++) {
+        const r = ranges[i];
+        if (r > rMin && r < rMax) {
+          const lx = r * Math.cos(angle);
+          const ly = r * Math.sin(angle);
+          points.push({
+            x: Math.round((state.robotPose.x + cosT * lx - sinT * ly) * 1000) / 1000,
+            y: Math.round((state.robotPose.y + sinT * lx + cosT * ly) * 1000) / 1000,
+          });
+        }
+        angle += inc;
+      }
+      state.scanPoints = points;
     });
 
     node.createSubscription('sensor_msgs/msg/Imu', `/${NAMESPACE}/zed/imu/data`, () => {
@@ -400,55 +406,41 @@ async function main() {
       .catch(() => {});
   });
 
-  // --- live_map bridge via subprocess + file ---
-  // rclnodejs DDS discovery bug prevents reliable subscription to C++ OccupancyGrid
-  // publishers. Workaround: Python subprocess subscribes to /agv/live_map and writes
-  // PNG + JSON metadata to /tmp/. The TS backend reads these files periodically.
-  const LIVE_MAP_PNG = '/tmp/agv_live_map.png';
-  const LIVE_MAP_META = '/tmp/agv_live_map.json';
-  let lastLiveMapTimestamp = 0;
-
-  function startLiveMapBridge() {
-    const bridgePath = path.resolve(__dirname, '../scripts/live_map_bridge.py');
-    const proc = require('child_process').spawn('python3', [bridgePath, '--namespace', NAMESPACE], {
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    proc.stdout.on('data', (chunk: Buffer) => {
-      const line = chunk.toString().trim();
-      if (line) console.log('[live_map bridge]', line);
-    });
-    proc.stderr.on('data', (chunk: Buffer) => {
-      const line = chunk.toString().trim();
-      if (line && !line.includes('selected interface')) console.warn('[live_map bridge stderr]', line);
-    });
-    proc.on('exit', (code: number) => {
-      console.warn(`[live_map bridge] Exited code=${code}, restarting in 3s...`);
-      setTimeout(startLiveMapBridge, 3000);
-    });
-  }
-  setTimeout(startLiveMapBridge, 2000);
-
-  // Poll the PNG file written by the bridge (every 1.5s)
-  setInterval(() => {
-    try {
-      const metaRaw = fs.readFileSync(LIVE_MAP_META, 'utf-8');
-      const meta = JSON.parse(metaRaw);
-      if (meta.timestamp && meta.timestamp > lastLiveMapTimestamp) {
-        lastLiveMapTimestamp = meta.timestamp;
-        const png = fs.readFileSync(LIVE_MAP_PNG);
-        state.liveMapPng = png;
-        state.liveMapMeta = {
-          resolution: meta.resolution,
-          origin_x: meta.origin_x,
-          origin_y: meta.origin_y,
-          width: meta.width,
-          height: meta.height,
-        };
-        state.liveMapVersion++;
+  // --- Live occupancy grid (direct rclnodejs subscription) ---
+  // Same pattern as static map subscription above — no Python subprocess needed.
+  node.createSubscription('nav_msgs/msg/OccupancyGrid', `/${NAMESPACE}/live_map`,
+    { qos: tlQos }, (msg: any) => {
+    const w = msg.info.width, h = msg.info.height, data = msg.data;
+    const pixels = Buffer.alloc(w * h * 4); // RGBA for transparency
+    for (let i = 0; i < w * h; i++) {
+      const v = typeof data[i] === 'number' ? data[i] : -1;
+      const p = i * 4;
+      if (v === -1 || v === 255) {
+        pixels[p] = 0; pixels[p+1] = 0; pixels[p+2] = 0; pixels[p+3] = 0;
+      } else if (v === 0) {
+        pixels[p] = 240; pixels[p+1] = 245; pixels[p+2] = 240; pixels[p+3] = 180;
+      } else if (v >= 80) {
+        pixels[p] = 20; pixels[p+1] = 20; pixels[p+2] = 25; pixels[p+3] = 240;
+      } else {
+        const gray = Math.max(40, 220 - v * 2);
+        const a = Math.min(220, 80 + v * 2);
+        pixels[p] = gray; pixels[p+1] = gray; pixels[p+2] = gray; pixels[p+3] = a;
       }
-    } catch { /* file not ready yet — ignore */ }
-  }, 1500);
+    }
+    const rowBytes = w * 4;
+    const flipped = Buffer.alloc(w * h * 4);
+    for (let row = 0; row < h; row++)
+      pixels.copy(flipped, (h - 1 - row) * rowBytes, row * rowBytes, (row + 1) * rowBytes);
+    const sharp = require('sharp');
+    sharp(flipped, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer()
+      .then((buf: Buffer) => {
+        state.liveMapPng = buf;
+        state.liveMapMeta = { resolution: msg.info.resolution,
+          origin_x: msg.info.origin.position.x, origin_y: msg.info.origin.position.y,
+          width: w, height: h };
+        state.liveMapVersion++;
+      }).catch(() => {});
+  });
 
   // --- motor_state bridge via subprocess ---
   // rclnodejs has a DDS discovery bug where its subscriber fails to
@@ -514,7 +506,6 @@ async function main() {
     state.health.network = { status: 'ok', detail: `${state.activeClients} client(s)`, updated: now };
     updateState();
   }, 1000);
-  setInterval(() => scanAccumulator.updatePng(), 2000);
   setInterval(() => { try { telemetryStore.recordSample({ timestamp: Date.now() / 1000,
     pose_x: state.robotPose.x, pose_y: state.robotPose.y, pose_theta: state.robotPose.theta,
     linear_vel: state.latestVelocity.linear, angular_vel: state.latestVelocity.angular,
@@ -529,7 +520,7 @@ async function main() {
 
   // --- Build AppDeps ---
   const deps: AppDeps = {
-    state, ros, eventLog, scanAccumulator, telemetryStore, authManager,
+    state, ros, eventLog, telemetryStore, authManager,
     config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
     updateState,
     setMode(mode: string) {
