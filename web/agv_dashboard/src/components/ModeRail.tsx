@@ -9,6 +9,7 @@ const MODES: { key: ModeRailType; icon: string; label: string }[] = [
   { key: 'operate', icon: '🎮', label: 'Operate' },
   { key: 'map', icon: '🗺', label: 'Map' },
   { key: 'missions', icon: '📋', label: 'Missions' },
+  { key: 'apriltags', icon: '🏷', label: 'AprilTags' },
   { key: 'recovery', icon: '🔧', label: 'Recovery' },
   { key: 'analytics', icon: '📊', label: 'Analytics' },
 ]

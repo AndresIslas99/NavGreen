@@ -1028,3 +1028,158 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   font-weight: 600;
   pointer-events: none;
 }
+
+/* ── AprilTag Panel ── */
+.apriltag-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(79, 195, 247, 0.05);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.apriltag-form input {
+  padding: 6px 10px;
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #e0e0e0;
+}
+.apriltag-form .form-row {
+  display: flex;
+  gap: 8px;
+}
+.apriltag-form .form-row label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #999;
+}
+.apriltag-form .form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.apriltag-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.apriltag-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.apriltag-actions {
+  display: flex;
+  gap: 4px;
+}
+.apriltag-coords {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #4fc3f7;
+  margin: 4px 0;
+}
+.apriltag-hw {
+  font-size: 0.85rem;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.apriltag-hw .badge {
+  background: #4caf50;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+}
+.apriltag-pending {
+  background: rgba(255, 152, 0, 0.1);
+  border-left: 3px solid #ff9800;
+  padding: 8px;
+  margin: 4px 0;
+  font-family: monospace;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.modal-content {
+  background: #1a1a2e;
+  border: 2px solid #4fc3f7;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.modal-content h2 {
+  margin-top: 0;
+  color: #4fc3f7;
+}
+.modal-select {
+  width: 100%;
+  padding: 10px;
+  background: #0f0f1e;
+  border: 1px solid #4fc3f7;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 1rem;
+  margin: 12px 0;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.error-text {
+  color: #f44336;
+  font-size: 0.85rem;
+}
+.btn-small {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border: 1px solid #4fc3f7;
+  background: rgba(79, 195, 247, 0.1);
+  color: #4fc3f7;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-small:hover { background: rgba(79, 195, 247, 0.2); }
+.btn-small.btn-danger {
+  border-color: #f44336;
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+.btn-primary {
+  padding: 8px 16px;
+  background: #4fc3f7;
+  color: #0f0f1e;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

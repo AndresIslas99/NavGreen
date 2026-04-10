@@ -19,6 +19,7 @@ import * as rclnodejs from 'rclnodejs';
 import { deriveState, allowedActions, RobotState, MotorState, NavState, MissionProgress } from './state_machine';
 import { EventLog } from './event_log';
 // ScanAccumulator removed — live map comes directly from scan_grid_mapper via rclnodejs
+import { AprilTagManager } from './apriltag_manager';
 import { TelemetryStore } from './telemetry_store';
 import { AuthManager } from './auth';
 import { registerAllRoutes } from './routes';
@@ -46,6 +47,7 @@ if (!fs.existsSync(MISSIONS_FILE)) fs.writeFileSync(MISSIONS_FILE, '[]');
 
 const eventLog = new EventLog(DATA_DIR);
 // scanAccumulator removed — live map pipeline is now direct rclnodejs subscription
+const apriltagManager = new AprilTagManager(DATA_DIR);
 const telemetryStore = new TelemetryStore(DATA_DIR, parseInt(process.env.AGV_RETENTION_DAYS || '30'));
 const authManager = new AuthManager(DATA_DIR);
 
@@ -153,6 +155,18 @@ async function main() {
   const eStopPub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/e_stop`);
   const motorEnablePub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/motor_enable`);
   const modePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode`);
+  // AprilTag registry reload trigger (transient_local so marker_correction picks it up after restart)
+  const markerReloadPub = node.createPublisher('std_msgs/msg/Empty',
+    `/${NAMESPACE}/markers/registry_reload`,
+    { qos: new rclnodejs.QoS(rclnodejs.QoS.HistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, 1,
+      rclnodejs.QoS.ReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+      rclnodejs.QoS.DurabilityPolicy.RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL) });
+
+  // When AprilTagManager regenerates the registry YAML, trigger marker_correction reload
+  apriltagManager.onRegistryChanged(() => {
+    const empty = rclnodejs.createMessageObject('std_msgs/msg/Empty') as any;
+    markerReloadPub.publish(empty);
+  });
 
   // --- Nav2 Action Client ---
   const navActionClient = new rclnodejs.ActionClient(
@@ -377,6 +391,19 @@ async function main() {
       state.lastImuTime = Date.now() / 1000;
     });
 
+    // AprilTag raw detections — listen on /marker_raw_detected ("tag_<id>") which
+    // marker_correction_node publishes for ALL detected tags (regardless of registry).
+    // Avoids the need for apriltag_msgs custom types which rclnodejs can't load.
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/marker_raw_detected`, (msg: any) => {
+      const data: string = typeof msg.data === 'string' ? msg.data : '';
+      const m = data.match(/^tag_(\d+)$/);
+      if (!m) return;
+      const id = parseInt(m[1], 10);
+      if (isNaN(id) || id < 0) return;
+      apriltagManager.recordPendingDetection(id);
+    });
+
     console.log('[ROS] All subscriptions created');
   }
 
@@ -540,7 +567,7 @@ async function main() {
 
   // --- Build AppDeps ---
   const deps: AppDeps = {
-    state, ros, eventLog, telemetryStore, authManager,
+    state, ros, eventLog, telemetryStore, authManager, apriltagManager,
     config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
     updateState,
     setMode(mode: string) {

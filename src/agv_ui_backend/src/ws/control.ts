@@ -87,6 +87,7 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
     let lastPathSnapshot = '';
     let clientMapVersion = deps.state.mapVersion;  // start at current so we don't re-send on connect
     let clientLiveMapVersion = deps.state.liveMapVersion;
+    const sentPendingApriltags = new Set<number>();  // Track which pending IDs this client has been notified about
 
     // Send current maps immediately on connect so reconnecting clients don't see blank
     if (deps.state.mapPng && deps.state.mapMeta) {
@@ -144,6 +145,25 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
             png_base64: deps.state.liveMapPng.toString('base64'),
             ...deps.state.liveMapMeta,
           }));
+        }
+
+        // AprilTag pending detections — notify client about new unassigned hardware IDs
+        const pending = deps.apriltagManager.getPendingDetections();
+        // Clean up sent set: remove IDs no longer pending (assigned or dismissed)
+        const currentPendingIds = new Set(pending.map(p => p.hardware_id));
+        for (const sentId of sentPendingApriltags) {
+          if (!currentPendingIds.has(sentId)) sentPendingApriltags.delete(sentId);
+        }
+        // Send any new pending detections
+        for (const det of pending) {
+          if (!sentPendingApriltags.has(det.hardware_id)) {
+            sentPendingApriltags.add(det.hardware_id);
+            ws.send(JSON.stringify({
+              type: 'apriltag_pending',
+              hardware_id: det.hardware_id,
+              first_seen: det.first_seen,
+            }));
+          }
         }
 
         for (const evt of deps.eventLog.popPending()) {
