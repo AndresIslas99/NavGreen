@@ -90,8 +90,8 @@ export function MappingPanel({ state, actions, motorsArmed, onModeChange, onReco
         <div className="section-title">Drive</div>
         <Joystick
           enabled={motorsArmed && (state === 'mapping' || state === 'ready')}
-          maxLinear={0.5}
-          maxAngular={1.0}
+          maxLinear={0.4}
+          maxAngular={0.3}
           onMove={onCmdVel}
         />
         {!motorsArmed && <p className="dim">Arm motors first (Recovery panel)</p>}

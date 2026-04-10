@@ -45,7 +45,7 @@ export function OperatePanel({ actions, motorsArmed, mode, onCmdVel, onMotorEnab
         <Joystick
           enabled={actions.canTeleop && mode === 'teleop'}
           maxLinear={0.5}
-          maxAngular={1.0}
+          maxAngular={0.5}
           onMove={onCmdVel}
         />
       </div>
