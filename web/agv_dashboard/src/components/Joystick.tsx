@@ -72,14 +72,23 @@ export function Joystick({ enabled, maxLinear, maxAngular, onMove }: Props) {
     return () => clearInterval(id)
   }, [draw])
 
-  // Send commands at 10Hz
+  // Send commands at 20Hz — always sends latest stick position (no accumulation).
+  // When not dragging, sends (0,0) repeatedly to ensure the robot stops even if
+  // a single stop packet is lost over WiFi.
+  const zeroCountRef = useRef(0)
   useEffect(() => {
     intervalRef.current = setInterval(() => {
-      if (enabled && dragging.current) {
+      if (!enabled) return
+      if (dragging.current) {
         const { x, y } = stickRef.current
         onMove(-y * maxLinear, -x * maxAngular)
+        zeroCountRef.current = 0
+      } else if (zeroCountRef.current < 5) {
+        // Send zero 5 times after release to guarantee stop delivery
+        onMove(0, 0)
+        zeroCountRef.current++
       }
-    }, 100)
+    }, 50)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
