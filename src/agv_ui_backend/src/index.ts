@@ -170,8 +170,11 @@ async function main() {
       if (state.eStopActive) return;
       if (state.currentMode !== 'teleop' && state.currentMode !== 'mapping') return;
       const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any;
-      msg.linear.x = Math.max(-0.5, Math.min(0.5, linear));
-      msg.angular.z = Math.max(-0.5, Math.min(0.5, angular));
+      // Mapping mode: tighter limits to keep cuVSLAM tracking stable
+      const maxLin = state.currentMode === 'mapping' ? 0.4 : 0.5;
+      const maxAng = state.currentMode === 'mapping' ? 0.3 : 0.5;
+      msg.linear.x = Math.max(-maxLin, Math.min(maxLin, linear));
+      msg.angular.z = Math.max(-maxAng, Math.min(maxAng, angular));
       cmdVelPub.publish(msg);
       cmdVelSafePub.publish(msg);
       lastCmdTime = Date.now() / 1000;
