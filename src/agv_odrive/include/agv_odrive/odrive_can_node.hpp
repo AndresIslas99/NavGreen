@@ -85,6 +85,19 @@ private:
   bool odom_initialized_ = false;
   rclcpp::Time last_odom_time_;
 
+  // -- Encoder velocity filter (EMA low-pass) --
+  double left_vel_filtered_ = 0.0;
+  double right_vel_filtered_ = 0.0;
+  double velocity_filter_alpha_;
+  bool pure_rotation_ = false;  // cached for covariance scaling
+
+  // -- Wheel slip detection --
+  double slip_velocity_threshold_;
+  double slip_reduction_factor_;
+  bool wheel_slip_active_ = false;
+  rclcpp::Time slip_start_time_;
+  double slip_cooldown_ms_;
+
   // -- Caster disturbance state --
   double caster_disturbance_level_ = 0.0;
   double prev_v_linear_ = 0.0;

@@ -55,11 +55,11 @@ def generate_launch_description():
             name='pointcloud_to_laserscan',
             namespace=ns,
             parameters=[{
-                'min_height': 0.08,
+                'min_height': 0.03,
                 'max_height': 2.0,
-                'angle_min': -1.0472,
-                'angle_max': 1.0472,
-                'angle_increment': 0.005,
+                'angle_min': -1.5708,
+                'angle_max': 1.5708,
+                'angle_increment': 0.003,
                 'scan_time': 0.1,
                 'range_min': 0.3,
                 'range_max': 8.0,
@@ -106,9 +106,9 @@ def generate_launch_description():
             output='log',
         ),
 
-        # SLAM pipeline (cuVSLAM + nvblox) — delayed 2s for TF settle
+        # SLAM pipeline (cuVSLAM + nvblox) — delayed 3s for TF settle + ZED auto-exposure
         TimerAction(
-            period=2.0,
+            period=3.0,
             actions=[
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource(
