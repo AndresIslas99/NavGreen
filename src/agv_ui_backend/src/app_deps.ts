@@ -7,6 +7,7 @@ import type { RobotState, MotorState, NavState, MissionProgress } from './state_
 import type { EventLog } from './event_log';
 import type { TelemetryStore } from './telemetry_store';
 import type { AuthManager } from './auth';
+import type { AprilTagManager } from './apriltag_manager';
 
 export interface RobotPose {
   x: number;
@@ -63,6 +64,7 @@ export interface AppDeps {
   eventLog: EventLog;
   telemetryStore: TelemetryStore;
   authManager: AuthManager;
+  apriltagManager: AprilTagManager;
   config: {
     port: number;
     dataDir: string;

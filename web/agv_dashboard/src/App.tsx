@@ -15,6 +15,8 @@ import { MappingPanel } from './components/panels/MappingPanel'
 import { MissionsPanel } from './components/panels/MissionsPanel'
 import { RecoveryPanel } from './components/panels/RecoveryPanel'
 import { AnalyticsPanel } from './components/panels/AnalyticsPanel'
+import { AprilTagsPanel } from './components/panels/AprilTagsPanel'
+import { AprilTagAssignmentModal } from './components/AprilTagAssignmentModal'
 import { ReplaySlider } from './components/ReplaySlider'
 import { FleetOverlay } from './components/FleetOverlay'
 import { useFleetSocket } from './hooks/useFleetSocket'
@@ -61,7 +63,7 @@ export default function App() {
 }
 
 function Dashboard({ username, userRole, onLogout }: { username: string; userRole: string; onLogout: () => void }) {
-  const { connected, status, path, scanPoints, mapData, accMapData, events, recordingResult, send } = useWebSocket()
+  const { connected, status, path, scanPoints, mapData, accMapData, events, recordingResult, send, pendingApriltag, dismissPendingApriltag } = useWebSocket()
   const { fleetConnected, robots: fleetRobots, selectedRobot, selectRobot } = useFleetSocket()
 
   const [rail, setRail] = useState<ModeRailType>('operate')
@@ -164,6 +166,8 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         )
       case 'analytics':
         return <AnalyticsPanel />
+      case 'apriltags':
+        return <AprilTagsPanel />
     }
   }
 
@@ -225,6 +229,13 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
       </div>
 
       <EventLog entries={events} onClear={() => fetch('/api/events', { method: 'DELETE' })} />
+
+      {pendingApriltag !== null && (
+        <AprilTagAssignmentModal
+          hardwareId={pendingApriltag}
+          onClose={dismissPendingApriltag}
+        />
+      )}
     </div>
   )
 }
