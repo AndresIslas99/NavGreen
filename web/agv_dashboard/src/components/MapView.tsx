@@ -127,7 +127,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   }, [mode, onGoalClick])
 
   // Update map image overlay
-  const isAccMap = useRef(false)
+  // Track which type of map is displayed to detect switches (static↔live)
+  const currentMapType = useRef<'static' | 'live' | null>(null)
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapData?.png_base64) return
@@ -137,25 +138,28 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const northEast = worldToLatLng(origin_x + width * resolution, origin_y + height * resolution)
     const bounds = L.latLngBounds(southWest, northEast)
 
-    // Detect accumulated map: 500x500 grid from scan_accumulator (not the 400x400 nav map)
-    const isAccumulatedMap = width >= 500
+    const mapType = resolution < 0.04 ? 'live' : 'static'
+    const typeChanged = currentMapType.current !== null && currentMapType.current !== mapType
+    currentMapType.current = mapType
 
     const imageUrl = `data:image/png;base64,${mapData.png_base64}`
 
+    // If map type switched (static↔live), destroy old overlay to avoid stale bounds/image
+    if (typeChanged && imageLayerRef.current) {
+      imageLayerRef.current.remove()
+      imageLayerRef.current = null
+    }
+
     if (imageLayerRef.current) {
-      imageLayerRef.current.setUrl(imageUrl)
       imageLayerRef.current.setBounds(bounds)
+      imageLayerRef.current.setUrl(imageUrl)
     } else {
       const overlay = L.imageOverlay(imageUrl, bounds, { opacity: 0.9 }).addTo(map)
       imageLayerRef.current = overlay
 
-      if (isAccumulatedMap) {
-        // Acc map: zoom to robot position, not full 50m grid
-        isAccMap.current = true
+      if (mapType === 'live') {
         map.setView(worldToLatLng(pose.x, pose.y), 3)
       } else {
-        // Static navigation map: fit to map bounds
-        isAccMap.current = false
         map.fitBounds(bounds)
       }
     }
