@@ -303,6 +303,8 @@ def generate_launch_description():
                     parameters=[{
                         'markers_registry_file': os.path.join(
                             get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
+                        # Runtime registry — operator-defined tags from dashboard
+                        'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
                         'max_detection_range': 5.0,
                         'tag_size': 0.2,
                         'covariance_xy': 0.01,
