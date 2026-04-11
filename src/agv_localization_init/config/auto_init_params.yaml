@@ -1,0 +1,31 @@
+/**/auto_init_orchestrator:
+  ros__parameters:
+    # Directory where map artifacts live (*.pgm, *.yaml, *_cuvslam/, *_meta.json)
+    map_dir: ""
+
+    # How long to wait for an AprilTag detection before falling back to
+    # last-known-pose (seconds).
+    marker_wait_timeout_s: 10.0
+
+    # Retries for the localize_in_map service (each call has its own grid search
+    # internally per the cuvslam_greenhouse.yaml settings).
+    localize_retries: 3
+
+    # Seconds between localize_in_map retries.
+    localize_retry_backoff_s: 2.0
+
+    # Path to the last-known-pose JSON (relative to map_dir, per map).
+    # If a map "T4" is loaded, the file looked up is {map_dir}/T4_meta.json
+    # with format: {"x": 1.23, "y": 4.56, "theta": 0.78, "saved_at": 1234567890}.
+    last_known_pose_filename_suffix: "_meta.json"
+
+    # Kidnapping detection — if the live pose vs last-known drift exceeds this
+    # many meters suddenly without wheel odom matching, trigger a re-init.
+    kidnapping_drift_m: 5.0
+
+    # Periodic save of the last-known pose to {map_name}_meta.json. A hard
+    # crash (power loss, OOM) bypasses the rclcpp::on_shutdown hook, so a
+    # periodic save guarantees the next boot has a recent fallback pose.
+    # Set to 0 to disable periodic saves (shutdown hook still fires on
+    # graceful SIGINT/SIGTERM from ros2 launch).
+    periodic_save_interval_s: 30.0
