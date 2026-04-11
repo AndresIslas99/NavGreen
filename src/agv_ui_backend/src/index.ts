@@ -72,7 +72,6 @@ const state: AppState = {
   slamTracking: 'unknown',
   scanPoints: [],
   navPathPoints: [],
-  navPathChanged: false,
   odomTimes: [],
   activeClients: 0,
   recordingActive: false,
@@ -89,6 +88,12 @@ const state: AppState = {
   liveMapVersion: 0,
   pendingRailApproach: null,
   railApproachState: 'idle',
+  // 'IDLE' (gray) at boot before collision_monitor has published any state.
+  // The collision_monitor only publishes state_topic when it processes a
+  // cmd_vel_smoothed, so a fresh boot with no nav active → no state messages.
+  // 'OFFLINE' is reserved for the STALE case (updated>0 and age>2s).
+  collisionMonitor: { action: 'IDLE', polygon: '', updated: 0 },
+  localization: { action: 'UNKNOWN', detail: '', map: '', updated: 0 },
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -152,14 +157,29 @@ async function main() {
   const node = new rclnodejs.Node('teleop_server');
 
   // --- Publishers ---
+  // cmd_vel is the SINGLE entry point into the safety chain:
+  //   /agv/cmd_vel → velocity_smoother → /agv/cmd_vel_smoothed
+  //                                    → collision_monitor → /agv/cmd_vel_safe → odrive
+  // The backend NEVER publishes to cmd_vel_safe directly — only collision_monitor
+  // does, ensuring single-source-of-truth and giving teleop/mapping the same
+  // collision protection as nav.
   const cmdVelPub = node.createPublisher('geometry_msgs/msg/Twist', `/${NAMESPACE}/cmd_vel`);
-  const cmdVelSafePub = node.createPublisher('geometry_msgs/msg/Twist', `/${NAMESPACE}/cmd_vel_safe`);
   const eStopPub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/e_stop`);
   const motorEnablePub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/motor_enable`);
   const modePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode`);
   // AprilTag registry reload trigger (transient_local so marker_correction picks it up after restart)
   const markerReloadPub = node.createPublisher('std_msgs/msg/Empty',
     `/${NAMESPACE}/markers/registry_reload`,
+    { qos: new rclnodejs.QoS(rclnodejs.QoS.HistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, 1,
+      rclnodejs.QoS.ReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+      rclnodejs.QoS.DurabilityPolicy.RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL) });
+  // maps/loaded event — fired from routes/maps.ts after any successful Nav2
+  // load_map call, and at boot with AGV_BOOT_MAP_NAME if the launch loaded a
+  // default map. Transient_local so the auto_init_orchestrator receives the
+  // last published value even if it subscribes later. QoS must match the
+  // orchestrator's subscription (rclcpp::QoS(1).transient_local().reliable()).
+  const mapsLoadedPub = node.createPublisher('std_msgs/msg/String',
+    `/${NAMESPACE}/maps/loaded`,
     { qos: new rclnodejs.QoS(rclnodejs.QoS.HistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, 1,
       rclnodejs.QoS.ReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
       rclnodejs.QoS.DurabilityPolicy.RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL) });
@@ -191,13 +211,36 @@ async function main() {
       const maxAng = state.currentMode === 'mapping' ? 0.2 : 0.5;
       msg.linear.x = Math.max(-maxLin, Math.min(maxLin, linear));
       msg.angular.z = Math.max(-maxAng, Math.min(maxAng, angular));
+      // Single chain entry point — smoother + collision_monitor handle the rest.
       cmdVelPub.publish(msg);
-      cmdVelSafePub.publish(msg);
       lastCmdTime = Date.now() / 1000;
     },
 
     sendNavGoal(x: number, y: number, theta: number = 0) {
       if (state.currentMode !== 'nav') return { success: false, message: 'Not in nav mode' };
+      if (!state.motorState.armed) {
+        eventLog.emit('warn', 'NAV',
+          'Goal rejected: motors not armed. Arm motors first (Recovery panel)');
+        return { success: false, message: 'Motors not armed. Arm motors before navigating.' };
+      }
+      // Safety chain liveness gate. Nav2's collision_monitor only publishes
+      // state_topic WHILE it's processing cmd_vel_smoothed (i.e., during an
+      // active navigation). On cold boot we have NEVER seen a state message
+      // (updated == 0), so the first goal is allowed through; the STALE
+      // watchdog will catch it within 2s if the chain silently fails.
+      //
+      // For subsequent goals: if we previously received state but it has aged
+      // more than 2s without updates while we're navigating, the chain is
+      // considered broken and we reject new goals with a clear message.
+      const cm = state.collisionMonitor;
+      if (cm.updated > 0) {
+        const cmAge = Date.now() / 1000 - cm.updated;
+        if (cm.action === 'STALE' || cm.action === 'OFFLINE' || cmAge > 2.0) {
+          eventLog.emit('crit', 'SAFETY',
+            `Goal rejected: collision_monitor ${cm.action} (last update ${cmAge.toFixed(1)}s ago)`);
+          return { success: false, message: 'Safety chain offline (collision_monitor not publishing). Restart nav stack.' };
+        }
+      }
       if (!navActionClient.isActionServerAvailable()) {
         state.health.nav = { status: 'error', detail: 'Nav2 not available', updated: Date.now() / 1000 };
         return { success: false, message: 'Nav2 action server not available' };
@@ -228,7 +271,7 @@ async function main() {
           const succeeded = s === 4;
           state.navState = { active: false, distance_remaining: 0,
             status: succeeded ? 'succeeded' : s === 5 ? 'canceled' : 'aborted' };
-          navGoalHandle = null; state.navPathPoints = []; state.navPathChanged = true;
+          navGoalHandle = null; state.navPathPoints = [];
           updateState();
 
           // Auto-trigger rail_approach if this nav goal targeted a rail_start tag
@@ -261,13 +304,28 @@ async function main() {
     cancelNavGoal() {
       if (navGoalHandle) { navGoalHandle.cancelGoal().catch(() => {}); state.navState.status = 'canceling'; }
       state.missionCancel = true;
+      // Inject (0,0) into the chain. velocity_smoother decelerates linearly via
+      // max_decel: -1.0 m/s² → 0.5→0 m/s in ~500ms, graceful (no jerk).
+      // Don't wait for Nav2 to process the cancellation.
+      const zero = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any;
+      zero.linear.x = 0; zero.linear.y = 0; zero.linear.z = 0;
+      zero.angular.x = 0; zero.angular.y = 0; zero.angular.z = 0;
+      cmdVelPub.publish(zero);
+      eventLog.emit('warn', 'NAV', 'Navigation canceled — robot decelerating');
     },
 
     sendEStop(active: boolean) {
       state.eStopActive = active;
       const msg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
       msg.data = active; eStopPub.publish(msg);
-      if (active) { ros.sendCmdVel(0, 0); ros.cancelNavGoal(); }
+      if (active) {
+        // Primary E-Stop path is /agv/e_stop → odrive::on_e_stop, which sets
+        // e_stop_active_=true sticky and sends CAN-level zero immediately.
+        // odrive ignores ALL subsequent cmd_vel until cleared, so publishing
+        // additional cmd_vel(0,0) here is redundant — and would create a race
+        // with the chain. We rely on the dedicated topic + cancelNavGoal.
+        ros.cancelNavGoal();
+      }
       eventLog.emit(active ? 'crit' : 'info', 'SAFETY', active ? 'E-STOP ACTIVATED' : 'E-stop cleared');
       updateState();
     },
@@ -283,6 +341,14 @@ async function main() {
         const r = await client.sendRequestAsync({}, { timeout: 5000 });
         return { success: r.success, message: r.message || '' };
       } catch (e: any) { return { success: false, message: e?.message || 'failed' }; }
+    },
+
+    publishMapLoaded(name: string) {
+      if (!name) return;
+      const msg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+      msg.data = name;
+      mapsLoadedPub.publish(msg);
+      eventLog.emit('info', 'NAV', `Published maps/loaded: ${name} (auto-localize starting)`);
     },
 
     startRecClient, stopRecClient, loadMapClient,
@@ -426,8 +492,66 @@ async function main() {
       state.navPathPoints = (msg.poses || []).map((ps: any) => ({
         x: Math.round(ps.pose.position.x * 1000) / 1000, y: Math.round(ps.pose.position.y * 1000) / 1000,
       }));
-      state.navPathChanged = true;
     });
+
+    // Auto-localization orchestrator state (from agv_localization_init).
+    // Published as JSON string on /agv/localization/state with
+    // { action, detail, map }. Purely informational for the dashboard LOC
+    // pill — nav goal gating is NOT tied to this. The orchestrator is
+    // authoritative: cuVSLAM → AprilTag → last-known-pose cascade runs
+    // automatically at boot and on every map load.
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/localization/state`, (msg: any) => {
+        try {
+          const p = JSON.parse(msg.data);
+          const prevAction = state.localization.action;
+          state.localization = {
+            action: p.action || 'UNKNOWN',
+            detail: p.detail || '',
+            map: p.map || '',
+            updated: Date.now() / 1000,
+          };
+          if (prevAction !== state.localization.action) {
+            const loc = state.localization.action;
+            const sev = loc === 'FAILED' ? 'crit'
+                      : loc === 'DEGRADED' ? 'warn' : 'info';
+            eventLog.emit(sev as any, 'NAV',
+              `Localization ${loc}: ${state.localization.detail}`);
+          }
+        } catch (e: any) {
+          console.warn('[localization] parse error:', e?.message);
+        }
+      });
+
+    // collision_monitor liveness watchdog. The collision_monitor publishes a
+    // CollisionMonitorState message every cycle (driven by cmd_vel_smoothed).
+    // We track the action and the wall-clock arrival time. A separate periodic
+    // check (below, in the watchdog interval) marks the chain STALE if no
+    // message has arrived in 2s. canSendGoal in sendNavGoal blocks new goals
+    // when STALE/OFFLINE.
+    node.createSubscription('nav2_msgs/msg/CollisionMonitorState',
+      `/${NAMESPACE}/collision_monitor_state`, (msg: any) => {
+        const actionMap: Record<number, string> = {
+          0: 'OK',         // DO_NOTHING
+          1: 'STOP',
+          2: 'SLOWDOWN',
+          3: 'APPROACH',
+        };
+        const prevAction = state.collisionMonitor.action;
+        state.collisionMonitor = {
+          action: actionMap[msg.action_type] ?? 'unknown',
+          polygon: msg.polygon_name || '',
+          updated: Date.now() / 1000,
+        };
+        // Log only on STOP/SLOWDOWN entry edges to avoid spam
+        if (state.collisionMonitor.action === 'STOP' && prevAction !== 'STOP') {
+          eventLog.emit('warn', 'SAFETY',
+            `Collision STOP triggered (polygon: ${state.collisionMonitor.polygon})`);
+        } else if (state.collisionMonitor.action === 'SLOWDOWN' && prevAction !== 'SLOWDOWN') {
+          eventLog.emit('info', 'SAFETY',
+            `Collision SLOWDOWN (polygon: ${state.collisionMonitor.polygon})`);
+        }
+      });
 
     node.createSubscription('sensor_msgs/msg/LaserScan', `/${NAMESPACE}/scan`, (msg: any) => {
       // Extract scan points for real-time visualization (red dots on map)
@@ -636,11 +760,33 @@ async function main() {
     odom_hz: calcHz(state.odomTimes), slam_confidence: state.slamTracking,
     robot_state: state.robotState, battery_pct: state.batteryPct }); } catch {} }, 1000);
   setInterval(() => { try { telemetryStore.prune(); } catch {} }, 86400_000);
-  setInterval(() => { // Watchdog
+  setInterval(() => { // Watchdog: stale-command stop, defense in depth
     if (state.activeClients > 0 && !state.eStopActive && lastCmdTime > 0 && Date.now() / 1000 - lastCmdTime > 0.5) {
-      const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any; cmdVelPub.publish(msg); cmdVelSafePub.publish(msg);
+      const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any;
+      cmdVelPub.publish(msg);
     }
   }, 100);
+
+  // collision_monitor liveness watchdog. The state_topic is published only when
+  // the chain processes a cmd_vel_smoothed; if the operator is idle (mode=teleop
+  // joystick at zero), nav2 emits no cmd_vel and collision_monitor stays silent.
+  // We mark STALE only after 2s without ANY message AND only when the chain is
+  // expected to be live (mode=nav OR backend is sending cmd_vel actively).
+  setInterval(() => {
+    const cm = state.collisionMonitor;
+    const age = Date.now() / 1000 - cm.updated;
+    const wasOnline = cm.action !== 'STALE' && cm.action !== 'OFFLINE';
+    if (cm.updated === 0) {
+      // Never received — keep as OFFLINE
+      return;
+    }
+    if (age > 2.0 && wasOnline) {
+      state.collisionMonitor = { ...cm, action: 'STALE' };
+      eventLog.emit('warn', 'SAFETY',
+        `Collision monitor STALE — no state_topic for ${age.toFixed(1)}s`);
+      updateState();
+    }
+  }, 500);
 
   // --- Build AppDeps ---
   const deps: AppDeps = {
@@ -684,9 +830,30 @@ async function main() {
   // participant discovery for publishers that already exist.
   rclnodejs.spin(node);
 
+  // Boot-time maps/loaded: if the launch file provided AGV_BOOT_MAP_NAME (the
+  // basename of the map arg), publish it to /agv/maps/loaded after a short
+  // delay so the auto_init_orchestrator (which starts at t=7s per the launch)
+  // is definitely up and subscribed before we publish. Without this, the
+  // boot-time load via Nav2 map_server bypasses the orchestrator entirely.
+  const bootMapName = process.env.AGV_BOOT_MAP_NAME || '';
+  if (bootMapName) {
+    setTimeout(() => {
+      try {
+        ros.publishMapLoaded(bootMapName);
+        console.log(`[boot] Published maps/loaded for '${bootMapName}'`);
+      } catch (e: any) {
+        console.warn(`[boot] publishMapLoaded failed: ${e?.message}`);
+      }
+    }, 10000);
+  }
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`AGV Backend (TS) on http://0.0.0.0:${PORT}`);
     eventLog.emit('info', 'SYSTEM', 'Backend started');
+    if (bootMapName) {
+      eventLog.emit('info', 'MAPPING',
+        `Boot map detected: '${bootMapName}' — will auto-localize in 10s`);
+    }
   });
 }
 
