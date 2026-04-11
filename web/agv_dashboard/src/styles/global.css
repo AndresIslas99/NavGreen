@@ -1194,6 +1194,43 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   justify-content: center;
   z-index: 9999;
 }
+
+/* Side panel — used when the panel must NOT block the underlying map. */
+/* Positioned in the bottom-right corner. Semi-transparent background only on */
+/* the panel content itself, not the whole screen. The map remains fully */
+/* interactive behind/around the panel. */
+.side-panel {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  max-width: 420px;
+  max-height: calc(100vh - 120px);
+  background: #1a1a2e;
+  border: 2px solid #4fc3f7;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  pointer-events: auto;
+  overflow-y: auto;
+}
+.side-panel h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: #4fc3f7;
+  font-size: 1.1rem;
+}
+.side-panel p {
+  font-size: 0.85rem;
+  color: #bbb;
+  margin: 4px 0;
+}
+.side-panel ol {
+  margin-top: 8px;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  color: #bbb;
+}
 .modal-content {
   background: #1a1a2e;
   border: 2px solid #4fc3f7;

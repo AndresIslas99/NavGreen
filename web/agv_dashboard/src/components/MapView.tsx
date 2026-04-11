@@ -25,17 +25,28 @@ interface Props {
   mappingCoverage?: number
 }
 
-// Robot icon as rotated div
-// In Leaflet CRS.Simple: X→right (lng), Y→up (lat)
-// In ROS: theta=0 means facing X+ (right). CSS rotate(0)=up.
-// So we need -90° offset: theta=0 → arrow points right
+// Robot icon: circular body + clear arrow head pointing in the heading direction.
+// SVG default orientation: arrow tip at top (north). ROS theta=0 means facing
+// X+ (east in our CRS.Simple → right). The conversion from ROS yaw to CSS
+// rotation is the same as before: deg = -theta*180/π + 90.
 function robotIcon(theta: number): L.DivIcon {
   const deg = -(theta * 180 / Math.PI) + 90
+  const svg = `
+    <svg viewBox="0 0 32 32" width="32" height="32"
+         style="transform: rotate(${deg}deg); transform-origin: 16px 16px;">
+      <!-- Body circle -->
+      <circle cx="16" cy="16" r="9" fill="#1b5e20" stroke="#4caf50" stroke-width="2"/>
+      <!-- Heading arrow: tip up, base inside circle -->
+      <path d="M16,2 L24,15 L16,11 L8,15 Z"
+            fill="#69f0ae" stroke="#fff" stroke-width="1" stroke-linejoin="round"/>
+      <!-- Center dot for reference -->
+      <circle cx="16" cy="16" r="1.5" fill="#fff"/>
+    </svg>`
   return L.divIcon({
     className: 'robot-marker',
-    html: `<div class="robot-arrow" style="transform: rotate(${deg}deg)"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    html: svg,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
   })
 }
 

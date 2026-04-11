@@ -63,9 +63,15 @@ export function register(app: Express, deps: AppDeps): void {
     try {
       const r = await ros.loadMapClient.sendRequestAsync({ map_url: yamlPath }, { timeout: 10000 });
       const success = r.result === 0; // nav2_msgs/srv/LoadMap: RESULT_SUCCESS = 0
-      if (success) eventLog.emit('info', 'MAPPING', `Map "${name}" loaded`);
-      else eventLog.emit('warn', 'MAPPING', `Map load failed: ${name}`);
-      res.json({ success, message: success ? 'Loaded' : 'Load failed' });
+      if (success) {
+        eventLog.emit('info', 'MAPPING', `Map "${name}" loaded — auto-localizing...`);
+        // Fire /agv/maps/loaded so auto_init_orchestrator starts its
+        // cuVSLAM → AprilTag → last-known-pose cascade automatically.
+        ros.publishMapLoaded(name);
+      } else {
+        eventLog.emit('warn', 'MAPPING', `Map load failed: ${name}`);
+      }
+      res.json({ success, message: success ? 'Loaded — auto-localizing' : 'Load failed' });
     } catch (e: any) {
       res.status(500).json({ success: false, message: e?.message || 'Load service call failed' });
     }
