@@ -11,10 +11,12 @@
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <agv_interfaces/srv/save_map.hpp>
 #include <agv_interfaces/srv/load_map.hpp>
 #include <agv_interfaces/srv/update_zone.hpp>
 #include <nav2_msgs/srv/load_map.hpp>
+#include <isaac_ros_visual_slam_interfaces/srv/file_path.hpp>
 
 namespace fs = std::filesystem;
 
@@ -24,9 +26,14 @@ public:
     this->declare_parameter("map_dir", "");
     this->declare_parameter("default_map", "");
     this->declare_parameter("map_topic", "/agv/map");
+    // When true, save/load also calls /visual_slam/save_map and /visual_slam/load_map
+    // so cuVSLAM can relocalize against a prior keyframe database at boot time.
+    // Disable only for pure HIL/sim where cuVSLAM is not running.
+    this->declare_parameter("cuvslam_enabled", true);
 
     map_dir_ = this->get_parameter("map_dir").as_string();
     map_topic_ = this->get_parameter("map_topic").as_string();
+    cuvslam_enabled_ = this->get_parameter("cuvslam_enabled").as_bool();
 
     if (map_dir_.empty()) {
       RCLCPP_FATAL(get_logger(), "map_dir parameter is required");
@@ -53,6 +60,19 @@ public:
     // Nav2 LoadMap client
     nav2_load_client_ = this->create_client<nav2_msgs::srv::LoadMap>(
       "map_server/load_map");
+
+    // cuVSLAM save/load map clients (live in the /visual_slam namespace, not ours)
+    if (cuvslam_enabled_) {
+      cuvslam_save_client_ = this->create_client<isaac_ros_visual_slam_interfaces::srv::FilePath>(
+        "/visual_slam/save_map");
+      cuvslam_load_client_ = this->create_client<isaac_ros_visual_slam_interfaces::srv::FilePath>(
+        "/visual_slam/load_map");
+    }
+
+    // Event publisher: emitted after any successful load_map so the auto_init
+    // orchestrator can begin its relocalization sequence.
+    map_loaded_pub_ = this->create_publisher<std_msgs::msg::String>(
+      "maps/loaded", rclcpp::QoS(1).transient_local());
 
     // Load default map on startup
     auto default_map = this->get_parameter("default_map").as_string();
@@ -106,6 +126,9 @@ private:
       res->success = true;
       res->message = "Map saved: " + name;
       RCLCPP_INFO(get_logger(), "Map saved: %s", name.c_str());
+      // Also persist the cuVSLAM keyframe database so future sessions can
+      // relocalize automatically. Non-blocking — the 2D map is already saved.
+      save_cuvslam_map(name);
     } else {
       res->success = false;
       res->message = "map_saver_cli failed (exit " + std::to_string(ret) + "): " + output;
@@ -129,6 +152,9 @@ private:
     if (load_map_internal(yaml_path)) {
       res->success = true;
       res->message = "Map loaded: " + name;
+      // Fire the maps/loaded event so auto_init_orchestrator starts its
+      // relocalization sequence (load cuVSLAM DB + wait for tag + localize_in_map).
+      publish_map_loaded_event(name);
     } else {
       res->success = false;
       res->message = "Failed to load map via nav2";
@@ -151,6 +177,7 @@ private:
       auto result = future.get();
       if (result->result == 0) {
         RCLCPP_INFO(get_logger(), "Map loaded: %s", yaml_path.c_str());
+        publish_map_loaded_event(yaml_path);
         return true;
       }
     }
@@ -231,12 +258,63 @@ private:
                 req->zone_id.c_str());
   }
 
+  // Fire-and-forget helper to ask cuVSLAM to save its keyframe database to a
+  // per-map subdirectory. Logs failure but does NOT block the main save path —
+  // the 2D occupancy grid is saved either way.
+  void save_cuvslam_map(const std::string& name) {
+    if (!cuvslam_enabled_ || !cuvslam_save_client_) return;
+    if (!cuvslam_save_client_->service_is_ready()) {
+      RCLCPP_WARN(get_logger(),
+        "cuVSLAM /visual_slam/save_map not available — skipping keyframe DB save for '%s'",
+        name.c_str());
+      return;
+    }
+    const auto cuvslam_dir = map_dir_ + "/" + name + "_cuvslam";
+    try {
+      fs::create_directories(cuvslam_dir);
+    } catch (const std::exception& e) {
+      RCLCPP_ERROR(get_logger(), "Failed to create cuVSLAM map dir %s: %s",
+                   cuvslam_dir.c_str(), e.what());
+      return;
+    }
+    auto req = std::make_shared<isaac_ros_visual_slam_interfaces::srv::FilePath::Request>();
+    req->file_path = cuvslam_dir;
+    // Async with callback — do not block the save service
+    cuvslam_save_client_->async_send_request(req,
+      [this, name, cuvslam_dir](rclcpp::Client<isaac_ros_visual_slam_interfaces::srv::FilePath>::SharedFuture f) {
+        try {
+          auto r = f.get();
+          if (r->success) {
+            RCLCPP_INFO(get_logger(), "cuVSLAM keyframe DB saved: %s", cuvslam_dir.c_str());
+          } else {
+            RCLCPP_WARN(get_logger(), "cuVSLAM save_map reported failure for '%s'", name.c_str());
+          }
+        } catch (const std::exception& e) {
+          RCLCPP_WARN(get_logger(), "cuVSLAM save_map exception: %s", e.what());
+        }
+      });
+  }
+
+  // Emit a maps/loaded event so downstream nodes (auto_init_orchestrator) can
+  // begin their localization sequence. The payload is the map name (no extension).
+  void publish_map_loaded_event(const std::string& map_name_or_path) {
+    std_msgs::msg::String msg;
+    // Normalize to just the stem if a path was passed
+    msg.data = fs::path(map_name_or_path).stem().string();
+    map_loaded_pub_->publish(msg);
+    RCLCPP_INFO(get_logger(), "Published maps/loaded event: '%s'", msg.data.c_str());
+  }
+
   std::string map_dir_;
   std::string map_topic_;
+  bool cuvslam_enabled_{false};
   rclcpp::Service<agv_interfaces::srv::SaveMap>::SharedPtr save_srv_;
   rclcpp::Service<agv_interfaces::srv::LoadMap>::SharedPtr load_srv_;
   rclcpp::Service<agv_interfaces::srv::UpdateZone>::SharedPtr zone_srv_;
   rclcpp::Client<nav2_msgs::srv::LoadMap>::SharedPtr nav2_load_client_;
+  rclcpp::Client<isaac_ros_visual_slam_interfaces::srv::FilePath>::SharedPtr cuvslam_save_client_;
+  rclcpp::Client<isaac_ros_visual_slam_interfaces::srv::FilePath>::SharedPtr cuvslam_load_client_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr map_loaded_pub_;
 };
 
 int main(int argc, char** argv) {

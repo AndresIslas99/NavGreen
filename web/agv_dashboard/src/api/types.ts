@@ -96,6 +96,20 @@ export interface RobotStatus {
   health: HealthMap
   mapping_coverage: number
   mission_progress: MissionProgress | null
+  // Live state of the safety chain. action: OK | SLOWDOWN | STOP | STALE | OFFLINE
+  // age_s: seconds since last collision_monitor_state message (null if never).
+  collision_monitor: {
+    action: string
+    polygon: string
+    age_s: number | null
+  }
+  // Auto-localization orchestrator state (from agv_localization_init).
+  // action: INITIALIZING | LOCALIZED | DEGRADED | FAILED | UNKNOWN
+  localization: {
+    action: string
+    detail: string
+    map: string
+  }
 }
 
 export interface MapInfo {

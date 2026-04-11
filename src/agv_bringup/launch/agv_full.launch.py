@@ -96,7 +96,13 @@ def generate_launch_description():
             name='pointcloud_to_laserscan',
             namespace=ns,
             parameters=[{
-                'min_height': 0.03,
+                # min_height was 0.03 — that filtered out cables, tools, feet,
+                # and any small floor obstacle. Lowered to 0.01 (1cm) to feed
+                # those into /agv/scan so the collision_monitor can react.
+                # The voxel_layer of the costmap has its own min_obstacle_height
+                # (0.10) which keeps the COSTMAP tolerant of floor noise — this
+                # change only affects the LAST-LINE safety reaction.
+                'min_height': 0.01,
                 'max_height': 2.0,
                 'angle_min': -1.5708,
                 'angle_max': 1.5708,
@@ -351,6 +357,26 @@ def generate_launch_description():
                     output='log',
                     condition=IfCondition(enable_markers),
                 ),
+                # Auto-localization orchestrator: listens for /agv/maps/loaded,
+                # loads the matching cuVSLAM keyframe DB, waits for an AprilTag
+                # (up to 10s), then calls /visual_slam/localize_in_map. Publishes
+                # /agv/localization/state which the dashboard displays as an
+                # informational LOC pill. Only launched when markers are
+                # enabled (AprilTag is the primary pose hint).
+                Node(
+                    package='agv_localization_init',
+                    executable='auto_init_orchestrator_node',
+                    name='auto_init_orchestrator',
+                    namespace=ns,
+                    parameters=[
+                        os.path.join(
+                            get_package_share_directory('agv_localization_init'),
+                            'config', 'auto_init_params.yaml'),
+                        {'map_dir': '/home/orza/agv_data/maps'},
+                    ],
+                    output='screen',
+                    condition=IfCondition(enable_markers),
+                ),
             ],
         ),
 
@@ -385,6 +411,18 @@ def generate_launch_description():
                         'AGV_PORT': '8090',
                         'AGV_NAMESPACE': 'agv',
                         'AGV_DATA_DIR': '/home/orza/agv_data',
+                        # Pass the map basename (without extension) so the backend
+                        # knows which map was loaded by Nav2's map_server at boot.
+                        # The backend publishes this to /agv/maps/loaded ~10s after
+                        # its own start to trigger the auto_init_orchestrator.
+                        # If map arg is empty, this resolves to an empty string and
+                        # the backend skips the boot-time publish.
+                        'AGV_BOOT_MAP_NAME': PythonExpression([
+                            "__import__('os').path.splitext("
+                            "__import__('os').path.basename('",
+                            map_yaml,
+                            "'))[0]"
+                        ]),
                     },
                     output='log',
                 ),

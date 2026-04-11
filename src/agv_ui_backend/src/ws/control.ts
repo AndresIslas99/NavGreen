@@ -41,6 +41,18 @@ function getStatus(deps: AppDeps) {
     battery_pct: s.batteryPct,
     mission_progress: s.missionProgress,
     mapping_coverage: 0,
+    collision_monitor: {
+      action: s.collisionMonitor.action,
+      polygon: s.collisionMonitor.polygon,
+      age_s: s.collisionMonitor.updated > 0
+        ? Math.round((Date.now() / 1000 - s.collisionMonitor.updated) * 10) / 10
+        : null,
+    },
+    localization: {
+      action: s.localization.action,
+      detail: s.localization.detail,
+      map: s.localization.map,
+    },
   };
 }
 
@@ -108,6 +120,14 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
         }));
       } catch { /* ignore */ }
     }
+    // Send current nav path on connect so reconnecting clients see the active route
+    if (deps.state.navPathPoints.length > 0) {
+      try {
+        const pathStr = JSON.stringify(deps.state.navPathPoints);
+        lastPathSnapshot = pathStr;
+        ws.send(JSON.stringify({ type: 'path', points: deps.state.navPathPoints }));
+      } catch { /* ignore */ }
+    }
 
     // 5Hz status broadcast
     const statusInterval = setInterval(() => {
@@ -119,12 +139,13 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
           ws.send(JSON.stringify({ type: 'scan', points: deps.state.scanPoints }));
         }
 
-        if (deps.state.navPathChanged) {
-          const pathStr = JSON.stringify(deps.state.navPathPoints);
-          if (pathStr !== lastPathSnapshot) {
-            lastPathSnapshot = pathStr;
-            ws.send(JSON.stringify({ type: 'path', points: deps.state.navPathPoints }));
-          }
+        // Path is broadcast whenever the per-client snapshot differs from the
+        // current state — no global dirty flag (the previous flag pattern was
+        // never reset and corrupted multi-client/refresh scenarios).
+        const pathStr = JSON.stringify(deps.state.navPathPoints);
+        if (pathStr !== lastPathSnapshot) {
+          lastPathSnapshot = pathStr;
+          ws.send(JSON.stringify({ type: 'path', points: deps.state.navPathPoints }));
         }
 
         // Per-client map version tracking (fixes multi-client race condition)

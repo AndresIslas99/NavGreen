@@ -55,6 +55,75 @@ function slamColor(tracking: string): string {
   return 'warn'
 }
 
+// collision_monitor pill — gray when idle/normal, color when something is wrong
+// IDLE: no nav in progress, chain is alive but hasn't published state yet
+// OK: chain published DO_NOTHING during active nav
+// SLOWDOWN: amber (obstacle in slowdown_zone)
+// STOP/STALE/OFFLINE: red (obstacle in stop_zone OR chain actually dead)
+type Cm = RobotStatus['collision_monitor']
+function safetyLabel(cm: Cm | undefined): string {
+  if (!cm) return '…'
+  if (cm.action === 'IDLE') return 'IDLE'
+  if (cm.action === 'OFFLINE') return '⛔ OFFLINE'
+  if (cm.action === 'STALE') return '⚠ STALE'
+  if (cm.action === 'STOP') return '⛔ STOP'
+  if (cm.action === 'SLOWDOWN') return '⚠ SLOW'
+  if (cm.action === 'OK') return 'OK'
+  return cm.action
+}
+function safetyBadgeStyle(cm: Cm | undefined): React.CSSProperties {
+  if (!cm) return { background: 'var(--normal-bg)', color: 'var(--dim)' }
+  switch (cm.action) {
+    case 'OFFLINE':
+    case 'STALE':
+    case 'STOP':
+      return { background: 'var(--red)', color: '#fff', fontWeight: 700 }
+    case 'SLOWDOWN':
+      return { background: 'var(--orange)', color: '#000', fontWeight: 700 }
+    case 'IDLE':
+    case 'OK':
+      return { background: 'var(--normal-bg)', color: 'var(--dim)' }
+    default:
+      return { background: 'var(--normal-bg)', color: 'var(--dim)' }
+  }
+}
+function collisionTooltip(cm: Cm | undefined): string {
+  if (!cm) return 'Collision monitor: status unknown'
+  const ageStr = cm.age_s != null ? `${cm.age_s}s ago` : 'never'
+  const polyStr = cm.polygon ? `polygon: ${cm.polygon}` : ''
+  return `Safety chain: ${cm.action}${polyStr ? ' · ' + polyStr : ''} · last update: ${ageStr}`
+}
+
+// Auto-localization orchestrator pill
+type Loc = RobotStatus['localization']
+function localizationLabel(loc: Loc | undefined): string {
+  if (!loc || loc.action === 'UNKNOWN') return '…'
+  if (loc.action === 'INITIALIZING') return '⟳ INIT'
+  if (loc.action === 'LOCALIZED') return '✓ OK'
+  if (loc.action === 'DEGRADED') return '⚠ DEG'
+  if (loc.action === 'FAILED') return '⛔ FAIL'
+  return loc.action
+}
+function localizationBadgeStyle(loc: Loc | undefined): React.CSSProperties {
+  if (!loc) return { background: 'var(--normal-bg)', color: 'var(--dim)' }
+  switch (loc.action) {
+    case 'FAILED':
+      return { background: 'var(--red)', color: '#fff', fontWeight: 700 }
+    case 'DEGRADED':
+      return { background: 'var(--orange)', color: '#000', fontWeight: 700 }
+    case 'INITIALIZING':
+      return { background: 'transparent', color: 'var(--blue)', border: '1px solid var(--blue)' }
+    case 'LOCALIZED':
+      return { background: 'var(--normal-bg)', color: 'var(--dim)' }
+    default:
+      return { background: 'var(--normal-bg)', color: 'var(--dim)' }
+  }
+}
+function localizationTooltip(loc: Loc | undefined): string {
+  if (!loc) return 'Localization: unknown'
+  return `Localization: ${loc.action}${loc.map ? ' · map: ' + loc.map : ''}${loc.detail ? ' · ' + loc.detail : ''}`
+}
+
 export function TopBar({ status, state, connected, onEStop, onNavCancel, username, userRole, onLogout }: Props) {
   const s = status
   const navActive = s?.nav_state?.active || false
@@ -105,6 +174,20 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
             <span className="metric-sep">|</span>
             <span className="metric">
               <span className="metric-value">({s.pose.x.toFixed(1)}, {s.pose.y.toFixed(1)})</span>
+            </span>
+            <span className="metric-sep">|</span>
+            <span className="metric" title={collisionTooltip(s.collision_monitor)}>
+              <span className="metric-label">SAFETY</span>
+              <span className="metric-value safety-badge" style={safetyBadgeStyle(s.collision_monitor)}>
+                {safetyLabel(s.collision_monitor)}
+              </span>
+            </span>
+            <span className="metric-sep">|</span>
+            <span className="metric" title={localizationTooltip(s.localization)}>
+              <span className="metric-label">LOC</span>
+              <span className="metric-value safety-badge" style={localizationBadgeStyle(s.localization)}>
+                {localizationLabel(s.localization)}
+              </span>
             </span>
           </div>
         )}

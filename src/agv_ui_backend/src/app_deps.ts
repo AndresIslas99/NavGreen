@@ -27,7 +27,6 @@ export interface AppState {
   slamTracking: string;
   scanPoints: Array<{ x: number; y: number }>;
   navPathPoints: Array<{ x: number; y: number }>;
-  navPathChanged: boolean;
   odomTimes: number[];
   activeClients: number;
   recordingActive: boolean;
@@ -48,6 +47,26 @@ export interface AppState {
   pendingRailApproach: { hardware_id: number; defined_id: number } | null;
   // Latest rail_approach state for waypoint action gating
   railApproachState: string;
+  // Liveness + state of the collision_monitor safety chain. updated is the
+  // wall-clock seconds when the last state_topic message was received; if it
+  // ages > 2s the chain is considered STALE and nav goals are rejected.
+  // action: OK | SLOWDOWN | STOP | STALE | OFFLINE
+  collisionMonitor: {
+    action: string;
+    polygon: string;
+    updated: number;
+  };
+  // Auto-localization orchestrator state from agv_localization_init.
+  // Informational only — nav goals are NOT gated on this. The orchestrator
+  // is the authoritative source of truth for localization; this field
+  // mirrors its reported state for dashboard display.
+  // action: INITIALIZING | LOCALIZED | DEGRADED | FAILED | UNKNOWN
+  localization: {
+    action: string;
+    detail: string;
+    map: string;
+    updated: number;
+  };
 }
 
 export interface RosBridge {
@@ -57,6 +76,10 @@ export interface RosBridge {
   sendEStop(active: boolean): void;
   sendMotorEnable(active: boolean): void;
   callTriggerService(client: any, name: string): Promise<{ success: boolean; message: string }>;
+  // Fires the /agv/maps/loaded event so auto_init_orchestrator starts its
+  // relocalization sequence. Must be called after any successful Nav2
+  // load_map. The name is the map stem (without path or .yaml extension).
+  publishMapLoaded(name: string): void;
   startRecClient: any;
   stopRecClient: any;
   loadMapClient: any;
