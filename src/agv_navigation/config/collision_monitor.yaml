@@ -3,9 +3,16 @@
 # Operates independently of costmaps. Directly modifies cmd_vel based on
 # real-time sensor readings and configurable safety zones.
 #
-# Two zones:
-#   stop_zone: Robot footprint + 5cm margin → full stop
-#   slowdown_zone: 25cm clearance beyond footprint → 30% speed reduction
+# Defense-in-depth design (post-crash audit):
+#   L1 — costmap inflation (planner avoids obstacles known on the map)
+#   L2 — collision_monitor with TWO sources (LaserScan 2D + 3D PointCloud)
+#   L3 — stop_zone polygon sized for actual physical stopping distance
+#   L4 — vx_max capped at 0.25 m/s to keep stopping within zone
+#   L5 — backend watchdog rejects nav goals if state_topic is stale
+#   HW gap — ZED 2i has a 30cm minimum depth → cannot perceive objects
+#            closer than ~50cm in front of the physical robot. This is a
+#            hardware limit; software cannot fix it. See agv_navigation/CLAUDE.md
+#            for the recommendation to add a 2D LIDAR / bumper / ToF array.
 #
 # Robot footprint: front=0.50m, rear=-0.30m, left=0.37m, right=-0.37m
 
@@ -16,36 +23,65 @@
     cmd_vel_in_topic: cmd_vel_smoothed
     cmd_vel_out_topic: cmd_vel_safe
     state_topic: collision_monitor_state
-    transform_tolerance: 0.3
-    source_timeout: 2.0
-    stop_pub_timeout: 2.0
+    transform_tolerance: 0.5             # was 0.3 — tolerate Jetson TF jitter
+    # 0.5s × 0.25 m/s (vx_max) = 12.5cm of unprotected travel if a source stalls.
+    # Matches the safety margin built into the stop_zone polygon.
+    source_timeout: 0.5                  # was 2.0 (catastrophic — 80cm @ 0.4 m/s)
+    stop_pub_timeout: 0.5                # was 2.0
 
     polygons: ["stop_zone", "slowdown_zone"]
 
-    # Stop zone: robot footprint + 5cm margin on all sides
-    # Footprint: front=0.50, rear=-0.30, left=0.37, right=-0.37
-    # Zone:      front=0.55, rear=-0.35, left=0.40, right=-0.40  (each +5cm)
+    # Stop zone: footprint front + 20cm safety margin (was 5cm — geometrically
+    # insufficient for the actual stopping distance).
+    #
+    # Math derived from physics, not tuning:
+    #   At vx_max = 0.4 m/s, max_decel = 1.0 m/s²:
+    #     stop distance     = v² / (2·a) = 0.16 / 2.0 = 0.08m  (8cm)
+    #     reaction latency  = ~100ms (collision_monitor cycle + comm + smoother)
+    #     reaction distance = 0.4 × 0.1 = 0.04m  (4cm)
+    #     safety margin     = 0.08m  (8cm)
+    #     TOTAL needed      = 20cm forward of robot front
+    #   → x = 0.50 (footprint front) + 0.20 = 0.70m
+    #
+    # max_points: 1 — a SINGLE point in the polygon triggers stop. The previous
+    # value (3) could miss small/thin objects that only generate 1-2 hits in the
+    # scan. We accept some false positives from sensor noise in exchange for
+    # never missing a real obstacle.
     stop_zone:
       type: "polygon"
-      points: "[[0.55, 0.40], [0.55, -0.40], [-0.35, -0.40], [-0.35, 0.40]]"
+      points: [0.70, 0.42, 0.70, -0.42, -0.35, -0.42, -0.35, 0.42]
       action_type: "stop"
-      max_points: 3
+      max_points: 1
       visualize: true
       polygon_pub_topic: "stop_zone_polygon"
 
-    # Slowdown zone: robot footprint + 25cm margin (30cm front, 20cm rear)
-    # Zone: front=0.80, rear=-0.50, left=0.50, right=-0.50
-    # Reduces speed to 30% when obstacle detected in this zone
+    # Slowdown zone: footprint + 50cm — early warning so the operator can
+    # intervene before the stop zone fires. Robot drops to 30% speed.
     slowdown_zone:
       type: "polygon"
-      points: "[[0.80, 0.50], [0.80, -0.50], [-0.50, -0.50], [-0.50, 0.50]]"
+      points: [1.00, 0.55, 1.00, -0.55, -0.50, -0.55, -0.50, 0.55]
       action_type: "slowdown"
       slowdown_ratio: 0.3
-      max_points: 3
+      max_points: 2
       visualize: true
       polygon_pub_topic: "slowdown_zone_polygon"
 
-    observation_sources: ["scan_source"]
+    # Two independent observation sources — defense in depth at the source layer.
+    #
+    # scan_source (2D, LaserScan): fast, well-tested, single horizontal slice.
+    #   Limitation: misses obstacles above max_height or below min_height of the
+    #   pointcloud_to_laserscan slice (currently 0.01–2.0m).
+    #
+    # pointcloud_source (3D, raw ZED depth): catches everything in the FULL 3D
+    #   field of view, including objects above the laser slice (low ceilings,
+    #   hanging branches) and below it (small floor objects, cables). Slightly
+    #   higher CPU cost but bounded by the polygon's bounding box.
+    observation_sources: ["scan_source", "pointcloud_source"]
     scan_source:
       type: "scan"
       topic: /agv/scan
+    pointcloud_source:
+      type: "pointcloud"
+      topic: /agv/zed/point_cloud/cloud_registered
+      min_height: -0.20    # tolerate camera mount calibration error below ground
+      max_height: 2.00     # ceiling height — catch overhead obstacles too
