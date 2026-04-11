@@ -33,6 +33,12 @@ def _build_nav2(context, *args, **kwargs):
     nav_dir = get_package_share_directory('agv_navigation')
     vel_smoother_params = os.path.join(nav_dir, 'config', 'velocity_smoother.yaml')
     collision_monitor_params = os.path.join(nav_dir, 'config', 'collision_monitor.yaml')
+    # Custom forward-only BT — see behavior_trees/navigate_to_pose_forward_only.xml
+    # for the rationale (no rear sensor → no BackUp recovery action). Injected
+    # here as an absolute path because YAML param files don't expand
+    # $(find-pkg-share ...) substitutions.
+    forward_only_bt_xml = os.path.join(
+        nav_dir, 'behavior_trees', 'navigate_to_pose_forward_only.xml')
 
     # Build nav2 params list: base + optional override
     nav2_params_list = [nav2_params_path]
@@ -46,9 +52,12 @@ def _build_nav2(context, *args, **kwargs):
         'behavior_server',
         'bt_navigator',
         'velocity_smoother',
+        'collision_monitor',
     ]
-    # collision_monitor excluded from lifecycle — it runs independently
-    # and must not block the entire Nav2 stack on config errors
+    # collision_monitor IS a lifecycle node (nav2_util::LifecycleNode). It must
+    # be activated by the lifecycle_manager — otherwise on_activate() never runs,
+    # the cmd_vel_smoothed subscriber and cmd_vel_safe publisher are never
+    # created, and the entire Nav2 → odrive cmd_vel chain is broken in nav mode.
 
     return [GroupAction(
         actions=[
@@ -100,7 +109,10 @@ def _build_nav2(context, *args, **kwargs):
                 package='nav2_bt_navigator',
                 executable='bt_navigator',
                 name='bt_navigator',
-                parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
+                parameters=nav2_params_list + [
+                    {'use_sim_time': use_sim_time},
+                    {'default_nav_to_pose_bt_xml': forward_only_bt_xml},
+                ],
                 output='screen',
             ),
 
