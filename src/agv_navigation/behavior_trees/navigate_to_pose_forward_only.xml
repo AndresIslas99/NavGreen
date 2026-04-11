@@ -1,0 +1,50 @@
+<!--
+  Forward-only navigation BT for AGV greenhouse robot.
+
+  Hardware constraint: the robot has ONLY a front-facing ZED 2i camera and the
+  collision_monitor stop/slowdown polygons extend almost exclusively forward
+  (front=0.55m, rear=-0.35m). There is NO rear obstacle perception.
+
+  Rationale for the changes vs Nav2 default
+  (navigate_to_pose_w_replanning_and_recovery.xml):
+   - The default RoundRobin recovery cycles through ClearingActions → Spin →
+     Wait → BackUp. The BackUp action is REMOVED here because it commands the
+     robot to move 30 cm in reverse — directly into a blind spot with no
+     collision protection.
+   - The replacement RoundRobin keeps ClearingActions, Spin, and Wait. If the
+     robot still cannot find a forward trajectory after these recoveries, the
+     BT aborts loud (reports failure to the action client) instead of
+     silently driving backward.
+   - Aborting is the safer fail mode: the operator sees the failure on the
+     dashboard and can manually intervene with teleop, instead of the robot
+     reversing into an unseen obstacle.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
