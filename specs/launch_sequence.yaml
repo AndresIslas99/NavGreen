@@ -265,9 +265,9 @@ sequence:
 
   # ── t = 7.0 seconds ── (conditional)
 
-  - name: "apriltag_node + marker_correction + rail_approach + auto_init_orchestrator"
-    package: "multiple (agv_markers, agv_rail_approach, agv_localization_init)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:337-409"
+  - name: "apriltag_node + marker_correction + rail_approach"
+    package: "multiple (agv_markers, agv_rail_approach)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:358-410"
     start_time_s: 7.0
     condition: "IfCondition(enable_markers), default=true"
     preconditions:
@@ -275,6 +275,19 @@ sequence:
     provides:
       - "topic /agv/marker_pose"
       - "topic /agv/marker_raw_detected"
+
+  - name: "auto_init_orchestrator"
+    package: "agv_localization_init"
+    source: "src/agv_bringup/launch/agv_full.launch.py:428-444"
+    start_time_s: 7.0
+    # PR1: decoupled from enable_markers. Gated on has_map so the
+    # orchestrator still runs when AprilTags are disabled; the existing
+    # cascade falls through to Path B (last-known pose) → DEGRADED.
+    condition: "IfCondition(has_map)"
+    preconditions:
+      - "map_manager publishing /agv/maps/loaded"
+      - "cuVSLAM localize_in_map service available"
+    provides:
       - "topic /agv/localization/state"
       - "service /agv/localization/reinitialize"
 
