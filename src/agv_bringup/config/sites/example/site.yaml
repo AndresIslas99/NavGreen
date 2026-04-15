@@ -1,0 +1,18 @@
+# Example Farm greenhouse — Mexico deployment.
+#
+# This is the default site (default value of the `site:=` launch argument).
+
+site:
+  name: "Example Farm"
+  country: "MX"
+  timezone: "America/Mexico_City"
+
+  maps_dir: "/home/orza/agv_data/maps"
+  marker_registry: "/home/orza/agv_data/runtime_markers_registry.yaml"
+
+  # example uses the cuVSLAM tuning currently in
+  # agv_bringup/config/cuvslam_greenhouse.yaml. When the migration in
+  # config/README.md happens, that file moves under
+  # config/sites/example/perception/cuvslam.yaml and the path here changes.
+  perception:
+    cuvslam_params: "config/cuvslam_greenhouse.yaml"

@@ -1,0 +1,15 @@
+# Hardware-in-the-loop (HIL) overlay.
+#
+# In HIL mode, the real Jetson runs the production code paths against a
+# simulated sensor source (Gazebo / Isaac Sim publishing to /agv/* topics).
+# This file is for HIL-specific tweaks ONLY — anything that touches
+# production code logic violates Rule 8.
+
+hil:
+  use_sim_time: false   # HIL should run on wall clock, not sim clock,
+                        # to expose real timing constraints
+
+  # The HIL-specific Cyclone DDS XML is in this same config directory at the
+  # legacy top level: cyclonedds_hil.xml. It will move under hil/ on the next
+  # field-test cycle. Until then, launch files reference the legacy path.
+  cyclone_dds_xml: "config/cyclonedds_hil.xml"

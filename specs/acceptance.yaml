@@ -1,4 +1,24 @@
 spec_version: "1.1"
+status: "pending_revision_post_audit"
+pending_revision_note: |
+  This spec was NOT revised in the 2026-04-13 audit. It still describes the
+  quality gates from before the safety chain, Area Memory, and localization
+  orchestrator integrations. It references a nav2 stack config (planner +
+  controller) that no longer matches the code, and it does not include gates
+  for the verify_specs pre-commit hook or the end-to-end teleop → save →
+  reboot → load → localize cycle that Fase 6 delivers.
+
+  Scheduled rewrite: after Fase 6 closes (teleop works end-to-end, meta.json
+  symmetry fixed, mode feedback loop added). At that point the gates should
+  include:
+    - bash tools/verify_specs/all.sh → 0 blocking violations
+    - bash tools/verify_specs/install_git_hook.sh installed
+    - Reboot → healthcheck PASS within 60s
+    - Save → Reboot → Load → LOCALIZED within 10s (Area Memory Path A0)
+    - Dashboard teleop → ODrive wheels responding while has_map=true
+    - (new gates from Fase 6 bugs)
+
+  Until this rewrite lands, DO NOT treat the gates below as authoritative.
 
 quality_gates:
   unit:

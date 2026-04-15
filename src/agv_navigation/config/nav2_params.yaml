@@ -117,7 +117,7 @@
       PreferForwardCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 18.0                # [FIXED-HW] Dominates PathAlignCritic (14) — robot must never trade forward-ness for path alignment
+        cost_weight: 12.0                # [FIXED-HW] Still dominant for forward-only motion, but no longer steamrolls PathAlign (was 18.0 → 12.0 in 2026-04-12 smoothness tune)
         threshold_to_consider: 0.5
 
       ObstaclesCritic:
@@ -133,7 +133,7 @@
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 14.0                # [TUNABLE] Higher = follow path more closely
+        cost_weight: 20.0                # [TUNABLE] Higher = follow path more closely (was 14.0 → 20.0 in 2026-04-12 smoothness tune — now the primary smoothness driver, beats PreferForward)
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
         threshold_to_consider: 0.5
@@ -143,7 +143,7 @@
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
+        cost_weight: 7.0                 # [TUNABLE] Mild boost to look-ahead tracking (was 5.0 → 7.0 in 2026-04-12 smoothness tune)
         offset_from_furthest: 5
         threshold_to_consider: 1.4
 
@@ -176,6 +176,30 @@
         w_smooth: 0.3                    # [ARCHITECTURAL] Smoothing weight
         w_data: 0.2                      # [ARCHITECTURAL] Data fidelity weight
         tolerance: 1.0e-10               # [ARCHITECTURAL]
+
+# --- Nav2 Smoother Server (post-plan smoothing) ---
+# SmacPlanner2D outputs a grid-aligned path with ~5cm waypoint spacing. MPPI
+# then tries to track every waypoint, which on a straight-line goal induces
+# steering corrections proportional to waypoint noise — the "searching"
+# behaviour the operator reported. The SmootherServer accepts the raw plan
+# and post-processes it into a curvature-continuous path that MPPI can
+# sample along smoothly. Invoked from the behavior tree via SmoothPath
+# action between ComputePathToPose and FollowPath.
+#
+# SimpleSmoother is chosen over ConstrainedSmoother for v1: fewer
+# parameters, no kinematic model required, and the post-smoothed path is
+# visibly cleaner while still respecting obstacles (the plugin checks
+# costmap cost for each smoothed point and backs off if a smoothing step
+# would cross a lethal cell).
+/**/smoother_server:
+  ros__parameters:
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10                 # [ARCHITECTURAL] Convergence tolerance
+      max_its: 1000                      # [ARCHITECTURAL] Max iterations per smoothing pass
+      do_refinement: true                # [TUNABLE] Run a second refinement pass
+      refinement_num: 2                  # [TUNABLE] Number of refinement iterations
 
 # --- Costmap configuration ---
 # Footprint: front=0.50m, rear=0.30m, left=0.37m, right=0.37m

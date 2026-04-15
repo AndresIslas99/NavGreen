@@ -1,0 +1,43 @@
+
+── verify_canonical_sources.sh ──
+verify_canonical_sources: OK
+RESULT: OK
+
+── verify_no_hardcoded_paths.sh ──
+verify_no_hardcoded_paths: OK
+RESULT: OK
+
+── verify_werror.sh ──
+verify_werror: OK
+RESULT: OK
+
+── verify_dev_only.py ──
+verify_dev_only: OK
+RESULT: OK
+
+── verify_interfaces.py ──
+verify_interfaces: OK
+RESULT: OK
+
+── verify_claude_md_coverage.sh ──
+verify_claude_md_coverage: OK
+RESULT: OK
+
+── verify_persistence.py ──
+verify_persistence: OK
+RESULT: OK
+
+── verify_state_machine.py ──
+verify_state_machine: OK
+RESULT: OK
+
+── verify_launch_sequence.py ──
+verify_launch_sequence: OK
+RESULT: OK
+
+──────────── SUMMARY ────────────
+scripts run:       9
+blocking failures: 0
+warnings:          0
+
+all.sh: OK (warnings=0)

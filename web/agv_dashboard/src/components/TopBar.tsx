@@ -133,10 +133,34 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
   const connColor = connected ? 'var(--normal)' : 'var(--red)'
   const connText = connected ? 'OK' : 'LOST'
 
+  const mapName = s?.current_map_name ?? null
+
   return (
     <>
       <header className="top-bar">
         <span className="brand">AGV Control</span>
+
+        <span
+          className="map-header-pill"
+          title={mapName ? `Active map: ${mapName}` : 'No map loaded — mapping-first mode'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            marginLeft: '8px',
+            borderRadius: '4px',
+            background: mapName ? 'var(--blue)' : 'var(--normal-bg)',
+            color: mapName ? '#fff' : 'var(--dim)',
+            fontWeight: 700,
+            fontSize: '13px',
+            letterSpacing: '0.5px',
+            border: mapName ? 'none' : '1px dashed var(--dim)',
+          }}
+        >
+          <span style={{ opacity: 0.7, fontWeight: 500, fontSize: '11px' }}>MAP</span>
+          <span>{mapName ?? 'mapping…'}</span>
+        </span>
 
         <span className="state-badge" style={stateBadgeStyle(state)}>
           {STATE_LABELS[state]}
