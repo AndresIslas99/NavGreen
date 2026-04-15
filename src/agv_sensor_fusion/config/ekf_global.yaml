@@ -127,3 +127,48 @@
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.03]
+
+    # ── Initial estimate covariance — cold-start convergence ──
+    # The robot_localization default for this matrix is ~1e-9 on every
+    # diagonal, which tells the EKF "I'm absolutely certain about my initial
+    # state." At boot, that is false: we have no idea where the robot is
+    # until the first absolute pose (ZED Area Memory via pose1, or an
+    # AprilTag via pose0 when enabled) arrives. With overconfident priors,
+    # the EKF innovation S = H·P·H^T + R is tiny, so the Mahalanobis distance
+    # D = sqrt(innov^T · S^{-1} · innov) for the first absolute pose becomes
+    # huge even for a 1 m jump, and the measurement gets rejected until
+    # wheel-odom drift grows P to a reasonable level. That costs 5-15 s of
+    # "stuck at the wrong pose" on every cold-start.
+    #
+    # Raising X, Y to 1.0 m² and Yaw to 0.5 rad² (~40° 1-sigma) makes the
+    # filter start "uncertain" so the first absolute pose is absorbed on
+    # arrival. Velocities and accelerations stay at the default 1e-9 —
+    # the robot is stationary at boot, so "zero with high confidence" is
+    # correct for those states. Z, roll, pitch are zeroed by two_d_mode
+    # regardless.
+    #
+    # This addresses PR3 FIX 1 from the PR1+PR2+PR3 navigation refactor.
+    # PR3 FIX 2 (raising pose1_rejection_threshold from 3.0 to 5.0) was
+    # INTENTIONALLY NOT APPLIED: the current 3.0 was chosen on 2026-04-12
+    # specifically to reduce "localization wander" during navigation by
+    # making pose0 and pose1 symmetric (see pose1_rejection_threshold comment
+    # above). The cold-start issue is fully addressed by FIX 1 without
+    # touching the post-convergence rejection behavior. If field data after
+    # this PR shows pose1 rejection rates above a few per 30 s during normal
+    # navigation with enable_markers:=false, revisit FIX 2 separately.
+    initial_estimate_covariance:
+      [1.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   1.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.5,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9]
