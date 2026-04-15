@@ -21,7 +21,9 @@
     base_frame_id: base_link
     odom_frame_id: odom
     cmd_vel_in_topic: cmd_vel_smoothed
-    cmd_vel_out_topic: cmd_vel_safe
+    # Feeds into agv_safety/cmd_vel_gate, which republishes to cmd_vel_safe
+    # (the final topic consumed by odrive_can_node). See agv_safety/CLAUDE.md.
+    cmd_vel_out_topic: cmd_vel_collision_safe
     state_topic: collision_monitor_state
     transform_tolerance: 0.5             # was 0.3 — tolerate Jetson TF jitter
     # 0.5s × 0.25 m/s (vx_max) = 12.5cm of unprotected travel if a source stalls.

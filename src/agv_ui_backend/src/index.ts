@@ -94,6 +94,7 @@ const state: AppState = {
   // 'OFFLINE' is reserved for the STALE case (updated>0 and age>2s).
   collisionMonitor: { action: 'IDLE', polygon: '', updated: 0 },
   localization: { action: 'UNKNOWN', detail: '', map: '', updated: 0 },
+  currentMapName: null,
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -199,6 +200,14 @@ async function main() {
   const startRecClient = node.createClient('std_srvs/srv/Trigger', '/session/start_recording');
   const stopRecClient = node.createClient('std_srvs/srv/Trigger', '/session/stop_recording');
   const loadMapClient = node.createClient('nav2_msgs/srv/LoadMap', `/${NAMESPACE}/map_server/load_map`);
+  // Nav2 lifecycle liveness check. lifecycle_manager_navigation exposes
+  // is_active (std_srvs/Trigger) that returns success=true iff all of its
+  // managed nodes (map_server, controller_server, planner_server,
+  // behavior_server, bt_navigator, velocity_smoother, collision_monitor)
+  // are in the 'active' lifecycle state. Used to gate setMode('nav').
+  const nav2IsActiveClient = node.createClient(
+    'std_srvs/srv/Trigger',
+    `/${NAMESPACE}/lifecycle_manager_navigation/is_active`);
 
   // --- ROS Bridge (passed to route modules via AppDeps) ---
   const ros: RosBridge = {
@@ -222,6 +231,24 @@ async function main() {
         eventLog.emit('warn', 'NAV',
           'Goal rejected: motors not armed. Arm motors first (Recovery panel)');
         return { success: false, message: 'Motors not armed. Arm motors before navigating.' };
+      }
+      // Fase 7 F4: gate nav goals when the localization cascade has exhausted
+      // all 4 paths (A0 Area Memory, A cuVSLAM+AprilTag, B AprilTag only, C
+      // last-known pose). With localization in FAILED, map→odom is stale
+      // (frozen from a prior session) and the robot navigates to phantom
+      // coordinates. Blocks only FAILED; allows UNKNOWN (boot), INITIALIZING
+      // (cascade running), LOCALIZED (ideal), DEGRADED (operator accepts
+      // drift risk). See specs/state_machine.yaml invariant mode_coherence
+      // and docs/audit/2026-04-13-full-audit.md bug #1 history.
+      //
+      // KNOWN GAP: agv_waypoint_manager sends NavigateToPose goals directly
+      // to Nav2, bypassing this gate. Mission execution remains unprotected.
+      // Tracked for Fase 8 (mission executor refactor to route via backend).
+      if (state.localization?.action === 'FAILED') {
+        eventLog.emit('crit', 'NAV',
+          `Goal rejected: localization FAILED (${state.localization.detail || 'cascade exhausted'}). ` +
+          `Drive to an AprilTag via teleop and call /agv/localization/reinitialize.`);
+        return { success: false, message: 'Localization failed. Reinitialize with AprilTag before navigating.' };
       }
       // Safety chain liveness gate. Nav2's collision_monitor only publishes
       // state_topic WHILE it's processing cmd_vel_smoothed (i.e., during an
@@ -605,6 +632,19 @@ async function main() {
       } catch { /* ignore parse errors */ }
     });
 
+    // Latched current map name (transient_local) published by map_manager_node
+    // on every successful maps/loaded event. Feeds the map header pill in the
+    // dashboard so the operator always sees which map is active.
+    const tlQosCurrentMap = new rclnodejs.QoS(
+      rclnodejs.QoS.HistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, 1,
+      rclnodejs.QoS.ReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+      rclnodejs.QoS.DurabilityPolicy.RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL);
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/current_map`, { qos: tlQosCurrentMap }, (msg: any) => {
+      const name = typeof msg.data === 'string' ? msg.data.trim() : '';
+      state.currentMapName = name.length > 0 ? name : null;
+    });
+
     console.log('[ROS] All subscriptions created');
   }
 
@@ -793,17 +833,41 @@ async function main() {
     state, ros, eventLog, telemetryStore, authManager, apriltagManager,
     config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
     updateState,
-    setMode(mode: string) {
-      if (mode !== state.currentMode) {
-        if (mode !== 'nav' && state.navState.active) ros.cancelNavGoal();
-        eventLog.emit('info', 'SYSTEM', `Mode: ${state.currentMode} → ${mode}`);
-        state.currentMode = mode;
-        // Publish mode to ROS2 topic (interfaces.yaml compliance)
-        const modeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
-        modeMsg.data = mode;
-        modePub.publish(modeMsg);
-        updateState();
+    async setMode(mode: string): Promise<{ok: boolean; reason?: string}> {
+      if (mode === state.currentMode) return {ok: true};
+      // Transition-into-nav precondition: Nav2 lifecycle must be active.
+      // Without this check the dashboard can claim 'nav' while Nav2 has
+      // crashed or never reached active, and goal dispatch fails silently.
+      // See docs/audit/2026-04-13-full-audit.md bug #3 and
+      // specs/state_machine.yaml invariant mode_coherence.
+      if (mode === 'nav') {
+        try {
+          if (!nav2IsActiveClient.isServiceServerAvailable()) {
+            const reason = 'Nav2 lifecycle service not available — stack likely in mapping-first mode or still booting';
+            eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
+            return {ok: false, reason};
+          }
+          const r = await nav2IsActiveClient.sendRequestAsync({}, {timeout: 1500});
+          if (!r || r.success !== true) {
+            const reason = (r && r.message) ? r.message : 'lifecycle_manager returned not-active';
+            eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
+            return {ok: false, reason};
+          }
+        } catch (e: any) {
+          const reason = `lifecycle_manager check failed: ${e?.message || e}`;
+          eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
+          return {ok: false, reason};
+        }
       }
+      if (mode !== 'nav' && state.navState.active) ros.cancelNavGoal();
+      eventLog.emit('info', 'SYSTEM', `Mode: ${state.currentMode} → ${mode}`);
+      state.currentMode = mode;
+      // Publish mode to ROS2 topic (interfaces.yaml compliance)
+      const modeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+      modeMsg.data = mode;
+      modePub.publish(modeMsg);
+      updateState();
+      return {ok: true};
     },
     executeMission,
   };

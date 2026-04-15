@@ -1,0 +1,30 @@
+task_version: "1.0"
+package: "agv_interfaces"
+owner_role: "architect"
+status: "stable"
+language: "ROS 2 msg/srv/action definitions (no runtime code)"
+dev_only: false
+
+objective: |
+  Custom ROS 2 interface definitions shared across the AGV packages.
+  All cross-package message/service/action types live here to ensure
+  a single version and a single rebuild target.
+
+interfaces_defined:
+  msg:
+    - "SafetyStatus.msg — published by agv_safety::safety_supervisor"
+  srv:
+    - "SaveMap.srv — agv_map_manager"
+    - "LoadMap.srv — agv_map_manager"
+    - "UpdateZone.srv — agv_map_manager"
+    - "SaveWaypoint.srv, ListMissions.srv, ExecuteMission.srv — agv_waypoint_manager"
+
+rules:
+  - "Any change to an existing interface requires a version bump and review"
+  - "New interfaces must be referenced in specs/interfaces.yaml in the same commit"
+  - "No interfaces live outside this package (no agv_<pkg>/msg folders)"
+
+done_definition:
+  - "colcon build --packages-select agv_interfaces succeeds"
+  - "All dependents rebuild cleanly after an interface change"
+  - "specs/interfaces.yaml declares the same types as this package"

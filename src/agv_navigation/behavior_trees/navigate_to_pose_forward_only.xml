@@ -18,12 +18,36 @@
    - Aborting is the safer fail mode: the operator sees the failure on the
      dashboard and can manually intervene with teleop, instead of the robot
      reversing into an unseen obstacle.
+
+  Motion smoothness changes (2026-04-12):
+   - RateController raised from 1.0 Hz to 2.0 Hz. At 0.25 m/s this means the
+     robot operates on plans at most 12.5 cm stale instead of 25 cm stale,
+     which reduces the "searching" behaviour on straight-line goals.
+
+  SmoothPath removal (2026-04-13 Fase 7 F5):
+   - Previously we inserted a SmoothPath action between ComputePathToPose
+     and FollowPath to convert the grid-aligned SmacPlanner2D output into a
+     curvature-continuous path. During the post-Fase6 navigation trip the
+     BT logged `Timed out while waiting for action server to acknowledge
+     goal request for smooth_path` — the smoother_server could not ACK its
+     action goals under CPU pressure (compounded by nvblox + slam_web_gui
+     eating >2 cores, removed in F1+F2 of the same phase).
+   - SmoothPath was removed rather than throttled because:
+     1) MPPI already has PreferForwardCritic + PathAlignCritic critics
+        that produce smooth forward trajectories from grid-aligned inputs,
+        so the smoother was marginal quality gain.
+     2) Removing it eliminates one action-server protocol round-trip per
+        replan (2 Hz × extra overhead per call), freeing additional CPU.
+     3) If path smoothness becomes an issue in the field, re-introduce
+        SmoothPath in a dedicated <Sequence> OUTSIDE the PipelineSequence
+        hot path per Nav2 tutorial best practice:
+        https://docs.nav2.org/tutorials/docs/adding_smoother.html
 -->
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <RecoveryNode number_of_retries="6" name="NavigateRecovery">
       <PipelineSequence name="NavigateWithReplanning">
-        <RateController hz="1.0">
+        <RateController hz="2.0">
           <RecoveryNode number_of_retries="1" name="ComputePathToPose">
             <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>

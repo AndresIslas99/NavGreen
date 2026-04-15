@@ -1,0 +1,297 @@
+spec_version: "2.0"
+last_updated: "2026-04-13"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-1"
+verified_by: "tools/verify_specs/verify_state_machine.py"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGV Operation Modes — canonical matrix
+#
+# The running state of the robot is the product of FOUR independent layers.
+# Nothing in the codebase captures this matrix; this file is the single source
+# of truth for what combinations are valid and what they mean.
+#
+# A runtime observer can answer "what is the current mode?" by sampling the
+# four layer values at the same instant.
+# ─────────────────────────────────────────────────────────────────────────────
+
+layers:
+
+  # Layer 1 — systemd environment. Changes require `systemctl restart agv.service`
+  # (the launch file itself changes). Source: Environment=AGV_MODE=... in
+  # /etc/systemd/system/agv.service, read by src/agv_bringup/scripts/agv_start.sh:47
+  layer_1_systemd_mode:
+    variable: "AGV_MODE"
+    source: "systemd environment variable"
+    authority: "operator via systemctl edit"
+    switchable_live: false
+    values:
+      real:
+        default: true
+        launch_file: "agv_full.launch.py"
+        purpose: "Production. Full stack with Nav2, safety chain, dual EKF, cuVSLAM, AprilTag localization."
+        map_resolution: "AGV_MAP env > ~/.agv/last_map > src/agv_navigation/maps/default_empty.yaml"
+      mapping:
+        launch_file: "agv_mapping.launch.py"
+        purpose: "Commissioning. Map building. cuVSLAM owns odom→base_link (TF enabled). No Nav2, no EKF dual, no safety chain."
+        map_resolution: "no initial map (SLAM builds from scratch)"
+      hil:
+        launch_file: "agv_hil_full.launch.py"
+        purpose: "Hardware-in-the-loop simulation. Simulated sensor inputs drive the real stack."
+        map_resolution: "AGV_MAP required (fails if missing)"
+
+  # Layer 2 — launch file condition. Computed inside the launch file as
+  # `has_map = map_yaml != ''`. Gates Nav2 and safety chain inclusion.
+  # Source: src/agv_bringup/launch/agv_full.launch.py:63
+  #
+  # NOTE: YAML 1.1 parses `true`/`false` as booleans. We use explicit
+  # string keys `with_map` / `without_map` so that consumers (yq, jq, python)
+  # get predictable string values when traversing this structure.
+  layer_2_has_map:
+    variable: "has_map"
+    source: "PythonExpression in agv_full.launch.py"
+    authority: "derived from AGV_MAP resolution at boot"
+    switchable_live: false
+    values:
+      with_map:
+        boolean_equivalent: true
+        nav2: "active"
+        safety_chain: "active (velocity_smoother → collision_monitor → cmd_vel_gate)"
+        odrive_topic: "/agv/cmd_vel_safe"
+      without_map:
+        boolean_equivalent: false
+        nav2: "not launched"
+        safety_chain: "not launched"
+        odrive_topic: "/agv/cmd_vel"
+        note: "Mapping-first mode. Direct teleop, no collision protection. Not reachable in production because agv_start.sh falls back to default_empty.yaml — see gaps."
+
+  # Layer 3 — runtime mode published by the dashboard backend. Changes live
+  # via WebSocket message or REST. Does NOT change TF ownership or launch
+  # topology — it only gates dashboard buttons and cmd_vel limits.
+  # Source: src/agv_ui_backend/src/index.ts:810-821
+  layer_3_runtime_mode:
+    variable: "currentMode"
+    source: "agv_ui_backend state + /agv/mode topic"
+    authority: "operator via dashboard button or WS message"
+    switchable_live: true
+    values:
+      teleop:
+        default: true
+        cmd_vel_limits: {linear: 0.5, angular: 0.5}
+        nav_goals: "rejected"
+        save_map: "allowed"
+        load_map: "allowed"
+      mapping:
+        cmd_vel_limits: {linear: 0.4, angular: 0.2}
+        nav_goals: "rejected"
+        save_map: "allowed"
+        load_map: "not recommended (SLAM is building)"
+        note: "Stricter limits keep cuVSLAM tracking stable."
+      nav:
+        cmd_vel_limits: "backend does not publish teleop; only Nav2"
+        nav_goals: "allowed if motors armed AND collision_monitor_state fresh"
+        save_map: "allowed"
+        load_map: "allowed"
+        invariants:
+          - "safety chain must be alive (has_map=true)"
+          - "collision_monitor publishing state within 2s"
+          - "motors armed"
+
+  # Layer 4 — robot state, derived from sensor data. Not an authoritative
+  # setting; it is the OUTPUT of the state machine observing the other layers.
+  # Source: src/agv_ui_backend/src/state_machine.ts
+  layer_4_robot_state:
+    variable: "RobotState"
+    source: "agv_ui_backend/state_machine.ts::deriveState()"
+    authority: "derived"
+    switchable_live: false
+    observable_live: true
+    priority_order:
+      - "e_stop: eStop flag is true"
+      - "fault: motor errors present"
+      - "idle: no odometry data or motors disarmed"
+      - "mapping: currentMode == 'mapping'"
+      - "executing_mission: mission is running"
+      - "navigating: Nav2 active goal"
+      - "ready: motors armed, odometry flowing"
+    used_for: "Dashboard UI badges and button enable/disable. NOT for transitioning other layers."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Valid combinations
+#
+# Not every product of the four layers is valid. These are the
+# combinations the system is designed to support. Invalid combinations
+# either never happen in practice (e.g., AGV_MODE=hil with no map) or
+# silently produce broken behavior (e.g., currentMode=nav with
+# has_map=false).
+# ─────────────────────────────────────────────────────────────────────────────
+
+valid_combinations:
+
+  - id: "real_teleop"
+    layer_1_systemd_mode: "real"
+    layer_2_has_map: "with_map"
+    layer_3_runtime_mode: "teleop"
+    layer_4_robot_state_range: ["idle", "ready"]
+    description: "Production teleop. Operator drives with the joystick through the full safety chain. Layer 4 is 'ready' when motors are armed and odometry is flowing, 'idle' otherwise."
+
+  - id: "real_nav_ready"
+    layer_1_systemd_mode: "real"
+    layer_2_has_map: "with_map"
+    layer_3_runtime_mode: "nav"
+    layer_4_robot_state: "ready"
+    description: "Robot has been placed in 'nav' mode by the operator and is waiting for a goal. Nav2 is active, safety chain is active, no goal is currently being executed. Next valid transition: the operator sends a goal → real_nav_goal."
+
+  - id: "real_nav_goal"
+    layer_1_systemd_mode: "real"
+    layer_2_has_map: "with_map"
+    layer_3_runtime_mode: "nav"
+    layer_4_robot_state: "navigating"
+    description: "Nav2 is executing a goal. bt_navigator is active, the controller is publishing cmd_vel_smoothed, and the safety chain is forwarding to cmd_vel_safe."
+
+  - id: "real_mapping_mode"
+    layer_1_systemd_mode: "real"
+    layer_2_has_map: "with_map"
+    layer_3_runtime_mode: "mapping"
+    layer_4_robot_state: "mapping"
+    description: "Operator is building a map while Nav2 is still running against the previously-loaded map (or default_empty). cuVSLAM is adding keyframes; scan_grid_mapper is building the live overlay. Save Map flushes the in-RAM DB to disk."
+
+  - id: "mapping_session"
+    layer_1_systemd_mode: "mapping"
+    layer_2_has_map: "N/A (different launch file: agv_mapping.launch.py)"
+    layer_3_runtime_mode: "mapping"
+    layer_4_robot_state: "mapping"
+    description: "Dedicated mapping commissioning launch. cuVSLAM owns TF (different invariant from real mode). No Nav2, no dual EKF. Used for first-time site commissioning."
+
+  - id: "hil_simulated"
+    layer_1_systemd_mode: "hil"
+    layer_2_has_map: "with_map"
+    layer_3_runtime_mode: "teleop"
+    layer_4_robot_state: "ready"
+    description: "Developer HIL mode. Stack runs against simulated sensor inputs. Not exercised as a regular workflow."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Invariants — must hold in every valid combination
+# ─────────────────────────────────────────────────────────────────────────────
+
+invariants:
+
+  - id: "tf_map_odom_single_owner"
+    description: "Exactly one node publishes map→odom transform at any time."
+    owner: "ekf_global in real/hil modes; cuVSLAM in mapping mode"
+    enforced_by: "YAML overrides with /**: key — see src/agv_slam/config/cuvslam_greenhouse.yaml"
+    failure_mode: "Two publishers → TF jitter → localization divergence → navigation failures"
+
+  - id: "tf_odom_base_single_owner"
+    description: "Exactly one node publishes odom→base_link transform."
+    owner: "ekf_local in real/hil modes; cuVSLAM in mapping mode"
+    enforced_by: "ZED wrapper publish_tf=false + SLAM Toolbox transform_publish_period=0.0"
+
+  - id: "odrive_cmd_vel_source"
+    description: "agv_odrive_node subscribes to exactly one cmd_vel topic."
+    rule: "layer_2_has_map=with_map → /agv/cmd_vel_safe; without_map → /agv/cmd_vel"
+    enforced_by: "src/agv_bringup/launch/agv_full.launch.py:84-115 with IfCondition/UnlessCondition"
+
+  - id: "safety_chain_never_silent_on_idle"
+    description: "The topics monitored by safety_supervisor must publish continuously at a predictable rate. Event-driven topics (such as Nav2 collision_monitor_state, which only publishes when cmd_vel_smoothed flows) must NOT be in the monitored list, otherwise teleop-at-rest falsely marks them silent and blocks cmd_vel."
+    enforced_by: "src/agv_safety/config/safety_params.yaml monitored_topics list (reviewed in agv_safety/CLAUDE.md)"
+    current_state: "FIXED 2026-04-13 (Fase 6 bug #1). Was VIOLATED with /agv/collision_monitor_state in the list."
+    failure_mode_history: "Supervisor marked collision_monitor_state silent → safety_ok=false → cmd_vel_gate zero-ed all commands → teleop appeared broken without any error. Discovered when verifying audit bug #1 turned out to have a different root cause than the audit initially documented."
+
+  - id: "single_source_of_domain"
+    description: "All nodes in the production stack run in the ROS_DOMAIN_ID declared in specs/project.yaml#deployment.ros_domain_id."
+    canonical_value_source: "specs/project.yaml#deployment.ros_domain_id"
+    enforced_by: "Environment=ROS_DOMAIN_ID=<value> in /etc/systemd/system/agv*.service"
+    reason: "Isolates the robot from dev PC nodes on the l4tbr0 USB bridge peer (see project.yaml#deployment.rationale_domain_id)."
+
+  - id: "canonical_base_dir"
+    description: "All persistent artifacts live under AGV_DATA_DIR (default /home/orza/agv_data)."
+    exceptions:
+      - "~/.agv/last_map — boot marker, read by shell script before ROS starts"
+      - "~/.ros/log — ROS framework default"
+      - "/var/log/journal — systemd"
+    enforced_by: "tools/verify_specs/verify_no_hardcoded_paths.sh"
+
+  - id: "mode_coherence"
+    description: "currentMode='nav' requires has_map=true AND Nav2 lifecycle active."
+    enforced_by: "agv_ui_backend::setMode calls /agv/lifecycle_manager_navigation/is_active before transitioning. Rejections surface as HTTP 409 (REST) or eventLog warning (WebSocket)."
+    code_ref: "src/agv_ui_backend/src/index.ts::setMode"
+    current_state: "FIXED 2026-04-13 Fase 6 bug #3"
+
+  - id: "nav_goal_requires_localization"
+    description: "sendNavGoal must reject dispatch when localization.action == 'FAILED'. Allowed states: UNKNOWN (boot), INITIALIZING (cascade running), LOCALIZED, DEGRADED (operator accepts drift risk)."
+    enforced_by: "agv_ui_backend::sendNavGoal checks state.localization.action before calling Nav2 action client. Rejections emit a 'crit' event and return a user-facing message."
+    code_ref: "src/agv_ui_backend/src/index.ts::sendNavGoal (after motors_armed check)"
+    current_state: "FIXED 2026-04-13 Fase 7 F4 (partial — waypoint_manager bypass remains, tracked for Fase 8)"
+    rationale: |
+      With localization FAILED, map→odom is stale (frozen from a prior
+      session). Nav2 traduces map-frame goals to odom-frame via the stale
+      offset, so the robot physically navigates to phantom coordinates.
+      Observed during 2026-04-13 post-Fase6 trip: 2.98 m goal, 0.67 m
+      advanced over 3 min 30 s before operator cancelled.
+    known_gap: "agv_waypoint_manager (mission executor) sends NavigateToPose goals directly to Nav2 via action client, bypassing agv_ui_backend. Mission execution is unprotected by this gate. Fix requires refactoring the mission executor to route through the backend — tracked for Fase 8."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Authorized transitions
+#
+# A transition from combination A → combination B is allowed only if listed
+# here. Other transitions must go through an intermediate state or a restart.
+# ─────────────────────────────────────────────────────────────────────────────
+
+transitions:
+
+  - from: "real_teleop"
+    to: "real_nav_ready"
+    trigger: "operator sets mode=nav via WebSocket or dashboard button"
+    handler: "src/agv_ui_backend/src/index.ts:setMode"
+    preconditions:
+      - "layer_2_has_map == with_map"
+      - "collision_monitor_state fresh (<2s old)"
+      - "motors armed"
+      - "localization state != FAILED"
+      - "(future) lifecycle_manager_navigation reports active — see invariant mode_coherence, currently NOT ENFORCED"
+
+  - from: "real_nav_ready"
+    to: "real_nav_goal"
+    trigger: "operator sends NavigateToPose goal from dashboard"
+    handler: "nav2 bt_navigator accepts the goal"
+
+  - from: "real_nav_goal"
+    to: "real_nav_ready"
+    trigger: "goal completes OR goal canceled OR recovery fails"
+    handler: "bt_navigator returns result + state_machine derives 'ready' when nav_state.active == false"
+
+  - from: "real_nav_ready"
+    to: "real_teleop"
+    trigger: "operator sets mode=teleop via dashboard"
+    handler: "setMode"
+
+  - from: "real_nav_goal"
+    to: "real_teleop"
+    trigger: "operator cancels goal AND sets mode=teleop"
+    handler: "ros.cancelNavGoal + setMode"
+
+  - from: "real_teleop"
+    to: "real_mapping_mode"
+    trigger: "operator starts mapping from dashboard"
+    handler: "setMode('mapping')"
+    note: "Live switch — no restart required. Same launch file, different cmd_vel limits and UI."
+
+  - from: "any real_*"
+    to: "mapping_session"
+    trigger: "systemctl edit agv.service + restart (changes AGV_MODE to 'mapping')"
+    note: "Different launch file. Requires a full service restart; cannot be done live."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Known gaps (this spec is not yet complete)
+# ─────────────────────────────────────────────────────────────────────────────
+gaps:
+  - id: "real_without_map_not_reachable"
+    description: "The combination {real, without_map, teleop, ready} — first boot of a fresh robot with no saved map and no default_empty.yaml — is not reachable in production because agv_start.sh always falls back to default_empty.yaml. Only reachable via a manual launch invocation that passes map:=''. Decision needed: delete default_empty.yaml (forcing operators to always have a real map) or formally remove the combination from valid_combinations."
+  - id: "remap_from_scratch"
+    description: "No explicit workflow for 'operator wants to remap a site from scratch'. Today requires manual removal of ~/.agv/last_map + restart. Should be a dashboard-triggered workflow that cleans old cuvslam DB, .area, and meta.json atomically."
+  - id: "hil_transitions_sparse"
+    description: "hil mode transition matrix is underspecified — HIL is not exercised as a regular workflow."
+  - id: "unused_robot_states"
+    description: "Layer 4 RobotState enum has 9 values but several ('offline', 'blocked') are never observed in practice. Should be pruned or documented as reserved for future features."
+  - id: "nav2_liveness_feedback"
+    description: "Invariant mode_coherence is currently NOT ENFORCED — setMode('nav') does not verify that Nav2 lifecycle reached 'active'. See docs/audit/2026-04-13-full-audit.md bug #3. Fix tracked in Fase 6."

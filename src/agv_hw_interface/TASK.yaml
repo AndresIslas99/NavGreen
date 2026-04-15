@@ -1,0 +1,34 @@
+package: agv_hw_interface
+status: mvp
+language: cpp17
+dev_only: false
+
+description: |
+  ros2_control SystemInterface plugin wrapping the ODrive CAN protocol so
+  that diff_drive_controller and mock_components/GenericSystem can drive
+  the AGV. Co-exists with agv_odrive.
+
+provides:
+  plugin: agv_hw_interface/AgvDiffDriveSystem
+  base: hardware_interface/SystemInterface
+  joints:
+    - left_wheel_joint
+    - right_wheel_joint
+  state_interfaces:
+    - position
+    - velocity
+  command_interfaces:
+    - velocity
+
+acceptance:
+  - "Builds with -Wall -Wextra -Wpedantic -Werror"
+  - "test_kinematics passes"
+  - "agv_ros2control_mock.launch.py brings the diff_drive_controller to active"
+  - "agv_ros2control.launch.py talks to a real ODrive on can0"
+
+follow_up_work:
+  - "Port caster compensation, wheel slip detection, asymmetric accel from agv_odrive"
+  - "Extract shared CAN code into agv_can library, remove duplication"
+  - "Add launch_testing for the mock launch (Gap 4 of architectural_gaps.md)"
+  - "Wire diff_drive_controller's /odom into ekf_local as a wheel odom source"
+  - "Once field-validated, retire agv_odrive standalone node and update agv_full.launch.py"

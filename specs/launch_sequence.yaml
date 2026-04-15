@@ -1,0 +1,344 @@
+spec_version: "2.0"
+last_updated: "2026-04-13"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-2"
+verified_by: "tools/verify_specs/verify_launch_sequence.py"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGV Launch Sequence — agv_full.launch.py startup DAG
+#
+# Canonical ordering of node startup for the `real` mode entry point. Each
+# node declares its preconditions (what must be ready before it can function),
+# launch timing relative to launch_ros start, and failure mode (what depends
+# on this node being up).
+#
+# This replaces the tables in src/agv_bringup/CLAUDE.md which drift from
+# the actual launch file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+entry_points:
+
+  production:
+    systemd_unit: "agv.service"
+    shell_script: "src/agv_bringup/scripts/agv_start.sh"
+    env_vars:
+      AGV_MODE: "real (default)"
+      AGV_MAP: "optional — resolved from ~/.agv/last_map if absent"
+      AGV_DATA_DIR: "/home/orza/agv_data (default)"
+      ROS_DOMAIN_ID: "42"
+      CYCLONEDDS_URI: "file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml"
+    launch_file: "src/agv_bringup/launch/agv_full.launch.py"
+
+  mapping_commissioning:
+    launch_file: "src/agv_bringup/launch/agv_mapping.launch.py"
+    note: "Invoked by agv_start.sh when AGV_MODE=mapping. Separate startup sequence, not covered by this spec."
+
+  hil_simulation:
+    launch_file: "src/agv_bringup/launch/agv_hil_full.launch.py"
+    note: "Invoked by agv_start.sh when AGV_MODE=hil. Separate startup sequence, not covered by this spec."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Node-by-node startup (relative to launch_ros t=0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+sequence:
+
+  # ── t = 0 seconds — immediately on launch_ros start ──
+
+  - name: "robot_description_launch"
+    package: "agv_description (delegated via description.launch.py)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:73-82"
+    delegates_to: "src/agv_description/launch/description.launch.py"
+    start_time_s: 0.0
+    preconditions:
+      - "URDF file exists at agv_description/urdf/agv.urdf.xacro"
+    provides:
+      - "robot_state_publisher node publishing TF base_link → wheel frames (static)"
+      - "topic /robot_description"
+    failure_impact: "No TF from base_link outward. Nav2 costmaps fail to compute footprint in world frame."
+    note: "agv_full.launch.py calls IncludeLaunchDescription(description.launch.py); the robot_state_publisher Node is instantiated inside that include, not directly in agv_full.launch.py."
+
+  - name: "agv_odrive_node"
+    package: "agv_odrive"
+    source: "src/agv_bringup/launch/agv_full.launch.py:84-115"
+    start_time_s: 0.0
+    branch_logic:
+      has_map_true:
+        remap: "cmd_vel → cmd_vel_safe"
+      has_map_false:
+        remap: "cmd_vel → cmd_vel (no remap)"
+    preconditions:
+      - "CAN bus can0 UP (setup by can-setup.service)"
+      - "ODrive S1 firmware answering on CAN node IDs 0 and 1"
+    provides:
+      - "topic /agv/wheel_odom (50 Hz)"
+      - "topic /agv/motor_state"
+      - "cmd_vel → motor currents"
+    failure_impact: "Robot cannot move. Wheel odometry missing → ekf_local degraded."
+
+  - name: "pointcloud_to_laserscan"
+    package: "pointcloud_to_laserscan (external)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:116-138"
+    start_time_s: 0.0
+    preconditions:
+      - "zed wrapper publishing /agv/zed/point_cloud/cloud_registered"
+    provides:
+      - "topic /agv/scan (LaserScan from ZED depth)"
+    failure_impact: "collision_monitor scan_source stops. slam_toolbox stops receiving scans."
+
+  - name: "image_server"
+    package: "agv_image_server"
+    source: "src/agv_bringup/launch/agv_full.launch.py:140-154"
+    start_time_s: 0.0
+    provides:
+      - "HTTP MJPEG stream on port 8091"
+    failure_impact: "Dashboard camera view fails. Not safety-critical."
+
+  - name: "scan_grid_mapper"
+    package: "agv_scan_mapper"
+    source: "src/agv_bringup/launch/agv_full.launch.py:156-169"
+    start_time_s: 0.0
+    provides:
+      - "topic /agv/live_map (live occupancy grid while mapping)"
+    failure_impact: "Dashboard live map view fails during mapping. Not safety-critical."
+
+  # ── t = 3.0 seconds ──
+
+  - name: "zed_container + cuVSLAM (nvblox REMOVED Fase 7 F2)"
+    package: "agv_slam (includes Isaac ROS components)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:172-185"
+    start_time_s: 3.0
+    preconditions:
+      - "ZED 2i camera connected and detected by SDK"
+      - "cuvslam_greenhouse.yaml present (TF disabled via /**: key)"
+    provides:
+      - "topic /agv/zed/imu/data (200 Hz)"
+      - "topic /agv/zed/depth/depth_registered"
+      - "topic /agv/zed/point_cloud/cloud_registered"
+      - "topic /visual_slam/tracking/odometry (for ekf_global)"
+      - "service /agv/zed/save_area_memory"
+      - "service /agv/zed/reset_pos_tracking"
+    failure_impact: "Visual perception fails. cuVSLAM odometry missing → ekf_global has only wheel odometry."
+    removed_components:
+      - component: "nvblox_node"
+        removed_date: "2026-04-13"
+        removed_in: "Fase 7 F2"
+        reason: "9.6 GB RAM + 50% CPU during navigation. Not used in Nav2 costmap pipeline (see src/agv_navigation/CLAUDE.md — nvblox_layer removed from both costmaps). TimerAction definition remains in agv_slam.launch.py for offline use."
+      - component: "slam_web_gui_node"
+        removed_date: "2026-04-13"
+        removed_in: "Fase 7 F1"
+        reason: "94% CPU sustained. Dev-only FastAPI visualization tool, no ROS consumers outside its own subscribers, not in the dashboard."
+
+  # ── t = 3.5 seconds ──
+
+  - name: "imu_filter"
+    package: "agv_sensor_fusion"
+    source: "src/agv_bringup/launch/agv_full.launch.py:188-209"
+    start_time_s: 3.5
+    preconditions:
+      - "ZED IMU publishing on /agv/zed/imu/data"
+    provides:
+      - "topic /agv/imu/filtered (Butterworth-filtered IMU)"
+    failure_impact: "EKF filters ingest unfiltered vibration-contaminated IMU data. Pose estimate degraded at speed."
+    note: "Must start BEFORE EKF or the filter has no history buffer."
+
+  # ── t = 4.0 seconds ──
+
+  - name: "ekf_local"
+    package: "robot_localization (via agv_sensor_fusion fusion.launch.py include)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:211-223"
+    start_time_s: 4.0
+    preconditions:
+      - "imu_filter publishing"
+      - "agv_odrive_node publishing /agv/wheel_odom"
+    provides:
+      - "TF odom → base_link (SOLE OWNER)"
+      - "topic /agv/odometry/local"
+    failure_impact: "TF chain broken. All nodes that need odom→base_link fail: Nav2 local_costmap, safety chain."
+
+  - name: "ekf_global"
+    package: "robot_localization (via agv_sensor_fusion fusion.launch.py include)"
+    source: "src/agv_sensor_fusion/launch/fusion.launch.py"
+    start_time_s: 4.0
+    preconditions:
+      - "ekf_local publishing"
+      - "cuVSLAM publishing /visual_slam/tracking/odometry"
+    provides:
+      - "TF map → odom (SOLE OWNER)"
+      - "topic /agv/odometry/global"
+    failure_impact: "TF map→odom missing. Navigation cannot localize robot in map frame."
+
+  - name: "fusion_monitor"
+    package: "agv_sensor_fusion"
+    source: "src/agv_sensor_fusion/launch/fusion.launch.py"
+    start_time_s: 4.0
+    provides:
+      - "topic /agv/pose (republished pose for dashboard)"
+      - "diagnostic about EKF health"
+
+  # ── t = 4.5 seconds ──
+
+  - name: "factor_graph"
+    package: "agv_factor_graph"
+    source: "src/agv_bringup/launch/agv_full.launch.py:225-243"
+    start_time_s: 4.5
+    mode: "parallel (publish_tf=false)"
+    provides:
+      - "topic /agv/factor_graph/odometry (validation only)"
+    failure_impact: "None — validation node. Not in the critical path."
+
+  # ── t = 5.0 seconds ──
+
+  - name: "slam_toolbox_localization"
+    package: "slam_toolbox (external)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:245-267"
+    start_time_s: 5.0
+    condition: "IfCondition(enable_slam_localization), default=true"
+    mode: "mapping mode with transform_publish_period=0.0 (TF disabled)"
+    provides:
+      - "loop closure over cuVSLAM drift"
+      - "topic /map (separate from /agv/map — beware!)"
+    failure_impact: "cuVSLAM accumulated drift not bounded. Localization degrades over long runs."
+
+  - name: "map_manager"
+    package: "agv_map_manager"
+    source: "src/agv_bringup/launch/agv_full.launch.py:269-296"
+    start_time_s: 5.0
+    preconditions:
+      - "AGV_DATA_DIR/maps/ exists and is writable"
+    provides:
+      - "service /agv/map_manager/save_map"
+      - "service /agv/map_manager/load_map"
+      - "service /agv/map_manager/update_zone"
+      - "topic /agv/maps/loaded (transient_local)"
+      - "topic /agv/current_map (transient_local)"
+
+  - name: "waypoint_manager"
+    package: "agv_waypoint_manager"
+    source: "src/agv_bringup/launch/agv_full.launch.py:269-296"
+    start_time_s: 5.0
+    preconditions:
+      - "missions_file exists"
+
+  # ── t = 6.0 seconds ── (conditional)
+
+  - name: "Nav2 stack"
+    package: "agv_navigation (bundle)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:298-315"
+    start_time_s: 6.0
+    condition: "IfCondition(has_map)"
+    includes:
+      - "map_server"
+      - "controller_server (MPPI)"
+      - "planner_server (SmacPlanner2D)"
+      - "behavior_server"
+      - "bt_navigator"
+      - "velocity_smoother"
+      - "collision_monitor"
+      - "lifecycle_manager_navigation"
+    preconditions:
+      - "has_map=true"
+      - "ekf_global publishing /agv/odometry/global"
+      - "map file at AGV_MAP path"
+    provides:
+      - "topic /agv/cmd_vel_smoothed → /agv/cmd_vel_collision_safe (chain)"
+      - "action /agv/navigate_to_pose"
+      - "service /agv/map_server/load_map"
+    failure_impact: "Navigation disabled. Teleop still works (through the chain if gate is healthy; see bug #1)."
+
+  # ── t = 6.5 seconds ── (conditional)
+
+  - name: "agv_safety stack"
+    package: "agv_safety (via safety.launch.py)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:317-335"
+    start_time_s: 6.5
+    condition: "IfCondition(has_map)"
+    includes:
+      - "safety_supervisor_node (publishes /agv/safety/status)"
+      - "cmd_vel_gate_node (consumes cmd_vel_collision_safe → cmd_vel_safe)"
+    preconditions:
+      - "collision_monitor publishing /agv/cmd_vel_collision_safe"
+    provides:
+      - "topic /agv/safety/status (10 Hz)"
+      - "topic /agv/cmd_vel_safe (forwarded from gate)"
+    current_bug: "cmd_vel_gate watchdog fires at 0.5s before safety_supervisor has published. Blocks teleop. See audit bug #1."
+    failure_impact: "No cmd_vel reaches ODrive. Teleop broken even though chain exists."
+
+  # ── t = 7.0 seconds ── (conditional)
+
+  - name: "apriltag_node + marker_correction + rail_approach + auto_init_orchestrator"
+    package: "multiple (agv_markers, agv_rail_approach, agv_localization_init)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:337-409"
+    start_time_s: 7.0
+    condition: "IfCondition(enable_markers), default=true"
+    preconditions:
+      - "ZED camera_info publishing"
+    provides:
+      - "topic /agv/marker_pose"
+      - "topic /agv/marker_raw_detected"
+      - "topic /agv/localization/state"
+      - "service /agv/localization/reinitialize"
+
+  - name: "behavior_executor (optional)"
+    package: "agv_behaviors"
+    source: "src/agv_bringup/launch/agv_full.launch.py:411-425"
+    start_time_s: 7.0
+    condition: "IfCondition(enable_behaviors), default=false"
+    status: "NEVER ENABLED in practice — dead launch branch"
+
+  # ── t = 8.0 seconds ──
+
+  - name: "teleop_server (agv_ui_backend)"
+    package: "agv_ui_backend"
+    source: "src/agv_bringup/launch/agv_full.launch.py:427-455"
+    start_time_s: 8.0
+    preconditions:
+      - "Nav2 stack sufficiently discoverable over DDS (8s grace window)"
+    env_vars_passed:
+      - "AGV_PORT=8090"
+      - "AGV_NAMESPACE=agv"
+      - "AGV_DATA_DIR=/home/orza/agv_data"
+      - "AGV_BOOT_MAP_NAME=<resolved from map_yaml basename>"
+    provides:
+      - "HTTP REST on :8090"
+      - "WebSocket /ws/control"
+      - "ROS publisher /agv/cmd_vel (teleop)"
+      - "ROS publisher /agv/maps/loaded (boot-time event, ~10s after own start)"
+    failure_impact: "Dashboard offline. Operator has no UI. Robot runs headless but cannot be controlled remotely."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Known violations of launch ordering invariants (for Fase 6 fixing)
+# ─────────────────────────────────────────────────────────────────────────────
+
+known_issues:
+  - issue: "safety_supervisor and cmd_vel_gate launch in parallel within safety.launch.py"
+    location: "src/agv_safety/launch/safety.launch.py"
+    consequence: "cmd_vel_gate watchdog can fire before supervisor has published first SafetyStatus"
+    fix: "Add TimerAction to delay cmd_vel_gate until supervisor has been up N seconds, OR add startup grace window to the gate's watchdog logic."
+
+  - issue: "teleop_server publishes maps/loaded ~10s after own start using AGV_BOOT_MAP_NAME"
+    location: "src/agv_ui_backend/src/index.ts:833-848"
+    consequence: "If Nav2 map_server still configuring when this fires, orchestrator triggers before the map is actually loaded"
+    fix: "Make teleop_server wait for /agv/map_server/load_map service to be ready before publishing."
+
+  - issue: "No healthcheck that verifies lifecycle_manager_navigation reached active state"
+    consequence: "Silent partial Nav2 bringup — backend can enter nav mode with a broken stack"
+    fix: "agv_healthcheck.sh already checks collision_monitor presence; extend to verify lifecycle state via lifecycle_manager service."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dead launch files (to be removed or clearly marked experimental in Fase 5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+unreachable_from_production:
+  status: "RESOLVED 2026-04-13 Fase 6 bug #4"
+  deleted_files:
+    - "src/agv_bringup/launch/agv_modular.launch.py"
+    - "src/agv_bringup/launch/nav.launch.py"
+    - "src/agv_bringup/launch/hardware.launch.py"
+    - "src/agv_bringup/launch/dashboard.launch.py"
+    - "src/agv_bringup/launch/perception.launch.py"
+    - "src/agv_bringup/launch/agv_teleop.launch.py"
+    - "src/agv_bringup/launch/agv_robot_core.launch.py"
+    - "src/agv_bringup/launch/agv_fusion.launch.py"
+    - "src/agv_bringup/launch/agv_ekf_local_test.launch.py"
+    - "src/agv_bringup/launch/agv_hil.launch.py"
+  note: "Deleted in the audit/2026-04-13 branch. They were listed in agv_bringup/CLAUDE.md as entry points but were never invoked by agv_start.sh. Git log preserves them if they need to be revived. Only agv_full.launch.py, agv_mapping.launch.py, and agv_hil_full.launch.py remain."

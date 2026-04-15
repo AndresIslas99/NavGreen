@@ -1,0 +1,47 @@
+#pragma once
+
+#include "rclcpp/rclcpp.hpp"
+#include "geometry_msgs/msg/twist.hpp"
+#include "std_msgs/msg/bool.hpp"
+
+#include "agv_interfaces/msg/safety_status.hpp"
+
+namespace agv_safety {
+
+// Pure logic helper exposed for unit testing.
+struct GateInputs {
+  geometry_msgs::msg::Twist input_cmd;
+  bool safety_ok{true};
+  bool hardware_estop{false};
+  double max_linear{0.5};
+  double max_angular{1.5};
+};
+
+geometry_msgs::msg::Twist apply_gate(const GateInputs& in);
+
+class CmdVelGateNode : public rclcpp::Node {
+ public:
+  CmdVelGateNode();
+
+ private:
+  void declare_parameters();
+  void on_input(const geometry_msgs::msg::Twist& msg);
+  void on_safety(const agv_interfaces::msg::SafetyStatus& msg);
+  void on_hardware_estop(const std_msgs::msg::Bool& msg);
+  void on_safety_timeout();
+
+  bool safety_ok_{false};
+  bool hardware_estop_{false};
+  rclcpp::Time last_safety_msg_{0, 0, RCL_ROS_TIME};
+  double safety_timeout_s_{0.5};
+  double max_linear_{0.5};
+  double max_angular_{1.5};
+
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_input_;
+  rclcpp::Subscription<agv_interfaces::msg::SafetyStatus>::SharedPtr sub_safety_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_hw_estop_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_output_;
+  rclcpp::TimerBase::SharedPtr watchdog_;
+};
+
+}  // namespace agv_safety

@@ -38,13 +38,24 @@ export function register(app: Express, deps: AppDeps): void {
   app.get('/api/health', (_req, res) => res.json(state.health));
   app.get('/api/mode', (_req, res) => res.json({ mode: state.currentMode }));
 
-  app.put('/api/mode', (req, res) => {
+  app.put('/api/mode', async (req, res) => {
     const mode = req.body?.mode;
     if (!['teleop', 'mapping', 'nav'].includes(mode)) {
       return res.status(400).json({ success: false, message: `Invalid mode: ${mode}` });
     }
-    if (mode !== state.currentMode) {
-      deps.setMode(mode);
+    if (mode === state.currentMode) {
+      return res.json({ success: true, mode: state.currentMode });
+    }
+    // Mode transitions into 'nav' validate Nav2 lifecycle state first.
+    // Rejections are surfaced as HTTP 409 so the dashboard can show the
+    // reason; the state remains in the previous mode.
+    const result = await deps.setMode(mode);
+    if (!result.ok) {
+      return res.status(409).json({
+        success: false,
+        mode: state.currentMode,
+        message: result.reason || 'setMode rejected',
+      });
     }
     res.json({ success: true, mode: state.currentMode });
   });
