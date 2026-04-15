@@ -410,10 +410,19 @@ def generate_launch_description():
                 ),
                 # Auto-localization orchestrator: listens for /agv/maps/loaded,
                 # loads the matching cuVSLAM keyframe DB, waits for an AprilTag
-                # (up to 10s), then calls /visual_slam/localize_in_map. Publishes
-                # /agv/localization/state which the dashboard displays as an
-                # informational LOC pill. Only launched when markers are
-                # enabled (AprilTag is the primary pose hint).
+                # (up to marker_wait_timeout_s), then calls
+                # /visual_slam/localize_in_map. Publishes /agv/localization/state
+                # which the dashboard displays as an informational LOC pill.
+                #
+                # Gated on has_map (NOT enable_markers): when AprilTags are
+                # disabled via enable_markers:=false, Path A times out and the
+                # orchestrator falls through to Path B (last-known pose from
+                # {map}_meta.json) → DEGRADED, still localized. If we gated
+                # this on enable_markers, disabling markers would also kill
+                # cold-start and leave the robot without a map→odom origin.
+                # AprilTag-dependent nodes (detector, marker_correction,
+                # rail_approach) remain gated on enable_markers above — they
+                # have no purpose without tags.
                 Node(
                     package='agv_localization_init',
                     executable='auto_init_orchestrator_node',
@@ -426,7 +435,7 @@ def generate_launch_description():
                         {'map_dir': '/home/orza/agv_data/maps'},
                     ],
                     output='screen',
-                    condition=IfCondition(enable_markers),
+                    condition=IfCondition(has_map),
                 ),
             ],
         ),
