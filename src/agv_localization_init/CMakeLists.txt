@@ -15,13 +15,15 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(isaac_ros_visual_slam_interfaces REQUIRED)
 find_package(robot_localization REQUIRED)
+find_package(zed_msgs REQUIRED)
 
 add_executable(auto_init_orchestrator_node
   src/auto_init_orchestrator_node.cpp)
 ament_target_dependencies(auto_init_orchestrator_node
   rclcpp std_msgs std_srvs geometry_msgs nav_msgs
   isaac_ros_visual_slam_interfaces
-  robot_localization)
+  robot_localization
+  zed_msgs)
 
 install(TARGETS auto_init_orchestrator_node
   DESTINATION lib/${PROJECT_NAME})

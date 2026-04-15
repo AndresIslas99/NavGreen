@@ -67,6 +67,11 @@ export interface AppState {
     map: string;
     updated: number;
   };
+  // Name of the map currently loaded into Nav2 (no extension). Sourced from
+  // the latched /{ns}/current_map topic published by map_manager_node. null
+  // when no map is loaded (mapping-first mode) or before the latched value
+  // has been received at dashboard boot.
+  currentMapName: string | null;
 }
 
 export interface RosBridge {
@@ -102,6 +107,6 @@ export interface AppDeps {
   };
   // Functions that modify state
   updateState(): void;
-  setMode(mode: string): void;
+  setMode(mode: string): Promise<{ok: boolean; reason?: string}>;
   executeMission(missionId: string): Promise<{ success: boolean; message?: string; nodes?: number }>;
 }

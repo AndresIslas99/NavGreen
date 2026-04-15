@@ -1,0 +1,33 @@
+task_version: "1.0"
+package: "agv_image_server"
+owner_role: "perception"
+status: "stable"
+language: "C++17"
+dev_only: false
+
+objective: |
+  C++17 node that serves MJPEG streams from the ZED camera topics over
+  HTTP on port 8091. Consumed by the dashboard for live video.
+
+inputs:
+  topics:
+    - "/agv/zed/left/image_rect_color (sensor_msgs/Image)"
+    - "/agv/zed/depth/depth_registered (sensor_msgs/Image)"
+  parameters:
+    - "port (int, default 8091)"
+    - "jpeg_quality (int, default 70)"
+    - "max_width (int, default 640)"
+
+outputs:
+  http:
+    - "http://<host>:8091/camera (MJPEG stream)"
+    - "http://<host>:8091/depth (MJPEG stream of colorized depth)"
+
+rules:
+  - "No hardcoded URLs or ports in source — use parameters"
+  - "Non-blocking: camera subscription must not stall if no HTTP client is connected"
+
+done_definition:
+  - "Builds with -Werror + zero warnings"
+  - "Dashboard video pane receives frames at >=10 Hz"
+  - "Clean shutdown on SIGINT"

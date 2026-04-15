@@ -1,0 +1,26 @@
+[Unit]
+Description=AGV Runtime Watchdog
+After=agv.service
+BindsTo=agv.service
+PartOf=agv.service
+
+[Service]
+Type=simple
+User=orza
+Environment=HOME=/home/orza
+Environment=ROS_DOMAIN_ID=42
+Environment=CYCLONEDDS_URI=file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml
+# Tune these in a drop-in override if needed:
+Environment=AGV_WATCH_INTERVAL=30
+Environment=AGV_WATCH_ODOM_HZ=30
+Environment=AGV_WATCH_RSS_MAX_MB=12288
+Environment=AGV_WATCH_STALL_BUDGET=3
+Environment=AGV_WATCH_STARTUP_GRACE=60
+ExecStart=/home/orza/ros2_ws/src/agv_bringup/scripts/agv_watchdog.sh
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

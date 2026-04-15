@@ -60,6 +60,37 @@
     pose0_queue_size: 1
     pose0_rejection_threshold: 3.0         # reject outlier detections
 
+    # ── ZED SDK positional tracking with Area Memory ──
+    # PoseWithCovarianceStamped in the SDK map frame from the wrapper.
+    # Provides a tag-free absolute pose source so cold-start works without
+    # an AprilTag in view (Stereolabs SDK relocalises against the .area
+    # landmark database loaded at startup). Runs in parallel with cuVSLAM
+    # (odom1) and AprilTags (pose0); the EKF rejects outliers via
+    # Mahalanobis gating.
+    #
+    # Rejection threshold ordering (tighter = more skeptical):
+    #   pose0 (AprilTag)         3.0  ← strictest, absolute ground truth
+    #   odom1 (cuVSLAM)          3.5  ← differential VO velocities
+    #   pose1 (ZED Area Memory)  4.0  ← absolute, but matches can drift
+    #                                   slightly between loop closures, so
+    #                                   we accept slightly larger residuals
+    pose1: /agv/zed/pose_with_covariance
+    pose1_config: [true,  true,  false,    # x, y, z (z off — 2D mode)
+                   false, false, true,     # roll, pitch, yaw (yaw only)
+                   false, false, false,    # vx, vy, vz
+                   false, false, false,    # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    pose1_differential: false              # absolute — anchored by Area Memory
+    pose1_relative: false
+    pose1_queue_size: 5
+    # Tightened from 4.0 → 3.0 on 2026-04-12 to match pose0 (AprilTag). When
+    # both absolute sources fire, the symmetric threshold lets the tighter
+    # one win on disagreement instead of pose1's looser gate pulling the
+    # filter toward ZED SDK outliers. Cut down the "localization wander"
+    # during navigation.
+    pose1_rejection_threshold: 3.0
+    pose1_nodelay: false
+
     # REMOVED: cuVSLAM provides meaningful state-dependent covariances that
     # indicate tracking quality. Overriding with fixed values prevents the EKF
     # from down-weighting cuVSLAM during poor tracking conditions.
@@ -71,14 +102,22 @@
     #                         0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
     #                         0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
 
-    # ── Process noise covariance (2x local — gradual corrections) ──
+    # ── Process noise covariance (tighter than 2x local for smoothness) ──
+    # Changed 2026-04-12 as part of motion smoothness tune. The x/y/yaw
+    # diagonal terms were halved (0.10 → 0.05, 0.10 → 0.05, 0.08 → 0.04) so
+    # the filter anchors harder on its prior between corrections. This
+    # reduces the "wander" observed when pose0 (AprilTag) and pose1 (ZED
+    # SDK Area Memory) briefly disagree — the filter now trusts its own
+    # prediction more instead of averaging discordant measurements.
+    # Robot max speed is 0.25 m/s and filter runs at 10 Hz, so per-step
+    # prediction lag is <2.5 cm — acceptable.
     process_noise_covariance:
-      [0.10,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
-       0.0,   0.10,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      [0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.12,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
-       0.0,   0.0,   0.0,   0.0,   0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.04,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
        0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,

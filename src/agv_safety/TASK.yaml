@@ -1,0 +1,41 @@
+package: agv_safety
+status: mvp
+language: cpp17
+dev_only: false
+
+description: |
+  Software safety supervisor and cmd_vel gate. Operational safeguards only —
+  not certified functional safety per Rule 6 in policies/engineering_rules.md.
+  Provides per-topic deadline monitoring and a final-stage cmd_vel gate that
+  zeros velocity on safety degradation or hardware E-stop.
+
+owns:
+  topics:
+    publish:
+      - "/agv/safety/status"     # SafetyStatus, 10 Hz
+      - "/agv/cmd_vel_safe"      # Twist, gated output to ODrive
+    subscribe:
+      - "/agv/cmd_vel_collision_safe"  # Twist, from collision_monitor
+      - "/agv/software_estop"    # Bool
+      - "/agv/hardware_estop"    # Bool
+      # Plus a configurable list of monitored critical topics (see config)
+
+nodes:
+  - name: safety_supervisor_node
+    executable: safety_supervisor_node
+    type: standalone
+  - name: cmd_vel_gate_node
+    executable: cmd_vel_gate_node
+    type: standalone
+
+acceptance:
+  - "Builds with -Wall -Wextra -Wpedantic -Werror"
+  - "All unit tests pass (test_supervisor_logic, test_gate_logic)"
+  - "When safety_supervisor is killed, cmd_vel_gate stops forwarding within safety_timeout_s"
+  - "When hardware_estop is asserted, cmd_vel_gate publishes zero within one tick"
+  - "When any monitored topic exceeds its deadline, safety_status.safety_ok becomes false"
+
+integration_pending:
+  - "Wire safety_supervisor + cmd_vel_gate into agv_full.launch.py"
+  - "Rename collision_monitor output topic from cmd_vel_safe to cmd_vel_collision_safe"
+  - "Document cmd_vel pipeline in agv_navigation/CLAUDE.md"

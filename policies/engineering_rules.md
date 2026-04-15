@@ -67,3 +67,12 @@ Develop every node, algorithm, and pipeline as if it will run on the real robot.
 - Never implement workarounds on the sim side that wouldn't exist in production
 - If a pipeline works in sim but requires sim-side processing, it is architecturally wrong
 - HIL mode must exercise the same code paths as production — only the sensor source changes
+
+## Rule 9 — Interface change governance
+`specs/interfaces.yaml` is the binding contract for TF frames, topics, services, actions, and message rates across the workspace. Any change to it requires:
+- The PR description must list every package that produces or consumes the affected interface and explain why the new shape is necessary.
+- Review by every team that owns one of those packages before merge.
+- Bumping the `spec_version` field at the top of `interfaces.yaml` on every merge.
+- A corresponding update to any package whose runtime behavior no longer matches the contract, in the same PR or a follow-up PR linked from the description.
+
+Adding a new interface follows the same process: list the producing package, list the intended consumers, and bump the version.
