@@ -78,6 +78,9 @@ export interface MissionProgress {
 export interface RobotStatus {
   robot_state: RobotState
   allowed_actions: AllowedActions
+  // Name of the map currently loaded into Nav2 (no extension). null when the
+  // robot is in mapping-first mode or has never been told which map is active.
+  current_map_name: string | null
   wheel_odom_hz: number
   velocity: { linear: number; angular: number }
   e_stop: boolean

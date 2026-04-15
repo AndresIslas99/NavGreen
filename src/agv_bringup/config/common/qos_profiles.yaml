@@ -1,0 +1,43 @@
+# Centralized QoS profile reference for the AGV stack.
+#
+# This file is documentation + a future-loadable parameter source. Today most
+# packages declare their QoS inline; the goal of centralizing here is to make
+# QoS choices reviewable in one place when interfaces change.
+#
+# Format: name → {reliability, history, depth, durability, deadline_ms (optional)}
+#
+# Convention:
+#  - Sensors at fixed rates: best_effort, keep_last(10)
+#  - Commands and state: reliable, keep_last(10)
+#  - Latched config: reliable, keep_last(1), transient_local
+
+profiles:
+  sensor_50hz:
+    reliability: best_effort
+    history: keep_last
+    depth: 10
+    durability: volatile
+
+  sensor_10hz:
+    reliability: best_effort
+    history: keep_last
+    depth: 10
+    durability: volatile
+
+  command:
+    reliability: reliable
+    history: keep_last
+    depth: 10
+    durability: volatile
+
+  state:
+    reliability: reliable
+    history: keep_last
+    depth: 10
+    durability: volatile
+
+  latched_config:
+    reliability: reliable
+    history: keep_last
+    depth: 1
+    durability: transient_local

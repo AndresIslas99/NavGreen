@@ -13,11 +13,12 @@ find_package(agv_interfaces REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(isaac_ros_visual_slam_interfaces REQUIRED)
 
 add_executable(map_manager_node src/map_manager_node.cpp)
 ament_target_dependencies(map_manager_node
-  rclcpp agv_interfaces nav_msgs nav2_msgs std_msgs
+  rclcpp agv_interfaces nav_msgs nav2_msgs std_msgs std_srvs
   isaac_ros_visual_slam_interfaces)
 
 install(TARGETS map_manager_node DESTINATION lib/${PROJECT_NAME})

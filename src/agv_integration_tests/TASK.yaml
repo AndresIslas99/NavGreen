@@ -1,0 +1,26 @@
+task_version: "1.0"
+package: "agv_integration_tests"
+owner_role: "qa"
+status: "todo"
+language: "Python (tests only — not a runtime node)"
+dev_only: true
+
+objective: |
+  End-to-end integration tests for the AGV stack. Run in CI and on
+  operator machine before field visits. Tests are Python-based (pytest,
+  launch_testing) because ROS 2 test framework is Python-native.
+
+inputs:
+  launch_files:
+    - "agv_bringup/launch/agv_full.launch.py"
+
+tests_planned:
+  - "Boot sequence test: verify all expected nodes reach active within 15 s"
+  - "Save/Load map round trip: drive short path, save, reboot, load, verify localize"
+  - "Safety chain test: publish obstacle in scan, verify cmd_vel zeroed"
+  - "Mode transition test: teleop → nav → teleop, verify currentMode consistent"
+
+done_definition:
+  - "Tests runnable via colcon test"
+  - "CI reports green"
+  - "Field checklist derived from the test plan"

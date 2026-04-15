@@ -2,12 +2,19 @@
 // AGV greenhouse.
 //
 // Hierarchy (evaluated in order on every map load):
-//   1. AprilTag pose hint — preferred because it's absolute ground truth,
-//      robust to lighting, independent of visual drift.
-//   2. Last-known pose from disk ({map_name}_meta.json) — second best, uses
+//   0. ZED SDK Area Memory — preferred for cold-start because it does NOT
+//      need an AprilTag. The wrapper loads the .area landmark database at
+//      startup; we wait for the SDK to publish a low-covariance pose with
+//      KNOWN_MAP equivalent (gated by N consecutive frames under a
+//      covariance threshold) and seed ekf_global directly. This closes the
+//      "no tag visible at boot" gap that paths 1–3 below depend on.
+//   1. cuVSLAM keyframe DB + AprilTag — preferred when a tag IS visible
+//      because it cross-checks the SDK relocalisation.
+//   2. AprilTag pose hint alone — for legacy maps without a cuVSLAM DB.
+//   3. Last-known pose from disk ({map_name}_meta.json) — third best, uses
 //      the pose at the time the map was last saved or the robot last shut
 //      down cleanly.
-//   3. FAILED state — the dashboard surfaces this only as an informational
+//   4. FAILED state — the dashboard surfaces this only as an informational
 //      LOC pill. Recovery path: operator drives via teleop toward an
 //      AprilTag and calls /agv/localization/reinitialize.
 //
@@ -20,6 +27,12 @@
 //     Fired by map_manager_node after a successful load_map.
 //   - /agv/marker_pose (geometry_msgs/PoseWithCovarianceStamped) — AprilTag
 //     pose from marker_correction_node.
+//   - /agv/mode (std_msgs/String) — operator-selected mode from the dashboard
+//     backend ("teleop" | "mapping" | "nav"). On a transition into "nav" we
+//     re-fire the init sequence so that flipping the dashboard tab from
+//     Mapping to Operate seeds ekf_global without requiring an explicit
+//     map-load REST call. This closes the trigger gap where the orchestrator
+//     would otherwise sit idle and ekf_global would stay at (0,0,0).
 //
 // Services called:
 //   - /visual_slam/load_map (isaac_ros_visual_slam_interfaces/FilePath)
@@ -50,6 +63,7 @@
 #include <isaac_ros_visual_slam_interfaces/srv/file_path.hpp>
 #include <isaac_ros_visual_slam_interfaces/srv/localize_in_map.hpp>
 #include <robot_localization/srv/set_pose.hpp>
+#include <zed_msgs/msg/pos_track_status.hpp>
 
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
@@ -90,6 +104,31 @@ public:
     // last-known-pose for the next boot. Set to 0 to disable periodic saves;
     // the shutdown hook still runs on SIGINT/SIGTERM.
     this->declare_parameter("periodic_save_interval_s", 30.0);
+    // ── Path A0: ZED SDK Area Memory parameters ──
+    // Wait up to `zed_area_timeout_s` for the SDK to publish a pose with
+    // covariance below `zed_max_xy_cov_m2` (x and y) and `zed_max_yaw_cov_rad2`
+    // (yaw), for `zed_min_consecutive_frames` consecutive samples in a row,
+    // AND with `spatial_memory_status == OK` (the SDK is actually relocalised
+    // against the saved landmark database, not dead-reckoning from origin).
+    //
+    // The consecutive-frames guard defends against single-frame false-positive
+    // matches in visually repetitive crop rows. The spatial-memory gate
+    // defends against the bigger false-positive class: a cold-boot ZED with
+    // no .area file to load publishes tiny covariances within ~150ms of
+    // startup, which would trivially satisfy a covariance-only gate. Without
+    // the status gate, Path A0 would "succeed" at the ZED's dead-reckoned
+    // origin on every first boot.
+    //
+    // `zed_area_file_path` is checked for existence BEFORE waiting: if the
+    // file does not exist on disk, the SDK has nothing to relocalise against
+    // and Path A0 is short-circuited so the cascade can fall through to
+    // Path A/B/C immediately instead of wasting 8s on a guaranteed timeout.
+    this->declare_parameter("zed_area_timeout_s", 8.0);
+    this->declare_parameter("zed_max_xy_cov_m2", 0.10);
+    this->declare_parameter("zed_max_yaw_cov_rad2", 0.05);
+    this->declare_parameter("zed_min_consecutive_frames", 5);
+    this->declare_parameter("zed_area_file_path",
+      std::string("/home/orza/agv_data/maps/.current.area"));
 
     map_dir_ = this->get_parameter("map_dir").as_string();
     marker_timeout_s_ = this->get_parameter("marker_wait_timeout_s").as_double();
@@ -97,6 +136,11 @@ public:
     retry_backoff_s_ = this->get_parameter("localize_retry_backoff_s").as_double();
     meta_suffix_ = this->get_parameter("last_known_pose_filename_suffix").as_string();
     periodic_save_interval_s_ = this->get_parameter("periodic_save_interval_s").as_double();
+    zed_area_timeout_s_ = this->get_parameter("zed_area_timeout_s").as_double();
+    zed_max_xy_cov_m2_ = this->get_parameter("zed_max_xy_cov_m2").as_double();
+    zed_max_yaw_cov_rad2_ = this->get_parameter("zed_max_yaw_cov_rad2").as_double();
+    zed_min_consecutive_ = this->get_parameter("zed_min_consecutive_frames").as_int();
+    zed_area_file_path_ = this->get_parameter("zed_area_file_path").as_string();
 
     if (map_dir_.empty()) {
       RCLCPP_FATAL(get_logger(), "map_dir parameter is required");
@@ -144,12 +188,58 @@ public:
       std::bind(&AutoInitOrchestratorNode::on_reinitialize, this,
                 std::placeholders::_1, std::placeholders::_2));
 
+    // Save-pose trigger — called synchronously by map_manager_node::on_save_map
+    // so the <map>_meta.json file is written at the exact moment of Save Map
+    // (not 30s later when the next periodic save fires). Closes the save/load
+    // symmetry gap documented as audit bug #2.
+    save_pose_srv_ = this->create_service<std_srvs::srv::Trigger>(
+      "localization/save_last_known_pose",
+      std::bind(&AutoInitOrchestratorNode::on_save_last_known_pose, this,
+                std::placeholders::_1, std::placeholders::_2));
+
     // Track the live pose so we can persist it to disk. The orchestrator does
     // not consume the pose for its own logic (cuVSLAM does that); it's only
     // for the last-known-pose fallback file.
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "odometry/global", rclcpp::QoS(10),
       std::bind(&AutoInitOrchestratorNode::on_odometry, this, std::placeholders::_1));
+
+    // Mode subscription. The dashboard backend publishes "teleop" | "mapping"
+    // | "nav" on /agv/mode (relative "mode" under our "agv" namespace).
+    // Default reliable QoS, depth 10 — matches the publisher in
+    // src/agv_ui_backend/src/index.ts. NOT transient_local: we only care
+    // about live transitions, not the most recent stored value.
+    mode_sub_ = this->create_subscription<std_msgs::msg::String>(
+      "mode", rclcpp::QoS(10),
+      std::bind(&AutoInitOrchestratorNode::on_mode_change, this,
+                std::placeholders::_1));
+
+    // Path A0 input: ZED SDK pose with covariance, anchored by the loaded
+    // .area file (Area Memory). The wrapper is launched under namespace
+    // /agv with node name 'zed', so the topic is /agv/zed/pose_with_covariance
+    // (NOT /zed/zed_node/...). Absolute path because the wrapper publishes
+    // outside our namespace remap chain. SensorDataQoS — best effort,
+    // matches the wrapper's publisher.
+    zed_pose_sub_ = this->create_subscription<
+      geometry_msgs::msg::PoseWithCovarianceStamped>(
+        "/agv/zed/pose_with_covariance", rclcpp::SensorDataQoS(),
+        std::bind(&AutoInitOrchestratorNode::on_zed_pose, this,
+                  std::placeholders::_1));
+
+    // Path A0 gate: ZED SDK spatial memory status. Required to distinguish
+    // a real Area Memory relocalisation from ZED's cold-boot dead-reckoning
+    // origin assertion. Spatial memory states:
+    //   OK          (0) — relocalised against saved landmark DB
+    //   LOOP_CLOSED (1) — detected a loop and corrected
+    //   SEARCHING   (2) — actively searching, NOT yet matched — DO NOT ACCEPT
+    //   OFF         (3) — Area Memory disabled — DO NOT ACCEPT
+    // on_zed_pose_status() updates zed_spatial_memory_ok_; on_zed_pose()
+    // only increments the consecutive-low-cov counter when that flag is true.
+    zed_pose_status_sub_ = this->create_subscription<
+      zed_msgs::msg::PosTrackStatus>(
+        "/agv/zed/pose/status", rclcpp::SensorDataQoS(),
+        std::bind(&AutoInitOrchestratorNode::on_zed_pose_status, this,
+                  std::placeholders::_1));
 
     // Periodic save timer. Saves only when a map is loaded AND a fresh pose
     // has been received. Cheap — atomic snapshot + small JSON file write.
@@ -199,12 +289,114 @@ private:
     has_marker_ = true;
   }
 
+  // Path A0 input: every ZED SDK pose update with covariance. We track a
+  // sliding "consecutive low-covariance frames" counter so try_zed_area_memory_path()
+  // can pick the moment Area Memory is confidently relocalised. Resets the
+  // counter on any frame that exceeds either covariance threshold so a single
+  // false-positive match cannot be combined with later good frames.
+  //
+  // Covariance row-major layout in PoseWithCovarianceStamped (6x6):
+  //   [0]=xx [7]=yy [14]=zz [21]=rr [28]=pp [35]=yaw_yaw
+  //
+  // Frames only count when the ZED spatial memory status is OK or LOOP_CLOSED
+  // (see on_zed_pose_status). Without that gate, a cold-boot ZED publishes
+  // tiny covariances from dead-reckoning and passes the covariance check
+  // trivially — even with no .area file loaded. The file-existence precheck
+  // in try_zed_area_memory_path is belt; this gate is suspenders.
+  void on_zed_pose(
+    const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
+  {
+    std::lock_guard<std::mutex> lock(zed_pose_mutex_);
+    last_zed_pose_ = *msg;
+    has_zed_pose_ = true;
+
+    const double xx = msg->pose.covariance[0];
+    const double yy = msg->pose.covariance[7];
+    const double yaw_yaw = msg->pose.covariance[35];
+
+    const bool xy_ok = (xx <= zed_max_xy_cov_m2_) && (yy <= zed_max_xy_cov_m2_);
+    const bool yaw_ok = (yaw_yaw <= zed_max_yaw_cov_rad2_);
+    const bool spatial_ok = zed_spatial_memory_ok_.load();
+
+    if (xy_ok && yaw_ok && spatial_ok) {
+      ++zed_consecutive_low_cov_;
+    } else {
+      zed_consecutive_low_cov_ = 0;
+    }
+  }
+
+  // Spatial-memory status gate for Path A0. We accept only OK (normal) and
+  // LOOP_CLOSED (just corrected a loop, still a valid relocalisation state).
+  // SEARCHING means the SDK is actively hunting and has not matched yet;
+  // OFF means Area Memory is disabled and no relocalisation will ever happen.
+  void on_zed_pose_status(
+    const zed_msgs::msg::PosTrackStatus::SharedPtr msg)
+  {
+    const bool ok =
+      (msg->spatial_memory_status == zed_msgs::msg::PosTrackStatus::OK) ||
+      (msg->spatial_memory_status == zed_msgs::msg::PosTrackStatus::LOOP_CLOSED);
+    zed_spatial_memory_ok_.store(ok);
+  }
+
   void on_odometry(const nav_msgs::msg::Odometry::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(odom_mutex_);
     const auto& p = msg->pose.pose;
     last_odom_pose_ = pose_from_quat(p.orientation.z, p.orientation.w,
                                      p.position.x, p.position.y);
     has_odom_ = true;
+  }
+
+  // Re-fire the init sequence whenever the operator transitions into "nav"
+  // mode from any other mode (typically "mapping" → "nav" via the dashboard
+  // tab switch). Without this, switching tabs publishes /agv/mode but never
+  // /agv/maps/loaded, so the orchestrator stays idle and ekf_global keeps
+  // its (0,0,0) seed — exactly the failure mode the user was hitting.
+  //
+  // Gating rules:
+  //   - only on TRANSITION into "nav" (not on every republish)
+  //   - if no map is currently loaded → publish FAILED with a clear reason
+  //     instead of running the cascade against an empty map name
+  //   - if we are already LOCALIZED → skip the re-run (free retry is cheap
+  //     when we're not LOCALIZED, but a 10s AprilTag wait when we already
+  //     have a fix is wasteful)
+  void on_mode_change(const std_msgs::msg::String::SharedPtr msg) {
+    const std::string new_mode = msg->data;
+    std::string previous_mode;
+    std::string map_name;
+    std::string current_state;
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      previous_mode = last_seen_mode_;
+      last_seen_mode_ = new_mode;
+      map_name = current_map_name_;
+      current_state = current_state_;
+    }
+
+    if (new_mode != "nav") return;
+    if (previous_mode == "nav") return;  // not an actual transition
+
+    RCLCPP_INFO(get_logger(),
+      "mode transition '%s' → 'nav' detected", previous_mode.c_str());
+
+    if (map_name.empty()) {
+      set_state(STATE_FAILED,
+        "navigation mode entered but no map loaded — load a map first");
+      return;
+    }
+
+    if (current_state == STATE_LOCALIZED) {
+      RCLCPP_INFO(get_logger(),
+        "Already LOCALIZED for map '%s'; skipping re-init on mode change",
+        map_name.c_str());
+      return;
+    }
+
+    RCLCPP_INFO(get_logger(),
+      "Auto-init triggered by mode transition to 'nav' for map '%s'",
+      map_name.c_str());
+    if (worker_.joinable()) worker_.join();
+    worker_ = std::thread(&AutoInitOrchestratorNode::run_init_sequence,
+                          this, map_name);
   }
 
   void on_reinitialize(
@@ -230,6 +422,26 @@ private:
     res->message = "Reinitialization started";
   }
 
+  // Handler for /agv/localization/save_last_known_pose. Called by
+  // map_manager_node::on_save_map synchronously so that <map>_meta.json is
+  // written with the current pose at the moment of Save, not 30s later when
+  // the periodic save fires. Respects the same guards as the periodic save
+  // (never-called, implausible-distance). Returns success=true even when a
+  // guard refuses: the save_map chain proceeds because Path C is
+  // best-effort, and the periodic save will retry on the next tick.
+  void on_save_last_known_pose(
+    const std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
+    std_srvs::srv::Trigger::Response::SharedPtr res)
+  {
+    // save_last_known_pose_to_disk returns (success, reason). Guards
+    // (never-called, no odom, implausible pose) map to success=false with
+    // a human-readable reason. map_manager treats false as non-fatal —
+    // the next periodic save will retry if conditions improve.
+    const auto [ok, detail] = save_last_known_pose_to_disk("save_map");
+    res->success = ok;
+    res->message = ok ? ("wrote " + detail) : ("refused: " + detail);
+  }
+
   // ── Sequence ────────────────────────────────────────────────────────────
 
   // Cascading localization strategy — the orchestrator must NEVER ask the
@@ -252,6 +464,18 @@ private:
   //   dashboard shows the manual pose modal as an absolute last resort.
   void run_init_sequence(const std::string& map_name) {
     set_state(STATE_INITIALIZING, "selecting localization strategy");
+
+    // Path A0 — ZED SDK Area Memory. Tag-free, vision-anchored, runs first
+    // because it is the only path that does not require an AprilTag in view.
+    set_state(STATE_INITIALIZING,
+              "Path A0: waiting for ZED Area Memory relocalisation");
+    if (try_zed_area_memory_path()) {
+      return;  // LOCALIZED already published
+    }
+    RCLCPP_INFO(get_logger(),
+      "Path A0 (ZED Area Memory) did not converge in %.1fs, "
+      "falling through to Path A (cuVSLAM + AprilTag)",
+      zed_area_timeout_s_);
 
     const std::string cuvslam_folder = map_dir_ + "/" + map_name + "_cuvslam";
     const bool has_cuvslam_db = fs::exists(cuvslam_folder);
@@ -304,6 +528,105 @@ private:
       set_state(STATE_DEGRADED,
                 "Path C: last-known pose from previous session (drive slowly)");
     }
+  }
+
+  // Path A0 — wait for ZED SDK Area Memory to relocalise.
+  //
+  // The wrapper loads the .area landmark DB at startup if the file exists,
+  // then runs visual-inertial SLAM. Once it matches enough landmarks against
+  // the saved DB, it publishes /zed/zed_node/pose_with_covariance with low
+  // covariance in the SDK map frame. We wait for `zed_min_consecutive_`
+  // consecutive samples below the covariance thresholds (or `zed_area_timeout_s_`,
+  // whichever comes first), then seed ekf_global via SetPose.
+  //
+  // Why consecutive samples instead of a single low-covariance sample:
+  //   greenhouse crop rows are visually repetitive, so a single matched
+  //   frame can be a false positive. Demanding N in a row makes a false
+  //   positive turn into a sustained illusion across ~330ms (N=5 at 15 Hz),
+  //   which is much harder for the SDK to fabricate than a single frame.
+  //
+  // Why we still call SetPose instead of relying on pose1 alone:
+  //   pose1 feeds ekf_global continuously, but ekf_global needs an initial
+  //   anchor before the first absolute correction lands. SetPose snaps the
+  //   filter to the SDK's belief immediately so pose1 corrections after
+  //   that are within the rejection threshold (4.0 Mahalanobis).
+  //
+  // Returns true if successfully relocalised, false on timeout. Never
+  // throws — caller falls through to the next path on false.
+  bool try_zed_area_memory_path() {
+    // ── File-existence precheck ──────────────────────────────────────────
+    // If the .area landmark database does not exist on disk, the SDK has
+    // nothing to relocalise against and will dead-reckon from its cold-boot
+    // origin. Waiting 8 s for covariance convergence here is a false-positive
+    // trap — the SDK publishes tiny covariances (~1e-5, five orders of
+    // magnitude below our threshold) within ~150 ms of startup without any
+    // real map match. Skip immediately so the cascade can fall through to
+    // Path A (cuVSLAM) or Path B (AprilTag) without wasting the timeout.
+    if (!fs::exists(zed_area_file_path_)) {
+      RCLCPP_INFO(get_logger(),
+        "Path A0 skipped: no .area file at %s — nothing to relocalise against",
+        zed_area_file_path_.c_str());
+      return false;
+    }
+    // Placeholder empty landing pad exists at boot so the ZED wrapper does
+    // not clear its cached member; that file has 0 bytes and carries no
+    // landmarks. Treat that exactly like "no file" to avoid wasting the
+    // timeout waiting for covariance convergence.
+    try {
+      if (fs::file_size(zed_area_file_path_) == 0) {
+        RCLCPP_INFO(get_logger(),
+          "Path A0 skipped: landing pad %s is empty (no landmarks yet)",
+          zed_area_file_path_.c_str());
+        return false;
+      }
+    } catch (const std::exception& e) {
+      RCLCPP_WARN(get_logger(),
+        "Path A0: could not stat %s: %s", zed_area_file_path_.c_str(), e.what());
+      return false;
+    }
+
+    // ── Reset counters so we only count frames that arrive AFTER Path A0
+    //    started. Older buffered frames could be from before we loaded the
+    //    right area file, so they cannot be trusted. ─────────────────────
+    {
+      std::lock_guard<std::mutex> lock(zed_pose_mutex_);
+      zed_consecutive_low_cov_ = 0;
+    }
+
+    const auto deadline =
+      this->now() + rclcpp::Duration::from_seconds(zed_area_timeout_s_);
+    while (rclcpp::ok() && this->now() < deadline) {
+      Pose2D snapshot_pose;
+      bool ready = false;
+      {
+        std::lock_guard<std::mutex> lock(zed_pose_mutex_);
+        if (has_zed_pose_ &&
+            zed_consecutive_low_cov_ >= zed_min_consecutive_)
+        {
+          const auto& p = last_zed_pose_.pose.pose;
+          snapshot_pose = pose_from_quat(
+            p.orientation.z, p.orientation.w, p.position.x, p.position.y);
+          ready = true;
+        }
+      }
+      if (ready) {
+        RCLCPP_INFO(get_logger(),
+          "Path A0: ZED Area Memory relocalised after %d frames at "
+          "(%.2f, %.2f, %.1f°)",
+          zed_min_consecutive_, snapshot_pose.x, snapshot_pose.y,
+          snapshot_pose.theta * 180.0 / M_PI);
+        if (!call_set_pose(snapshot_pose)) {
+          RCLCPP_ERROR(get_logger(),
+            "Path A0: relocalised but set_pose to ekf_global failed");
+          return false;
+        }
+        set_state(STATE_LOCALIZED,
+                  "Path A0: ZED Area Memory relocalised (spatial_memory OK, no AprilTag)");
+        return true;
+      }
+      std::this_thread::sleep_for(50ms);
+    }
+    return false;
   }
 
   // Tries the cuVSLAM path: load_map → wait pose hint → localize_in_map
@@ -412,6 +735,41 @@ private:
       p.x = extract_number(content, "\"x\"");
       p.y = extract_number(content, "\"y\"");
       p.theta = extract_number(content, "\"theta\"");
+
+      // ── Path C load guard (mirror of the save guard) ──────────────────
+      // save_last_known_pose_to_disk refuses to persist poses >200 m from
+      // origin (added 2026-04-12 after the phantom-pose self-poisoning
+      // loop). But legacy meta.json files written before that guard may
+      // still contain garbage. Validate on LOAD as well so a stale corrupt
+      // file from a past session cannot re-seed ekf_global with a phantom
+      // pose that would then feed scan_grid_mapper and OOM the backend.
+      //
+      // On detection: rename the offending file to .corrupt-{timestamp}
+      // for forensics, log loudly, and return nullopt so the cascade
+      // proceeds to FAILED instead of DEGRADED.
+      constexpr double kMaxReasonableDistanceM = 200.0;
+      if (std::abs(p.x) > kMaxReasonableDistanceM ||
+          std::abs(p.y) > kMaxReasonableDistanceM)
+      {
+        const auto now_s = std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::system_clock::now().time_since_epoch()).count();
+        const auto corrupt_path =
+          meta_path + ".corrupt-" + std::to_string(now_s);
+        RCLCPP_ERROR(get_logger(),
+          "Path C REJECTED: %s has implausible pose (%.1f, %.1f) — "
+          "renaming to %s and falling through to FAILED. "
+          "This is almost certainly a legacy corrupt file from before "
+          "the save-side guard was added.",
+          meta_path.c_str(), p.x, p.y, corrupt_path.c_str());
+        try {
+          fs::rename(meta_path, corrupt_path);
+        } catch (const std::exception& rename_err) {
+          RCLCPP_WARN(get_logger(),
+            "Also failed to rename corrupt meta file: %s", rename_err.what());
+        }
+        return std::nullopt;
+      }
+
       return std::make_pair<std::string, Pose2D>("last_known", std::move(p));
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "Failed to parse %s: %s", meta_path.c_str(), e.what());
@@ -501,6 +859,10 @@ private:
       RCLCPP_INFO(get_logger(),
         "set_pose applied: (%.2f, %.2f, %.1f°)",
         hint.x, hint.y, hint.theta * 180.0 / M_PI);
+      // Mark that we have explicitly seeded ekf_global at least once.
+      // periodic_save_to_disk uses this flag to refuse persisting an
+      // uninitialized (0,0,0) pose that would later poison Path C.
+      set_pose_ever_called_.store(true);
       return true;
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "set_pose exception: %s", e.what());
@@ -544,7 +906,28 @@ private:
   // (SIGINT/SIGTERM from `ros2 launch`). Safe to call repeatedly — atomic
   // write via temp file + rename to avoid half-written files if we're killed
   // mid-write.
-  void save_last_known_pose_to_disk(const std::string& reason) {
+  //
+  // Sanity guards (added 2026-04-12 after a self-poisoning loop was found):
+  //
+  //   1. Refuse to save until set_pose has been called at least once. The
+  //      ekf_global boots at (0,0,0) before any pose source seeds it; if
+  //      we save that uninitialized origin and then Path C reads it back,
+  //      we override every legitimate localization with (0,0,0).
+  //
+  //   2. Refuse to save implausible poses (>200m from origin). A
+  //      greenhouse rarely exceeds 100m. If ekf_global has drifted to
+  //      hundreds of meters, the pose is definitely garbage from a bad
+  //      cuVSLAM jump, a false-positive Area Memory match, or a buggy
+  //      diff integration. Persisting that to disk poisons every future
+  //      boot via Path C and is exactly the bug that took down the
+  //      backend live_map subscriber via scan_grid_mapper expansion.
+  //
+  // Both guards are *defensive*: they do not fix the upstream cause of
+  // bad poses, only stop us from caching them.
+  // Returns a pair: (success, reason_if_failed). success=true means the file
+  // was written to disk atomically. success=false means a safety guard
+  // refused OR the write itself failed; `reason_if_failed` is human-readable.
+  std::pair<bool, std::string> save_last_known_pose_to_disk(const std::string& reason) {
     std::string map_name;
     {
       // Read current_map_name_ (written from the worker thread; we use a
@@ -553,7 +936,14 @@ private:
       std::lock_guard<std::mutex> lock(state_mutex_);
       map_name = current_map_name_;
     }
-    if (map_name.empty()) return;  // no map loaded → nothing meaningful to save
+    if (map_name.empty()) return {false, "no map loaded"};
+
+    // Guard 1: never save before the localization cascade has explicitly
+    // seeded ekf_global at least once. set_pose_ever_called_ is true after
+    // any successful call_set_pose() (which only happens via Path A0/A/B/C).
+    if (!set_pose_ever_called_.load()) {
+      return {false, "set_pose never called — ekf_global not yet seeded by any cascade path"};
+    }
 
     Pose2D pose;
     bool have_pose = false;
@@ -564,7 +954,22 @@ private:
         have_pose = true;
       }
     }
-    if (!have_pose) return;  // no odometry received yet
+    if (!have_pose) return {false, "no odometry received yet"};
+
+    // Guard 2: refuse to persist implausible poses. Greenhouses are <100m;
+    // any pose >200m from origin is corrupt. Log loudly so we notice the
+    // upstream bug but do NOT poison disk.
+    constexpr double kMaxReasonableDistanceM = 200.0;
+    if (std::abs(pose.x) > kMaxReasonableDistanceM ||
+        std::abs(pose.y) > kMaxReasonableDistanceM)
+    {
+      RCLCPP_WARN(get_logger(),
+        "Refusing to %s-save implausible pose (%.1f, %.1f) — likely upstream "
+        "ekf_global corruption (cuVSLAM jump, bad set_pose, or pose1 outlier). "
+        "Disk meta.json will NOT be poisoned.",
+        reason.c_str(), pose.x, pose.y);
+      return {false, "pose implausible (>200m from origin)"};
+    }
 
     const auto final_path = map_dir_ + "/" + map_name + meta_suffix_;
     const auto tmp_path = final_path + ".tmp";
@@ -572,7 +977,7 @@ private:
       std::ofstream out(tmp_path, std::ios::trunc);
       if (!out.is_open()) {
         RCLCPP_WARN(get_logger(), "Could not open %s for writing", tmp_path.c_str());
-        return;
+        return {false, "failed to open tmp file for writing"};
       }
       const auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -584,7 +989,7 @@ private:
       out.close();
       // Atomic rename so readers never see a half-written file
       fs::rename(tmp_path, final_path);
-      if (reason == "shutdown") {
+      if (reason != "periodic") {
         RCLCPP_INFO(get_logger(),
           "Last-known-pose saved (%s): map='%s' pose=(%.3f, %.3f, %.1f°) → %s",
           reason.c_str(), map_name.c_str(), pose.x, pose.y,
@@ -592,8 +997,10 @@ private:
       } else {
         RCLCPP_DEBUG(get_logger(), "Periodic last-known-pose save: %s", final_path.c_str());
       }
+      return {true, final_path};
     } catch (const std::exception& e) {
       RCLCPP_WARN(get_logger(), "Failed to save last-known-pose: %s", e.what());
+      return {false, std::string("exception: ") + e.what()};
     }
   }
 
@@ -622,17 +1029,28 @@ private:
   double retry_backoff_s_{2.0};
   std::string meta_suffix_{"_meta.json"};
   double periodic_save_interval_s_{30.0};
+  // Path A0 — ZED SDK Area Memory parameters
+  double zed_area_timeout_s_{8.0};
+  double zed_max_xy_cov_m2_{0.10};
+  double zed_max_yaw_cov_rad2_{0.05};
+  int zed_min_consecutive_{5};
+  std::string zed_area_file_path_{"/home/orza/agv_data/maps/.current.area"};
 
-  std::mutex state_mutex_;  // protects current_map_name_ + current_state_
+  std::mutex state_mutex_;  // protects current_map_name_ + current_state_ + last_seen_mode_
   std::string current_map_name_;
   std::string current_state_;
+  std::string last_seen_mode_{"unknown"};  // last value seen on /agv/mode
   std::thread worker_;
 
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr map_loaded_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr marker_pose_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr zed_pose_sub_;
+  rclcpp::Subscription<zed_msgs::msg::PosTrackStatus>::SharedPtr zed_pose_status_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reinit_srv_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_pose_srv_;
   rclcpp::Client<isaac_ros_visual_slam_interfaces::srv::FilePath>::SharedPtr load_map_client_;
   rclcpp::Client<isaac_ros_visual_slam_interfaces::srv::LocalizeInMap>::SharedPtr localize_client_;
   rclcpp::Client<robot_localization::srv::SetPose>::SharedPtr set_pose_client_;
@@ -643,9 +1061,24 @@ private:
   rclcpp::Time last_marker_time_{0, 0, RCL_ROS_TIME};
   geometry_msgs::msg::PoseWithCovarianceStamped last_marker_pose_;
 
+  // Path A0 — ZED SDK Area Memory pose state
+  std::mutex zed_pose_mutex_;
+  bool has_zed_pose_{false};
+  int zed_consecutive_low_cov_{0};
+  geometry_msgs::msg::PoseWithCovarianceStamped last_zed_pose_;
+  // Atomic because updated from pose/status callback (executor thread) and
+  // read from on_zed_pose callback (same executor, but the coupling is
+  // across topic callbacks so atomic is simpler than sharing the mutex).
+  std::atomic<bool> zed_spatial_memory_ok_{false};
+
   std::mutex odom_mutex_;
   bool has_odom_{false};
   Pose2D last_odom_pose_{};
+
+  // Sanity guard for periodic_save: only persist after the cascade has
+  // explicitly called set_pose at least once. Atomic because it is read by
+  // the wall-timer thread and written by the worker thread.
+  std::atomic<bool> set_pose_ever_called_{false};
 };
 
 int main(int argc, char** argv) {

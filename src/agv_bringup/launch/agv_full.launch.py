@@ -32,7 +32,7 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument, IncludeLaunchDescription, TimerAction,
 )
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
@@ -50,9 +50,20 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('agv_bringup')
     nav_dir = get_package_share_directory('agv_navigation')
     cuvslam_no_tf = os.path.join(bringup_dir, 'config', 'cuvslam_greenhouse.yaml')
-    maps_dir = os.path.join(nav_dir, 'maps')
+    # Fase 7 F3: map_dir unified to ${AGV_DATA_DIR}/maps. Previously
+    # maps_dir = os.path.join(nav_dir, 'maps') which pointed at the colcon
+    # install share (read-only template dir). Save operations to map_manager
+    # were writing per-map .area/cuvslam/meta sidecars into the install
+    # share while agv_ui_backend reads from AGV_DATA_DIR, causing save/load
+    # asymmetry. All consumers now agree on AGV_DATA_DIR/maps — canonical
+    # value in specs/project.yaml#deployment.default_data_dir.
+    maps_dir = os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data') + '/maps'
     missions_file = os.path.join(nav_dir, 'missions', 'missions.json')
     slam_loc_config = os.path.join(nav_dir, 'config', 'slam_toolbox_localization.yaml')
+
+    # map_yaml controls whether Nav2 + the full safety chain come up. Empty
+    # string ⇒ mapping-first mode: no Nav2, no collision_monitor, no gate.
+    has_map = PythonExpression(["'", map_yaml, "' != ''"])
 
     return LaunchDescription([
         # ── Arguments ──
@@ -77,7 +88,10 @@ def generate_launch_description():
             launch_arguments={'namespace': ns}.items(),
         ),
 
-        # ── ODrive motor control (immediate, listens to cmd_vel_safe from collision monitor) ──
+        # ── ODrive motor control (immediate) ──
+        # With map: listens to cmd_vel_safe, which is the gated output of the
+        # safety chain (teleop/Nav2 → velocity_smoother → collision_monitor →
+        # cmd_vel_collision_safe → cmd_vel_gate → cmd_vel_safe → ODrive).
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -87,6 +101,22 @@ def generate_launch_description():
                 'namespace': ns,
                 'cmd_vel_topic': 'cmd_vel_safe',
             }.items(),
+            condition=IfCondition(has_map),
+        ),
+        # Mapping-first mode (no map): Nav2 and safety chain are not launched,
+        # so the ODrive subscribes directly to /agv/cmd_vel from teleop_server.
+        # This mode is commissioning-only — the operator is expected to drive
+        # line-of-sight at low velocity to build the initial map.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('agv_odrive'), 'launch', 'odrive.launch.py'
+                ])),
+            launch_arguments={
+                'namespace': ns,
+                'cmd_vel_topic': 'cmd_vel',
+            }.items(),
+            condition=UnlessCondition(has_map),
         ),
 
         # ── Ground-filtered LaserScan from ZED point cloud (production pipeline) ──
@@ -295,7 +325,28 @@ def generate_launch_description():
                         'use_sim_time': 'false',
                         'map': map_yaml,
                     }.items(),
-                    condition=IfCondition(PythonExpression(["'", map_yaml, "' != ''"])),
+                    condition=IfCondition(has_map),
+                ),
+            ],
+        ),
+
+        # ── Safety layer (t=6.5s — supervisor + cmd_vel_gate) ──
+        # Only when a map is loaded (Nav2 is up). collision_monitor publishes
+        # cmd_vel_collision_safe → cmd_vel_gate → cmd_vel_safe, consumed by
+        # odrive_can_node. The gate forces zero output on hardware_estop or
+        # safety_supervisor unsafe verdict.
+        # In mapping-first mode the safety chain is bypassed — see the ODrive
+        # mapping-first include above.
+        TimerAction(
+            period=6.5,
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        PathJoinSubstitution([
+                            FindPackageShare('agv_safety'), 'launch', 'safety.launch.py'
+                        ])),
+                    launch_arguments={'namespace': ns}.items(),
+                    condition=IfCondition(has_map),
                 ),
             ],
         ),

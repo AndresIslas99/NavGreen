@@ -1,0 +1,27 @@
+[Unit]
+Description=AGV Post-Boot Health Check
+After=agv.service
+Requires=agv.service
+BindsTo=agv.service
+# Delay the check so the full stack has time to sequence up (agv_full.launch.py
+# schedules nodes up to t+8s, and Nav2 lifecycle activation takes another few
+# seconds on the Jetson).
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=orza
+Environment=HOME=/home/orza
+Environment=ROS_DOMAIN_ID=42
+Environment=CYCLONEDDS_URI=file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml
+# Wait 45 s after agv.service start before probing.
+ExecStartPre=/bin/sleep 45
+ExecStart=/home/orza/ros2_ws/src/agv_bringup/scripts/agv_healthcheck.sh
+# Log all output to the journal so `journalctl -u agv-healthcheck` shows the
+# exact failing check.
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
