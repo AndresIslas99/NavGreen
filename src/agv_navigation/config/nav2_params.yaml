@@ -66,8 +66,39 @@
     #      (14.0) so MPPI never sacrifices forward-ness for path alignment
     # Also see behavior_trees/navigate_to_pose_forward_only.xml for the BT-side
     # removal of the BackUp recovery action.
+    # RotationShimController wraps MPPIController. When the heading error to
+    # the upcoming path exceeds `angular_dist_threshold`, the shim performs a
+    # clean in-place rotation and only hands control to MPPI once the robot
+    # is aligned. This fixes the "oscillating spiral" symptom caused by MPPI
+    # with vx_min=0.0 being unable to sample forward trajectories when facing
+    # away from the path.
+    #
+    # Humble YAML structure: primary_controller is a FLAT STRING (not a nested
+    # sub-namespace), and the primary controller's parameters share the same
+    # yaml namespace as the shim parameters — both live directly under
+    # FollowPath. Verified against docs.nav2.org and the nav2_rotation_shim
+    # README on the humble branch.
+    #
+    # rotate_to_goal_heading: true is CRITICAL for forward-only robots. The
+    # default is false. It was backported to Humble in Nav2 1.1.15 (PR #4332);
+    # the Jetson currently runs 1.1.20, so this flag is available.
     FollowPath:
-      plugin: "nav2_mppi_controller::MPPIController"
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_mppi_controller::MPPIController"
+
+      # ── RotationShim parameters ──
+      angular_dist_threshold: 0.785         # [TUNABLE] rad (~45°) — rotate in-place if heading error exceeds this
+      forward_sampling_distance: 0.5        # [TUNABLE] m — look-ahead along the path to sample target heading
+      rotate_to_heading_angular_vel: 1.0    # [TUNABLE] rad/s — conservative indoor (default 1.8)
+      max_angular_accel: 1.5                # [TUNABLE] rad/s² — conservative (default 3.2)
+      simulate_ahead_time: 1.0              # [ARCHITECTURAL] s — collision-check window during rotation
+      rotate_to_goal_heading: true          # [FIXED-HW] Forward-only robot cannot adjust final heading otherwise
+      # Leave defaults: angular_disengage_threshold (0.3925), closed_loop (true),
+      # rotate_to_heading_once (false), use_path_orientations (false).
+
+      # ── MPPI parameters (flat, same namespace as the shim) ──
+      # All values below are preserved from the 2026-04-12 smoothness tune
+      # and the 2026-04-13 safety cap. Do NOT re-tune MPPI in this PR.
       time_steps: 32                     # [ARCHITECTURAL] 32 × 0.05s = 1.6s horizon
       model_dt: 0.05                     # [ARCHITECTURAL] Time step duration (s)
       batch_size: 1000                   # [ARCHITECTURAL] Halved for Jetson Orin CPU budget
@@ -226,7 +257,7 @@
       # navigate from there. Structurally incompatible with backtracking through
       # already-visited corridors. nvblox keeps running for visualization, mesh,
       # and ground plane estimation but does NOT feed the costmap.
-      plugins: ["voxel_layer", "inflation_layer"]
+      plugins: ["voxel_layer", "denoise_layer", "inflation_layer"]
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: true
@@ -255,10 +286,29 @@
           raytrace_min_range: 0.0
           obstacle_max_range: 2.5       # [TUNABLE] [1.5-4.0] m — max marking range
           obstacle_min_range: 0.0
+      # DenoiseLayer removes isolated salt-and-pepper noise cells before they
+      # reach the inflation layer. Placed between voxel_layer (which receives
+      # raw scan observations) and inflation_layer (which amplifies any single
+      # lethal cell into a full obstacle footprint). minimal_group_size: 2 uses
+      # the fast erosion path (~10x faster than connected-component for >2).
+      denoise_layer:
+        plugin: "nav2_costmap_2d::DenoiseLayer"
+        enabled: true
+        minimal_group_size: 2
+        group_connectivity_type: 8
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0        # [TUNABLE] [1.0-5.0] — higher = faster cost falloff
-        inflation_radius: 1.0           # [TUNABLE] [0.5-1.5] m — obstacle influence radius
+        # inflation_radius reduced from 1.0 → 0.55 to fit 2.0m corridors.
+        # Math: with inscribed radius r=0.37m and I=0.55m, the free margin at
+        # a 2.0m corridor center is W - 2(r+I) = 2.0 - 1.84 = 0.16m. Previous
+        # value 1.0 produced 2.74m total footprint+inflation in a 2.0m corridor,
+        # fully saturating the center and causing MPPI to freeze.
+        # cost_scaling_factor raised from 2.0 → 3.0 for a steeper potential
+        # field and a clearer gradient for MPPI to follow. Nav2 Issue #4314
+        # warns that 4.0/5.0 degrade SmacPlannerHybrid, but this repo uses
+        # SmacPlanner2D and 3.0 is safe in both.
+        cost_scaling_factor: 3.0        # [TUNABLE] [1.0-3.0] — higher = faster cost falloff
+        inflation_radius: 0.55          # [TUNABLE] [0.4-0.7] m — sized for 2m corridors
 
 /**/global_costmap:
   global_costmap:
@@ -275,7 +325,7 @@
       # never get cleared, leading to "starting point in lethal space" planner
       # failures after any backtracking. nvblox keeps running but does NOT feed
       # this costmap.
-      plugins: ["static_layer", "voxel_layer", "inflation_layer"]
+      plugins: ["static_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: true   # [ARCHITECTURAL] Late subscriber support
@@ -302,10 +352,19 @@
           raytrace_min_range: 0.0
           obstacle_max_range: 2.5
           obstacle_min_range: 0.0
+      # Mirror of local_costmap DenoiseLayer. See local_costmap/denoise_layer
+      # comment for rationale.
+      denoise_layer:
+        plugin: "nav2_costmap_2d::DenoiseLayer"
+        enabled: true
+        minimal_group_size: 2
+        group_connectivity_type: 8
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.0
-        inflation_radius: 1.0
+        # Mirror of local_costmap/inflation_layer. See local_costmap comment
+        # for the corridor math justifying 0.55m.
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
 
 /**/map_server:
   ros__parameters:
