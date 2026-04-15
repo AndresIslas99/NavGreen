@@ -53,6 +53,7 @@ function getStatus(deps: AppDeps) {
       detail: s.localization.detail,
       map: s.localization.map,
     },
+    current_map_name: s.currentMapName,
   };
 }
 
@@ -216,7 +217,13 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
             break;
           case 'mode':
             if (['teleop', 'mapping', 'nav'].includes(msg.mode)) {
-              deps.setMode(msg.mode);
+              // setMode is async now (nav transition validates Nav2 lifecycle
+              // active). Fire-and-forget at the WS layer; the result is
+              // surfaced via eventLog, and the next status tick reflects the
+              // actual currentMode (unchanged if the transition was rejected).
+              deps.setMode(msg.mode).catch((e) => {
+                console.warn('[ws] setMode failed:', e);
+              });
             }
             break;
           case 'nav_goal':

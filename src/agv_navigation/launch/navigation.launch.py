@@ -49,6 +49,7 @@ def _build_nav2(context, *args, **kwargs):
         'map_server',
         'controller_server',
         'planner_server',
+        'smoother_server',
         'behavior_server',
         'bt_navigator',
         'velocity_smoother',
@@ -91,6 +92,18 @@ def _build_nav2(context, *args, **kwargs):
                 package='nav2_planner',
                 executable='planner_server',
                 name='planner_server',
+                parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
+                output='screen',
+            ),
+
+            # Smoother server (post-plan SimpleSmoother)
+            # Accepts the raw plan from planner_server and produces a
+            # curvature-continuous smoothed path before it reaches MPPI.
+            # Invoked from the BT via SmoothPath action.
+            Node(
+                package='nav2_smoother',
+                executable='smoother_server',
+                name='smoother_server',
                 parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
             ),

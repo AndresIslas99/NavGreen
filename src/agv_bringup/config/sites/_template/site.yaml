@@ -1,0 +1,27 @@
+# Site template — copy this directory to sites/<your_site>/ and edit.
+#
+# All keys here are OPTIONAL overrides on top of common/ + robot/. Anything
+# you do not set falls through to the lower layers.
+
+site:
+  name: "TEMPLATE — RENAME ME"
+  country: "MX"
+  timezone: "America/Mexico_City"
+
+  # Path on the Jetson where this site's maps live. Override per-deployment.
+  maps_dir: "/home/orza/agv_data/maps"
+
+  # Path to the operator-edited AprilTag registry for this site.
+  marker_registry: "/home/orza/agv_data/runtime_markers_registry.yaml"
+
+  # Optional Nav2 overrides for this site. Leave commented unless you know
+  # the default in agv_navigation/config/nav2_params.yaml is wrong here.
+  # nav:
+  #   vx_max: 0.4
+  #   wz_max: 1.5
+  #   slowdown_ratio: 0.3
+
+  # Optional perception overrides for this site (cuVSLAM tuning is the most
+  # likely thing you will want to override per greenhouse).
+  # perception:
+  #   cuvslam_params: "config/perception/cuvslam_default.yaml"

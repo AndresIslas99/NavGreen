@@ -1,9 +1,12 @@
-spec_version: "1.1"
+spec_version: "2.0"
+last_updated: "2026-04-13"
+last_audit: "2026-04-13"
+audit_document: "docs/audit/2026-04-13-full-audit.md"
 
 project:
   id: "agv-greenhouse-mvp"
   name: "AGV Greenhouse MVP for First Site Visit"
-  status: "planning"
+  status: "in_progress_audit_phase"
   primary_goal: "Deliver a field-ready AGV that can be teleoperated from a local tablet, build and load a map, execute waypoint missions, and show live status during the first greenhouse visit."
   success_definition:
     - "Operator can control robot from browser over local WiFi"
@@ -20,6 +23,27 @@ deployment_targets:
   production:
     compute: "Jetson Orin NX 16GB"
     role: "future production optimization target after MVP stability is proven"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canonical deployment constants — the ONE place where literal values live.
+# Other specs reference these keys instead of repeating the literal:
+#   specs/state_machine.yaml → invariant single_source_of_domain
+#   specs/persistence.yaml    → base_directories.canonical_data
+#   specs/launch_sequence.yaml→ entry_points.production.env_vars
+# ─────────────────────────────────────────────────────────────────────────────
+deployment:
+  ros_domain_id: 42
+  rationale_domain_id: |
+    Domain 42 isolates the production robot from any other ROS 2 participant
+    on the LAN or the l4tbr0 USB bridge (dev PCs default to domain 0). See
+    docs/audit/2026-04-13-full-audit.md section 6, bug #4 for the incident
+    that motivated this choice (ghost sim_*/teleop nodes from a dev PC).
+  default_data_dir: "/home/orza/agv_data"
+  default_dashboard_port: 8090
+  default_image_server_port: 8091
+  default_namespace: "agv"
+  can_interface: "can0"
+  cyclonedds_uri: "file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml"
 
 environment:
   site_type: "commercial greenhouse"
@@ -61,14 +85,18 @@ robot:
       global_filter: "map -> odom from visual SLAM and optional marker correction"
   navigation:
     stack: "Nav2"
-    planner: "Smac Hybrid-A*"
-    controller: "Regulated Pure Pursuit"
+    # Updated 2026-04-13 audit: SmacPlanner2D + MPPI per nav2_params.yaml.
+    # Previous entries (Smac Hybrid-A* / Regulated Pure Pursuit) were stale
+    # from before commit a8180b7 (collision_monitor hardening + MPPI).
+    planner: "SmacPlanner2D"
+    controller: "MPPI (nav2_mppi_controller::MPPIController)"
+    behavior_tree: "custom forward-only (src/agv_navigation/behavior_trees/navigate_to_pose_forward_only.xml)"
     dynamic_obstacle_handling:
-      - "Nav2 Collision Monitor"
-      - "nvblox-derived or equivalent obstacle/costmap layer"
+      - "Nav2 Collision Monitor (two-source: scan + pointcloud)"
+      - "agv_safety cmd_vel_gate as final stage"
     costmap_filters:
-      - "keepout zones"
-      - "speed zones"
+      - "keepout zones (future — zones.json integration)"
+      - "speed zones (future)"
 
 commissioning_protocol:
   mapping_speed_mps:
@@ -90,7 +118,7 @@ commissioning_protocol:
 scope:
   in_scope:
     - id: "teleop_web"
-      package: "agv_teleop"
+      package: "agv_ui_backend"  # Fixed 2026-04-13: was "agv_teleop" which never existed.
       outcome: "Web joystick sends cmd_vel over local WiFi"
     - id: "slam_mapping"
       package: "agv_slam"
@@ -222,3 +250,25 @@ phases:
       - "phase_5_dashboard"
     packages: ["all"]
     gate: "30-minute end-to-end demo passes without technical intervention"
+
+  - id: "phase_audit_2026_04_13"
+    sequence: 99
+    status: "in_progress"
+    depends_on: []
+    packages: ["all"]
+    gate: "All verify_specs checks pass + teleop works end-to-end post-audit"
+    notes: |
+      Full audit + restructure triggered by accumulation of ad-hoc fixes across
+      the reboot-to-production / Area Memory / safety chain iterations. Six
+      sub-phases: Fase 0 (freeze), 1 (audit doc), 2 (specs as SSOT),
+      3 (enforcement scripts), 4 (documentation restructure), 5 (fix violators),
+      6 (resolve latent bugs). Tracked in plan file and in docs/audit/.
+
+post_audit_invariants:
+  - "Every persistent artifact under AGV_DATA_DIR (no hardcoded /home/orza/ in src/)"
+  - "Every ROS topic/service crossing package boundaries declared in specs/interfaces.yaml"
+  - "Every package with C++ code has -Werror"
+  - "Every .py node launched in production has dev_only: true OR is ported to C++17"
+  - "Every package in src/agv_* has CLAUDE.md and TASK.yaml"
+  - "pre-commit hook runs tools/verify_specs/all.sh"
+  - "AGENT_INSTRUCTIONS.md exists and is referenced from root CLAUDE.md"

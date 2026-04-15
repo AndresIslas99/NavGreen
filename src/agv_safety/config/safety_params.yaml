@@ -1,0 +1,51 @@
+# agv_safety — runtime parameters
+#
+# safety_supervisor monitors a configurable list of critical topics. Each topic
+# has a deadline (ms); if no message arrives within deadline, safety_ok drops
+# to false. The three arrays must be the same length and are zipped element-wise.
+#
+# cmd_vel_gate forces zero velocity when safety_ok is false or hardware E-stop
+# is asserted. It also clamps linear/angular to the configured maxima as a
+# defense in depth (Nav2 already caps these but the gate is the last line).
+
+/**/safety_supervisor:
+  ros__parameters:
+    publish_rate_hz: 10.0
+    startup_grace_ms: 3000
+
+    # /agv/collision_monitor_state is DELIBERATELY NOT in this list.
+    #
+    # Nav2's collision_monitor only publishes its state topic when it
+    # processes a cmd_vel_smoothed input — it is NOT a continuous heartbeat.
+    # In teleop at rest, no cmd_vel flows through the Nav2 chain, so the
+    # topic stays silent forever, which causes the supervisor to mark it
+    # stale → safety_ok=false → cmd_vel_gate blocks cmd_vel → teleop broken.
+    #
+    # Discovered 2026-04-13 during Fase 6 bug #1 resolution. See
+    # docs/audit/2026-04-13-full-audit.md for the original (incorrect)
+    # diagnosis and specs/interfaces.yaml for the corrected type.
+    #
+    # collision_monitor liveness is instead verified by:
+    #   1. agv_healthcheck.sh at boot (node presence check)
+    #   2. agv_ui_backend freshness watchdog which gates nav goal dispatch
+    monitored_topics:
+      - "/agv/wheel_odom"
+      - "/agv/odometry/global"
+      - "/agv/scan"
+    monitored_types:
+      - "nav_msgs/msg/Odometry"
+      - "nav_msgs/msg/Odometry"
+      - "sensor_msgs/msg/LaserScan"
+    monitored_deadline_ms:
+      - 100   # wheel_odom @50Hz → 2x period
+      - 250   # ekf_global @10Hz → 2.5x period
+      - 250   # scan @10Hz → 2.5x period
+
+/**/cmd_vel_gate:
+  ros__parameters:
+    # These are the LAST-LINE caps. Nav2 already caps vx_max=0.4 and wz_max=1.5.
+    # Keep these slightly above Nav2 so legitimate commands pass through, but
+    # well under the kinematic limits of the platform.
+    max_linear: 0.5
+    max_angular: 1.6
+    safety_timeout_s: 0.5
