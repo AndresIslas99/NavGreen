@@ -25,6 +25,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'publish_tf', default_value='false',
             description='Publish map->odom TF (set true for cutover from ekf_global)'),
+        DeclareLaunchArgument(
+            'use_sim_time', default_value='false',
+            description='Use /clock (sim_time) — must match the clock domain of '
+                        'the input topics (/agv/wheel_odom, /agv/imu/filtered, etc).'),
 
         Node(
             package='agv_factor_graph',
@@ -34,6 +38,7 @@ def generate_launch_description():
             parameters=[
                 config_file,
                 {'publish_tf': LaunchConfiguration('publish_tf')},
+                {'use_sim_time': LaunchConfiguration('use_sim_time')},
             ],
             output='log',
         ),

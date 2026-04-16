@@ -82,6 +82,20 @@ def generate_launch_description():
     no_map_real = PythonExpression(
         ["'", map_yaml, "' == '' and '", hil_mode, "'.lower() != 'true'"])
 
+    # Derive use_sim_time directly from hil_mode. In HIL the sim publishes
+    # /clock at 72 Hz via IsaacSim's ClockPublisher and every publisher
+    # (wheel_odom, imu, tf, etc.) stamps messages with IsaacReadSimulationTime.
+    # Running the brain on wall_clock against those stamps yields TF_OLD_DATA
+    # rejections on every lookup and premature STALE reports from safety and
+    # fusion_monitor. In production (hil_mode=false) everything is wall_clock.
+    # Known exception: /agv/motor_state and /agv/drive_debug are published by
+    # the sim's sim_motor_gate with a WALL_CLOCK timer (commit 3a4467b, sim
+    # side) because the real ODrive emits at 10 Hz wall regardless of sim
+    # time. Subscribers must NOT age-validate those two topics against
+    # use_sim_time=true — verified that agv_ui_backend does not.
+    use_sim_time = PythonExpression(
+        ["'true' if '", hil_mode, "'.lower() == 'true' else 'false'"])
+
     return LaunchDescription([
         # ── Arguments ──
         DeclareLaunchArgument('namespace', default_value='agv'),
@@ -111,7 +125,10 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('agv_description'), 'launch', 'description.launch.py'
                 ])),
-            launch_arguments={'namespace': ns}.items(),
+            launch_arguments={
+                'namespace': ns,
+                'use_sim_time': use_sim_time,
+            }.items(),
         ),
 
         # ── ODrive motor control (immediate, real hardware only) ──
@@ -220,6 +237,7 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('agv_scan_mapper'), 'config', 'scan_mapper_params.yaml'
                 ]),
+                {'use_sim_time': use_sim_time},
             ],
             respawn=True,
             respawn_delay=2.0,
@@ -287,7 +305,10 @@ def generate_launch_description():
                         PathJoinSubstitution([
                             FindPackageShare('agv_sensor_fusion'), 'launch', 'fusion.launch.py'
                         ])),
-                    launch_arguments={'namespace': ns}.items(),
+                    launch_arguments={
+                        'namespace': ns,
+                        'use_sim_time': use_sim_time,
+                    }.items(),
                 ),
             ],
         ),
@@ -307,6 +328,7 @@ def generate_launch_description():
                     launch_arguments={
                         'namespace': ns,
                         'publish_tf': 'false',  # Parallel mode — ekf_global owns TF
+                        'use_sim_time': use_sim_time,
                     }.items(),
                 ),
             ],
@@ -326,6 +348,7 @@ def generate_launch_description():
                     namespace=ns,
                     parameters=[
                         slam_loc_config,
+                        {'use_sim_time': use_sim_time},
                     ],
                     remappings=[
                         ('scan', 'scan'),
@@ -348,6 +371,7 @@ def generate_launch_description():
                     parameters=[{
                         'map_dir': maps_dir,
                         'map_topic': '/agv/map',
+                        'use_sim_time': use_sim_time,
                     }],
                     output='log',
                 ),
@@ -359,6 +383,7 @@ def generate_launch_description():
                     parameters=[{
                         'missions_file': missions_file,
                         'default_speed': 0.3,
+                        'use_sim_time': use_sim_time,
                     }],
                     output='log',
                 ),
@@ -380,7 +405,7 @@ def generate_launch_description():
                         ])),
                     launch_arguments={
                         'namespace': ns,
-                        'use_sim_time': 'false',
+                        'use_sim_time': use_sim_time,
                         'map': map_yaml,
                         'hil_mode': hil_mode,
                     }.items(),
@@ -404,7 +429,10 @@ def generate_launch_description():
                         PathJoinSubstitution([
                             FindPackageShare('agv_safety'), 'launch', 'safety.launch.py'
                         ])),
-                    launch_arguments={'namespace': ns}.items(),
+                    launch_arguments={
+                        'namespace': ns,
+                        'use_sim_time': use_sim_time,
+                    }.items(),
                     condition=IfCondition(has_map),
                 ),
             ],
@@ -425,6 +453,7 @@ def generate_launch_description():
                         'max_hamming': 0,
                         'detector.threads': 2,
                         'detector.quad_decimate': 2.0,
+                        'use_sim_time': use_sim_time,
                     }],
                     remappings=[
                         ('image_rect', '/agv/zed/left/image_rect_color'),
@@ -447,6 +476,7 @@ def generate_launch_description():
                         'tag_size': 0.2,
                         'covariance_xy': 0.01,
                         'covariance_yaw': 0.03,
+                        'use_sim_time': use_sim_time,
                     }],
                     output='log',
                     condition=IfCondition(enable_markers),
@@ -463,6 +493,7 @@ def generate_launch_description():
                         'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
                         'tag_size': 0.2,
                         'camera_info_topic': '/agv/zed/left/camera_info',
+                        'use_sim_time': use_sim_time,
                     }],
                     output='log',
                     condition=IfCondition(enable_markers),
@@ -492,6 +523,7 @@ def generate_launch_description():
                             get_package_share_directory('agv_localization_init'),
                             'config', 'auto_init_params.yaml'),
                         {'map_dir': '/home/orza/agv_data/maps'},
+                        {'use_sim_time': use_sim_time},
                     ],
                     output='screen',
                     condition=IfCondition(has_map),
@@ -510,6 +542,7 @@ def generate_launch_description():
                     namespace=ns,
                     parameters=[{
                         'trees_dir': '',
+                        'use_sim_time': use_sim_time,
                     }],
                     output='log',
                     condition=IfCondition(enable_behaviors),

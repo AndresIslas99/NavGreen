@@ -25,10 +25,17 @@ def generate_launch_description():
     ekf_local_config = os.path.join(pkg_dir, 'config', 'ekf_local.yaml')
     ekf_global_config = os.path.join(pkg_dir, 'config', 'ekf_global.yaml')
 
+    use_sim_time = LaunchConfiguration('use_sim_time')
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'namespace', default_value='agv',
             description='Robot namespace'),
+        DeclareLaunchArgument(
+            'use_sim_time', default_value='false',
+            description='Use /clock (sim_time) instead of wall_clock. Set to true '
+                        'when the fusion stack consumes sim-produced topics whose '
+                        'headers carry IsaacSim sim_time stamps.'),
 
         # ── Local EKF: wheel_odom + IMU → odom→base_link ──
         Node(
@@ -36,7 +43,7 @@ def generate_launch_description():
             executable='ekf_node',
             name='ekf_local',
             namespace=LaunchConfiguration('namespace'),
-            parameters=[ekf_local_config],
+            parameters=[ekf_local_config, {'use_sim_time': use_sim_time}],
             remappings=[
                 ('odometry/filtered', 'odometry/local'),
             ],
@@ -49,7 +56,7 @@ def generate_launch_description():
             executable='ekf_node',
             name='ekf_global',
             namespace=LaunchConfiguration('namespace'),
-            parameters=[ekf_global_config],
+            parameters=[ekf_global_config, {'use_sim_time': use_sim_time}],
             remappings=[
                 ('odometry/filtered', 'odometry/global'),
             ],
@@ -67,6 +74,7 @@ def generate_launch_description():
                 'covariance_warn_threshold': 0.5,
                 'covariance_error_threshold': 2.0,
                 'stale_timeout_s': 2.0,
+                'use_sim_time': use_sim_time,
             }],
             output='screen',
         ),
