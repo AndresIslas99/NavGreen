@@ -74,6 +74,7 @@ sequence:
       - "topic /agv/motor_state"
       - "cmd_vel → motor currents"
     failure_impact: "Robot cannot move. Wheel odometry missing → ekf_local degraded."
+    condition_hil: "SKIPPED when hil_mode=true (no CAN hardware). Sim PC publishes /agv/wheel_odom and subscribes /agv/cmd_vel_safe directly."
 
   - name: "pointcloud_to_laserscan"
     package: "pointcloud_to_laserscan (external)"
@@ -84,6 +85,7 @@ sequence:
     provides:
       - "topic /agv/scan (LaserScan from ZED depth)"
     failure_impact: "collision_monitor scan_source stops. slam_toolbox stops receiving scans."
+    condition_hil: "SKIPPED when hil_mode=true. Sim PC publishes /agv/scan directly (pre-filtered). Running the Jetson copy subscribes to the raw point cloud over WiFi and saturates the radio."
 
   - name: "image_server"
     package: "agv_image_server"
@@ -107,6 +109,7 @@ sequence:
     package: "agv_slam (includes Isaac ROS components)"
     source: "src/agv_bringup/launch/agv_full.launch.py:172-185"
     start_time_s: 3.0
+    condition_hil: "SKIPPED when hil_mode=true. ZED wrapper needs physical camera (dies with 'CAMERA NOT DETECTED' in sim). cuVSLAM is replaced by sim_global_odom shim publishing /visual_slam/tracking/odometry."
     preconditions:
       - "ZED 2i camera connected and detected by SDK"
       - "cuvslam_greenhouse.yaml present (TF disabled via /**: key)"
@@ -140,6 +143,7 @@ sequence:
       - "topic /agv/imu/filtered (Butterworth-filtered IMU)"
     failure_impact: "EKF filters ingest unfiltered vibration-contaminated IMU data. Pose estimate degraded at speed."
     note: "Must start BEFORE EKF or the filter has no history buffer."
+    condition_hil: "SKIPPED when hil_mode=true. Sim PC provides a pre-filtered IMU via isaac_ros_bridge on /agv/imu/data."
 
   # ── t = 4.0 seconds ──
 
@@ -244,6 +248,7 @@ sequence:
       - "action /agv/navigate_to_pose"
       - "service /agv/map_server/load_map"
     failure_impact: "Navigation disabled. Teleop still works (through the chain if gate is healthy; see bug #1)."
+    condition_hil: "Active in hil_mode=true. hil_mode is forwarded to navigation.launch.py which layers collision_monitor_hil_overrides.yaml on top of the base config — drops collision_monitor.observation_sources.pointcloud_source so the Jetson does not try to consume /agv/zed/point_cloud over WiFi. scan_source stays active for HIL obstacle detection."
 
   # ── t = 6.5 seconds ── (conditional)
 

@@ -27,12 +27,25 @@ def _build_nav2(context, *args, **kwargs):
     ns = LaunchConfiguration('namespace').perform(context)
     use_sim_time_str = LaunchConfiguration('use_sim_time').perform(context)
     use_sim_time = use_sim_time_str.lower() in ('true', '1', 'yes')
+    hil_mode_str = LaunchConfiguration('hil_mode').perform(context)
+    hil_mode = hil_mode_str.lower() in ('true', '1', 'yes')
     map_yaml = LaunchConfiguration('map').perform(context)
     nav2_params_path = LaunchConfiguration('nav2_params').perform(context)
     nav2_override_path = LaunchConfiguration('nav2_params_override').perform(context)
     nav_dir = get_package_share_directory('agv_navigation')
     vel_smoother_params = os.path.join(nav_dir, 'config', 'velocity_smoother.yaml')
     collision_monitor_params = os.path.join(nav_dir, 'config', 'collision_monitor.yaml')
+    # In HIL, drop collision_monitor's pointcloud_source (the 3D defense-in-depth
+    # layer). The sim PC does not publish /agv/zed/point_cloud over the network
+    # without saturating WiFi (~180 Mbps), and even if we accepted the cost the
+    # Jetson already drops the frames. scan_source alone is sufficient for HIL
+    # validation — the 3D coverage is a production-only feature requiring the
+    # local ZED IPC.
+    collision_monitor_hil_override = os.path.join(
+        nav_dir, 'config', 'collision_monitor_hil_overrides.yaml')
+    collision_monitor_params_list = [collision_monitor_params]
+    if hil_mode and os.path.isfile(collision_monitor_hil_override):
+        collision_monitor_params_list.append(collision_monitor_hil_override)
     # Custom forward-only BT — see behavior_trees/navigate_to_pose_forward_only.xml
     # for the rationale (no rear sensor → no BackUp recovery action). Injected
     # here as an absolute path because YAML param files don't expand
@@ -143,11 +156,14 @@ def _build_nav2(context, *args, **kwargs):
             ),
 
             # Collision monitor (cmd_vel_smoothed → cmd_vel_safe)
+            # In HIL, the list includes collision_monitor_hil_overrides.yaml
+            # (drops pointcloud_source); in production it is only the base
+            # config (both scan_source and pointcloud_source active).
             Node(
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
                 name='collision_monitor',
-                parameters=[collision_monitor_params, {'use_sim_time': use_sim_time}],
+                parameters=collision_monitor_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
             ),
 
@@ -181,6 +197,13 @@ def generate_launch_description():
                               description='Path to Nav2 base params YAML'),
         DeclareLaunchArgument('nav2_params_override', default_value='',
                               description='Optional override YAML (HIL differences)'),
+        DeclareLaunchArgument(
+            'hil_mode', default_value='false',
+            description=(
+                'HIL mode: layer collision_monitor_hil_overrides.yaml on top '
+                'of the base collision_monitor config (drops pointcloud_source).'
+            ),
+        ),
 
         OpaqueFunction(function=_build_nav2),
     ])

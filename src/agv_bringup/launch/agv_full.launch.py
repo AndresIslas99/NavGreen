@@ -46,6 +46,13 @@ def generate_launch_description():
     enable_behaviors = LaunchConfiguration('enable_behaviors')
     enable_slam_localization = LaunchConfiguration('enable_slam_localization')
     slam_map_file = LaunchConfiguration('slam_map_file')
+    # hil_mode: when true, skips Jetson-side nodes that conflict with sim
+    # sensors (ZED wrapper+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan).
+    # The sim PC provides their equivalents over the DDS network. The full
+    # brain stack (Nav2, dual EKF, safety chain, auto_init_orchestrator,
+    # map_manager) stays active so PR-validation and operator dashboards
+    # behave like production. See docs/hil_validation.md for the sim contract.
+    hil_mode = LaunchConfiguration('hil_mode')
 
     bringup_dir = get_package_share_directory('agv_bringup')
     nav_dir = get_package_share_directory('agv_navigation')
@@ -65,6 +72,15 @@ def generate_launch_description():
     # string ⇒ mapping-first mode: no Nav2, no collision_monitor, no gate.
     has_map = PythonExpression(["'", map_yaml, "' != ''"])
 
+    # Composed guards for HIL mode. The ODrive branches are gated on both
+    # `has_map` AND `hil_mode` because in HIL there is no CAN hardware to talk
+    # to in either mapping-first or real-map scenarios — the sim PC closes the
+    # cmd_vel loop instead.
+    has_map_real = PythonExpression(
+        ["'", map_yaml, "' != '' and '", hil_mode, "'.lower() != 'true'"])
+    no_map_real = PythonExpression(
+        ["'", map_yaml, "' == '' and '", hil_mode, "'.lower() != 'true'"])
+
     return LaunchDescription([
         # ── Arguments ──
         DeclareLaunchArgument('namespace', default_value='agv'),
@@ -78,6 +94,14 @@ def generate_launch_description():
                               description='Enable SLAM Toolbox in localization mode for loop closure'),
         DeclareLaunchArgument('slam_map_file', default_value='',
                               description='Path to serialized SLAM Toolbox map (without extension)'),
+        DeclareLaunchArgument(
+            'hil_mode', default_value='false',
+            description=(
+                'HIL mode: skip nodes that conflict with sim sensors (ZED+cuVSLAM, '
+                'ODrive CAN, IMU filter, pointcloud_to_laserscan). The full brain '
+                'stack (Nav2, dual EKF, safety chain, orchestrator, map_manager) '
+                'stays active. Default false = production with real hardware.'),
+        ),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -88,10 +112,12 @@ def generate_launch_description():
             launch_arguments={'namespace': ns}.items(),
         ),
 
-        # ── ODrive motor control (immediate) ──
+        # ── ODrive motor control (immediate, real hardware only) ──
         # With map: listens to cmd_vel_safe, which is the gated output of the
         # safety chain (teleop/Nav2 → velocity_smoother → collision_monitor →
         # cmd_vel_collision_safe → cmd_vel_gate → cmd_vel_safe → ODrive).
+        # Skipped when hil_mode=true — in HIL the sim PC closes the cmd_vel
+        # loop via its sim_motor_gate + sim_drive_shaping_node pipeline.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -101,12 +127,13 @@ def generate_launch_description():
                 'namespace': ns,
                 'cmd_vel_topic': 'cmd_vel_safe',
             }.items(),
-            condition=IfCondition(has_map),
+            condition=IfCondition(has_map_real),
         ),
         # Mapping-first mode (no map): Nav2 and safety chain are not launched,
         # so the ODrive subscribes directly to /agv/cmd_vel from teleop_server.
         # This mode is commissioning-only — the operator is expected to drive
         # line-of-sight at low velocity to build the initial map.
+        # Also skipped when hil_mode=true.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -116,10 +143,17 @@ def generate_launch_description():
                 'namespace': ns,
                 'cmd_vel_topic': 'cmd_vel',
             }.items(),
-            condition=UnlessCondition(has_map),
+            condition=IfCondition(no_map_real),
         ),
 
         # ── Ground-filtered LaserScan from ZED point cloud (production pipeline) ──
+        # In production, the ZED wrapper publishes /agv/zed/point_cloud locally
+        # on this Jetson (ROS2 IPC, zero network), so the ~180 Mbps subscription
+        # here is free. In HIL the sim PC publishes the point cloud over the
+        # network and the sim PC runs its own pointcloud_to_laserscan; running a
+        # second copy here saturates the radio and starves /agv/scan. So we skip
+        # it in HIL and consume /agv/scan directly from the sim. See the HIL
+        # validation contract in docs/hil_validation.md.
         Node(
             package='pointcloud_to_laserscan',
             executable='pointcloud_to_laserscan_node',
@@ -149,6 +183,7 @@ def generate_launch_description():
                 ('scan', 'scan'),
             ],
             output='log',
+            condition=UnlessCondition(hil_mode),
         ),
 
         # ── C++ Image Server (camera + depth MJPEG on port 8091) ──
@@ -184,6 +219,10 @@ def generate_launch_description():
         ),
 
         # ── SLAM pipeline (t=3s, TF DISABLED — EKF owns transforms) ──
+        # Skipped in HIL: the ZED wrapper requires physical hardware (it
+        # fails with "CAMERA NOT DETECTED" after a 30s retry window), and
+        # cuVSLAM is replaced by the sim PC's sim_global_odom shim which
+        # publishes /visual_slam/tracking/odometry directly.
         TimerAction(
             period=3.0,
             actions=[
@@ -199,9 +238,15 @@ def generate_launch_description():
                     }.items(),
                 ),
             ],
+            condition=UnlessCondition(hil_mode),
         ),
 
         # ── IMU vibration filter (t=3.5s — must start before EKF) ──
+        # Skipped in HIL: the sim PC publishes a pre-filtered IMU through
+        # isaac_ros_bridge on /agv/imu/data (bias-drift-injected but already
+        # noise-free). ekf_local subscribes to /agv/imu/filtered in production
+        # and to /agv/imu/data in HIL via the hil collision_monitor override
+        # pathway; see the sim contract in docs/hil_validation.md.
         TimerAction(
             period=3.5,
             actions=[
@@ -222,6 +267,7 @@ def generate_launch_description():
                     output='log',
                 ),
             ],
+            condition=UnlessCondition(hil_mode),
         ),
 
         # ── Dual EKF sensor fusion (t=4s) ──
@@ -312,6 +358,10 @@ def generate_launch_description():
         ),
 
         # ── Nav2 stack (t=6s, only if map provided) ──
+        # hil_mode is passed down so navigation.launch.py can append the
+        # collision_monitor HIL override (drops pointcloud_source — the raw
+        # ZED point cloud is not available over the HIL WiFi without saturating
+        # the radio; scan_source alone is enough for HIL validation).
         TimerAction(
             period=6.0,
             actions=[
@@ -324,6 +374,7 @@ def generate_launch_description():
                         'namespace': ns,
                         'use_sim_time': 'false',
                         'map': map_yaml,
+                        'hil_mode': hil_mode,
                     }.items(),
                     condition=IfCondition(has_map),
                 ),

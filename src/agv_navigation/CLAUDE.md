@@ -272,6 +272,22 @@ cmd_vel -> velocity_smoother -> cmd_vel_smoothed -> collision_monitor -> cmd_vel
 - Slowdown zone: 30% speed reduction if obstacle within footprint + 25cm
 - Source: `/agv/scan` only (not depth, to avoid false positives)
 
+### HIL mode override
+
+When `navigation.launch.py` is invoked with `hil_mode:=true` (via
+`agv_full.launch.py hil_mode:=true`), an extra params file
+`config/collision_monitor_hil_overrides.yaml` is layered on top of the base
+config. Its only effect is to override `observation_sources` to
+`["scan_source"]` — that is, it drops `pointcloud_source`.
+
+Rationale: in HIL the raw ZED point cloud is published over the WiFi network
+by the sim PC at ~180 Mbps. The Jetson cannot sustain two consumers of that
+stream (collision_monitor's pointcloud_source AND pointcloud_to_laserscan)
+without starving the small BEST_EFFORT `/agv/scan` topic and tripping
+`safety_supervisor` on "silent: /agv/scan". Dropping the 3D source in HIL
+keeps the bandwidth within budget. Production behavior is untouched — the
+override file is only loaded when the `hil_mode` flag is true.
+
 ## Dependencies
 
 - nav2_bringup, nav2_bt_navigator, nav2_controller, nav2_planner, nav2_behaviors,
