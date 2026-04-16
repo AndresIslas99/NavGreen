@@ -26,18 +26,24 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     ns = LaunchConfiguration('namespace')
+    use_sim_time = LaunchConfiguration('use_sim_time')
     params = os.path.join(
         get_package_share_directory('agv_safety'), 'config', 'safety_params.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value='agv'),
+        DeclareLaunchArgument(
+            'use_sim_time', default_value='false',
+            description='Use /clock (sim_time) for the supervisor watchdog and '
+                        'gate timeout. Must match the clock domain of the monitored '
+                        'topics (/agv/wheel_odom, /agv/odometry/global, /agv/scan).'),
 
         Node(
             package='agv_safety',
             executable='safety_supervisor_node',
             name='safety_supervisor',
             namespace=ns,
-            parameters=[params],
+            parameters=[params, {'use_sim_time': use_sim_time}],
             remappings=[
                 ('software_estop', 'software_estop'),
                 ('~/status', 'safety/status'),
@@ -50,7 +56,7 @@ def generate_launch_description():
             executable='cmd_vel_gate_node',
             name='cmd_vel_gate',
             namespace=ns,
-            parameters=[params],
+            parameters=[params, {'use_sim_time': use_sim_time}],
             remappings=[
                 ('cmd_vel_in', 'cmd_vel_collision_safe'),
                 ('cmd_vel_out', 'cmd_vel_safe'),
