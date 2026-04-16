@@ -19,8 +19,18 @@ them if they need to be revived.
 | File | Purpose | AGV_MODE |
 |------|---------|----------|
 | `agv_full.launch.py` | **Production**: full autonomy stack with Nav2 + safety chain | `real` (default) |
+| `agv_full.launch.py hil_mode:=true` | **HIL with full brain stack**: same as production but skips nodes that need real hardware (ZED+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan) and drops collision_monitor's pointcloud_source; keeps safety chain + orchestrator + map_manager active | `hil_full` |
 | `agv_mapping.launch.py` | Commissioning mapping: cuVSLAM owns TF, SLAM Toolbox in mapping mode, no Nav2 | `mapping` |
-| `agv_hil_full.launch.py` | Hardware-in-the-loop: full stack with simulated sensor inputs | `hil` |
+| `agv_hil_full.launch.py` | **HIL minimal**: simpler HIL stack without the full brain (no safety chain, no orchestrator). For quick sim smoke tests. | `hil` |
+
+### Choosing between `hil` and `hil_full`
+
+- Use `AGV_MODE=hil` (`agv_hil_full.launch.py`) for quick simulator smoke tests
+  where you only need Nav2 + EKF to verify sensor fusion or a basic plan.
+- Use `AGV_MODE=hil_full` (`agv_full.launch.py hil_mode:=true`) when validating
+  changes to the safety chain, `auto_init_orchestrator`, `map_manager`, or any
+  full-stack behavior that the minimal HIL launch omits. This is the mode used
+  during PR validation sprints for the Nav2 refactor.
 
 ## Full Stack Startup Sequence (agv_full.launch.py)
 
@@ -55,6 +65,7 @@ authoritative DAG with preconditions and failure modes. Summary:
 | `enable_markers` | `true` | agv_full |
 | `enable_behaviors` | `false` | agv_full |
 | `enable_slam_localization` | `true` | agv_full |
+| `hil_mode` | `false` | agv_full (skips ZED+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan; drops collision_monitor pointcloud_source) |
 
 ## TF Ownership (Critical)
 

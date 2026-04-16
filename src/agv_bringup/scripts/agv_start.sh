@@ -218,7 +218,20 @@ elif [ "$MODE" = "hil" ]; then
     fi
     exec ros2 launch agv_bringup agv_hil_full.launch.py "map:=$MAP"
 
+elif [ "$MODE" = "hil_full" ]; then
+    # Same brain as production (agv_full.launch.py) but with hil_mode:=true
+    # to skip nodes that need physical hardware (ZED+cuVSLAM, ODrive CAN, IMU
+    # filter, pointcloud_to_laserscan). Use this mode when HIL validation
+    # needs the full brain stack: safety chain, auto_init_orchestrator,
+    # map_manager, and/or the complete Nav2 pipeline as deployed in production.
+    # agv_hil_full.launch.py is the simpler alternative that skips those too.
+    if [ -z "$MAP" ]; then
+        echo "ERROR: AGV_MAP not set. hil_full requires a map. Set it in agv.service or override."
+        exit 1
+    fi
+    exec ros2 launch agv_bringup agv_full.launch.py "map:=$MAP" hil_mode:=true
+
 else
-    echo "ERROR: Unknown AGV_MODE=$MODE (expected: mapping, real, hil)"
+    echo "ERROR: Unknown AGV_MODE=$MODE (expected: mapping, real, hil, hil_full)"
     exit 1
 fi
