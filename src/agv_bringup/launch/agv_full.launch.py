@@ -47,11 +47,12 @@ def generate_launch_description():
     enable_slam_localization = LaunchConfiguration('enable_slam_localization')
     slam_map_file = LaunchConfiguration('slam_map_file')
     # hil_mode: when true, skips Jetson-side nodes that conflict with sim
-    # sensors (ZED wrapper+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan).
-    # The sim PC provides their equivalents over the DDS network. The full
-    # brain stack (Nav2, dual EKF, safety chain, auto_init_orchestrator,
-    # map_manager) stays active so PR-validation and operator dashboards
-    # behave like production. See docs/hil_validation.md for the sim contract.
+    # sensors (ZED wrapper+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan,
+    # image_server). The sim PC provides their equivalents over the DDS
+    # network. The full brain stack (Nav2, dual EKF, safety chain,
+    # auto_init_orchestrator, map_manager) stays active so PR-validation and
+    # operator dashboards behave like production. See docs/hil_validation.md
+    # for the sim contract.
     hil_mode = LaunchConfiguration('hil_mode')
 
     bringup_dir = get_package_share_directory('agv_bringup')
@@ -98,9 +99,10 @@ def generate_launch_description():
             'hil_mode', default_value='false',
             description=(
                 'HIL mode: skip nodes that conflict with sim sensors (ZED+cuVSLAM, '
-                'ODrive CAN, IMU filter, pointcloud_to_laserscan). The full brain '
-                'stack (Nav2, dual EKF, safety chain, orchestrator, map_manager) '
-                'stays active. Default false = production with real hardware.'),
+                'ODrive CAN, IMU filter, pointcloud_to_laserscan, image_server). '
+                'The full brain stack (Nav2, dual EKF, safety chain, orchestrator, '
+                'map_manager) stays active. Default false = production with real '
+                'hardware.'),
         ),
 
         # ── Robot description (URDF → static TF) ──
@@ -187,6 +189,11 @@ def generate_launch_description():
         ),
 
         # ── C++ Image Server (camera + depth MJPEG on port 8091) ──
+        # Skipped when hil_mode=true: in HIL the camera/depth topics come from
+        # the sim PC over WiFi (~30 MB/s RELIABLE). The brain-side image_server
+        # would re-consume them, saturating the radio and starving /clock and
+        # other small topics. In production the ZED feeds are local, no WiFi
+        # involved — image_server runs normally.
         Node(
             package='agv_image_server',
             executable='image_server_node',
@@ -200,6 +207,7 @@ def generate_launch_description():
                 'max_width': 640,
             }],
             output='log',
+            condition=UnlessCondition(hil_mode),
         ),
 
         # ── Live occupancy grid from scan data ──
