@@ -15,6 +15,9 @@ if(BUILD_TESTING)
   # Phase 2 — ROS-free oracle unit tests (always run).
   ament_add_pytest_test(test_mode_transitions_oracle
     test/test_mode_transitions_oracle.py)
+  # Phase 2 G — dispatch router pure-logic tests.
+  ament_add_pytest_test(test_dispatch_logic
+    test/test_dispatch_logic.py)
   # HIL tests — skip themselves when SIM_API_HOST / ROS_DOMAIN_ID=42 are not set.
   # Timeout bumped — each waypoint may take up to 120 s on Nav2.
   ament_add_pytest_test(test_nav2_probe test/test_nav2_probe.py
