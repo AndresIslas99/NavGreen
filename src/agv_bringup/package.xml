@@ -13,6 +13,9 @@
   <exec_depend>agv_odrive</exec_depend>
   <exec_depend>agv_ui_backend</exec_depend>
   <exec_depend>agv_hil_bridges</exec_depend>
+  <exec_depend>agv_zone_detector</exec_depend>
+  <exec_depend>agv_rail_driver</exec_depend>
+  <exec_depend>agv_mode_arbiter</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
 
   <export>
