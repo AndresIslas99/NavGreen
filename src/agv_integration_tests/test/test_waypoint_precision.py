@@ -142,6 +142,8 @@ class WaypointResult:
     modes_observed: Optional[list] = None
     modes_expected: Optional[list] = None
     modes_match: Optional[bool] = None
+    # Phase 2 G: which driver was dispatched for this waypoint.
+    dispatch_used: Optional[str] = None
 
 
 def _quat_to_yaw(x: float, y: float, z: float, w: float) -> float:
@@ -291,6 +293,11 @@ class Harness(Node):
         # Phase 2: record unique mode transitions per waypoint.
         from mode_transitions_oracle import ModeTransitionRecorder
         self._mode_recorder = ModeTransitionRecorder()
+        # Phase 2: raw state JSON strings — consumed by _wait_for_state_value.
+        self.last_rail_approach_state: Optional[str] = None
+        self.last_rail_driver_state: Optional[str] = None
+        # Phase 2: lazy-created publisher for /agv/rail_driver/goal.
+        self._rail_goal_pub = None
 
         self.create_subscription(
             PoseStamped,
@@ -321,6 +328,20 @@ class Harness(Node):
             String,
             "/agv/mode/state",
             self._on_mode_state,
+            reliable_qos,
+        )
+        # Phase 2: rail_approach + rail_driver state subscriptions feed the
+        # dispatch router (_wait_for_state_value) and the reporter.
+        self.create_subscription(
+            String,
+            "/agv/rail_approach/state",
+            lambda m: setattr(self, "last_rail_approach_state", m.data),
+            reliable_qos,
+        )
+        self.create_subscription(
+            String,
+            "/agv/rail_driver/state",
+            lambda m: setattr(self, "last_rail_driver_state", m.data),
             reliable_qos,
         )
 
@@ -354,6 +375,23 @@ class Harness(Node):
 
     def modes_observed(self) -> list:
         return self._mode_recorder.modes_seen()
+
+    def ensure_rail_goal_publisher(self):
+        """Lazy-create the one-shot publisher for /agv/rail_driver/goal.
+
+        Transient-local depth=1 so the rail_driver picks up the latest goal
+        even if the test races ahead of subscriber discovery.
+        """
+        if self._rail_goal_pub is None:
+            latched = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=1,
+            )
+            self._rail_goal_pub = self.create_publisher(
+                PoseStamped, "/agv/rail_driver/goal", latched)
+        return self._rail_goal_pub
 
     def spin_until(self, predicate, timeout_s: float) -> bool:
         deadline = time.monotonic() + timeout_s
@@ -678,6 +716,154 @@ def _check_preconditions() -> None:
         pytest.skip(f"sim_api at {SIM_API_HOST}:{SIM_API_PORT} unreachable: {e}")
 
 
+# ── Phase 2: per-waypoint dispatch router ────────────────────────────
+# Each waypoint can carry a `dispatch` field to pick the driver that
+# navigates to its goal:
+#   * "nav2"          — HTTP POST /goal to sim_api → Nav2 action (legacy path).
+#   * "rail_approach" — call /agv/rail_approach/execute service with tag_id +
+#                       offsets; wait for /agv/rail_approach/state → "settled".
+#   * "rail_drive"    — publish PoseStamped to /agv/rail_driver/goal; wait for
+#                       /agv/rail_driver/state → "reached".
+# When `dispatch` is absent we derive it from the last element of
+# `expected_modes` so legacy tagged yaml continues to work.
+_DISPATCH_FROM_LAST_MODE = {
+    "corridor_nav":         "nav2",
+    "rail_approach_pend":   "nav2",        # pre-ACTIVE → Nav2 still owns cmd_vel
+    "rail_approach_active": "rail_approach",
+    "rail_drive":           "rail_drive",
+    "blocked_handoff":      "nav2",
+    "teleop":               "nav2",
+    "idle":                 "nav2",
+}
+_VALID_DISPATCH = {"nav2", "rail_approach", "rail_drive"}
+
+# Floor-tag ID lookup for aisles {-4.4, -2.2, 0, +2.2, +4.4} (idx 0..4).
+# REAR entry at x=4.0 facing +Z: IDs 33..37.
+# FRONT entry at x=7.0 facing +Z: IDs 2, 3, 4, 12, 13.
+_REAR_APPROACH_TAGS  = [33, 34, 35, 36, 37]
+_FRONT_APPROACH_TAGS = [2,  3,  4,  12, 13]
+
+
+def _dispatch_for(wp: dict) -> str:
+    """Pick a dispatcher for this waypoint.
+
+    Explicit `dispatch` wins. Otherwise derive from `expected_modes[-1]`.
+    Fall back to "nav2" for legacy/ambiguous entries.
+    """
+    explicit = wp.get("dispatch")
+    if isinstance(explicit, str) and explicit in _VALID_DISPATCH:
+        return explicit
+    expected = wp.get("expected_modes") or []
+    if expected:
+        last = expected[-1]
+        if last in _DISPATCH_FROM_LAST_MODE:
+            return _DISPATCH_FROM_LAST_MODE[last]
+    return "nav2"
+
+
+def _derive_tag_id(wp: dict) -> Optional[int]:
+    """Look up the floor tag for a rail_approach waypoint.
+
+    Priority: explicit `tag_id` → aisle lookup via goal's y and expected zone.
+    Returns None when it cannot be resolved (caller reports as failure).
+    """
+    explicit = wp.get("tag_id")
+    if isinstance(explicit, int):
+        return explicit
+    goal = wp.get("goal") or {}
+    goal_x = float(goal.get("x", 0.0))
+    goal_y = float(goal.get("y", 0.0))
+    # Aisle index by nearest center.
+    aisle_centers = [-4.4, -2.2, 0.0, 2.2, 4.4]
+    aisle_idx = min(range(len(aisle_centers)),
+                    key=lambda i: abs(goal_y - aisle_centers[i]))
+    if abs(goal_y - aisle_centers[aisle_idx]) > 0.35:
+        return None  # goal not aisle-aligned
+    if 3.9 <= goal_x <= 4.6:
+        return _REAR_APPROACH_TAGS[aisle_idx]
+    if 6.9 <= goal_x <= 7.6:
+        return _FRONT_APPROACH_TAGS[aisle_idx]
+    return None
+
+
+def _call_rail_approach(harness: "Harness", tag_id: int, offset_x: float,
+                        offset_y: float, timeout_s: float) -> str:
+    """Call /agv/rail_approach/execute and wait for the state to settle.
+
+    Returns one of: "SUCCEEDED" (state=="settled"), "ABORTED" (state==
+    "aborted"), "NAV_TIMEOUT" (neither within timeout_s), or
+    "SERVICE_UNAVAILABLE" (client failed to connect).
+    """
+    from agv_interfaces.srv import RailApproach
+    cli = harness.create_client(RailApproach, "/agv/rail_approach/execute")
+    if not cli.wait_for_service(timeout_sec=5.0):
+        return "SERVICE_UNAVAILABLE"
+    req = RailApproach.Request()
+    req.tag_id = int(tag_id)
+    req.offset_x = float(offset_x)
+    req.offset_y = float(offset_y)
+    fut = cli.call_async(req)
+    # Spin briefly so the service call doesn't sit in the queue.
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and not fut.done():
+        rclpy.spin_once(harness, timeout_sec=0.1)
+    # Poll the state topic for settled/aborted.
+    return _wait_for_state_value(
+        harness, topic_attr="last_rail_approach_state",
+        target_values={"SUCCEEDED": ["settled"], "ABORTED": ["aborted"]},
+        timeout_s=timeout_s)
+
+
+def _publish_rail_goal(harness: "Harness", goal_x: float, goal_y: float,
+                       timeout_s: float) -> str:
+    """Publish /agv/rail_driver/goal and wait for rail_driver reached.
+
+    Returns "SUCCEEDED" on reached, "ABORTED" on blocked_*, or
+    "NAV_TIMEOUT" otherwise.
+    """
+    pub = harness.ensure_rail_goal_publisher()
+    goal = PoseStamped()
+    goal.header.stamp = harness.get_clock().now().to_msg()
+    goal.header.frame_id = "map"
+    goal.pose.position.x = float(goal_x)
+    goal.pose.position.y = float(goal_y)
+    goal.pose.orientation.w = 1.0
+    pub.publish(goal)
+    return _wait_for_state_value(
+        harness, topic_attr="last_rail_driver_state",
+        target_values={
+            "SUCCEEDED": ["reached"],
+            "ABORTED": ["blocked_lateral", "blocked_misaligned"],
+        },
+        timeout_s=timeout_s)
+
+
+def _wait_for_state_value(harness: "Harness", topic_attr: str,
+                           target_values: dict, timeout_s: float) -> str:
+    """Poll a harness attribute (JSON string) for a top-level "state" match.
+
+    `target_values` maps a status label ("SUCCEEDED"/"ABORTED"/...) to a
+    list of JSON state strings that should return it. Returns
+    "NAV_TIMEOUT" on deadline.
+    """
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        rclpy.spin_once(harness, timeout_sec=0.1)
+        payload = getattr(harness, topic_attr, None)
+        if isinstance(payload, str) and payload:
+            # Lightweight JSON extractor (matches the arbiter's C++ helper).
+            try:
+                parsed = json.loads(payload)
+                state = parsed.get("state")
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                state = None
+            if state:
+                for status, values in target_values.items():
+                    if state in values:
+                        return status
+    return "NAV_TIMEOUT"
+
+
 def _run_one_waypoint(
     harness: Harness,
     wp: dict,
@@ -733,6 +919,7 @@ def _run_one_waypoint(
             modes_observed=harness.modes_observed(),
             modes_expected=expected_modes if expected_modes else None,
             modes_match=None,  # cannot assert — wp never actually ran
+            dispatch_used=_dispatch_for(wp),
         )
 
     # 1b. Clear e_stop (latched on by /reset) and arm motors.
@@ -777,12 +964,33 @@ def _run_one_waypoint(
                 _reinit_localization(harness)
                 harness.spin_until(lambda: False, 0.5)
 
-    # 4. Navigate.
+    # 4. Navigate — pick the driver based on the waypoint's dispatch.
     t_nav_start = time.time()
     t_events_start = time.time()
-    status = harness.navigate_to(
-        float(goal["x"]), float(goal["y"]), float(goal["yaw"]), NAV_TIMEOUT_S
-    )
+    dispatch = _dispatch_for(wp)
+    if dispatch == "rail_approach":
+        tag_id = _derive_tag_id(wp)
+        if tag_id is None:
+            status = "DISPATCH_ERROR"
+            print(f"    [dispatch] cannot derive tag_id for rail_approach wp; "
+                  f"goal={goal}", flush=True)
+        else:
+            offset_x = float(wp.get("offset_x", 0.3))
+            offset_y = float(wp.get("offset_y", 0.0))
+            print(f"    [dispatch] rail_approach tag_id={tag_id} "
+                  f"offsets=({offset_x:.2f}, {offset_y:.2f})", flush=True)
+            status = _call_rail_approach(
+                harness, tag_id, offset_x, offset_y, NAV_TIMEOUT_S)
+    elif dispatch == "rail_drive":
+        print(f"    [dispatch] rail_drive goal=({goal['x']:.2f}, "
+              f"{goal['y']:.2f})", flush=True)
+        status = _publish_rail_goal(
+            harness, float(goal["x"]), float(goal["y"]), NAV_TIMEOUT_S)
+    else:
+        # Default: Nav2 via sim_api HTTP /goal.
+        status = harness.navigate_to(
+            float(goal["x"]), float(goal["y"]), float(goal["yaw"]),
+            NAV_TIMEOUT_S)
 
     # 5. Snapshot both poses at terminal.
     rclpy.spin_once(harness, timeout_sec=0.2)
@@ -828,6 +1036,7 @@ def _run_one_waypoint(
         modes_observed=modes_obs,
         modes_expected=expected_modes if expected_modes else None,
         modes_match=modes_match,
+        dispatch_used=dispatch,
     )
 
 
