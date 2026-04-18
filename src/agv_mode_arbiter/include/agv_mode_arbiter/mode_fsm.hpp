@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <string>
 
 namespace agv_mode_arbiter {
@@ -67,6 +68,16 @@ struct FsmInputs {
   std::string operator_mode = "nav";
   // Zone label from /agv/zone/state.
   std::string zone = "gap";
+  // Floor AprilTag ID at the current approach strip (-1 if not an approach).
+  // Read from /agv/zone/state's approach_tag_id field by the ROS wrapper.
+  int approach_tag_id = -1;
+  // Aisle center y from /agv/zone/state (used to derive rail_drive goals).
+  // NaN if zone is not rail-related.
+  double aisle_y_center = std::nan("");
+  // Current robot pose in map frame — used to derive rail_drive goals.
+  // NaN sentinels mean "pose unknown, hold".
+  double current_x = std::nan("");
+  double current_y = std::nan("");
   // /agv/rail_approach/state.state ("idle" | "driving" | "settled" | "aborted").
   std::string rail_approach_state = "idle";
   // /agv/rail_driver/state.state (see agv_rail_driver/rail_controller.hpp).
