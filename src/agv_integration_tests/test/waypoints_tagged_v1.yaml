@@ -1,0 +1,67 @@
+# Waypoints — TAGGED v1 (3-mode architecture, 10 waypoints)
+#
+# 2026-04-18: designed for Round 41 full-mode HIL validation. Exercises all
+# three navigation modes end-to-end: CORRIDOR_NAV, RAIL_APPROACH (AprilTag
+# guided to 2 cm), RAIL_DRIVE (longitudinal only, wz=0). Each waypoint
+# carries `expected_modes` so the test harness can assert the mode_arbiter
+# transition log matches the designed trajectory.
+#
+# Geometry reference (operator-confirmed 2026-04-18):
+#   REAR rail section: x ∈ [-16.5, 3.5]
+#   APPROACH_REAR strip: x ∈ [4.0, 4.5)
+#   GAP: x ∈ (3.5, 7.5)
+#   APPROACH_FRONT strip: x ∈ (6.5, 7.0]
+#   FRONT rail section: x ∈ [7.5, 27.5]
+#   Floor tags at aisle 3 (y=0): id 35 at (4.0, 0), id 4 at (7.0, 0).
+#
+# Per-wp `expected_modes` (in order of first observation): the test asserts
+# that the /agv/mode/state transition log contains these modes as a
+# subsequence (additional intermediate modes are allowed — safety stops,
+# blocked_handoff). An empty list means "don't assert modes".
+
+waypoints:
+  # ── Phase A: gap pure (CORRIDOR_NAV regression coverage) ──
+  - {id: wp01, start: {x: 4.0, y: 0.0, yaw: 0.0}, goal: {x: 4.5, y: 0.0, yaw: 0.0},
+     expected_modes: [corridor_nav]}
+  - {id: wp02, start: {x: 5.0, y: 0.0, yaw: 0.0}, goal: {x: 6.0, y: 0.0, yaw: 0.0},
+     expected_modes: [corridor_nav]}
+  - {id: wp03, start: {x: 5.0, y: 0.0, yaw: 0.0}, goal: {x: 5.5, y: 0.0, yaw: 0.0},
+     expected_modes: [corridor_nav]}
+
+  # ── Phase B: gap → approach_rear → rail_drive (REAR entry, aisle 3) ──
+  # Start inside the gap, goal beyond the floor tag at x=4.0. The arbiter
+  # should see zone=gap → zone=rail_approach_rear → driving (approach) →
+  # settled → rail_drive.
+  - {id: wp04, start: {x: 5.2, y: 0.0, yaw: 3.14159},  # face −X to drive toward REAR
+     goal:  {x: 4.2, y: 0.0, yaw: 3.14159},
+     expected_modes: [corridor_nav, rail_approach_pend, rail_approach_active, rail_drive]}
+
+  # ── Phase C: RAIL_DRIVE traversal REAR aisle 3 (3 m into x=[1, 4]) ──
+  # Precondition: wp04 left robot settled at (~4.0, 0, π). rail_drive
+  # carries it to (1.0, 0, π) via its published goal.
+  - {id: wp05, start: {x: 4.0, y: 0.0, yaw: 3.14159},
+     goal:  {x: 1.0, y: 0.0, yaw: 3.14159},
+     expected_modes: [rail_drive, corridor_nav]}
+
+  # ── Phase D: RAIL_DRIVE back out REAR, return to gap ──
+  - {id: wp06, start: {x: 1.0, y: 0.0, yaw: 0.0},
+     goal:  {x: 4.2, y: 0.0, yaw: 0.0},
+     expected_modes: [corridor_nav]}  # x < 4.0 is plain REAR, not approach
+
+  # ── Phase E: gap → approach_front → rail_drive (FRONT entry, aisle 3) ──
+  - {id: wp07, start: {x: 5.5, y: 0.0, yaw: 0.0},
+     goal:  {x: 6.8, y: 0.0, yaw: 0.0},
+     expected_modes: [corridor_nav, rail_approach_pend, rail_approach_active, rail_drive]}
+
+  # ── Phase F: RAIL_DRIVE FRONT 3 m into aisle, then return ──
+  - {id: wp08, start: {x: 7.0, y: 0.0, yaw: 0.0},
+     goal:  {x: 10.0, y: 0.0, yaw: 0.0},
+     expected_modes: [rail_drive]}
+  - {id: wp09, start: {x: 10.0, y: 0.0, yaw: 3.14159},
+     goal:  {x: 7.0, y: 0.0, yaw: 3.14159},
+     expected_modes: [rail_drive, corridor_nav]}
+
+  # ── Phase G: exit FRONT approach back to gap centre ──
+  - {id: wp10, start: {x: 7.0, y: 0.0, yaw: 3.14159},
+     goal:  {x: 5.5, y: 0.0, yaw: 3.14159},
+     expected_modes: [corridor_nav]}

@@ -28,6 +28,7 @@ import json
 import math
 import os
 import statistics
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -35,6 +36,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+# The mode_transitions_oracle helper sits next to this file in the test
+# directory; make it importable whether pytest runs from the workspace
+# root or from this directory.
+sys.path.insert(0, str(Path(__file__).parent))
 
 import pytest
 
@@ -130,6 +136,12 @@ class WaypointResult:
     status: str
     events_during: list
     duration_s: float
+    # Phase 2 instrumentation: ordered list of unique modes observed on
+    # /agv/mode/state during this waypoint, plus an expected_modes check
+    # result. None/[] when the topic wasn't observed (legacy waypoints).
+    modes_observed: Optional[list] = None
+    modes_expected: Optional[list] = None
+    modes_match: Optional[bool] = None
 
 
 def _quat_to_yaw(x: float, y: float, z: float, w: float) -> float:
@@ -276,6 +288,9 @@ class Harness(Node):
         self.brain_odom: Optional[Odometry] = None
         self.reset_done_stamp: Optional[float] = None
         self._events: list[dict] = []
+        # Phase 2: record unique mode transitions per waypoint.
+        from mode_transitions_oracle import ModeTransitionRecorder
+        self._mode_recorder = ModeTransitionRecorder()
 
         self.create_subscription(
             PoseStamped,
@@ -301,6 +316,13 @@ class Harness(Node):
             self._on_event,
             reliable_qos,
         )
+        # Phase 2: record mode transitions emitted by agv_mode_arbiter.
+        self.create_subscription(
+            String,
+            "/agv/mode/state",
+            self._on_mode_state,
+            reliable_qos,
+        )
 
         # NOTE: no ActionClient here. rclpy's internal feedback-subscription
         # triggers a pybind11 TypeError on nav2_msgs/NavigateToPose feedback
@@ -323,6 +345,15 @@ class Harness(Node):
             payload = {"raw": msg.data}
         payload["_received_wall_s"] = time.time()
         self._events.append(payload)
+
+    def _on_mode_state(self, msg: String) -> None:
+        self._mode_recorder.record_transition(msg.data)
+
+    def begin_waypoint_modes(self) -> None:
+        self._mode_recorder.begin_waypoint()
+
+    def modes_observed(self) -> list:
+        return self._mode_recorder.modes_seen()
 
     def spin_until(self, predicate, timeout_s: float) -> bool:
         deadline = time.monotonic() + timeout_s
@@ -655,6 +686,10 @@ def _run_one_waypoint(
     wp_id = wp["id"]
     start = wp["start"]
     goal = wp["goal"]
+    expected_modes = wp.get("expected_modes")  # may be None for legacy yaml
+
+    # Phase 2: clear the recorder so modes_observed() tracks only this wp.
+    harness.begin_waypoint_modes()
 
     # 0. Cancel any active Nav2 action from the previous waypoint before
     #    teleporting — otherwise Nav2 keeps driving the robot toward the old
@@ -695,6 +730,9 @@ def _run_one_waypoint(
             status="RESET_TIMEOUT",
             events_during=[],
             duration_s=time.time() - t_reset_issue,
+            modes_observed=harness.modes_observed(),
+            modes_expected=expected_modes if expected_modes else None,
+            modes_match=None,  # cannot assert — wp never actually ran
         )
 
     # 1b. Clear e_stop (latched on by /reset) and arm motors.
@@ -765,6 +803,13 @@ def _run_one_waypoint(
     if any(e.get("event") == "collision" for e in events_during):
         status = "COLLISION"
 
+    # Phase 2: snapshot mode transitions observed across this waypoint.
+    modes_obs = harness.modes_observed()
+    modes_match: Optional[bool] = None
+    if expected_modes:
+        from mode_transitions_oracle import is_subsequence
+        modes_match = is_subsequence(expected_modes, modes_obs)
+
     return WaypointResult(
         wp_id=wp_id,
         goal_x=goal["x"], goal_y=goal["y"], goal_yaw=goal["yaw"],
@@ -780,6 +825,9 @@ def _run_one_waypoint(
         status=status,
         events_during=events_during,
         duration_s=time.time() - t_nav_start,
+        modes_observed=modes_obs,
+        modes_expected=expected_modes if expected_modes else None,
+        modes_match=modes_match,
     )
 
 
