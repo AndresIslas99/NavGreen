@@ -24,3 +24,9 @@ mode_arbiter:
     # even with mild drift post-approach.
     approach_offset_x: 0.3
     approach_offset_y: 0.0
+    # auto_approach=false by default: arbiter observes zones but does not
+    # auto-fire rail_approach. Production profiles with hands-off docking
+    # should override to true. The Phase-1/Round-41 Nav2-direct tests
+    # depend on this staying false so rail_approach does not hijack the
+    # test's navigation goals.
+    auto_approach: false
