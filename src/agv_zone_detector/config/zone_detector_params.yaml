@@ -1,0 +1,8 @@
+zone_detector:
+  ros__parameters:
+    odom_topic: /agv/odometry/global
+    zone_topic: /agv/zone/state
+    publish_rate_hz: 10.0
+    # 0.35 m = half the rail-pair spacing (0.45) + a small margin so the robot
+    # is still considered "in aisle" even when drifting to one rail edge.
+    aisle_half_width: 0.35
