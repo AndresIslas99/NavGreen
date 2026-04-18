@@ -69,8 +69,15 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
     std::bind(&RailApproachNode::on_camera_info, this, std::placeholders::_1));
 
   // Publishers
+  // The topic is `cmd_vel` so launches can remap it — under the `agv`
+  // namespace the default resolves to `/agv/cmd_vel`. The Phase-2 mode
+  // arbiter remaps this to `/agv/cmd_vel_approach` so Nav2, rail_driver,
+  // and rail_approach can coexist.
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
-  status_pub_ = create_publisher<std_msgs::msg::String>("rail_approach/status", 10);
+  // Phase 2 convention: publish /agv/rail_approach/state (matches
+  // agv_rail_driver and agv_mode_arbiter). The previous `status` topic
+  // name was a pre-arbiter convention.
+  status_pub_ = create_publisher<std_msgs::msg::String>("rail_approach/state", 10);
   target_pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>("rail_approach/target_pose", 10);
 
   // Services
@@ -92,9 +99,10 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   // Nav2 action client
   nav_client_ = rclcpp_action::create_client<NavAction>(this, "navigate_to_pose");
 
-  // Status timer (2 Hz)
+  // Status timer — 10 Hz so the mode_arbiter (ticking at 20 Hz) sees
+  // transitions within one tick. 2 Hz was too slow for FSM pickup.
   status_timer_ = create_wall_timer(
-    std::chrono::milliseconds(500),
+    std::chrono::milliseconds(100),
     std::bind(&RailApproachNode::publish_status, this));
 
   // Hot reload trigger from ui_backend (when operator assigns/removes tags)
@@ -524,9 +532,27 @@ void RailApproachNode::stop_robot() {
 // ── Status publishing ──
 
 void RailApproachNode::publish_status() {
+  // Dual label: `state` carries the mode_arbiter-compatible bucket
+  // (idle | driving | settled | aborted) and `detail` carries the
+  // internal fine-grained state (coarse_approach / tag_acquisition /
+  // fine_servoing / ...). Dashboards and the arbiter both get what
+  // they need from a single topic.
+  const std::string detail = state_name();
+  std::string arbiter_state = detail;
+  switch (state_) {
+    case State::COARSE_APPROACH:
+    case State::TAG_ACQUISITION:
+    case State::FINE_SERVOING:
+      arbiter_state = "driving";
+      break;
+    default:
+      break;  // idle/settled/aborted pass through.
+  }
+
   std_msgs::msg::String msg;
-  msg.data = "{\"state\":\"" + state_name() + "\",\"target_tag\":" +
-             std::to_string(target_tag_id_) + "}";
+  msg.data = "{\"state\":\"" + arbiter_state +
+             "\",\"detail\":\"" + detail +
+             "\",\"target_tag\":" + std::to_string(target_tag_id_) + "}";
   status_pub_->publish(msg);
 }
 

@@ -307,6 +307,11 @@ def generate_launch_description():
         ),
 
         # ── Nav2 stack ──
+        # Phase 2: controller_server publishes to /agv/cmd_vel_nav instead of
+        # /agv/cmd_vel. The mode_arbiter (below) routes one of
+        # {cmd_vel_nav, cmd_vel_approach, cmd_vel_rail} to /agv/cmd_vel based
+        # on zone + operator mode. velocity_smoother still subscribes to
+        # cmd_vel (arbiter output).
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -315,10 +320,42 @@ def generate_launch_description():
             launch_arguments={
                 'namespace': ns,
                 'use_sim_time': 'true',
+                'hil_mode': 'true',
                 'map': map_yaml,
                 'nav2_params': nav2_params_base,
                 'nav2_params_override': nav2_hil_overrides,
+                'controller_cmd_vel_topic': 'cmd_vel_nav',
             }.items(),
+        ),
+
+        # ── Phase 2: zone detector (pose-based classification) ──
+        Node(
+            package='agv_zone_detector',
+            executable='zone_detector_node',
+            name='zone_detector',
+            namespace=ns,
+            parameters=[{'use_sim_time': True}],
+            output='log',
+        ),
+
+        # ── Phase 2: mode arbiter — owns /agv/cmd_vel in the 3-mode stack ──
+        Node(
+            package='agv_mode_arbiter',
+            executable='mode_arbiter_node',
+            name='mode_arbiter',
+            namespace=ns,
+            parameters=[{'use_sim_time': True}],
+            output='screen',
+        ),
+
+        # ── Phase 2: rail driver (longitudinal-only inside aisles) ──
+        Node(
+            package='agv_rail_driver',
+            executable='rail_driver_node',
+            name='rail_driver',
+            namespace=ns,
+            parameters=[{'use_sim_time': True}],
+            output='log',
         ),
 
         # ── Scan grid mapper (live occupancy grid for commissioning) ──
@@ -388,6 +425,29 @@ def generate_launch_description():
                 'min_confidence': 50.0,
                 'use_sim_time': True,
             }],
+            output='log',
+        ),
+
+        # ── Phase 2: rail approach (AprilTag-guided 2 cm alignment) ──
+        # cmd_vel remapped to cmd_vel_approach so mode_arbiter can select
+        # between Nav2, rail_approach, and rail_driver.
+        Node(
+            package='agv_rail_approach',
+            executable='rail_approach_node',
+            name='rail_approach',
+            namespace=ns,
+            parameters=[
+                os.path.join(
+                    get_package_share_directory('agv_rail_approach'),
+                    'config', 'rail_approach_params.yaml'),
+                {
+                    'registry_file': os.path.join(
+                        get_package_share_directory('agv_markers'),
+                        'config', 'markers_registry.yaml'),
+                    'use_sim_time': True,
+                },
+            ],
+            remappings=[('cmd_vel', 'cmd_vel_approach')],
             output='log',
         ),
 

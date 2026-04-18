@@ -14,9 +14,16 @@ rail_approach:
     default_offset_y: 0.0       # lateral offset (0 = centered)
 
     # Convergence tolerances
-    tolerance_xy: 0.003         # ±3mm position (m)
-    tolerance_yaw: 0.015        # ±0.9° heading (rad)
-    settle_frames: 5            # consecutive in-tolerance frames to declare settled
+    # Phase-2 target is 2 cm per the realistic-field research the operator
+    # shared 2026-04-18 (±8-12mm typical, 3mm only in lab conditions). The
+    # previous 0.003m (3mm) default was aspirational and rarely repeatable
+    # with the motor hold-current micro-vibration. 0.02m is the realistic
+    # target; tighten after tuning in HIL only if the stack proves stable.
+    tolerance_xy: 0.02          # ±2cm position (m)
+    tolerance_yaw: 0.017        # ±1.0° heading (rad)
+    settle_frames: 8            # consecutive in-tolerance frames @ 20 Hz AprilTag
+                                # detection rate ≈ 0.4 s stabilisation window —
+                                # covers the motor hold-current micro-vibration.
 
     # P-controller gains
     Kp_linear: 0.15             # forward gain (m/s per m error)
