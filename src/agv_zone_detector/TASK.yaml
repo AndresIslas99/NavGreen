@@ -1,0 +1,28 @@
+name: agv_zone_detector
+status: active
+dev_only: false
+description: |
+  Publishes the current greenhouse zone (corridor vs rail aisle) from the
+  dual-EKF pose. Feeds the mode_arbiter so Nav2 runs in corridor and the
+  rail_driver takes over inside rail aisles.
+
+  Phase 1 source: pose-based (pure geometry lookup from /agv/odometry/global).
+  Phase 2 upgrades: AprilTag (absolute pose anchor), ZED visual rail detection
+  (handles map drift and missing world_config entries).
+
+interfaces:
+  publishes:
+    - topic: /agv/zone/state
+      type: std_msgs/String
+      payload: JSON with zone, section, aisle_y_center, rail_offset_lat,
+               rail_yaw_error, confidence, source
+      rate_hz: 10
+  subscribes:
+    - topic: /agv/odometry/global
+      type: nav_msgs/Odometry
+
+dependencies:
+  - rclcpp
+  - nav_msgs
+  - std_msgs
+  - geometry_msgs

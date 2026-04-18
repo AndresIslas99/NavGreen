@@ -1,0 +1,19 @@
+rail_driver:
+  ros__parameters:
+    odom_topic: /agv/odometry/global
+    goal_topic: /agv/rail_driver/goal
+    zone_topic: /agv/zone/state
+    collision_topic: /agv/collision_monitor_state
+    cmd_vel_topic: /agv/cmd_vel_rail
+    state_topic: /agv/rail_driver/state
+    publish_rate_hz: 20.0
+    kP: 1.0
+    # In HIL the drive efficiency is ~5-20 % of command. speed_max_mps=1.0
+    # yields ~0.05-0.2 m/s real motion, comparable to Nav2's in-gap runs.
+    # Production robot should drop this to 0.25 once on real hardware.
+    speed_max_mps: 1.0
+    stop_band_m: 0.05
+    lateral_abort_m: 0.30
+    # 0.26 rad ≈ 15°. Robot geometry tolerates ~36° yaw before a wheel snags
+    # the rail pair, but we stop well short of that to leave recovery room.
+    yaw_abort_rad: 0.26
