@@ -32,6 +32,12 @@ def _build_nav2(context, *args, **kwargs):
     map_yaml = LaunchConfiguration('map').perform(context)
     nav2_params_path = LaunchConfiguration('nav2_params').perform(context)
     nav2_override_path = LaunchConfiguration('nav2_params_override').perform(context)
+    # Phase 2 routes Nav2's cmd_vel through agv_mode_arbiter, which selects
+    # between Nav2, rail_approach, and rail_driver. The arbiter publishes the
+    # final /agv/cmd_vel. In production (no arbiter), keep the legacy direct
+    # path where controller_server publishes straight to cmd_vel.
+    controller_cmd_vel_topic = LaunchConfiguration(
+        'controller_cmd_vel_topic').perform(context)
     nav_dir = get_package_share_directory('agv_navigation')
     vel_smoother_params = os.path.join(nav_dir, 'config', 'velocity_smoother.yaml')
     collision_monitor_params = os.path.join(nav_dir, 'config', 'collision_monitor.yaml')
@@ -97,7 +103,7 @@ def _build_nav2(context, *args, **kwargs):
                 name='controller_server',
                 parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
-                remappings=[('cmd_vel', 'cmd_vel')],
+                remappings=[('cmd_vel', controller_cmd_vel_topic)],
             ),
 
             # Planner server (SmacPlanner2D)
@@ -142,7 +148,9 @@ def _build_nav2(context, *args, **kwargs):
                 output='screen',
             ),
 
-            # Velocity smoother (cmd_vel → cmd_vel_smoothed)
+            # Velocity smoother — input is always `cmd_vel` (the post-arbiter
+            # topic). Phase 2 keeps this unchanged; only controller_server's
+            # OUTPUT was rerouted through the arbiter.
             Node(
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
@@ -202,6 +210,14 @@ def generate_launch_description():
             description=(
                 'HIL mode: layer collision_monitor_hil_overrides.yaml on top '
                 'of the base collision_monitor config (drops pointcloud_source).'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'controller_cmd_vel_topic', default_value='cmd_vel',
+            description=(
+                'Topic that controller_server publishes velocity to. Default '
+                "'cmd_vel' preserves the legacy direct path. Phase 2 routes "
+                "this through agv_mode_arbiter via 'cmd_vel_nav'."
             ),
         ),
 
