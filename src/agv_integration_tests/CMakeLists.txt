@@ -12,6 +12,9 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_e_stop test/test_e_stop.py)
   ament_add_pytest_test(test_tf_tree test/test_tf_tree.py)
   ament_add_pytest_test(test_ekf_frames test/test_ekf_frames.py)
+  # Phase 2 — ROS-free oracle unit tests (always run).
+  ament_add_pytest_test(test_mode_transitions_oracle
+    test/test_mode_transitions_oracle.py)
   # HIL tests — skip themselves when SIM_API_HOST / ROS_DOMAIN_ID=42 are not set.
   # Timeout bumped — each waypoint may take up to 120 s on Nav2.
   ament_add_pytest_test(test_nav2_probe test/test_nav2_probe.py
