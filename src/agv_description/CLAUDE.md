@@ -30,7 +30,7 @@ separate static_transform_publisher in agv_bringup/agv_slam launch files.
 | `base_link_height` | `0.200` m | Base link above ground |
 | `left_wheel_xyz` | `[0.0, 0.3675, -0.1375]` | Left wheel position |
 | `right_wheel_xyz` | `[0.0, -0.3675, -0.1375]` | Right wheel position |
-| `zed_camera_xyz` | `[0.700, 0.0, -0.055]` | Camera mount offset |
+| `zed_camera_xyz` | `[0.700, 0.0, +0.010]` | Camera mount offset (210mm above ground; re-measured 2026-04-18) |
 
 ## URDF Files
 

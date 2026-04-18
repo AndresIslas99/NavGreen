@@ -1,0 +1,206 @@
+// Pure FSM for the mode arbiter. Header-only, ROS-free.
+//
+// The arbiter owns /agv/cmd_vel publication. At any instant exactly one of
+// three upstream sources is relayed:
+//   * cmd_vel_nav      — Nav2 controller_server (corridor zones)
+//   * cmd_vel_approach — agv_rail_approach  (AprilTag alignment at rail entry)
+//   * cmd_vel_rail     — agv_rail_driver    (longitudinal traversal inside rail)
+//
+// The operator can force a mode via the `nav | teleop | idle` directive from
+// the dashboard (layer 3 of specs/state_machine.yaml). In `teleop` and
+// `idle` the arbiter publishes zero velocity and does not relay.
+//
+// Transitions are driven by observations of the zone, the rail_approach
+// service status, the rail_driver state, and safety-chain signals.
+
+#pragma once
+
+#include <string>
+
+namespace agv_mode_arbiter {
+
+enum class Mode {
+  CORRIDOR_NAV,          // Nav2 owns cmd_vel
+  RAIL_APPROACH_PEND,    // Zone entered an approach strip; arbiter called
+                         // /agv/rail_approach service, waiting for ACK.
+  RAIL_APPROACH_ACTIVE,  // rail_approach is driving (service accepted).
+  RAIL_DRIVE,            // rail_approach declared settled; rail_driver
+                         // has the goal and is traversing.
+  BLOCKED_HANDOFF,       // collision_monitor stop OR e_stop — hold 0 cmd_vel
+                         // until the signal clears, then recover to prior mode.
+  TELEOP,                // Operator override via /agv/mode/set teleop.
+  IDLE,                  // Operator override via /agv/mode/set idle; 0 cmd_vel.
+};
+
+enum class Source {
+  NONE,         // publish 0 Twist
+  NAV,          // relay cmd_vel_nav
+  APPROACH,     // relay cmd_vel_approach
+  RAIL,         // relay cmd_vel_rail
+};
+
+inline const char *mode_to_str(Mode m) {
+  switch (m) {
+    case Mode::CORRIDOR_NAV:         return "corridor_nav";
+    case Mode::RAIL_APPROACH_PEND:   return "rail_approach_pend";
+    case Mode::RAIL_APPROACH_ACTIVE: return "rail_approach_active";
+    case Mode::RAIL_DRIVE:           return "rail_drive";
+    case Mode::BLOCKED_HANDOFF:      return "blocked_handoff";
+    case Mode::TELEOP:               return "teleop";
+    case Mode::IDLE:                 return "idle";
+  }
+  return "unknown";
+}
+
+inline const char *source_to_str(Source s) {
+  switch (s) {
+    case Source::NONE:     return "none";
+    case Source::NAV:      return "nav";
+    case Source::APPROACH: return "approach";
+    case Source::RAIL:     return "rail";
+  }
+  return "unknown";
+}
+
+struct FsmInputs {
+  // Operator directive: "nav" | "teleop" | "idle".
+  std::string operator_mode = "nav";
+  // Zone label from /agv/zone/state.
+  std::string zone = "gap";
+  // /agv/rail_approach/state.state ("idle" | "driving" | "settled" | "aborted").
+  std::string rail_approach_state = "idle";
+  // /agv/rail_driver/state.state (see agv_rail_driver/rail_controller.hpp).
+  std::string rail_driver_state = "idle";
+  // True when collision_monitor published "stop" (or "e_stop").
+  bool safety_stop = false;
+  // True when the arbiter has already dispatched the rail_approach service
+  // call for the current approach window. Consumed so the arbiter does not
+  // double-call on every FSM tick.
+  bool approach_request_in_flight = false;
+};
+
+struct FsmOutputs {
+  Mode next_mode = Mode::CORRIDOR_NAV;
+  Source active_source = Source::NAV;
+  // True if the arbiter should call /agv/rail_approach service NOW
+  // (transition into RAIL_APPROACH_PEND).
+  bool request_rail_approach = false;
+  // True if the arbiter should publish /agv/rail_driver/goal to hand off
+  // longitudinal traversal to the rail driver (transition into RAIL_DRIVE).
+  bool request_rail_drive_goal = false;
+};
+
+inline bool is_approach_zone(const std::string &zone) {
+  return zone == "rail_approach_front" || zone == "rail_approach_rear";
+}
+
+inline bool is_rail_zone(const std::string &zone) {
+  return zone == "rail_aisle_0"   || zone == "rail_aisle_p22" ||
+         zone == "rail_aisle_m22" || zone == "rail_aisle_p44" ||
+         zone == "rail_aisle_m44";
+}
+
+inline FsmOutputs step(Mode current, const FsmInputs &in) {
+  FsmOutputs out;
+  out.next_mode = current;
+
+  // Operator overrides — top priority.
+  if (in.operator_mode == "idle") {
+    out.next_mode = Mode::IDLE;
+    out.active_source = Source::NONE;
+    return out;
+  }
+  if (in.operator_mode == "teleop") {
+    out.next_mode = Mode::TELEOP;
+    out.active_source = Source::NONE;  // teleop_server owns /agv/cmd_vel directly
+    return out;
+  }
+
+  // Safety chain — second priority. On release, fall back to CORRIDOR_NAV
+  // and let the zone observer re-enter the appropriate rail flow.
+  if (in.safety_stop) {
+    out.next_mode = Mode::BLOCKED_HANDOFF;
+    out.active_source = Source::NONE;
+    return out;
+  }
+
+  // FSM transitions proper.
+  switch (current) {
+    case Mode::CORRIDOR_NAV:
+      if (is_approach_zone(in.zone) && !in.approach_request_in_flight) {
+        out.next_mode = Mode::RAIL_APPROACH_PEND;
+        out.active_source = Source::NONE;  // hold 0 vel while we kick off the service
+        out.request_rail_approach = true;
+        return out;
+      }
+      out.active_source = Source::NAV;
+      return out;
+
+    case Mode::RAIL_APPROACH_PEND:
+      // Wait for rail_approach to report that it has started driving.
+      if (in.rail_approach_state == "driving") {
+        out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
+        out.active_source = Source::APPROACH;
+        return out;
+      }
+      if (in.rail_approach_state == "aborted") {
+        // Approach refused (e.g., tag not visible). Fall back to corridor.
+        out.next_mode = Mode::CORRIDOR_NAV;
+        out.active_source = Source::NAV;
+        return out;
+      }
+      out.active_source = Source::NONE;  // still waiting; hold 0 velocity
+      return out;
+
+    case Mode::RAIL_APPROACH_ACTIVE:
+      if (in.rail_approach_state == "settled") {
+        out.next_mode = Mode::RAIL_DRIVE;
+        out.active_source = Source::RAIL;
+        out.request_rail_drive_goal = true;
+        return out;
+      }
+      if (in.rail_approach_state == "aborted") {
+        out.next_mode = Mode::CORRIDOR_NAV;
+        out.active_source = Source::NAV;
+        return out;
+      }
+      out.active_source = Source::APPROACH;
+      return out;
+
+    case Mode::RAIL_DRIVE:
+      if (in.rail_driver_state == "reached" && !is_rail_zone(in.zone) &&
+          !is_approach_zone(in.zone)) {
+        out.next_mode = Mode::CORRIDOR_NAV;
+        out.active_source = Source::NAV;
+        return out;
+      }
+      if (in.rail_driver_state == "blocked_lateral" ||
+          in.rail_driver_state == "blocked_misaligned") {
+        // Rail driver gave up; hand back to corridor for operator/Nav2 to resolve.
+        out.next_mode = Mode::CORRIDOR_NAV;
+        out.active_source = Source::NAV;
+        return out;
+      }
+      out.active_source = Source::RAIL;
+      return out;
+
+    case Mode::BLOCKED_HANDOFF:
+      // Released from safety_stop; fall back to corridor. The zone observer
+      // will re-enter an approach window on the next tick if we happen to be
+      // sitting in an approach strip.
+      out.next_mode = Mode::CORRIDOR_NAV;
+      out.active_source = Source::NAV;
+      return out;
+
+    case Mode::TELEOP:
+    case Mode::IDLE:
+      // Unreachable given the operator-override branch above; kept for
+      // exhaustiveness.
+      out.next_mode = Mode::CORRIDOR_NAV;
+      out.active_source = Source::NAV;
+      return out;
+  }
+  return out;
+}
+
+}  // namespace agv_mode_arbiter
