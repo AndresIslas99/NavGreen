@@ -1,0 +1,42 @@
+name: agv_rail_driver
+status: active
+dev_only: false
+description: |
+  Longitudinal-only drive controller. Publishes cmd_vel with angular.z=0
+  hardcoded. Primary use case: safe traversal of rail aisles in the
+  greenhouse, where any rotation risks snagging a wheel on a 51 mm rail
+  tube. Secondary use case: any forward-only drive that benefits from
+  deterministic behavior vs MPPI's wz sampling (e.g., the inter-section
+  4-m gap).
+
+  Part of Phase 2 per docs/validation/rail_driver_spec.md.
+
+interfaces:
+  publishes:
+    - topic: /agv/cmd_vel_rail
+      type: geometry_msgs/Twist
+      rate_hz: 20
+      notes: angular.z is ALWAYS 0 in every published message.
+    - topic: /agv/rail_driver/state
+      type: std_msgs/String
+      payload: JSON with state, linear_x, remaining_m, in_rail_zone, collision_stop
+      rate_hz: 20
+  subscribes:
+    - topic: /agv/odometry/global
+      type: nav_msgs/Odometry
+    - topic: /agv/rail_driver/goal
+      type: geometry_msgs/PoseStamped
+    - topic: /agv/zone/state
+      type: std_msgs/String
+    - topic: /agv/collision_monitor_state
+      type: std_msgs/String
+
+dependencies:
+  - agv_zone_detector  (reads /agv/zone/state)
+  - collision_monitor  (from agv_navigation, reads /agv/collision_monitor_state)
+
+safety:
+  - angular.z hardcoded 0 — not a parameter, not overridable.
+  - collision_monitor_stop takes priority over any other state.
+  - Lateral drift > 0.30 m aborts the drive.
+  - Yaw error > 15° (default) inside a rail aisle aborts the drive.
