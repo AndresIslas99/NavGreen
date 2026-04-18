@@ -19,6 +19,10 @@ FsmInputs base_inputs() {
   in.rail_driver_state = "idle";
   in.safety_stop = false;
   in.approach_request_in_flight = false;
+  // Default true for the existing transition tests — most of them assert
+  // the auto-trigger path. Tests that specifically validate the off path
+  // set auto_approach=false explicitly.
+  in.auto_approach = true;
   return in;
 }
 
@@ -36,7 +40,9 @@ TEST(ModeFsm, CorridorEntersApproachOnZoneAlignment) {
   in.zone = "rail_approach_rear";
   auto out = step(Mode::CORRIDOR_NAV, in);
   EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_PEND);
-  EXPECT_EQ(out.active_source, Source::NONE);
+  // Keep source=NAV so Nav2 can drive the coarse approach that
+  // rail_approach has delegated to it. Zeroing would freeze the robot.
+  EXPECT_EQ(out.active_source, Source::NAV);
   EXPECT_TRUE(out.request_rail_approach);
 }
 
@@ -163,6 +169,42 @@ TEST(ModeFsm, ApproachOnFrontAisleAlsoTriggersEntry) {
   auto out = step(Mode::CORRIDOR_NAV, in);
   EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_PEND);
   EXPECT_TRUE(out.request_rail_approach);
+}
+
+TEST(ModeFsm, AutoApproachOffStaysInCorridor) {
+  auto in = base_inputs();
+  in.auto_approach = false;
+  in.zone = "rail_approach_rear";
+  auto out = step(Mode::CORRIDOR_NAV, in);
+  // Without auto_approach, the arbiter stays CORRIDOR_NAV so Nav2 keeps
+  // driving straight through the approach strip. rail_approach must be
+  // fired externally to engage.
+  EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
+  EXPECT_EQ(out.active_source, Source::NAV);
+  EXPECT_FALSE(out.request_rail_approach);
+}
+
+TEST(ModeFsm, AutoApproachOffStillTracksExternalApproach) {
+  // Auto-trigger off, but rail_approach was fired externally and reached
+  // fine_servoing. The arbiter must still hand over cmd_vel to APPROACH.
+  auto in = base_inputs();
+  in.auto_approach = false;
+  in.zone = "rail_approach_rear";
+  in.rail_approach_state = "driving";
+  auto out = step(Mode::CORRIDOR_NAV, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_ACTIVE);
+  EXPECT_EQ(out.active_source, Source::APPROACH);
+}
+
+TEST(ModeFsm, PendKeepsNavWhileRailApproachCoarsing) {
+  // While rail_approach runs its COARSE_APPROACH sub-phase via Nav2, the
+  // arbiter must relay Nav2 (not hold 0) so the coarse approach finishes.
+  auto in = base_inputs();
+  in.zone = "rail_approach_rear";
+  in.rail_approach_state = "coarse_approach";  // rail_approach in Nav2-driven phase
+  auto out = step(Mode::RAIL_APPROACH_PEND, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_PEND);
+  EXPECT_EQ(out.active_source, Source::NAV);
 }
 
 TEST(ModeFsm, LabelsCoverAllStates) {
