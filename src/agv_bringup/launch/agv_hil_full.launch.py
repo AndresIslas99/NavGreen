@@ -218,12 +218,14 @@ def generate_launch_description():
         # In HIL the wrapper isn't running but the sim's pointcloud header
         # uses frame_id=zed_left_camera_frame_optical; without these statics,
         # pointcloud_to_laserscan's message filter drops every cloud.
-        # Same (0.700, 0.0, -0.055) offset as agv_slam.launch.py:82.
+        # Same (0.700, 0.0, +0.010) offset as agv_slam.launch.py:82 and
+        # robot_params.yaml (ZED z remeasured 2026-04-18 — see
+        # agv_description/config/robot_params.yaml).
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
             name='hil_base_to_zed',
-            arguments=['--x', '0.700', '--y', '0.0', '--z', '-0.055',
+            arguments=['--x', '0.700', '--y', '0.0', '--z', '0.010',
                        '--roll', '0', '--pitch', '0', '--yaw', '0',
                        '--frame-id', 'base_link', '--child-frame-id', 'zed_camera_link'],
             parameters=[{'use_sim_time': True}],

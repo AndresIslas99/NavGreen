@@ -1,0 +1,47 @@
+name: agv_mode_arbiter
+status: active
+dev_only: false
+description: |
+  Owns /agv/cmd_vel publication in the 3-mode navigation architecture.
+  Selects which upstream controller (Nav2, rail_approach, rail_driver)
+  currently drives the robot and relays its cmd_vel downstream.
+  Part of Phase 2 per docs/validation/rail_driver_spec.md.
+
+interfaces:
+  publishes:
+    - topic: /agv/cmd_vel
+      type: geometry_msgs/Twist
+      rate_hz: 20
+      notes: Relay from the selected upstream source, or zero Twist when source=NONE.
+    - topic: /agv/mode/state
+      type: std_msgs/String
+      payload: JSON with mode, source, zone, operator_mode, transitions
+      rate_hz: 20
+  subscribes:
+    - topic: /agv/cmd_vel_nav
+      type: geometry_msgs/Twist
+    - topic: /agv/cmd_vel_approach
+      type: geometry_msgs/Twist
+    - topic: /agv/cmd_vel_rail
+      type: geometry_msgs/Twist
+    - topic: /agv/zone/state
+      type: std_msgs/String
+    - topic: /agv/rail_approach/state
+      type: std_msgs/String
+    - topic: /agv/rail_driver/state
+      type: std_msgs/String
+    - topic: /agv/collision_monitor_state
+      type: std_msgs/String
+    - topic: /agv/mode/set
+      type: std_msgs/String
+
+dependencies:
+  - agv_zone_detector  (zone classification)
+  - agv_rail_driver    (rail_driver state)
+  - agv_rail_approach  (rail_approach state)
+
+safety:
+  - collision_monitor stop overrides every FSM state (BLOCKED_HANDOFF).
+  - operator "idle" forces zero cmd_vel.
+  - operator "teleop" releases control back to teleop_server via source=NONE
+    (the teleop_server publishes to /agv/cmd_vel directly under this mode).
