@@ -1,0 +1,44 @@
+# Waypoints — GAP ZONE ONLY (10 waypoints, all in x ∈ [3.7, 7.3])
+#
+# 2026-04-18 v3: discovered that the USD has TWO rail sections (front +
+# rear, 20 rails total). The REAR rail section covers x ∈ [−16.5, 3.5],
+# which invalidates every "west open" waypoint we used in rounds 34-37.
+#
+# The ONLY guaranteed rail-free zone inside the greenhouse is the
+# 4 m gap between rear-end (x=3.5) and front-start (x=7.5). This file
+# places all waypoints strictly inside x ∈ [3.7, 7.3] (0.2 m safety
+# margin from each rail edge).
+#
+# Static obstacles inside the gap:
+#   Crate1 (3.5, −2.0) — right at gap-west edge, avoid x<4.2 at y≈−2
+#   Crate2 (4.0, +3.5) — inside gap at y≈+3.5, avoid x<4.8 at y≈+3.5
+#
+# Safe y-bands within gap: (−0.6, +0.6), (+1.6, +2.8), and (−2.8, −1.6 with
+# x > 4.2). The y=±4.4 bands require x > 4.8 to clear Crate2. We stay
+# in the safest zones to get a clean Phase-1 reading.
+#
+# Waypoint design:
+#   - No yaw arcs (they fail reliably regardless of zone — separate bug).
+#   - No traversals > 2.5 m (gap is only 4 m wide; headroom for settle).
+#   - Short probes dominate; 2-m traversals for critic stress.
+
+waypoints:
+  # ── Short probes y=0 (center of gap, safest path) ──
+  - {id: wp01, start: {x: 4.0, y: 0.0, yaw: 0.0}, goal: {x: 4.5, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp02, start: {x: 5.0, y: 0.0, yaw: 0.0}, goal: {x: 5.5, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp03, start: {x: 6.5, y: 0.0, yaw: 0.0}, goal: {x: 7.0, y: 0.0, yaw: 0.0}}  # 0.5 m
+
+  # ── 1 m traversals y=0 ──
+  - {id: wp04, start: {x: 4.0, y: 0.0, yaw: 0.0}, goal: {x: 5.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+  - {id: wp05, start: {x: 5.0, y: 0.0, yaw: 0.0}, goal: {x: 6.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+  - {id: wp06, start: {x: 6.0, y: 0.0, yaw: 0.0}, goal: {x: 7.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+
+  # ── 2 m traversal y=0 (critic stress) ──
+  - {id: wp07, start: {x: 4.0, y: 0.0, yaw: 0.0}, goal: {x: 6.0, y: 0.0, yaw: 0.0}}  # 2.0 m
+
+  # ── Offset y=±0.3 inside the ±0.6 clear band ──
+  - {id: wp08, start: {x: 4.5, y:  0.3, yaw: 0.0}, goal: {x: 6.0, y:  0.3, yaw: 0.0}}  # 1.5 m offset +
+  - {id: wp09, start: {x: 4.5, y: -0.3, yaw: 0.0}, goal: {x: 6.0, y: -0.3, yaw: 0.0}}  # 1.5 m offset -
+
+  # ── Long-probe edge of gap (stress MPPI close to rail boundary) ──
+  - {id: wp10, start: {x: 3.8, y: 0.0, yaw: 0.0}, goal: {x: 7.2, y: 0.0, yaw: 0.0}}  # 3.4 m full-gap
