@@ -1,0 +1,88 @@
+# Waypoints — TAGGED v2 (explicit per-wp dispatch, 10 waypoints)
+#
+# 2026-04-18 Stage H: adds `dispatch` + per-driver metadata to every
+# waypoint so test_waypoint_precision.py picks the right driver (Nav2,
+# rail_approach service, rail_driver goal) instead of always POSTing to
+# Nav2. Same start/goal geometry as waypoints_tagged_v1.yaml.
+#
+# Geometry (operator-confirmed 2026-04-18):
+#   APPROACH_REAR floor tags at x=4.0 → IDs 33,34,35,36,37 (aisles 1..5)
+#   APPROACH_FRONT floor tags at x=7.0 → IDs 2,3,4,12,13   (aisles 1..5)
+#
+# dispatch field contract:
+#   nav2           → Nav2 goal via sim_api HTTP /goal (legacy path)
+#   rail_approach  → /agv/rail_approach/execute service (requires tag_id)
+#   rail_drive     → /agv/rail_driver/goal publish
+#
+# tag_id, offset_x, offset_y are auto-derived from goal when omitted.
+
+waypoints:
+  # ── Phase A: gap probes — pure Nav2 ──
+  - id: wp01
+    dispatch: nav2
+    start: {x: 4.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 4.5, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav]
+  - id: wp02
+    dispatch: nav2
+    start: {x: 5.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav]
+  - id: wp03
+    dispatch: nav2
+    start: {x: 5.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav]
+
+  # ── Phase B: rail_approach — AprilTag-guided 2 cm alignment ──
+  - id: wp04
+    dispatch: rail_approach
+    tag_id: 35          # REAR aisle 3 floor tag
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.2, y: 0.0, yaw: 3.14159}
+    goal:  {x: 4.2, y: 0.0, yaw: 3.14159}
+    expected_modes: [corridor_nav, rail_approach_active]
+
+  # ── Phase C: rail_drive — longitudinal only, wz=0 hardcoded ──
+  - id: wp05
+    dispatch: rail_drive
+    start: {x: 4.0, y: 0.0, yaw: 3.14159}
+    goal:  {x: 1.0, y: 0.0, yaw: 3.14159}
+    expected_modes: [rail_drive]
+
+  # ── Phase D: rail_drive back out REAR ──
+  - id: wp06
+    dispatch: rail_drive
+    start: {x: 1.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 4.2, y: 0.0, yaw: 0.0}
+    expected_modes: [rail_drive]
+
+  # ── Phase E: rail_approach — FRONT entry, aisle 3 ──
+  - id: wp07
+    dispatch: rail_approach
+    tag_id: 4           # FRONT aisle 3 floor tag
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.5, y: 0.0, yaw: 0.0}
+    goal:  {x: 6.8, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active]
+
+  # ── Phase F: rail_drive FRONT into aisle ──
+  - id: wp08
+    dispatch: rail_drive
+    start: {x: 7.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 10.0, y: 0.0, yaw: 0.0}
+    expected_modes: [rail_drive]
+  - id: wp09
+    dispatch: rail_drive
+    start: {x: 10.0, y: 0.0, yaw: 3.14159}
+    goal:  {x: 7.0, y: 0.0, yaw: 3.14159}
+    expected_modes: [rail_drive]
+
+  # ── Phase G: exit FRONT approach back to gap — Nav2 ──
+  - id: wp10
+    dispatch: nav2
+    start: {x: 7.0, y: 0.0, yaw: 3.14159}
+    goal:  {x: 5.5, y: 0.0, yaw: 3.14159}
+    expected_modes: [corridor_nav]
