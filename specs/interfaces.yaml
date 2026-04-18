@@ -49,15 +49,19 @@ ros:
 topics:
 
   # ── Velocity command chain ────────────────────────────────────────────────
+  # Phase 2 inserts agv_mode_arbiter as the single owner of /agv/cmd_vel.
+  # Upstream controllers (Nav2, rail_approach, rail_driver) publish to
+  # per-controller topics; the arbiter selects exactly one and relays. In
+  # legacy/production launches without mode_arbiter, the controllers can
+  # still publish directly to /agv/cmd_vel (via remap).
   - name: "/agv/cmd_vel"
     type: "geometry_msgs/msg/Twist"
-    owner_pkg: "agv_ui_backend"
-    owner_node: "teleop_server"
-    code_ref: "src/agv_ui_backend/src/index.ts:167"
+    owner_pkg: "agv_mode_arbiter"
+    owner_node: "mode_arbiter"
+    code_ref: "src/agv_mode_arbiter/src/mode_arbiter_node.cpp"
     publishers:
-      - {pkg: "agv_ui_backend", node: "teleop_server", role: "operator joystick / dashboard", active_when: "currentMode ∈ {teleop, mapping}"}
-      - {pkg: "nav2_controller (external)", node: "controller_server", role: "Nav2 MPPI controller output", active_when: "currentMode == nav AND goal is active"}
-      - {pkg: "agv_rail_approach", role: "precision docking controller", active_when: "operator triggers rail approach"}
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "3-mode selector (Phase 2)", active_when: "mode_arbiter running — default in HIL + production"}
+      - {pkg: "agv_ui_backend", node: "teleop_server", role: "operator joystick / dashboard", active_when: "currentMode ∈ {teleop, mapping} AND mode_arbiter source == NONE"}
     qos:
       reliability: "reliable"
       durability: "volatile"
@@ -68,11 +72,56 @@ topics:
       - {pkg: "nav2 velocity_smoother", role: "Nav2 chain input when layer_2_has_map=with_map"}
       - {pkg: "agv_odrive", role: "direct consumer when layer_2_has_map=without_map"}
     notes: |
-      Multiple publishers to this topic is INTENTIONAL but requires coordination:
-      teleop_server, controller_server, and rail_approach must be mutually exclusive
-      in time. The agv_ui_backend state machine (layer_3_runtime_mode) is the
-      coordinator — see specs/state_machine.yaml. Rogue dev-PC publishers from
-      DDS discovery are excluded by ROS_DOMAIN_ID=42 (see project.yaml#deployment).
+      In Phase 2, mode_arbiter is the only regular publisher. It relays from
+      cmd_vel_nav | cmd_vel_approach | cmd_vel_rail (see below). teleop_server
+      writes to /agv/cmd_vel directly only when the operator_mode override is
+      'teleop' (arbiter holds its own publisher silent in that case).
+
+  - name: "/agv/cmd_vel_nav"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "nav2_controller (external)"
+    owner_node: "controller_server"
+    code_ref: "src/agv_navigation/launch/navigation.launch.py (controller_cmd_vel_topic arg)"
+    publishers:
+      - {pkg: "nav2_controller (external)", node: "controller_server", role: "Nav2 MPPI output (Phase 2)"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "source for CORRIDOR_NAV mode"}
+    notes: |
+      Only published when the HIL launch passes controller_cmd_vel_topic:=cmd_vel_nav.
+      Legacy launches keep the default controller_cmd_vel_topic=cmd_vel which
+      sends controller_server output straight to /agv/cmd_vel.
+
+  - name: "/agv/cmd_vel_approach"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "agv_rail_approach"
+    owner_node: "rail_approach"
+    code_ref: "src/agv_rail_approach/src/rail_approach_node.cpp"
+    publishers:
+      - {pkg: "agv_rail_approach", node: "rail_approach", role: "AprilTag-guided alignment velocity (Phase 2)"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "source for RAIL_APPROACH_ACTIVE mode"}
+    notes: |
+      rail_approach_node publishes to the relative topic 'cmd_vel' and the
+      HIL launch remaps it to cmd_vel_approach (Phase 2). Drops to this topic
+      only while an execute service call is active.
+
+  - name: "/agv/cmd_vel_rail"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "agv_rail_driver"
+    owner_node: "rail_driver"
+    code_ref: "src/agv_rail_driver/src/rail_driver_node.cpp"
+    publishers:
+      - {pkg: "agv_rail_driver", node: "rail_driver", role: "longitudinal-only with wz=0 hard (Phase 2)"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 0, target: 20, max: 50}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "source for RAIL_DRIVE mode"}
+    notes: |
+      angular.z is HARD-CODED 0 in rail_controller.hpp. The arbiter relays
+      directly; no smoothing needed between controller and cmd_vel because
+      rail_driver already produces 20 Hz clean commands.
 
   - name: "/agv/cmd_vel_smoothed"
     type: "geometry_msgs/msg/Twist"
@@ -326,6 +375,67 @@ topics:
     payload: "'teleop' | 'mapping' | 'nav'"
     subscribers:
       - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "reacts on nav transition"}
+
+  # ── Phase 2: mode arbiter + zone detector + rail driver state ────────────
+  - name: "/agv/mode/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_mode_arbiter"
+    owner_node: "mode_arbiter"
+    payload: |
+      JSON {"mode": str, "source": str, "zone": str,
+            "operator_mode": str, "transitions": int}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 18, target: 20, max: 22}
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard mode pill (P2.S7 UI hookup follow-up)"}
+      - {pkg: "agv_integration_tests", role: "test_waypoint_precision mode-transition oracle"}
+
+  - name: "/agv/mode/set"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_ui_backend"
+    owner_node: "teleop_server"
+    payload: "'nav' | 'teleop' | 'idle'"
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "operator override input"}
+
+  - name: "/agv/zone/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_zone_detector"
+    owner_node: "zone_detector"
+    payload: |
+      JSON {"zone": str, "section": str, "aisle_y_center": float|null,
+            "rail_offset_lat": float|null, "rail_yaw_error": float|null,
+            "approach_tag_id": int|null, "confidence": float, "source": "pose"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 8, target: 10, max: 12}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
+      - {pkg: "agv_rail_driver", node: "rail_driver"}
+
+  - name: "/agv/rail_driver/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_rail_driver"
+    owner_node: "rail_driver"
+    payload: |
+      JSON {"state": str, "linear_x": float, "remaining_m": float,
+            "in_rail_zone": bool, "collision_stop": bool}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 18, target: 20, max: 22}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
+
+  - name: "/agv/rail_approach/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_rail_approach"
+    owner_node: "rail_approach"
+    payload: |
+      JSON {"state": str ("idle"|"driving"|"settled"|"aborted"),
+            "detail": str (internal fine-grained state),
+            "target_tag": int}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 8, target: 10, max: 12}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
 
   # ── HIL simulation validation overlay ─────────────────────────────────────
   # The /agv/sim/* namespace belongs to the separate sim host repo
