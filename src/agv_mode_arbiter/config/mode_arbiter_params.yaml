@@ -10,4 +10,17 @@ mode_arbiter:
     collision_topic: /agv/collision_monitor_state
     operator_mode_topic: /agv/mode/set
     state_topic: /agv/mode/state
+    odom_topic: /agv/odometry/global
+    rail_goal_topic: /agv/rail_driver/goal
+    rail_approach_service: /agv/rail_approach/execute
     publish_rate_hz: 20.0
+    # Goal derivation for RAIL_DRIVE: drive this far into the rail once
+    # approach settles (approach target − 3 m for REAR, + 3 m for FRONT).
+    # 3 m leaves margin vs the 10 m half-length so stops don't coincide
+    # with the aisle end.
+    rail_drive_distance_m: 3.0
+    # Camera-to-tag offsets when requesting rail_approach. offset_x is the
+    # forward distance at settle — 0.3 m keeps the tag inside the ZED FOV
+    # even with mild drift post-approach.
+    approach_offset_x: 0.3
+    approach_offset_y: 0.0

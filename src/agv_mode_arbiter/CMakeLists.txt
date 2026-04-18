@@ -8,11 +8,13 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(agv_interfaces REQUIRED)
 
 add_executable(mode_arbiter_node src/mode_arbiter_node.cpp)
 ament_target_dependencies(mode_arbiter_node
-  rclcpp geometry_msgs std_msgs)
+  rclcpp geometry_msgs nav_msgs std_msgs agv_interfaces)
 target_compile_features(mode_arbiter_node PUBLIC cxx_std_17)
 target_include_directories(mode_arbiter_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
