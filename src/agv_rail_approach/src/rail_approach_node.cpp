@@ -532,21 +532,23 @@ void RailApproachNode::stop_robot() {
 // ── Status publishing ──
 
 void RailApproachNode::publish_status() {
-  // Dual label: `state` carries the mode_arbiter-compatible bucket
-  // (idle | driving | settled | aborted) and `detail` carries the
-  // internal fine-grained state (coarse_approach / tag_acquisition /
-  // fine_servoing / ...). Dashboards and the arbiter both get what
-  // they need from a single topic.
+  // Dual label: `state` carries the mode_arbiter-compatible bucket and
+  // `detail` carries the internal fine-grained state.
+  //
+  // Bucketing: only FINE_SERVOING counts as "driving" because that's the
+  // phase in which rail_approach owns cmd_vel. During COARSE_APPROACH and
+  // TAG_ACQUISITION the Nav2 stack is the active publisher (rail_approach
+  // merely requested the Nav2 goal), so the arbiter should keep source=NAV
+  // and relay cmd_vel_nav — otherwise cmd_vel stays zero and the coarse
+  // approach never finishes.
   const std::string detail = state_name();
   std::string arbiter_state = detail;
   switch (state_) {
-    case State::COARSE_APPROACH:
-    case State::TAG_ACQUISITION:
     case State::FINE_SERVOING:
       arbiter_state = "driving";
       break;
     default:
-      break;  // idle/settled/aborted pass through.
+      break;  // idle/coarse_approach/tag_acquisition/settled/aborted pass through.
   }
 
   std_msgs::msg::String msg;

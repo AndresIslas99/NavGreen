@@ -66,6 +66,13 @@ inline const char *source_to_str(Source s) {
 struct FsmInputs {
   // Operator directive: "nav" | "teleop" | "idle".
   std::string operator_mode = "nav";
+  // If true, the arbiter auto-fires /agv/rail_approach/execute whenever the
+  // robot enters an approach strip. Default false: the arbiter is an
+  // observer/router, not an orchestrator. Tests and the dashboard retain
+  // explicit control over when rail_approach runs (by calling the service
+  // themselves). Enable this flag in operational profiles that want the
+  // hands-off docking behaviour.
+  bool auto_approach = false;
   // Zone label from /agv/zone/state.
   std::string zone = "gap";
   // Floor AprilTag ID at the current approach strip (-1 if not an approach).
@@ -138,29 +145,45 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
   // FSM transitions proper.
   switch (current) {
     case Mode::CORRIDOR_NAV:
-      if (is_approach_zone(in.zone) && !in.approach_request_in_flight) {
+      // Auto-trigger only when explicitly opted in. Without opt-in the
+      // arbiter stays in CORRIDOR_NAV and source=NAV even inside approach
+      // strips — the caller (test harness / operator UI) is responsible
+      // for firing /agv/rail_approach/execute when needed.
+      if (in.auto_approach && is_approach_zone(in.zone) &&
+          !in.approach_request_in_flight) {
         out.next_mode = Mode::RAIL_APPROACH_PEND;
-        out.active_source = Source::NONE;  // hold 0 vel while we kick off the service
+        out.active_source = Source::NAV;
         out.request_rail_approach = true;
+        return out;
+      }
+      // Even if rail_approach is running as a result of an explicit service
+      // call, catch its "driving" transition here so the arbiter still
+      // swaps cmd_vel to the approach source at fine-servoing.
+      if (in.rail_approach_state == "driving") {
+        out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
+        out.active_source = Source::APPROACH;
         return out;
       }
       out.active_source = Source::NAV;
       return out;
 
     case Mode::RAIL_APPROACH_PEND:
-      // Wait for rail_approach to report that it has started driving.
+      // Wait for rail_approach to enter FINE_SERVOING (= "driving"). During
+      // the preceding COARSE_APPROACH / TAG_ACQUISITION sub-states the
+      // Nav2 stack is the active cmd_vel publisher on rail_approach's
+      // behalf — keep source=NAV until rail_approach takes over its own
+      // cmd_vel.
       if (in.rail_approach_state == "driving") {
         out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
         out.active_source = Source::APPROACH;
         return out;
       }
       if (in.rail_approach_state == "aborted") {
-        // Approach refused (e.g., tag not visible). Fall back to corridor.
         out.next_mode = Mode::CORRIDOR_NAV;
         out.active_source = Source::NAV;
         return out;
       }
-      out.active_source = Source::NONE;  // still waiting; hold 0 velocity
+      out.active_source = Source::NAV;
       return out;
 
     case Mode::RAIL_APPROACH_ACTIVE:

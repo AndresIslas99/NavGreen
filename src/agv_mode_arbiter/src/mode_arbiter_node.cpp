@@ -62,6 +62,11 @@ class ModeArbiterNode : public rclcpp::Node {
     // Camera-to-tag desired forward offset when requesting rail_approach.
     declare_parameter<double>("approach_offset_x", 0.3);
     declare_parameter<double>("approach_offset_y", 0.0);
+    // Gate: if false, the arbiter never auto-calls rail_approach on zone
+    // entry. It still relays the right cmd_vel source when rail_approach
+    // is triggered externally (operator, test harness). Default false so
+    // the test_waypoint_precision Nav2-direct path keeps working.
+    declare_parameter<bool>("auto_approach", false);
 
     const auto cmd_out      = get_parameter("cmd_vel_out_topic").as_string();
     const auto cmd_nav      = get_parameter("cmd_vel_nav_topic").as_string();
@@ -83,6 +88,8 @@ class ModeArbiterNode : public rclcpp::Node {
     rail_drive_distance_m_ = get_parameter("rail_drive_distance_m").as_double();
     approach_offset_x_ = get_parameter("approach_offset_x").as_double();
     approach_offset_y_ = get_parameter("approach_offset_y").as_double();
+    auto_approach_ = get_parameter("auto_approach").as_bool();
+    latest_inputs_.auto_approach = auto_approach_;
 
     pub_cmd_   = create_publisher<geometry_msgs::msg::Twist>(cmd_out, rclcpp::QoS{10});
     pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, rclcpp::QoS{10});
@@ -328,6 +335,7 @@ class ModeArbiterNode : public rclcpp::Node {
   double rail_drive_distance_m_ = 3.0;
   double approach_offset_x_ = 0.3;
   double approach_offset_y_ = 0.0;
+  bool auto_approach_ = false;
 };
 
 }  // namespace agv_mode_arbiter
