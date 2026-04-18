@@ -12,6 +12,14 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_e_stop test/test_e_stop.py)
   ament_add_pytest_test(test_tf_tree test/test_tf_tree.py)
   ament_add_pytest_test(test_ekf_frames test/test_ekf_frames.py)
+  # HIL tests — skip themselves when SIM_API_HOST / ROS_DOMAIN_ID=42 are not set.
+  # Timeout bumped — each waypoint may take up to 120 s on Nav2.
+  ament_add_pytest_test(test_nav2_probe test/test_nav2_probe.py
+    TIMEOUT 180)
+  ament_add_pytest_test(test_waypoint_precision test/test_waypoint_precision.py
+    TIMEOUT 3600)
+  ament_add_pytest_test(test_full_flow test/test_full_flow.py
+    TIMEOUT 5400)
 endif()
 
 ament_package()

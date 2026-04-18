@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>agv_hil_bridges</name>
+  <version>0.1.0</version>
+  <description>
+    HIL-only bridge nodes. Translate the sim host's hardware-emulator topics
+    (/agv/joint_states, IMU raw) into the standard brain-side topics
+    (/agv/wheel_odom, /visual_slam/tracking/odometry) that agv_odrive and
+    isaac_ros_visual_slam provide on the real robot. Used only when
+    AGV_MODE=hil; in production this package's nodes are not launched.
+  </description>
+  <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf_transformations</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

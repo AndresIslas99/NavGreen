@@ -236,6 +236,75 @@ global_artifacts:
     required: false
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HIL validation artifacts (not iterated by verify_persistence.py)
+# ─────────────────────────────────────────────────────────────────────────────
+# Separate top-level section because these artifacts are either (a) written
+# by integration tests — which only exist at test time — or (b) located on
+# the sim host, outside this workspace's writable surface. Declared here for
+# traceability, not for the verifier's code_ref check.
+
+hil_artifacts:
+
+  brain_side_precision_report:
+    path_pattern: "${AGV_DATA_DIR}/sim_episodes/precision_run_<ts>/report.json"
+    format: 'JSON {"waypoints": [{"goal", "gt_final", "brain_final", "err_xy", "err_yaw", "brain_drift", "status", "bag_path", "events_slice"}], "summary": {"p95_err_xy", "max_err_xy", "success_rate"}}'
+    writer:
+      package: "agv_integration_tests"
+      test_ref: "src/agv_integration_tests/test/test_waypoint_precision.py"
+      mechanism: "written at end of test_waypoint_precision run"
+    readers:
+      - package: "agv_integration_tests"
+        test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+        role: "consumed for summary.json consolidation"
+      - package: "(human/LLM agent)"
+        role: "iteration loop reads p95 and event distribution to pick tuning actions"
+    lifecycle: "persistent (one dir per run, not rotated)"
+    required: false
+
+  brain_side_full_flow_summary:
+    path_pattern: "${AGV_DATA_DIR}/sim_episodes/full_flow_<ts>/summary.json"
+    format: 'JSON {"map_name", "map_fidelity": {...}, "waypoint_precision": {...}, "pass": bool}'
+    writer:
+      package: "agv_integration_tests"
+      test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+    readers:
+      - package: "(CI / PR review)"
+        role: "merge gate evidence"
+    lifecycle: "persistent"
+    required: false
+
+  brain_side_map_diff_report:
+    path_pattern: "${AGV_DATA_DIR}/sim_episodes/<run>/map_diff_<map_name>.json"
+    format: 'JSON {"centroid_errors_m", "ious", "corridor_slack", "free_space_precision", "free_space_recall", "pass": bool}'
+    writer:
+      package: "agv_integration_tests"
+      tool_ref: "src/agv_integration_tests/scripts/map_diff.py"
+    readers:
+      - package: "agv_integration_tests"
+        test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+    lifecycle: "persistent"
+    required: false
+
+  sim_host_episode_rosbags:
+    path_pattern: "/tmp/agv_runs/<episode_id>/ (on sim host, NOT on brain)"
+    format: "rosbag2 (mcap or sqlite3)"
+    writer:
+      host: "sim_host"
+      package: "sim_host:agv_sim_validation"
+      node: "episode_tracker"
+      note: "Not tracked by verify_persistence.py — path lives outside AGV_DATA_DIR on a different host."
+    readers:
+      - package: "(human/LLM agent via sim_api GET /episodes/{id}/bag)"
+        role: "postmortem for failed runs; rsync to brain-side archive before sim host reboot (volatile path)"
+    lifecycle: "volatile (sim host /tmp — lost on reboot). For permanent archive: rsync -av /tmp/agv_runs/ ~/agv_runs_archive/$(date +%F)/ on sim host."
+    required: false
+    rotation_policy:
+      max_episode_duration_s: 600
+      max_episode_size_mb: 500
+      total_cap_gb: 10
+      enforcement: "episode_tracker node in sim repo (not enforced by this spec)"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Session artifacts (non-canonical, scheduled for cleanup in Fase 5)
 # ─────────────────────────────────────────────────────────────────────────────
 
