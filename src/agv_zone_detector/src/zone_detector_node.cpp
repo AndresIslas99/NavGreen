@@ -84,12 +84,16 @@ class ZoneDetectorNode : public rclcpp::Node {
   void publish(const ClassifyResult &r) {
     std::ostringstream os;
     os.precision(4);
+    // approach_tag_id is -1 when the zone is not an approach; emit null.
+    std::string tag_id_str =
+        (r.approach_tag_id < 0) ? "null" : std::to_string(r.approach_tag_id);
     os << std::fixed
        << "{\"zone\":\""      << r.zone << "\","
        << "\"section\":\""   << r.section << "\","
-       << "\"aisle_y_center\":"  << to_json_num_or_null(r.aisle_y_center) << ","
-       << "\"rail_offset_lat\":" << to_json_num_or_null(r.rail_offset_lat) << ","
-       << "\"rail_yaw_error\":" << to_json_num_or_null(r.rail_yaw_error) << ","
+       << "\"aisle_y_center\":"   << to_json_num_or_null(r.aisle_y_center) << ","
+       << "\"rail_offset_lat\":"  << to_json_num_or_null(r.rail_offset_lat) << ","
+       << "\"rail_yaw_error\":"   << to_json_num_or_null(r.rail_yaw_error) << ","
+       << "\"approach_tag_id\":"  << tag_id_str << ","
        << "\"confidence\":"  << r.confidence << ","
        << "\"source\":\"pose\"}";
 
