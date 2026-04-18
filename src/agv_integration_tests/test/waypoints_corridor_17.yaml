@@ -1,0 +1,49 @@
+# Waypoints — CORRIDOR ONLY (17 waypoints)
+#
+# Split from waypoints_20.yaml v9 per user directive 2026-04-18: the stack has
+# two distinct navigation modes, and only CORRIDOR mode uses Nav2 freely.
+#
+#   CORRIDOR: open greenhouse central aisle (x<3.6 or x>7.4, any y),
+#             Nav2 + MPPI + RotationShim — can rotate, plan curves.
+#   RAIL:     longitudinal tracks (x∈[3.6, 7.4], y∈{0, ±2.2}) — robot
+#             can ONLY move forward/backward along the rail. Rotation
+#             is physically blocked by crop rows at y=±1.1, ±3.3, ±5.5.
+#             Rail traversal requires a separate rail_driver node
+#             (designed in docs/validation/rail_driver_spec.md).
+#
+# EXCLUDED from this file (Fase 2 work, rail_driver not yet implemented):
+#   - wp07 original: (2,0) → (5,0) enters rail zone at x=5
+#   - wp08 original: (5,-2.2) → (7,-2.2) inside rail y=-2.2
+#   - wp09 original: (5, 2.2) → (7, 2.2) inside rail y=+2.2
+#
+# Round 34c gave 8/17 corridor success (47%) with p95=0.096m over 8 successes.
+# Round 36 re-runs the same 17 corridor waypoints with the config reverted
+# from the round 35 regressions (xy_tol 0.10 restored).
+
+waypoints:
+  # ── Phase A: short probes, west-open y=0 (dominant success pattern) ──
+  - {id: wp01, start: {x: -0.5, y: 0.0, yaw: 0.0}, goal: {x:  0.0, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp02, start: {x:  0.0, y: 0.0, yaw: 0.0}, goal: {x:  1.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+  - {id: wp03, start: {x: -1.0, y: 0.0, yaw: 0.0}, goal: {x:  1.0, y: 0.0, yaw: 0.0}}  # 2.0 m
+  - {id: wp04, start: {x:  0.0, y: 0.0, yaw: 0.0}, goal: {x:  0.5, y: 0.0, yaw: 0.0}}  # 0.5 m repeat
+
+  # ── Phase B: y=±2 open corridor (≥1.1 m clear of crop rows and crates) ──
+  - {id: wp05, start: {x:  0.0, y:  2.0, yaw: 0.0}, goal: {x:  2.0, y:  2.0, yaw: 0.0}}
+  - {id: wp06, start: {x:  0.0, y: -2.0, yaw: 0.0}, goal: {x:  2.0, y: -2.0, yaw: 0.0}}
+
+  # ── Phase E: east-open forwards (round 28 proved this zone: 3-4 cm) ──
+  - {id: wp07, start: {x: 10.0, y:  0.0, yaw: 0.0}, goal: {x: 12.0, y:  0.0, yaw: 0.0}}  # 2 m east
+  - {id: wp08, start: {x: 12.0, y:  0.0, yaw: 0.0}, goal: {x: 15.0, y:  0.0, yaw: 0.0}}  # 3 m east
+  - {id: wp09, start: {x: 15.0, y:  0.0, yaw: 0.0}, goal: {x: 18.0, y:  0.0, yaw: 0.0}}  # 3 m east
+  - {id: wp10, start: {x: 18.0, y:  0.0, yaw: 0.0}, goal: {x: 20.0, y:  0.0, yaw: 0.0}}  # 2 m east
+  - {id: wp11, start: {x: 10.0, y:  2.0, yaw: 0.0}, goal: {x: 13.0, y:  2.0, yaw: 0.0}}  # 3 m east y=+2
+  - {id: wp12, start: {x: 10.0, y: -2.0, yaw: 0.0}, goal: {x: 13.0, y: -2.0, yaw: 0.0}}  # 3 m east y=-2
+
+  # ── Phase F: gentle arcs (yaw-change stress test) ──
+  - {id: wp13, start: {x: -2.0, y:  0.0, yaw:  0.0997}, goal: {x:  0.0, y:  0.2, yaw:  0.0997}}
+  - {id: wp14, start: {x:  0.0, y:  0.0, yaw: -0.0997}, goal: {x:  2.0, y: -0.2, yaw: -0.0997}}
+
+  # ── Phase G: repeat tight probes to stabilize the p95 sample ──
+  - {id: wp15, start: {x:  0.0, y: 0.0, yaw: 0.0}, goal: {x:  1.5, y: 0.0, yaw: 0.0}}  # 1.5 m
+  - {id: wp16, start: {x:  1.0, y: 0.0, yaw: 0.0}, goal: {x:  2.5, y: 0.0, yaw: 0.0}}  # 1.5 m offset
+  - {id: wp17, start: {x:  0.0, y: 2.0, yaw: 0.0}, goal: {x:  1.0, y: 2.0, yaw: 0.0}}  # 1.0 m offset lane

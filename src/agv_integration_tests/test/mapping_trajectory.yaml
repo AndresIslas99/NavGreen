@@ -1,0 +1,34 @@
+# Scripted mapping trajectory for test_full_flow mapping phase.
+#
+# Used by scripts/run_mapping_trajectory.py (OR a manual teleop equivalent).
+# Each waypoint is a coarse target for SLAM coverage — tolerance is 0.30 m,
+# not 0.10 m, because coverage is the goal here, not precision.
+#
+# Speed: nominal 0.3 m/s (see CLAUDE.md "Commissioning mapping protocol").
+# Pattern: U-shape through the central corridor, bidirectional pass for
+# loop-closure opportunities.
+#
+# Assumes the start pose is roughly (0, 0, 0) in map frame. Adjust if the
+# greenhouse world origin is elsewhere.
+
+trajectory:
+  nominal_speed_mps: 0.3
+  tolerance_m: 0.30
+  waypoints:
+    - {x:  2.0, y:  0.0, yaw: 0.0}
+    - {x:  4.0, y:  0.0, yaw: 0.0}
+    - {x:  4.0, y:  1.0, yaw: 1.5708}
+    - {x:  2.0, y:  1.0, yaw: 3.14159}
+    - {x:  0.0, y:  1.0, yaw: 3.14159}
+    - {x: -2.0, y:  1.0, yaw: 3.14159}
+    - {x: -4.0, y:  1.0, yaw: 3.14159}
+    - {x: -4.0, y: -1.0, yaw: -1.5708}
+    - {x: -2.0, y: -1.0, yaw: 0.0}
+    - {x:  0.0, y: -1.0, yaw: 0.0}
+    - {x:  2.0, y: -1.0, yaw: 0.0}
+    - {x:  4.0, y: -1.0, yaw: 0.0}
+    # Second pass (bidirectional for loop closure)
+    - {x:  4.0, y:  0.0, yaw: 1.5708}
+    - {x:  0.0, y:  0.0, yaw: 3.14159}
+    - {x: -4.0, y:  0.0, yaw: 3.14159}
+    - {x:  0.0, y:  0.0, yaw: 0.0}

@@ -288,6 +288,33 @@ without starving the small BEST_EFFORT `/agv/scan` topic and tripping
 keeps the bandwidth within budget. Production behavior is untouched — the
 override file is only loaded when the `hil_mode` flag is true.
 
+## HIL vs production divergence — goal tolerance
+
+`config/nav2_hil_overrides.yaml` tightens `general_goal_checker.xy_goal_tolerance`
+to **0.10 m** (yaw 0.20 rad) while `nav2_params.yaml` keeps production at
+**0.15 m** (yaw 0.25 rad). This is intentional and tracked by
+`specs/acceptance.yaml#hil_validation.waypoint_precision`.
+
+Reason for the split:
+
+- The HIL validation gate requires waypoint p95 error ≤ 0.10 m. Lowering the
+  controller's own `xy_goal_tolerance` to 0.10 is the minimum condition to
+  satisfy that gate — if the controller reports SUCCEEDED at 0.13 m, no
+  amount of external measurement will push the error below 0.10 m.
+- On real hardware, dropping `xy_goal_tolerance` below 0.15 m can make MPPI
+  oscillate near the goal (samples struggle to resolve sub-cell corrections
+  with wheel-encoder noise + EKF latency). The sim does not reproduce that
+  failure mode reliably, so production keeps 0.15 m until the HIL harness
+  proves the tighter tolerance converges deterministically over 20 waypoints.
+- Once `test_waypoint_precision` passes consistently, the production
+  tolerance can be lowered (separate PR, separate validation in the
+  greenhouse) — but not before.
+
+If a run fails the 0.10 m gate, the iteration loop in
+`docs/validation/iteration_loop.md` may temporarily raise HIL tolerance to
+0.12 m to bisect which Nav2 param is the bottleneck, document the finding,
+and then re-tighten. The 0.10 m target is the goal, not a dogma.
+
 ## Dependencies
 
 - nav2_bringup, nav2_bt_navigator, nav2_controller, nav2_planner, nav2_behaviors,
