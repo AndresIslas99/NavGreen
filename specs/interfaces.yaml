@@ -113,6 +113,17 @@ topics:
     rate_hz: {min: 40, target: 50, max: 55}
     subscribers:
       - {pkg: "robot_localization", node: "ekf_local", role: "odom0 for dual EKF"}
+    hil_override:
+      owner_pkg: "agv_hil_bridges"
+      owner_node: "joint_states_to_wheel_odom"
+      code_ref: "src/agv_hil_bridges/scripts/joint_states_to_wheel_odom.py"
+      since: "2026-04-17 (agv-greenhouse-sim 3d44cec)"
+      rationale: |
+        Sim host stopped publishing /agv/wheel_odom because it is Jetson
+        software work in production. In HIL the bridge integrates
+        /agv/joint_states (sim encoder emulation) using the SAME
+        wheel_radius / track_width as odrive_params.yaml, so ekf_local
+        sees the same robot kinematically in HIL and prod.
 
   - name: "/agv/odometry/local"
     type: "nav_msgs/msg/Odometry"
@@ -150,6 +161,18 @@ topics:
     notes: "cuVSLAM has TF DISABLED via cuvslam_greenhouse.yaml /**: override — topic only."
     subscribers:
       - {pkg: "robot_localization", node: "ekf_global", role: "differential mode"}
+    hil_override:
+      owner_pkg: "isaac_ros_visual_slam (external, runs on Jetson in HIL consuming sim /agv/zed/* + IMU)"
+      fallback_owner_pkg: "agv_hil_bridges"
+      fallback_owner_node: "vslam_fallback_relay"
+      fallback_code_ref: "src/agv_hil_bridges/scripts/vslam_fallback_relay.py"
+      fallback_gate: "cuvslam_in_hil:=false in agv_hil_full.launch.py"
+      since: "2026-04-17"
+      rationale: |
+        Sim no longer shims this topic. Primary path: cuVSLAM runs on
+        Jetson (IfCondition cuvslam_in_hil). Fallback: relay wheel_odom
+        with inflated covariance so ekf_global still has odom1 input
+        when cuVSLAM is disabled or failing on raytracing-quality images.
 
   # ── Perception ────────────────────────────────────────────────────────────
   - name: "/agv/scan"
@@ -161,6 +184,29 @@ topics:
       - {pkg: "slam_toolbox (external)"}
       - {pkg: "nav2_collision_monitor", role: "2D obstacle source"}
       - {pkg: "agv_ui_backend", role: "dashboard scan visualization"}
+    hil_notes: |
+      Post 2026-04-17 refactor sim no longer publishes /agv/scan.
+      agv_hil_full.launch.py starts pointcloud_to_laserscan on the Jetson
+      consuming /agv/zed/point_cloud/cloud_registered (from sim). QoS
+      override pins the subscription to RELIABLE because Isaac's Replicator
+      publishes RELIABLE; the default BEST_EFFORT subscriber silently drops
+      all messages (blocker observed in Round 2).
+
+  - name: "/agv/joint_states"
+    type: "sensor_msgs/msg/JointState"
+    owner_pkg: "sim_host:agv_isaac_sim"
+    owner_node: "isaac_joint_states_publisher"
+    cross_distro_boundary: false
+    host: "sim_host"
+    qos: {reliability: "best_effort", history: "keep_last", depth: 10}
+    rate_hz: {min: 30, target: 50}
+    semantics: |
+      Sim-side encoder emulation after 2026-04-17 refactor. Contains
+      `name: [left_wheel_joint, right_wheel_joint]` with position (rad)
+      and velocity (rad/s). Consumed by the Jetson-side
+      joint_states_to_wheel_odom bridge.
+    subscribers:
+      - {pkg: "agv_hil_bridges", node: "joint_states_to_wheel_odom", role: "encoder input for wheel_odom integration (HIL)"}
 
   - name: "/agv/live_map"
     type: "nav_msgs/msg/OccupancyGrid"
@@ -280,6 +326,151 @@ topics:
     payload: "'teleop' | 'mapping' | 'nav'"
     subscribers:
       - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "reacts on nav transition"}
+
+  # ── HIL simulation validation overlay ─────────────────────────────────────
+  # The /agv/sim/* namespace belongs to the separate sim host repo
+  # `agv-greenhouse-sim` (not this workspace). It is published by the
+  # overlay `agv_sim_validation` package running on the sim host
+  # (Linux PC, Humble) and consumed by the Jetson brain (Jazzy) over
+  # Cyclone DDS on ROS_DOMAIN_ID=42 (unicast peer list in sim repo
+  # cyclonedds.xml).
+  #
+  # INVARIANT cross_distro_boundary:
+  #   Payloads MUST use only standard ROS message types
+  #   (std_msgs/*, geometry_msgs/*, nav_msgs/*, nav2_msgs/*). Any
+  #   custom package type (e.g. agv_interfaces/*) would require the
+  #   exact same IDL build on both Humble and Jazzy, which we do not
+  #   guarantee. String-JSON payloads carry structured data instead.
+  #
+  # OWNERSHIP: owner_pkg deliberately uses prefix "sim_host:" so it does
+  # NOT start with "agv_" — verify_interfaces.py skips entries whose
+  # owner is not an agv_* package in this workspace. These topics are
+  # declared for brain-side consumers, not owned by this repo.
+  #
+  # AUTHORITATIVE SPEC: sim repo's docs/TOPIC_CONTRACT.md. If this file
+  # diverges from that one, that one wins — update here to match.
+
+  - name: "/agv/sim/ground_truth/pose"
+    type: "geometry_msgs/msg/PoseStamped"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "ground_truth_publisher"
+    cross_distro_boundary: true
+    host: "sim_host"
+    repo: "agv-greenhouse-sim"
+    frame_id: "map"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 10}
+    semantics: "PhysX-truth robot pose. Not derived from any EKF. Used by brain-side harness as ground truth oracle."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "terminal-error measurement vs /navigate_to_pose goal"}
+
+  - name: "/agv/sim/ground_truth/twist"
+    type: "geometry_msgs/msg/TwistStamped"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "ground_truth_publisher"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 10}
+    semantics: "Numerically derived velocity from GT pose."
+
+  - name: "/agv/sim/ground_truth/visible_markers"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "visible_markers"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 5}
+    payload: 'JSON {"stamp": sim_sec, "visible": [{"id": int, "range_m": float, "bearing_rad": float, "incidence_deg": float}]}'
+    semantics: "AprilTags currently inside the ZED frustum (HFOV 110°, ≤5m range, incidence ≤80°). Used to cross-check brain-side /detections pipeline."
+
+  - name: "/agv/sim/ground_truth/obstacles"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "obstacles_publisher"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    rate_hz: {publish: "latched once at start"}
+    payload: 'JSON {"obstacles": [{"name": str, "kind": "wall|crate|prop", "pose": {x,y,z,yaw}, "bbox": {sx,sy,sz}}]}'
+    semantics: "Static catalogue from world_config.yaml. Consumed by map_diff.py to compare saved .pgm vs ground truth geometry."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "map_diff.py fidelity metric"}
+
+  - name: "/agv/sim/localization_error"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "localization_monitor"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 1}
+    payload: 'JSON {"stamp": sim_sec, "pos_err_m": float, "yaw_err_rad": float, "rmse_xy_m": float}'
+    semantics: "Rolling error between GT and brain /agv/odometry/global. 1 Hz avoids alias with 10 Hz sources."
+
+  - name: "/agv/sim/events"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "events_detector"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_all", depth: 100}
+    rate_hz: {publish: "event-driven"}
+    payload: 'JSON {"stamp": sim_sec, "event": "collision|stuck|drift|drift_recovered|marker_seen|goal_succeeded|goal_aborted", "with": str?, "impulse_n_s": float?}'
+    semantics: "Discrete event timeline. Collisions from PhysX contact reports in sim handler."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "hard-fail test on collision events during waypoint runs"}
+
+  - name: "/agv/sim/episode_summary"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "episode_tracker"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    rate_hz: {publish: "latched per episode"}
+    payload: 'JSON {"episode_id": str, "path_length_m": float, "efficiency": float, "collisions": int, "mean_loc_err_m": float, "max_loc_err_m": float, "bag_path": str}'
+    semantics: "Per-mission summary. bag_path points to /tmp/agv_runs/ on sim host (not brain-side)."
+
+  - name: "/agv/sim/reset_request"
+    type: "geometry_msgs/msg/Pose"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "sim_api"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 1}
+    rate_hz: {publish: "on-demand"}
+    semantics: "Request to teleport the chassis rigid body to an absolute map-frame pose. Consumed by sim_isaac_handler inside the Isaac Kit process. Response signaled on /agv/sim/reset_done."
+    publishers:
+      - {pkg: "agv_integration_tests", role: "per-waypoint reset in test_waypoint_precision"}
+    subscribers:
+      - {pkg: "sim_host:agv_isaac_sim", node: "sim_isaac_handler (in-sim, Kit process)", role: "physical teleport via omni.isaac.dynamic_control"}
+
+  - name: "/agv/sim/reset_done"
+    type: "std_msgs/msg/Bool"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "sim_isaac_handler"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    rate_hz: {publish: "on completion of reset_request"}
+    semantics: "Latched True after the in-sim handler completes the teleport and zeroes wheel velocities. Subscribers wait for this edge before reading GT pose."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "barrier between reset and navigate in per-waypoint loop"}
+
+  - name: "/agv/sim/control"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "sim_isaac_handler"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 1}
+    rate_hz: {publish: "on-demand"}
+    payload: 'JSON {"command": "play"|"stop"|"pause"}'
+    semantics: "Timeline control consumed inside the Isaac Kit process. HTTP `POST /sim/play` and `POST /sim/stop` on sim_api are the mirror endpoints used by the LLM agent. /sim/restart is NOT represented here because it kills the Kit process — the supervisor relaunches it."
+    publishers:
+      - {pkg: "sim_host:agv_sim_validation", node: "sim_api", role: "HTTP /sim/play|stop → topic"}
 
   # ── Dashboard and diagnostics ─────────────────────────────────────────────
   - name: "/agv/battery"
