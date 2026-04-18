@@ -2,18 +2,75 @@
 #
 # Applied on top of the base config via: parameters=[nav2_params.yaml, nav2_hil_overrides.yaml]
 # Later YAML values override earlier ones for matching keys.
+#
+# HIL-specific deltas (sim physics differ from real hardware):
+#   - drive efficiency ~5-20% of commanded velocity (wheel slip / low
+#     friction in PhysX) so vx_max must be 10x higher in HIL than prod.
+#   - no ZED depth pointcloud bandwidth (collision_monitor scan-only).
+#   - inflation reduced to 0.30 so offset lanes near crop rows are traversable.
 
 /**/controller_server:
   ros__parameters:
-    # Sim topic rates are lower (~11 Hz odom, ~17 Hz IMU), so 20 Hz controller
-    # frequency from the base config was too aggressive. 10 Hz is conservative.
-    controller_frequency: 10.0
+    # NOTE (S9): controller_frequency must satisfy 1/freq <= model_dt (MPPI
+    # default is 0.05 s = 20 Hz). Running at 10 Hz made configure throw
+    # "Controller period more then model dt" and aborted Nav2 bringup on
+    # HIL. Staying at 20 Hz here; the sim easily sustains this alongside
+    # its lower topic rates, and MPPI model_dt remains default (0.05 s).
+    controller_frequency: 20.0
+
+    # Progress checker — relaxed for HIL's slow effective drive (5-37 mm/s).
+    # The default 0.5 m / 10 s triggers false "stuck" aborts because the
+    # sim needs 20+ s to cover 0.5 m at nominal speed.
+    progress_checker:
+      required_movement_radius: 0.05     # 5 cm — slow drive tolerance
+      movement_time_allowance: 120.0     # 2 min — full waypoint budget
+
     FollowPath:
       transform_tolerance: 0.5
-      # RotationShim + MPPI params come from the base nav2_params.yaml.
-      # No HIL-specific overrides needed for the controller itself — the
-      # shim and MPPI work at 10 Hz just fine (MPPI model_dt=0.05s still
-      # valid, controller just runs every other tick).
+      # ── MPPI retuning for HIL drive scale (empirically derived R8-R10) ──
+      # vx_max raised 10× from prod (0.25 → 2.5) to compensate for the
+      # 5-20% sim drive efficiency. Real drive distance ≈ 0.25 m/s, same
+      # as production. Safety chain (collision_monitor) stays active
+      # because the physical motion remains bounded.
+      vx_max: 2.5
+      vx_min: -0.3                       # Tiny reverse margin for MPPI jitter
+      wz_max: 2.0                        # Faster rotation for heading corrections
+      vx_std: 0.3                        # Wider sampling (was 0.2)
+      wz_std: 0.5                        # Wider angular sampling (was 0.4)
+      temperature: 0.4                   # Softer softmax (was 0.3)
+      batch_size: 2000                   # More samples for reliability (was 1000)
+      # ── Critic weights retuned for forward-only rail traversal ──
+      PreferForwardCritic:
+        cost_weight: 1.5                 # Reduced from 12.0 — no longer
+                                         # dominates path alignment. Forward-
+                                         # only is already enforced by vx_min
+                                         # and the forward-only BT.
+      PathAlignCritic:
+        cost_weight: 16.0                # From 20.0 — balance with Goal+Follow
+      GoalCritic:
+        cost_weight: 15.0                # Raised from 5.0 — stronger pull to
+                                         # goal for sub-10 cm precision
+      GoalAngleCritic:
+        cost_weight: 5.0                 # Raised from 3.0
+      PathFollowCritic:
+        cost_weight: 5.0                 # Lowered from 7.0 — match PathAlign
+                                         # emphasis on geometry vs look-ahead
+
+    # Tighten goal tolerance in HIL only. Production keeps xy=0.15 in
+    # nav2_params.yaml until the HIL harness (agv_integration_tests
+    # test_waypoint_precision) converges stably at 0.10 — dropping
+    # tolerance on real hardware can destabilize MPPI before that.
+    # Gate: specs/acceptance.yaml#hil_validation.waypoint_precision.
+    general_goal_checker:
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.30
+
+# collision_monitor source_timeout extended because sim scan rate is
+# ~10 Hz (pointcloud_to_laserscan on Jetson), not the ~30 Hz of real
+# hardware. The default 0.5 s was tripping false "sensor stale" stops.
+/**/collision_monitor:
+  ros__parameters:
+    source_timeout: 3.0
 
 /**/local_costmap:
   local_costmap:
@@ -37,7 +94,13 @@
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        # Reduced from 0.55 → 0.30. Reason: with the 2 m-wide crop-row
+        # corridor between y=±1.1, 0.55 inflation blocks the entire rail
+        # center (0.85 m clear needed but 0.55 + 0.37 inscribed = 0.92 m).
+        # 0.30 + 0.37 = 0.67 m leaves a 0.18 m free strip at y=0 — tight
+        # but traversable. Validated in R10: y=0 rail succeeded when
+        # inflation was 0.30; failed at 0.55.
+        inflation_radius: 0.30
 
 /**/global_costmap:
   global_costmap:
@@ -60,4 +123,4 @@
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.30

@@ -35,6 +35,51 @@ entry_points:
   hil_simulation:
     launch_file: "src/agv_bringup/launch/agv_hil_full.launch.py"
     note: "Invoked by agv_start.sh when AGV_MODE=hil. Separate startup sequence, not covered by this spec."
+    sim_host_companion:
+      description: |
+        HIL requires a second host (the sim host, a Linux PC with GPU) running
+        Isaac Sim and the validation overlay. That stack lives in a separate
+        git repo `agv-greenhouse-sim` and is NOT part of this workspace. It
+        is documented here only for orchestration — the Jetson's launch does
+        not spawn anything on the sim host.
+      repo: "git@github.com:AndresIslas99/agv-greenhouse-sim.git"
+      sim_host_entry_points:
+        - step: 1
+          terminal: "T1 (sim host)"
+          command: "./run_isaac_supervised.sh"
+          legacy_command: "./run_isaac_sim.sh (manual Play — deprecated after 2026-04-16)"
+          auto_play: true
+          auto_play_env_var: "AGV_AUTO_PLAY (default 1; set to 0 for manual Play)"
+          supervisor: "relaunches Isaac on crash or on POST /sim/restart; downtime ~30–60 s"
+          note: "Starts Isaac Kit under supervisor, loads greenhouse_with_robot.usd, boots sim_isaac_handler (in-Kit rclpy) for teleport + PhysX contact reports, and presses Play automatically."
+        - step: 2
+          terminal: "T2 (sim host)"
+          command: "ros2 launch agv_isaac_sim isaac_hil.launch.py validation:=true enable_api:=true"
+          args:
+            validation: "true enables /agv/sim/* overlay (7 nodes)"
+            enable_api: "true enables FastAPI sim_api on port 8090 of sim host"
+          note: "Forces ROS_DOMAIN_ID=42 internally. Starts overlay + foxglove_bridge (port 8765) + drive chain."
+        - step: 3
+          terminal: "Jetson"
+          command: "ros2 launch agv_bringup agv_hil_full.launch.py map:=<map_name>"
+          note: "Brain-side stack. Must start AFTER sim T1+T2 or Nav2 hangs without /clock."
+      http_timeline_control:
+        description: "HTTP endpoints on sim_api (:8090 of sim host) for remote control by the LLM agent without rclpy/DDS."
+        endpoints:
+          - {method: "POST", path: "/sim/play", effect: "start the Isaac timeline (mirrors auto-play)"}
+          - {method: "POST", path: "/sim/stop", effect: "pause physics + clock; does not kill the Kit process"}
+          - {method: "POST", path: "/sim/restart", effect: "kills Isaac; supervisor relaunches with auto-play; returns immediately. LLM must poll GET /state until gt_pose is non-null (~30–60 s)."}
+        topic_mirror: "/agv/sim/control (std_msgs/String JSON command=play|stop|pause) for play/stop; restart is not topic-exposed because it kills the Kit process."
+      cross_distro_boundary:
+        description: "sim host runs ROS 2 Humble; Jetson runs ROS 2 Jazzy. Cyclone DDS interops at wire level as long as only standard msg types cross."
+        allowed_types: ["std_msgs/*", "geometry_msgs/*", "nav_msgs/*", "nav2_msgs/*", "sensor_msgs/*"]
+        forbidden: "agv_interfaces/* and any other custom msg — IDL is not guaranteed byte-compatible across distros."
+      dds_peer_list:
+        file: "cyclonedds.xml (in sim repo)"
+        must_contain: "Jetson IP (USB 192.168.55.1 preferred for stability; WiFi JETSON-LAN-IP fallback)"
+        jetson_terminal_requirement: "any ros2 CLI terminal on the Jetson used for HIL verification must `export ROS_DOMAIN_ID=42` (default .bashrc is 0)."
+      usd_staleness:
+        warning: "After brain-parity refactor on 2026-04-15, the USD in sim repo is stale. Regenerate on sim host with `isaacsim --exec src/agv_isaac_sim/scripts/build_greenhouse_usd.py && isaacsim --exec src/agv_isaac_sim/scripts/import_robot_usd.py` before first Play of the day."
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Node-by-node startup (relative to launch_ros t=0)

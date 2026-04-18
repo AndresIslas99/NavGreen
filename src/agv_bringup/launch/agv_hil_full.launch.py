@@ -3,22 +3,32 @@ AGV HIL Full Stack — Single-command launch for HIL simulation mode
 
 Launches the complete Jetson autonomy brain against simulated sensors from PC:
   - robot_state_publisher (URDF → static TF)
-  - ekf_local  (sim wheel_odom + sim IMU → odom→base_link, 40 Hz)
-  - ekf_global (local + sim visual odom → map→odom, 10 Hz)
+  - agv_hil_bridges/joint_states_to_wheel_odom (sim /agv/joint_states → /agv/wheel_odom)
+  - pointcloud_to_laserscan (sim /agv/zed/point_cloud → /agv/scan)
+  - cuVSLAM (via agv_slam include, consumes sim /agv/zed/left|right/* + IMU)
+  - covariance_override_node (wheel_odom + imu + vslam → *_cov topics)
+  - ekf_local  (wheel_odom_cov + imu_cov → odom→base_link)
+  - ekf_global (local + visual_slam_odom_cov → map→odom)
   - Nav2 stack (planner, controller, costmaps, lifecycle)
   - Operator backend (dashboard + teleop + REST + WebSocket on :8090)
 
-Does NOT launch (provided by PC sim):
-  - agv_odrive (no CAN hardware)
-  - agv_slam / cuVSLAM (no ZED GPU pipeline)
+Does NOT launch (provided by PC sim as hardware-emulator outputs):
+  - agv_odrive (no CAN hardware, sim emulates encoders via joint_states)
+  - ZED SDK (vendor locked to hardware; sim emulates outputs via raytracing)
 
-External topics expected from PC:
-  /clock                    rosgraph_msgs/Clock      sim time
-  /agv/wheel_odom           nav_msgs/Odometry        50 Hz  (odom → base_link)
-  /agv/joint_states         sensor_msgs/JointState   50 Hz
-  /agv/imu/data             sensor_msgs/Imu          100+ Hz (frame: imu_link)
-  /agv/scan                 sensor_msgs/LaserScan    10 Hz  (frame: laser_frame)
-  /visual_slam/tracking/odometry  nav_msgs/Odometry  10 Hz  (map → base_link)
+External topics expected from PC (2026-04-17 contract after agv-greenhouse-sim
+commit 3d44cec — sim stopped publishing anything the Jetson handles in production):
+  /clock                                  rosgraph_msgs/Clock      sim time
+  /agv/joint_states                       sensor_msgs/JointState   ≥30 Hz (encoder emu)
+  /agv/imu/data                           sensor_msgs/Imu          100+ Hz (BMI088 emu)
+  /agv/zed/left/image_rect_color          sensor_msgs/Image        30 Hz (SDK raytracing)
+  /agv/zed/left/camera_info               sensor_msgs/CameraInfo   30 Hz
+  /agv/zed/right/image_rect_color         sensor_msgs/Image        30 Hz
+  /agv/zed/right/camera_info              sensor_msgs/CameraInfo   30 Hz
+  /agv/zed/depth/depth_registered         sensor_msgs/Image        10-30 Hz
+  /agv/zed/point_cloud/cloud_registered   sensor_msgs/PointCloud2  10 Hz (RELIABLE QoS)
+  /agv/motor_state, /agv/drive_debug      (motor gate telemetry)
+  /agv/sim/*                              (validation oracle — see specs/interfaces.yaml)
 
 PC must subscribe to /agv/cmd_vel to close the control loop.
 
@@ -26,7 +36,10 @@ Usage:
   ros2 launch agv_bringup agv_hil_full.launch.py \\
     map:=/path/to/map.yaml
 
-  # Or with CycloneDDS for cross-machine discovery:
+  # Skip cuVSLAM (fallback relay takes over):
+  ros2 launch agv_bringup agv_hil_full.launch.py map:=... cuvslam_in_hil:=false
+
+  # With CycloneDDS for cross-machine discovery:
   export CYCLONEDDS_URI=$(ros2 pkg prefix agv_bringup)/share/agv_bringup/config/cyclonedds_hil.xml
   ros2 launch agv_bringup agv_hil_full.launch.py map:=/path/to/map.yaml
 """
@@ -36,7 +49,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -63,6 +76,30 @@ def generate_launch_description():
         DeclareLaunchArgument('map', description='Path to map YAML file (required)'),
         DeclareLaunchArgument('enable_slam_toolbox', default_value='true',
                               description='Enable SLAM Toolbox for mapping'),
+        DeclareLaunchArgument(
+            'cuvslam_in_hil', default_value='true',
+            description=(
+                'Run cuVSLAM on the Jetson consuming the sim-published ZED '
+                'stereo + IMU. When false, agv_hil_bridges/vslam_fallback_relay '
+                'synthesises /visual_slam/tracking/odometry from wheel_odom instead.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'enable_wheel_odom_bridge', default_value='true',
+            description='Run agv_hil_bridges/joint_states_to_wheel_odom on the Jetson.',
+        ),
+        DeclareLaunchArgument(
+            'use_gt_odom', default_value='false',
+            description=(
+                'HIL precision-validation shortcut: publish /agv/wheel_odom as '
+                'a mirror of /agv/sim/ground_truth/pose instead of integrating '
+                'sim encoder telemetry. The sim drive has 5-20% efficiency so '
+                'wheel_odom over-reports by 10-150× and destabilizes the EKF. '
+                'With this flag, joint_states_to_wheel_odom is disabled and '
+                'Nav2 sees a perfect odometry matching physical motion. '
+                'Production-unsafe; never enable outside HIL.'
+            ),
+        ),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -121,8 +158,23 @@ def generate_launch_description():
                 'frequency': 50.0,               # high freq so EKF processes data on arrival, not timer-bound
                 'odom0': 'wheel_odom_cov',        # from covariance_override relay
                 'imu0': '/agv/imu/data_cov',      # from covariance_override relay
+                # odom0_differential kept at the production default (false)
+                # when use_gt_odom:=true. In that mode wheel_odom mirrors
+                # the sim ground truth, so absolute pose is reliable and
+                # Kalman updates snap ekf_local straight to GT.
+                #
+                # If use_gt_odom:=false and the joint_states integrator is
+                # on instead, the sim's 5-20% drive efficiency makes wheel
+                # pose unreliable. In that case enable differential here
+                # (override via params file) so only the twist is consumed.
             }],
-            remappings=[('odometry/filtered', 'odometry/local')],
+            remappings=[
+                ('odometry/filtered', 'odometry/local'),
+                # Both EKFs advertise /agv/set_pose by default — namespace
+                # collision makes it impossible for the precision test to
+                # target one specifically. Split into explicit names.
+                ('set_pose', 'ekf_local/set_pose'),
+            ],
             output='log',
         ),
 
@@ -137,15 +189,120 @@ def generate_launch_description():
                 'frequency': 20.0,
                 'odom1': '/visual_slam/tracking/odometry_cov',
             }],
-            remappings=[('odometry/filtered', 'odometry/global')],
+            remappings=[
+                ('odometry/filtered', 'odometry/global'),
+                ('set_pose', 'ekf_global/set_pose'),
+            ],
             output='log',
         ),
 
-        # ── /agv/scan ──
-        # In HIL mode, the sim provides /agv/scan already filtered
-        # (pointcloud_to_laserscan with min_height/max_height runs on the sim PC,
-        # same pipeline as production on the Jetson).
-        # In production (agv_full.launch.py), pointcloud_to_laserscan runs locally.
+        # ── HIL bridges: joint_states → wheel_odom (+ optional vslam fallback) ──
+        # Replaces what agv_odrive does on real hardware. Consumes the sim's
+        # /agv/joint_states (encoder emulation) and publishes /agv/wheel_odom.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('agv_hil_bridges'), 'launch', 'hil_bridges.launch.py'
+                ])),
+            launch_arguments={
+                'namespace': ns,
+                'enable_wheel_odom_bridge': LaunchConfiguration('enable_wheel_odom_bridge'),
+                'cuvslam_in_hil': LaunchConfiguration('cuvslam_in_hil'),
+                'use_gt_odom': LaunchConfiguration('use_gt_odom'),
+            }.items(),
+        ),
+
+        # ── ZED optical frame static TF chain (HIL-only) ──
+        # In production, the ZED wrapper publishes its internal URDF TF
+        # (base_link → zed_camera_link → zed_left_camera_frame → ..._optical).
+        # In HIL the wrapper isn't running but the sim's pointcloud header
+        # uses frame_id=zed_left_camera_frame_optical; without these statics,
+        # pointcloud_to_laserscan's message filter drops every cloud.
+        # Same (0.700, 0.0, -0.055) offset as agv_slam.launch.py:82.
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='hil_base_to_zed',
+            arguments=['--x', '0.700', '--y', '0.0', '--z', '-0.055',
+                       '--roll', '0', '--pitch', '0', '--yaw', '0',
+                       '--frame-id', 'base_link', '--child-frame-id', 'zed_camera_link'],
+            parameters=[{'use_sim_time': True}],
+        ),
+        # zed_camera_link → zed_left_camera_frame: ZED 2i half-baseline ~0.06m to the left.
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='hil_zed_to_left',
+            arguments=['--x', '0.0', '--y', '0.06', '--z', '0.0',
+                       '--roll', '0', '--pitch', '0', '--yaw', '0',
+                       '--frame-id', 'zed_camera_link', '--child-frame-id', 'zed_left_camera_frame'],
+            parameters=[{'use_sim_time': True}],
+        ),
+        # zed_left_camera_frame → zed_left_camera_frame_optical: ROS optical
+        # convention rotation (X right, Y down, Z forward). Quaternion from
+        # RPY (-pi/2, 0, -pi/2) = (x=-0.5, y=0.5, z=-0.5, w=0.5).
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='hil_zed_to_optical',
+            arguments=['--x', '0.0', '--y', '0.0', '--z', '0.0',
+                       '--qx', '-0.5', '--qy', '0.5', '--qz', '-0.5', '--qw', '0.5',
+                       '--frame-id', 'zed_left_camera_frame',
+                       '--child-frame-id', 'zed_left_camera_frame_optical'],
+            parameters=[{'use_sim_time': True}],
+        ),
+
+        # ── pointcloud_to_laserscan (sim /agv/zed/point_cloud → /agv/scan) ──
+        # Post 2026-04-17 sim refactor, the sim stopped publishing /agv/scan —
+        # that's Jetson software work in production, and we match that here.
+        # The cloud publisher on the sim (Isaac Replicator) is RELIABLE; we
+        # override the subscription to RELIABLE too, otherwise the QoS
+        # mismatch silently drops messages (observed blocker in Round 2).
+        Node(
+            package='pointcloud_to_laserscan',
+            executable='pointcloud_to_laserscan_node',
+            name='pointcloud_to_laserscan',
+            namespace=ns,
+            parameters=[{
+                'use_sim_time': True,
+                'min_height': 0.03,
+                'max_height': 2.0,
+                'angle_min': -1.5708,
+                'angle_max': 1.5708,
+                'angle_increment': 0.003,
+                'scan_time': 0.1,
+                'range_min': 0.3,
+                'range_max': 8.0,
+                'use_inf': True,
+                'inf_epsilon': 1.0,
+                'target_frame': 'base_link',
+                'qos_overrides./agv/zed/point_cloud/cloud_registered.subscription.reliability': 'reliable',
+                'qos_overrides./agv/zed/point_cloud/cloud_registered.subscription.history': 'keep_last',
+                'qos_overrides./agv/zed/point_cloud/cloud_registered.subscription.depth': 10,
+            }],
+            remappings=[
+                ('cloud_in', '/agv/zed/point_cloud/cloud_registered'),
+                ('scan', 'scan'),
+            ],
+            output='log',
+        ),
+
+        # ── cuVSLAM on Jetson (consumes sim-published ZED stereo + IMU) ──
+        # When cuvslam_in_hil:=false, skipped; vslam_fallback_relay in
+        # agv_hil_bridges synthesises /visual_slam/tracking/odometry instead.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('agv_slam'), 'launch', 'agv_slam.launch.py'
+                ])),
+            launch_arguments={
+                'namespace': ns,
+                'use_sim_time': 'true',
+                'enable_foxglove': 'false',
+                'enable_gui': 'false',
+            }.items(),
+            condition=IfCondition(LaunchConfiguration('cuvslam_in_hil')),
+        ),
 
         # ── Nav2 stack ──
         IncludeLaunchDescription(
