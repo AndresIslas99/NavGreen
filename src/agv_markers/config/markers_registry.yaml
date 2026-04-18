@@ -1,12 +1,18 @@
 # AprilTag marker registry — known marker poses in map frame
-# Family: tag36h11, size: 0.2m (default; per-tag override via tag_size field)
-# Positions from Gazebo Harmonic greenhouse sim.
-# Wall tags at z=0.145m, floor tags at z=0.002m.
-# ID 32 does not exist (removed from sim).
+# Family: tag36h11, tag face 0.20m × 0.20m (override per-tag via tag_size).
+# Border plate 0.25m × 0.25m × 5 mm (OmniPBR white). Tag thickness 1 mm.
+# Positions baked into agv-greenhouse-sim USD (greenhouse_with_robot.usd,
+# operator-confirmed 2026-04-18). 36 tags total, IDs 0–37 (ID 32 unused).
 #
-# Types: wall (drift correction), floor (drift correction), rail_start (precision approach).
-# rail_start tags are floor-mounted and used by agv_rail_approach for ±3mm servoing.
-# The type field is optional — defaults to wall/floor based on z height.
+# Categories (by z-height and purpose):
+#   - wall (z=0.145m): drift-correction via agv_markers (global EKF hint)
+#   - row_start (z=0.145m): vertical tags at x=7.40 (FRONT) and x=3.60 (REAR)
+#     marking the start of each crop row — consumed by agv_markers.
+#   - floor_rail_entry (z=0.002m): face-up tags at x=7.00 (FRONT entry) and
+#     x=4.00 (REAR entry) used by agv_rail_approach for 2 cm alignment
+#     before the robot enters a rail aisle.
+# The type field is optional — defaults to wall/row_start/floor_rail_entry
+# based on z-height and x-coordinate.
 
 markers:
   # Pared oeste
@@ -208,17 +214,11 @@ markers:
     z: 0.002
     yaw: 0.0
 
-  # ── Rail start points (floor-mounted, precision approach targets) ──
-  # These tags mark the entry point of each greenhouse rail.
-  # yaw = approach heading (direction robot faces when aligned).
-  # tag_size = physical tag size override (smaller tags for rail markers).
-  # Used by agv_rail_approach node for ±3mm visual servoing.
-  #
-  # Example entries — replace with real surveyed positions for production:
-  # - id: 50
-  #   x: 7.00
-  #   y: -4.40
-  #   z: 0.002
-  #   yaw: 1.5708
-  #   type: rail_start
-  #   tag_size: 0.15
+  # ── Rail entry floor tags (used by agv_rail_approach) ──
+  # The 10 floor tags above (IDs 2,3,4,12,13 FRONT x=7.00; IDs 33,34,35,36,37
+  # REAR x=4.00) are the approach targets for the RAIL_APPROACH mode. Robot
+  # detects them at ~1.0–2.5 m range with the ZED mounted at z=0.21 m, drives
+  # the final metre with the agv_rail_approach P-controller, settles, and
+  # hands off to agv_rail_driver for the longitudinal traversal.
+  # These entries are the floor tags listed above — no separate registry
+  # block needed. Field-deploy surveyed positions override these values.

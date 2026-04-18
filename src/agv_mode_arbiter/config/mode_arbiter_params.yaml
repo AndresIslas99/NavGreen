@@ -1,0 +1,13 @@
+mode_arbiter:
+  ros__parameters:
+    cmd_vel_out_topic: /agv/cmd_vel
+    cmd_vel_nav_topic: /agv/cmd_vel_nav
+    cmd_vel_approach_topic: /agv/cmd_vel_approach
+    cmd_vel_rail_topic: /agv/cmd_vel_rail
+    zone_topic: /agv/zone/state
+    rail_approach_state_topic: /agv/rail_approach/state
+    rail_driver_state_topic: /agv/rail_driver/state
+    collision_topic: /agv/collision_monitor_state
+    operator_mode_topic: /agv/mode/set
+    state_topic: /agv/mode/state
+    publish_rate_hz: 20.0
