@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 namespace agv_rail_driver {
@@ -17,6 +18,10 @@ struct RailControllerParams {
   double yaw_abort_rad = 0.26;        // |rail_yaw_error| exceeding this in rail → abort
                                       // (0.26 rad ≈ 15°; robot geometry tolerates ~36°
                                       //  but we stop well short of contact).
+  // Visual feedback thresholds — above min_conf AND age below max_age_s, the
+  // controller prefers visual lateral/yaw metrics over the pose-based ones.
+  double visual_min_conf  = 0.7;
+  double visual_max_age_s = 0.5;
 };
 
 enum class RailState {
@@ -64,6 +69,21 @@ struct RailControllerInputs {
   bool   in_rail_zone = false;           // true → enforce yaw_abort check
   bool   collision_monitor_stop = false; // halt signal from safety chain
   bool   have_goal = false;              // explicit flag — IDLE without a goal
+
+  // ── Visual feedback from agv_rail_detector (Stage K) ─────────────────
+  // Lateral offset from the rail-pair midline in base_link Y (signed):
+  // positive means the midline is to the robot's left → robot drifted right.
+  // |visual_lat_offset| > lateral_abort_m triggers BLOCKED_LATERAL, same as
+  // pose-based drift. Used only when visual_confidence > visual_min_conf AND
+  // visual_age_s < visual_max_age_s; otherwise the pose-based check applies.
+  double visual_lat_offset = 0.0;
+  // Rail-axis yaw vs robot +X, radians. Drop-in replacement for
+  // rail_yaw_error when visual is trusted.
+  double visual_yaw_error = 0.0;
+  // Confidence in [0, 1]. 0 means no detection.
+  double visual_confidence = 0.0;
+  // Seconds since last visual detection. Infinity means never received.
+  double visual_age_s = std::numeric_limits<double>::infinity();
 };
 
 struct RailControllerOutput {
@@ -107,19 +127,40 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
     return out;
   }
 
-  // Lateral drift abort. Cheap and always-safe to check.
-  if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
-    out.state = RailState::BLOCKED_LATERAL;
-    out.linear_x = 0.0;
-    return out;
-  }
+  // Visual feedback from rail_detector is preferred when fresh and confident.
+  // When rejected (stale / low conf / never received), the pose-based checks
+  // below apply instead — same thresholds, same abort states.
+  const bool visual_trusted =
+      in.visual_confidence > p.visual_min_conf &&
+      in.visual_age_s < p.visual_max_age_s;
 
-  // Yaw abort — only when operating inside a rail aisle (crop-row risk).
-  if (in.in_rail_zone && !std::isnan(in.rail_yaw_error) &&
-      std::abs(in.rail_yaw_error) > p.yaw_abort_rad) {
-    out.state = RailState::BLOCKED_MISALIGNED;
-    out.linear_x = 0.0;
-    return out;
+  if (visual_trusted) {
+    if (std::abs(in.visual_lat_offset) > p.lateral_abort_m) {
+      out.state = RailState::BLOCKED_LATERAL;
+      out.linear_x = 0.0;
+      return out;
+    }
+    if (in.in_rail_zone && !std::isnan(in.visual_yaw_error) &&
+        std::abs(in.visual_yaw_error) > p.yaw_abort_rad) {
+      out.state = RailState::BLOCKED_MISALIGNED;
+      out.linear_x = 0.0;
+      return out;
+    }
+  } else {
+    // Lateral drift abort. Cheap and always-safe to check.
+    if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
+      out.state = RailState::BLOCKED_LATERAL;
+      out.linear_x = 0.0;
+      return out;
+    }
+
+    // Yaw abort — only when operating inside a rail aisle (crop-row risk).
+    if (in.in_rail_zone && !std::isnan(in.rail_yaw_error) &&
+        std::abs(in.rail_yaw_error) > p.yaw_abort_rad) {
+      out.state = RailState::BLOCKED_MISALIGNED;
+      out.linear_x = 0.0;
+      return out;
+    }
   }
 
   // Goal reached (within stop band).

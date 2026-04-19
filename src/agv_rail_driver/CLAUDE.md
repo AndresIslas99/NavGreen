@@ -35,6 +35,11 @@ angular-velocity sampling was driving the robot into crop rows).
   `rail_yaw_error` and whether we're in a rail aisle.
 - `/agv/collision_monitor_state` (std_msgs/String) — from Nav2's
   `collision_monitor`; takes absolute priority over all other inputs.
+- `/agv/rail_detections` (geometry_msgs/PoseArray) — from
+  `agv_rail_detector` (Stage K). Two poses in base_link; midpoint Y is the
+  signed visual lateral offset, average yaw is the rail-axis direction.
+- `/agv/rail_detector/state` (std_msgs/String JSON) — visual confidence
+  used for gating the visual-vs-pose switch.
 
 ## Invariantes
 
@@ -45,7 +50,12 @@ angular-velocity sampling was driving the robot into crop rows).
   (including yaw/lateral aborts).
 - The controller logic lives in `include/agv_rail_driver/rail_controller.hpp`
   as a ROS-free header, so unit tests can stress-cover it without spinning
-  a node. See `test/test_rail_controller.cpp` (13 cases).
+  a node. See `test/test_rail_controller.cpp` (19 cases incl. visual-
+  feedback preference, staleness fallback, low-confidence rejection).
+- Visual inputs (`visual_lat_offset`, `visual_yaw_error`) override the
+  pose-based lateral/yaw aborts only when `visual_confidence > 0.7` AND
+  `visual_age_s < 0.5`. Otherwise the pose-based checks apply. Pose is
+  always the safe default.
 
 ## Failure modes
 
