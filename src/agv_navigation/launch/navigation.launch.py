@@ -175,7 +175,23 @@ def _build_nav2(context, *args, **kwargs):
                 output='screen',
             ),
 
-            # Lifecycle manager — brings up all Nav2 nodes
+            # Lifecycle manager — brings up all Nav2 nodes.
+            # Iter-17: under Round-44 HIL load (sim host + brain + sim-shim
+            # + pytest harness + multiple rclpy consumers all contending
+            # for the Jetson's CPU), the default Nav2 lifecycle_manager
+            # service-call timeout (~3 s) consistently fires before
+            # collision_monitor / velocity_smoother / controller_server
+            # return from their Configuring callback. The result is
+            # "Failed to change state for node X" followed by
+            # "Failed to bring up all requested nodes. Aborting bringup" —
+            # Nav2 never reaches `active`, cmd_vel_nav stays silent, and
+            # every nav2-dispatch waypoint stalls.
+            #
+            # Increasing `bond_timeout` relaxes the bond heartbeat window,
+            # letting nodes with slow initial tick survive; attempting
+            # respawn reconnection tolerates individual node restarts.
+            # 20 s matches the upper-bound configure time observed for
+            # controller_server under cold cache + costmap allocation.
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
@@ -184,6 +200,9 @@ def _build_nav2(context, *args, **kwargs):
                     'use_sim_time': use_sim_time,
                     'autostart': True,
                     'node_names': lifecycle_nodes,
+                    'bond_timeout': 20.0,
+                    'attempt_respawn_reconnection': True,
+                    'bond_respawn_max_duration': 20.0,
                 }],
                 output='screen',
             ),
