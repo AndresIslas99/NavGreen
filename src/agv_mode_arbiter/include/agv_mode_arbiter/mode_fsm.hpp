@@ -260,16 +260,20 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       return out;
 
     case Mode::RAIL_EXIT:
-      // Release condition: robot cleared the approach + rail zones AND is
-      // ≥ 1 m past the exit tag. rail_driver's state check is NOT required
-      // — the "reached" label is only latched for a single tick, and after
-      // that the driver goes back to "idle", which would leave the FSM
-      // permanently stuck in RAIL_EXIT even once geometry is satisfied
-      // (observed in Round 44 iter-1: every wp after a rail_drive success
-      // ran with mode="rail_exit" and source=RAIL, starving cmd_vel_nav
-      // and cmd_vel_approach).
+      // Release to CORRIDOR_NAV needs three conditions:
+      //   1. zone is out of rail/approach
+      //   2. clearance ≥ 1 m past the exit tag
+      //   3. rail_driver is NOT actively "driving" — i.e. "reached", "idle",
+      //      "blocked_*", or any non-driving state. This prevents a cycle
+      //      where release → shortcut fires on still-driving rail_driver →
+      //      RAIL_DRIVE again → "reached" → RAIL_EXIT → … (observed as 40-
+      //      cycle oscillation during Round 44 iter-2 wp06).
+      //      The check accepts any state whose movement has ceased, which
+      //      covers both the one-tick "reached" latch and the subsequent
+      //      "idle" state that iter-1's strict "reached" gate missed.
       if (!is_rail_zone(in.zone) && !is_approach_zone(in.zone) &&
-          in.rail_exit_clearance_m >= 1.0) {
+          in.rail_exit_clearance_m >= 1.0 &&
+          in.rail_driver_state != "driving") {
         out.next_mode = Mode::CORRIDOR_NAV;
         out.active_source = Source::NAV;
         return out;
