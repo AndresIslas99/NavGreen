@@ -18,6 +18,12 @@ if(BUILD_TESTING)
   # Phase 2 G — dispatch router pure-logic tests.
   ament_add_pytest_test(test_dispatch_logic
     test/test_dispatch_logic.py)
+  # Round 44 Q4 — harness oracle parsers (ROS-free).
+  ament_add_pytest_test(test_harness_oracles
+    test/test_harness_oracles.py)
+  # Round 44 Q5 — iteration analysis generator (ROS-free).
+  ament_add_pytest_test(test_iteration_report
+    test/test_iteration_report.py)
   # HIL tests — skip themselves when SIM_API_HOST / ROS_DOMAIN_ID=42 are not set.
   # Timeout bumped — each waypoint may take up to 120 s on Nav2.
   ament_add_pytest_test(test_nav2_probe test/test_nav2_probe.py
