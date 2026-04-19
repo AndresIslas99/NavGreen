@@ -476,6 +476,15 @@ def generate_launch_description():
                     'registry_file': os.path.join(
                         get_package_share_directory('agv_markers'),
                         'config', 'markers_registry.yaml'),
+                    # HIL TF tree uses `zed_left_camera_frame_optical`
+                    # (not the rail_approach default
+                    # `zed_left_camera_optical_frame`). The name mismatch
+                    # made every fine_servoing tick fall into the
+                    # tf_buffer_->lookupTransform exception handler, so
+                    # no cmd_vel was ever published during fine servo —
+                    # robot stalled at the coarse_standoff pose
+                    # (explains err≈0.33 m plateau in iter-7..9).
+                    'camera_frame': 'zed_left_camera_frame_optical',
                     'use_sim_time': True,
                 },
             ],
