@@ -16,6 +16,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -84,6 +85,18 @@ class ModeArbiterNode : public rclcpp::Node {
     // is triggered externally (operator, test harness). Default false so
     // the test_waypoint_precision Nav2-direct path keeps working.
     declare_parameter<bool>("auto_approach", false);
+    // Iter-22 brain 1.2 — FSM anti-oscillation guards.
+    // Round-44 iter-20/21 brain_log showed the arbiter bouncing
+    // rail_exit ↔ corridor_nav ↔ rail_drive 4+ times in 300 ms during
+    // RAIL_EXIT push; at 10 Hz harness polling the corridor_nav tick was
+    // frequently missed, yielding NAV_TIMEOUT on wp13/wp14 even though
+    // the geometric release actually fired.
+    //   - min_mode_dwell_s: enforce minimum dwell time between mode
+    //     transitions. Safety stops bypass the gate (hard priority).
+    //   - push_sticky: publish the rail_exit push goal ONCE per RAIL_EXIT
+    //     entry, not every tick the FSM happens to set
+    //     request_rail_exit_push. Resets on leaving RAIL_EXIT.
+    declare_parameter<double>("min_mode_dwell_s", 0.5);
 
     const auto cmd_out      = get_parameter("cmd_vel_out_topic").as_string();
     const auto cmd_nav      = get_parameter("cmd_vel_nav_topic").as_string();
@@ -112,6 +125,7 @@ class ModeArbiterNode : public rclcpp::Node {
     approach_offset_y_ = get_parameter("approach_offset_y").as_double();
     auto_approach_ = get_parameter("auto_approach").as_bool();
     latest_inputs_.auto_approach = auto_approach_;
+    min_mode_dwell_s_ = get_parameter("min_mode_dwell_s").as_double();
 
     pub_cmd_   = create_publisher<geometry_msgs::msg::Twist>(cmd_out, rclcpp::QoS{10});
     pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, rclcpp::QoS{10});
@@ -232,15 +246,56 @@ class ModeArbiterNode : public rclcpp::Node {
 
     auto out = step(mode_, latest_inputs_);
 
-    // One-shot side-effects from transitions.
+    // Iter-22 brain 1.2 — anti-oscillation dwell gate. If the FSM wants
+    // to change mode AND the safety chain is NOT overriding (BLOCKED_
+    // HANDOFF always passes), require at least `min_mode_dwell_s_`
+    // since the last actual change. Otherwise suppress the change and
+    // keep the current mode + its source. Prevents the
+    // rail_exit ↔ rail_drive ↔ corridor_nav rapid-fire seen in iter-20/21
+    // during RAIL_EXIT push which lost the corridor_nav tick in harness
+    // polling.
+    const auto now_ns = this->now().nanoseconds();
+    const bool is_safety_override = (out.next_mode == Mode::BLOCKED_HANDOFF);
+    const double since_last_change_s =
+        (last_mode_change_ns_ == 0)
+            ? std::numeric_limits<double>::infinity()
+            : (now_ns - last_mode_change_ns_) / 1e9;
+    bool dwell_blocked = false;
+    if (out.next_mode != mode_ && !is_safety_override &&
+        since_last_change_s < min_mode_dwell_s_) {
+      // Hold current mode. Don't propagate the new source either — keep
+      // relaying whatever the current mode implies.
+      dwell_blocked = true;
+      out.next_mode = mode_;
+      out.active_source = active_source_;
+      // Drop one-shot requests too — they would fire on the transition
+      // that we just denied.
+      out.request_rail_approach = false;
+      out.request_rail_drive_goal = false;
+      out.request_rail_exit_push = false;
+    }
+
+    // One-shot side-effects from transitions (after dwell gate).
     if (out.request_rail_approach) {
       call_rail_approach_service();
     }
     if (out.request_rail_drive_goal) {
       publish_rail_drive_goal();
     }
-    if (out.request_rail_exit_push) {
+    // Iter-22 brain 1.2 — push sticky: emit the exit push goal ONCE per
+    // RAIL_EXIT entry instead of every tick the FSM asserts
+    // request_rail_exit_push. Reset when leaving RAIL_EXIT. Prevents the
+    // double-publish observed iter-20/21 where the robot got a second
+    // EXIT_PUSH mid-traversal (`clearance_now=-2.95` = robot 2.95 m
+    // past the tag after the first push started but a second push
+    // re-fired).
+    if (out.request_rail_exit_push && !push_published_this_exit_) {
       publish_rail_exit_push_goal();
+      push_published_this_exit_ = true;
+    }
+    if (mode_ == Mode::RAIL_EXIT && out.next_mode != Mode::RAIL_EXIT) {
+      // Leaving RAIL_EXIT — arm the flag for the next entry.
+      push_published_this_exit_ = false;
     }
 
     // Reset the in-flight latch when the FSM leaves the approach flow.
@@ -253,7 +308,12 @@ class ModeArbiterNode : public rclcpp::Node {
                   mode_to_str(mode_), mode_to_str(out.next_mode),
                   source_to_str(out.active_source));
       mode_ = out.next_mode;
+      last_mode_change_ns_ = now_ns;
       ++transition_count_;
+    } else if (dwell_blocked) {
+      RCLCPP_DEBUG(get_logger(),
+                   "mode dwell: suppressed change (<%.2f s since last)",
+                   min_mode_dwell_s_);
     }
     active_source_ = out.active_source;
 
@@ -399,11 +459,15 @@ class ModeArbiterNode : public rclcpp::Node {
   Source active_source_ = Source::NAV;
   FsmInputs latest_inputs_;
   size_t transition_count_ = 0;
+  // Iter-22 brain 1.2 — anti-oscillation state.
+  int64_t last_mode_change_ns_ = 0;       // 0 = no changes yet.
+  bool push_published_this_exit_ = false;  // one-shot per RAIL_EXIT entry.
 
   double rail_drive_distance_m_ = 3.0;
   double approach_offset_x_ = 0.3;
   double approach_offset_y_ = 0.0;
   bool auto_approach_ = false;
+  double min_mode_dwell_s_ = 0.5;
 
   // Greenhouse geometry for RAIL_EXIT push-goal + clearance. Populated
   // from parameters at ctor; the push logic is stateless (depends only
