@@ -338,6 +338,26 @@ def generate_launch_description():
             output='log',
         ),
 
+        # ── Phase 2 Stage J: rail_detector (ZED depth → BEV → RANSAC) ──
+        # Publishes /agv/rail_detections (PoseArray, 5 Hz) so rail_driver can
+        # correct lateral drift inside a rail aisle via visual feedback instead
+        # of relying solely on pose. Runs only when depth + camera_info are
+        # available; silent otherwise (confidence=0 → consumers fall back to
+        # pose-based alignment).
+        Node(
+            package='agv_rail_detector',
+            executable='rail_detector_node',
+            name='rail_detector',
+            namespace=ns,
+            parameters=[
+                os.path.join(
+                    get_package_share_directory('agv_rail_detector'),
+                    'config', 'rail_detector_params.yaml'),
+                {'use_sim_time': True},
+            ],
+            output='log',
+        ),
+
         # ── Phase 2: mode arbiter — owns /agv/cmd_vel in the 3-mode stack ──
         Node(
             package='agv_mode_arbiter',
