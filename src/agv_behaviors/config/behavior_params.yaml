@@ -1,0 +1,4 @@
+behavior_executor:
+  ros__parameters:
+    trees_dir: ""              # set via launch
+    default_tree: "single_waypoint.xml"

@@ -1,0 +1,41 @@
+task_version: "1.1"
+package: "agv_markers"
+owner_role: "architect_agent"
+language: "C++17"
+priority: "post_mvp_stretch"
+notes: "De-prioritized per retro. Not required for first field visit if visual SLAM + wheel odom fusion is stable. AprilTag correction improves accuracy but is supplemental."
+
+objective: "Use AprilTag detections to publish global pose correction using a YAML registry of fixed marker poses."
+
+canonical_marker_type:
+  type: "AprilTag"
+  family: "tag36h11"
+
+inputs:
+  subscriptions:
+    - "/{robot_namespace}/tag_detections"
+  config_files:
+    - "config/markers_registry.yaml"
+
+outputs:
+  publications:
+    - "/{robot_namespace}/marker_pose"
+    - "/{robot_namespace}/marker_detected"
+
+logic:
+  - "load marker registry from YAML at startup"
+  - "on tag detection, look up marker ID in registry"
+  - "if marker exists, compute robot pose in map frame"
+  - "publish pose correction with configured covariance"
+  - "if marker missing, warn and ignore"
+
+rules:
+  - "hardcoded marker IDs in source code are forbidden"
+  - "use of QR or ArUco terminology in runtime code is forbidden"
+  - "AprilTags are pose anchors and drift correctors, not the sole localization method"
+  - "marker placement conventions should prefer stable, known positions such as corridor or aisle anchors"
+
+done_definition:
+  - "tag detected at 1.5m in greenhouse lighting"
+  - "pose error under 0.05m against measured ground truth"
+  - "detection-to-correction latency under 500ms"

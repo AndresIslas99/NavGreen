@@ -1,0 +1,35 @@
+task_version: "1.1"
+package: "agv_ui_backend"
+owner_role: "architect_agent"
+language: "TypeScript"
+
+objective: "Bridge browser and ROS2 using Node.js + rclnodejs over WebSocket and REST."
+
+environment:
+  required_env:
+    - "PORT"
+    - "WS_PORT"
+    - "ROS_DOMAIN_ID"
+    - "MAP_DIR"
+    - "MISSIONS_FILE"
+
+rules:
+  - "No hardcoded Jetson IP"
+  - "No polling ROS topics"
+  - "Throttle heavy map or costmap streams"
+  - "cmd_vel is only forwarded in teleop mode"
+  - "WebSocket reconnect must use bounded backoff and restore subscriptions cleanly"
+  - "UI-facing data must let the operator understand status and anomalies quickly"
+
+outputs:
+  capabilities:
+    - "serve dashboard static files"
+    - "stream robot status to browser"
+    - "relay teleop commands"
+    - "expose map and mission REST API"
+
+done_definition:
+  - "tablet connects over local WiFi without manual setup"
+  - "joystick-to-robot latency under 150ms"
+  - "automatic reconnect works"
+  - "large map renders without freezing browser"

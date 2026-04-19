@@ -1,0 +1,9 @@
+string zone_id
+string zone_type            # "keepout" | "speed"
+float64[] polygon_x         # polygon vertices X coords (meters, map frame)
+float64[] polygon_y         # polygon vertices Y coords (meters, map frame)
+float64 max_speed           # max linear velocity in zone (only for "speed" type)
+bool remove                 # true = remove this zone
+---
+bool success
+string message

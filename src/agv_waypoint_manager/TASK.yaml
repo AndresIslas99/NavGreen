@@ -1,0 +1,30 @@
+task_version: "1.1"
+package: "agv_waypoint_manager"
+owner_role: "architect_agent"
+language: "C++17"
+
+objective: "Store, list, and dispatch waypoints and missions based on operator-defined map clicks and mission composition."
+
+inputs:
+  persistent_storage:
+    - "missions.json"
+  upstream_events:
+    - "UI waypoint creation"
+    - "mission creation requests"
+
+outputs:
+  services:
+    - "/{robot_namespace}/waypoint_manager/save"
+    - "/{robot_namespace}/waypoint_manager/list"
+    - "/{robot_namespace}/waypoint_manager/execute"
+
+rules:
+  - "No hardcoded missions in source code"
+  - "Mission schema must be stable and versionable"
+  - "Waypoint coordinates must remain in map-space meters"
+  - "Current MVP mission model is ordered waypoints with metadata, not full fleet-level task orchestration"
+
+done_definition:
+  - "CRUD operations on missions work correctly"
+  - "mission serialization and deserialization are stable"
+  - "execute service dispatches canonical mission flow"

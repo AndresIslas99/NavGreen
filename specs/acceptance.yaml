@@ -1,0 +1,123 @@
+spec_version: "1.1"
+status: "pending_revision_post_audit"
+pending_revision_note: |
+  This spec was NOT revised in the 2026-04-13 audit. It still describes the
+  quality gates from before the safety chain, Area Memory, and localization
+  orchestrator integrations. It references a nav2 stack config (planner +
+  controller) that no longer matches the code, and it does not include gates
+  for the verify_specs pre-commit hook or the end-to-end teleop → save →
+  reboot → load → localize cycle that Fase 6 delivers.
+
+  Scheduled rewrite: after Fase 6 closes (teleop works end-to-end, meta.json
+  symmetry fixed, mode feedback loop added). At that point the gates should
+  include:
+    - bash tools/verify_specs/all.sh → 0 blocking violations
+    - bash tools/verify_specs/install_git_hook.sh installed
+    - Reboot → healthcheck PASS within 60s
+    - Save → Reboot → Load → LOCALIZED within 10s (Area Memory Path A0)
+    - Dashboard teleop → ODrive wheels responding while has_map=true
+    - (new gates from Fase 6 bugs)
+
+  Until this rewrite lands, DO NOT treat the gates below as authoritative.
+
+quality_gates:
+  unit:
+    pass_condition:
+      - "0 failures"
+      - "0 errors"
+
+  integration:
+    pass_condition:
+      - "TF tree complete within 5 seconds"
+      - "/wheel_odom near 50Hz"
+      - "required services available"
+      - "Nav2 lifecycle active"
+      - "dual EKF responsibilities respected: map->odom global, odom->base_link local"
+
+  mapping_commissioning:
+    pass_condition:
+      - "mapping performed at 0.3 to 0.5 m/s nominal speed"
+      - "each operational corridor is traversed at least once"
+      - "at least one bi-directional pass is performed in representative aisles"
+      - "map revision saved with timestamp and site identifier"
+      - "occupancy-grid generation pipeline is documented for that revision"
+
+  greenhouse_visual_localization:
+    pass_condition:
+      - "stereo-inertial mode enabled"
+      - "wheel odometry remains fused continuously"
+      - "temporary visual degradation does not collapse local odom estimate"
+      - "marker-based correction is supplemental, not the only localization source"
+
+  hardware:
+    pass_condition:
+      - "1 meter straight motion error <= 0.05 m"
+      - "360 degree rotation error <= 0.1 rad"
+      - "goal reach error <= 0.15 m"
+      - "E-stop command-to-stop <= 0.2 s"
+
+  hil_validation:
+    description: |
+      HIL closed-loop gate. Exercised by agv_integration_tests against
+      Isaac Sim overlay on sim host (ROS_DOMAIN_ID=42, Cyclone DDS, peer
+      list in sim repo cyclonedds.xml). Tightens hardware.goal_reach_error
+      (0.15) to 0.10 for simulation; production keeps 0.15 until this gate
+      converges in HIL. Waypoint precision measured against
+      /agv/sim/ground_truth/pose (PhysX truth), not brain's fused estimate.
+    sample_size: 20
+    waypoint_precision:
+      pass_condition:
+        - "err_xy p95 <= 0.10 m (across 20 waypoints)"
+        - "err_xy max <= 0.15 m"
+        - "yaw error p95 <= 0.25 rad"
+        - "success_rate >= 0.95"
+        - "zero collision events on /agv/sim/events during the run"
+      measurement_source:
+        truth_topic: "/agv/sim/ground_truth/pose"
+        brain_topic: "/agv/odometry/global"
+        sync_policy: "snapshot both at Nav2 goal SUCCEEDED/ABORTED/TIMEOUT, compare to goal pose in map frame"
+      test_ref: "src/agv_integration_tests/test/test_waypoint_precision.py"
+    map_fidelity:
+      description: "Geometric comparison of saved .pgm/.yaml vs /agv/sim/ground_truth/obstacles catalogue."
+      pass_condition:
+        - "per-obstacle centroid error p95 <= 0.10 m"
+        - "per-obstacle IoU >= 0.70 (Hungarian-matched pairs)"
+        - "corridor traversability slack <= 5% (A* on GT vs on .pgm)"
+        - "free-space precision >= 0.95 AND recall >= 0.90 (pixel-level)"
+      tool_ref: "src/agv_integration_tests/scripts/map_diff.py"
+    full_flow:
+      description: "End-to-end: mapping → save_map → load_map → 20-waypoint precision run."
+      pass_condition:
+        - "map_fidelity pass"
+        - "waypoint_precision pass"
+        - "/agv/localization/state reaches LOCALIZED within 15s after load_map"
+      test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+    operational_preconditions:
+      - "sim host running `./run_isaac_supervised.sh` (auto-play default via AGV_AUTO_PLAY=1)"
+      - "sim host running `agv_isaac_sim isaac_hil.launch.py validation:=true enable_api:=true`"
+      - "sim host sim_api exposes /sim/{play,stop,restart} endpoints on port 8090 (for autonomous self-heal)"
+      - "Jetson running `agv_bringup agv_hil_full.launch.py map:=<map_name>`"
+      - "test terminal has ROS_DOMAIN_ID=42 exported"
+      - "Cyclone peer list in sim repo cyclonedds.xml contains this Jetson IP"
+
+  end_to_end:
+    checklist:
+      - "stack auto-starts on boot"
+      - "tablet loads dashboard in <= 5 seconds"
+      - "teleop is responsive"
+      - "operator can map, save, load, create waypoint, create mission, execute mission"
+      - "dashboard shows live robot state"
+      - "E-stop from UI stops robot immediately"
+      - "zone edit persists and affects navigation behavior after reload"
+
+safety_boundary:
+  statements:
+    - "Nav2 collision handling and software E-stop logic are operational safeguards, not certified functional safety"
+    - "Any certified human safety requirement must be implemented with dedicated safety-rated hardware and logic outside this MVP spec"
+
+task_completion_rule:
+  must_satisfy_all:
+    - "build"
+    - "tests"
+    - "runtime interface compliance"
+    - "acceptance gate"

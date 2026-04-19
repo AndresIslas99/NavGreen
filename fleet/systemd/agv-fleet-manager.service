@@ -1,0 +1,21 @@
+# AGV Fleet Manager — VDA 5050 Master Control
+# Install: sudo cp agv-fleet-manager.service /etc/systemd/system/
+# Enable:  sudo systemctl enable agv-fleet-manager
+# Start:   sudo systemctl start agv-fleet-manager
+
+[Unit]
+Description=AGV Fleet Manager
+After=network.target agv-mosquitto.service
+
+[Service]
+Type=simple
+User=orza
+WorkingDirectory=/home/orza/ros2_ws/fleet/agv_fleet_manager
+ExecStart=/usr/bin/node dist/index.js
+Environment="VDA_MQTT_BROKER=mqtt://localhost:1883"
+Environment="FLEET_PORT=8091"
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

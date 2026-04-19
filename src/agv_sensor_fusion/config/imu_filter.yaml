@@ -1,0 +1,15 @@
+# IMU vibration filter — Butterworth 2nd order low-pass
+#
+# Filters mechanical vibrations from greenhouse floor transmitted through
+# the chassis to the ZED 2i IMU. Orientation passes through unfiltered.
+#
+# Cutoff selection:
+#   - Robot dynamics: < 5 Hz (max angular accel ~1 rad/s², linear ~1 m/s²)
+#   - Floor vibrations: > 20 Hz (motor vibration, wheel bumps, structural resonance)
+#   - Cutoff at 10 Hz (gyro) and 5 Hz (accel) gives clean separation
+
+/**/imu_filter:
+  ros__parameters:
+    gyro_cutoff_hz: 10.0     # Angular velocity cutoff (Hz)
+    accel_cutoff_hz: 5.0     # Linear acceleration cutoff (Hz)
+    sample_rate: 200.0       # ZED 2i IMU rate (must match sensors_pub_rate)

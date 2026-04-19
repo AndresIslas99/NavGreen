@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<!--
+  AGV URDF + ros2_control hardware block.
+
+  Composes the existing agv_description geometry (agv_full.urdf.xacro) and
+  appends a <ros2_control> block that loads either the AgvDiffDriveSystem
+  plugin (real CAN hardware) or mock_components/GenericSystem (development
+  without hardware).
+
+  Select via the `use_mock_hardware` xacro arg:
+    xacro agv_ros2control.urdf.xacro use_mock_hardware:=true
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="agv_ros2control">
+
+  <xacro:arg name="use_mock_hardware" default="false"/>
+  <xacro:arg name="can_interface" default="can0"/>
+  <xacro:arg name="left_axis_id" default="0"/>
+  <xacro:arg name="right_axis_id" default="1"/>
+  <xacro:arg name="gear_ratio" default="10.0"/>
+  <xacro:arg name="invert_left" default="true"/>
+  <xacro:arg name="invert_right" default="false"/>
+
+  <!-- Pull in the geometry already defined in agv_description -->
+  <xacro:include filename="$(find agv_description)/urdf/agv_full.urdf.xacro"/>
+
+  <ros2_control name="AgvDiffDriveHardware" type="system">
+    <hardware>
+      <xacro:if value="$(arg use_mock_hardware)">
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="calculate_dynamics">true</param>
+      </xacro:if>
+      <xacro:unless value="$(arg use_mock_hardware)">
+        <plugin>agv_hw_interface/AgvDiffDriveSystem</plugin>
+        <param name="can_interface">$(arg can_interface)</param>
+        <param name="left_axis_id">$(arg left_axis_id)</param>
+        <param name="right_axis_id">$(arg right_axis_id)</param>
+        <param name="gear_ratio">$(arg gear_ratio)</param>
+        <param name="invert_left">$(arg invert_left)</param>
+        <param name="invert_right">$(arg invert_right)</param>
+      </xacro:unless>
+    </hardware>
+
+    <joint name="left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-10.0</param>
+        <param name="max">10.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-10.0</param>
+        <param name="max">10.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+</robot>

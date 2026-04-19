@@ -1,0 +1,66 @@
+spec_version: "1.0"
+
+agents:
+  - id: "architect_agent"
+    preferred_tool: "Claude Code"
+    role: "cross-package architecture and multi-file implementation"
+    allowed_domains:
+      - "workspace design"
+      - "multi-package feature implementation"
+      - "compile and fix loops"
+      - "cross-package refactors"
+    forbidden_actions:
+      - "editing a file currently locked by another agent"
+    exit_criteria:
+      - "build succeeds"
+      - "tests pass"
+      - "changed files comply with policies"
+
+  - id: "refactor_agent"
+    preferred_tool: "Aider"
+    role: "single-file cleanup, naming, comments, semantic commits"
+    allowed_domains:
+      - "single active file refactoring"
+      - "small bug fixes"
+      - "commit generation"
+    forbidden_actions:
+      - "cross-package architectural changes"
+      - "editing same file as architect_agent at same time"
+
+  - id: "generator_agent"
+    preferred_tool: "scripted Claude API"
+    role: "generate config, URDF fragments, boilerplate tests, review diffs"
+    allowed_domains:
+      - "URDF generation from structured specs"
+      - "Nav2 config generation from robot params"
+      - "test scaffolding from ROS interfaces"
+      - "documentation stubs"
+    forbidden_actions:
+      - "direct manual ownership of runtime robot code"
+
+coordination_rules:
+  - "One agent, one domain, one lock at a time"
+  - "No two agents edit same file simultaneously"
+  - "All agents must read /specs/project.yaml and package TASK.yaml before acting"
+  - "Multi-file changes start with architect_agent"
+  - "Single-file cleanup after successful build may go to refactor_agent"
+  - "Every task must declare file ownership before editing"
+
+file_locking:
+  lock_file: ".agent_locks.yaml"
+  policy: "exclusive"
+
+task_lifecycle:
+  statuses:
+    - "todo"
+    - "in_progress"
+    - "blocked"
+    - "ready_for_review"
+    - "done"
+
+completion_policy:
+  a_task_is_done_only_when:
+    - "code compiles with zero warnings"
+    - "package tests pass"
+    - "runtime interface matches spec"
+    - "acceptance gate for the task is satisfied"

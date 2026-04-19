@@ -1,0 +1,96 @@
+# Local EKF: wheel odometry + IMU → odom→base_link
+#
+# This filter owns the odom→base_link transform.
+# It fuses wheel encoder odometry with IMU to produce a smooth,
+# continuous local pose estimate.
+#
+# This filter must remain functional even when visual SLAM degrades.
+
+/**:
+  ros__parameters:
+    frequency: 50.0
+    two_d_mode: true
+    publish_tf: true
+    print_diagnostics: true
+
+    # Enable dynamic process noise — scales Q by velocity.
+    # Critical for rotation: higher angular velocity = more uncertainty.
+    dynamic_process_noise_covariance: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom               # local filter operates in odom frame
+
+    # ── Wheel odometry (from agv_odrive or sim bridge) ──
+    odom0: wheel_odom
+    odom0_config: [true,  true,  false,    # x, y, z
+                   false, false, true,     # roll, pitch, yaw
+                   true,  false, false,    # vx, vy, vz
+                   false, false, true,     # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    # Covariance: use the dynamic values published by odrive_can_node
+    # (scales with angular velocity). The covariance_override_node handles
+    # the sim-only zero-covariance problem separately.
+
+    # ── ZED 2i IMU (filtered — vibration noise removed) ──
+    # Raw: /agv/zed/imu/data at 200Hz → imu_filter_node → /agv/imu/filtered
+    # In HIL sim: /agv/imu/data at ~20Hz (overridden via launch param)
+    imu0: /agv/imu/filtered
+    imu0_config: [false, false, false,     # x, y, z
+                  true,  true,  true,      # roll, pitch, yaw
+                  false, false, false,     # vx, vy, vz
+                  true,  true,  true,      # vroll, vpitch, vyaw
+                  true,  true,  false]     # ax, ay, az
+    # Absolute IMU yaw provides a global heading reference that can correct
+    # wheel-odometry heading drift. Covariance set wider (0.1) to account for
+    # potential magnetic interference in greenhouse.
+    imu0_differential: false
+    imu0_relative: false
+    imu0_remove_gravitational_acceleration: true
+    imu0_queue_size: 50
+
+    # Override IMU covariance (sim sends zeros)
+    # IMU yaw covariance: 0.02 rad² — tighter than wheel odom (0.03 base) so
+    # EKF trusts gyro heading over encoder-derived yaw. BMI088 gyro is not
+    # affected by magnetic interference (only magnetometer is, which we don't use).
+    imu0_pose_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.001, 0.0,   0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.001, 0.0,
+                           0.0,   0.0,   0.0,   0.0,   0.0,   0.02]
+    # Gyro rate covariance: tighter values reflect BMI088 spec (noise density
+    # 0.000244 rad/s/√Hz). vroll/vpitch=0.0003, vyaw=0.0005 (conservative).
+    imu0_twist_covariance: [0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+                            0.0,   0.0,   0.0,   0.0003, 0.0,  0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0003, 0.0,
+                            0.0,   0.0,   0.0,   0.0,   0.0,   0.0005]
+
+    # ── Process noise covariance ──
+    # Order: x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
+    # With dynamic_process_noise_covariance=true, these scale by velocity.
+    # Symmetric X/Y noise: differential drive can face any direction in the odom
+    # frame, so process noise should be direction-independent.
+    process_noise_covariance:
+      [0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.03,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.03,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.025, 0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.025, 0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.04,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.01,  0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.01,  0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.01,  0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.015]

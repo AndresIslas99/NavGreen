@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AGV Teleop Console</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  background: #1a1a2e; color: #eee;
+  height: 100vh; height: 100dvh; overflow: hidden;
+  touch-action: none;
+  display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.top-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: #16213e; border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+.top-bar h1 { font-size: 16px; font-weight: 600; }
+.conn-status {
+  padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+}
+.conn-ok { background: #2d6a4f; color: #b7e4c7; }
+.conn-err { background: #6a2d2d; color: #e4b7b7; }
+.main-area {
+  flex: 1; display: flex; overflow: hidden;
+}
+/* Left panel: status */
+.status-panel {
+  width: 200px; padding: 10px; background: #0f3460;
+  display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto; flex-shrink: 0;
+}
+.status-item { font-size: 12px; }
+.status-label { color: #999; display: block; margin-bottom: 2px; }
+.status-value { font-weight: 600; font-size: 14px; }
+.hz-ok { color: #52b788; }
+.hz-warn { color: #f4a261; }
+.hz-dead { color: #e76f51; }
+/* Center: joystick */
+.joystick-area {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+}
+#joystick-canvas {
+  border-radius: 50%; background: #16213e;
+  border: 2px solid #333; cursor: pointer;
+  touch-action: none;
+}
+.drive-indicator {
+  padding: 6px 20px; border-radius: 16px; font-size: 14px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.drive-active { background: #2d6a4f; color: #b7e4c7; }
+.drive-idle { background: #333; color: #777; }
+.speed-control {
+  display: flex; align-items: center; gap: 8px; font-size: 12px;
+}
+.speed-control input { width: 120px; }
+.cmd-display { font-size: 12px; color: #999; font-family: monospace; }
+/* Right panel: controls */
+.control-panel {
+  width: 160px; padding: 10px; background: #0f3460;
+  display: flex; flex-direction: column; gap: 10px;
+  flex-shrink: 0;
+}
+.e-stop-btn {
+  width: 100%; padding: 20px 10px; border: 3px solid #c0392b;
+  background: #e74c3c; color: white; font-size: 18px; font-weight: 900;
+  border-radius: 12px; cursor: pointer; text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.e-stop-btn:active { background: #c0392b; }
+.e-stop-btn.active {
+  background: #c0392b; border-color: #ff6b6b;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  50% { opacity: 0.7; }
+}
+.e-stop-clear {
+  width: 100%; padding: 10px; border: 2px solid #27ae60;
+  background: transparent; color: #27ae60; font-size: 13px;
+  font-weight: 600; border-radius: 8px; cursor: pointer;
+  display: none;
+}
+.rec-btn {
+  width: 100%; padding: 12px; border: 2px solid #555;
+  background: transparent; color: #ccc; font-size: 13px;
+  font-weight: 600; border-radius: 8px; cursor: pointer;
+}
+.rec-btn.recording { border-color: #e74c3c; color: #e74c3c; }
+.section-label {
+  font-size: 11px; color: #666; text-transform: uppercase;
+  letter-spacing: 1px; padding-top: 6px;
+  border-top: 1px solid #333;
+}
+/* Keyboard hint */
+.kb-hint {
+  font-size: 10px; color: #555; text-align: center;
+  padding: 4px; background: #16213e; border-top: 1px solid #333;
+}
+/* Readiness banner */
+.readiness-banner {
+  padding: 8px 12px; text-align: center; font-weight: 700;
+  font-size: 14px; letter-spacing: 1px; text-transform: uppercase;
+  flex-shrink: 0;
+}
+.ready-ok { background: #2d6a4f; color: #b7e4c7; }
+.ready-idle { background: #7f5539; color: #f4a261; }
+.ready-offline { background: #6a2d2d; color: #e4b7b7; }
+.motor-enable-btn {
+  width: 100%; padding: 14px 10px; border: 2px solid #27ae60;
+  background: #27ae60; color: white; font-size: 14px; font-weight: 700;
+  border-radius: 8px; cursor: pointer; text-transform: uppercase;
+}
+.motor-enable-btn:active { background: #1e8449; }
+.motor-disable-btn {
+  width: 100%; padding: 10px; border: 2px solid #f39c12;
+  background: transparent; color: #f39c12; font-size: 13px;
+  font-weight: 600; border-radius: 8px; cursor: pointer;
+}
+.joystick-disabled { opacity: 0.3; pointer-events: none; }
+/* Mobile compact status strip */
+.mobile-status {
+  display: none;
+  padding: 4px 8px; background: #0f3460;
+  font-size: 11px; gap: 10px; flex-shrink: 0;
+  justify-content: center; flex-wrap: wrap;
+}
+.mobile-status span { white-space: nowrap; }
+/* Mobile */
+@media (max-width: 700px) {
+  .status-panel { display: none; }
+  .mobile-status { display: flex; }
+  .main-area { flex-direction: column; }
+  .joystick-area { flex: 1; padding: 6px; gap: 6px; min-height: 0; }
+  .control-panel {
+    width: 100%; flex-direction: row; flex-wrap: wrap;
+    gap: 6px; padding: 6px 8px; justify-content: center;
+  }
+  .control-panel .section-label { display: none; }
+  .control-panel > div:last-child { display: none; } /* info text */
+  .e-stop-btn { flex: 1; min-width: 90px; padding: 14px 8px; font-size: 14px; }
+  .e-stop-clear { flex: 1; min-width: 90px; }
+  .motor-enable-btn, .motor-disable-btn { flex: 1; min-width: 90px; }
+  .rec-btn { flex: 1; min-width: 90px; padding: 10px; }
+  .speed-control input { width: 80px; }
+  .cmd-display { font-size: 10px; }
+  .drive-indicator { font-size: 12px; padding: 4px 14px; }
+  .readiness-banner { font-size: 11px; padding: 5px 8px; }
+  .kb-hint { display: none; }
+  .top-bar h1 { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>AGV Teleop Console</h1>
+  <span id="conn" class="conn-status conn-err">Disconnected</span>
+</div>
+
+<div id="readiness" class="readiness-banner ready-offline">Drive Offline — Start robot core via SSH</div>
+
+<div class="mobile-status">
+  <span>Odom: <span id="m-odom-hz" class="hz-dead">--</span></span>
+  <span>Motors: <span id="m-motor">--</span></span>
+  <span>E-Stop: <span id="m-estop" style="color:#52b788">Clear</span></span>
+</div>
+
+<div class="main-area">
+  <!-- Status Panel -->
+  <div class="status-panel">
+    <div class="status-item">
+      <span class="status-label">Wheel Odom</span>
+      <span id="odom-hz" class="status-value hz-dead">-- Hz</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Velocity</span>
+      <span id="vel-display" class="status-value">0.00 m/s</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">SLAM</span>
+      <span id="slam-status" class="status-value" style="color:#999">--</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Recording</span>
+      <span id="rec-status" class="status-value" style="color:#999">No</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Motors</span>
+      <span id="motor-status" class="status-value" style="color:#999">--</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">E-Stop</span>
+      <span id="estop-status" class="status-value" style="color:#52b788">Clear</span>
+    </div>
+  </div>
+
+  <!-- Joystick Area -->
+  <div class="joystick-area">
+    <div id="drive-ind" class="drive-indicator drive-idle">Idle</div>
+    <canvas id="joystick-canvas" width="220" height="220"></canvas>
+    <div class="cmd-display">
+      lin: <span id="cmd-lin">0.00</span> &nbsp;
+      ang: <span id="cmd-ang">0.00</span>
+    </div>
+    <div class="speed-control">
+      <span>Speed</span>
+      <input type="range" id="speed-slider" min="10" max="100" value="50">
+      <span id="speed-val">50%</span>
+    </div>
+  </div>
+
+  <!-- Control Panel -->
+  <div class="control-panel">
+    <button id="motor-enable-btn" class="motor-enable-btn" onclick="enableMotors()" style="display:none">Enable Motors</button>
+    <button id="motor-disable-btn" class="motor-disable-btn" onclick="disableMotors()" style="display:none">Disable Motors</button>
+
+    <button id="estop-btn" class="e-stop-btn" onclick="toggleEStop()">E-STOP</button>
+    <button id="estop-clear" class="e-stop-clear" onclick="clearEStop()">Clear E-Stop</button>
+
+    <div class="section-label">SLAM Recording</div>
+    <button id="rec-btn" class="rec-btn" onclick="toggleRecording()">Start Recording</button>
+
+    <div class="section-label">Info</div>
+    <div style="font-size:11px;color:#666">
+      Commissioning tool<br>
+      Touch joystick or WASD
+    </div>
+  </div>
+</div>
+
+<div class="kb-hint">Keyboard: WASD/Arrows to drive &bull; Space to stop &bull; Esc for E-Stop</div>
+
+<script>
+// ── Config ──
+const WS_URL = `ws://${location.host}/ws/control`;
+const CMD_RATE = 100; // ms between cmd_vel sends (10Hz)
+
+// ── State ──
+let ws = null;
+let connected = false;
+let driving = false;
+let eStopActive = false;
+let recording = false;
+let motorsArmed = false;
+let driveOnline = false;
+let cmdInterval = null;
+let joyX = 0, joyY = 0; // -1..1
+let speedScale = 0.5;
+let keysDown = new Set();
+let reconnectDelay = 500;
+
+// ── DOM ──
+const connEl = document.getElementById('conn');
+const driveInd = document.getElementById('drive-ind');
+const canvas = document.getElementById('joystick-canvas');
+const ctx = canvas.getContext('2d');
+const cmdLin = document.getElementById('cmd-lin');
+const cmdAng = document.getElementById('cmd-ang');
+const speedSlider = document.getElementById('speed-slider');
+const speedVal = document.getElementById('speed-val');
+
+// ── WebSocket ──
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    connected = true;
+    reconnectDelay = 500;
+    connEl.textContent = 'Connected';
+    connEl.className = 'conn-status conn-ok';
+  };
+  ws.onclose = () => {
+    connected = false;
+    connEl.textContent = 'Disconnected';
+    connEl.className = 'conn-status conn-err';
+    stopDriving();
+    setTimeout(connect, Math.min(reconnectDelay, 5000));
+    reconnectDelay *= 1.5;
+  };
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'status') updateStatus(data);
+      if (data.type === 'recording_result') {
+        // Could show toast, but keep minimal
+      }
+    } catch {}
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+// ── Status Updates ──
+function updateStatus(s) {
+  const hzEl = document.getElementById('odom-hz');
+  const hz = s.wheel_odom_hz || 0;
+  hzEl.textContent = hz.toFixed(1) + ' Hz';
+  hzEl.className = 'status-value ' + (hz > 40 ? 'hz-ok' : hz > 10 ? 'hz-warn' : 'hz-dead');
+
+  const vel = s.velocity || {};
+  document.getElementById('vel-display').textContent =
+    (vel.linear || 0).toFixed(2) + ' m/s';
+
+  // Motor state
+  motorsArmed = s.motors_armed || false;
+  driveOnline = s.drive_online || false;
+  const motorEl = document.getElementById('motor-status');
+  const stateNames = {0:'?', 1:'IDLE', 8:'READY'};
+  if (!driveOnline) {
+    motorEl.textContent = 'Offline';
+    motorEl.style.color = '#e76f51';
+  } else if (motorsArmed) {
+    motorEl.textContent = 'Armed';
+    motorEl.style.color = '#52b788';
+  } else {
+    motorEl.textContent = 'IDLE';
+    motorEl.style.color = '#f4a261';
+  }
+
+  // Motor enable/disable buttons
+  document.getElementById('motor-enable-btn').style.display =
+    (driveOnline && !motorsArmed) ? 'block' : 'none';
+  document.getElementById('motor-disable-btn').style.display =
+    (driveOnline && motorsArmed) ? 'block' : 'none';
+
+  // Readiness banner
+  const banner = document.getElementById('readiness');
+  if (!driveOnline) {
+    banner.textContent = 'Drive Offline \u2014 Start robot core via SSH';
+    banner.className = 'readiness-banner ready-offline';
+  } else if (!motorsArmed) {
+    banner.textContent = 'Motors IDLE \u2014 Press Enable Motors to drive';
+    banner.className = 'readiness-banner ready-idle';
+  } else {
+    banner.textContent = 'READY \u2014 Use joystick to drive';
+    banner.className = 'readiness-banner ready-ok';
+  }
+
+  // Joystick enable/disable
+  const joyCanvas = document.getElementById('joystick-canvas');
+  if (motorsArmed && !eStopActive) {
+    joyCanvas.classList.remove('joystick-disabled');
+  } else {
+    joyCanvas.classList.add('joystick-disabled');
+  }
+
+  const slam = s.slam_tracking || '--';
+  const slamEl = document.getElementById('slam-status');
+  slamEl.textContent = slam;
+  slamEl.style.color = slam === 'good' ? '#52b788' : slam === 'unknown' ? '#999' : '#f4a261';
+
+  recording = s.recording || false;
+  const recEl = document.getElementById('rec-status');
+  recEl.textContent = recording ? 'Recording' : 'No';
+  recEl.style.color = recording ? '#e74c3c' : '#999';
+  const recBtn = document.getElementById('rec-btn');
+  recBtn.textContent = recording ? 'Stop Recording' : 'Start Recording';
+  recBtn.className = 'rec-btn' + (recording ? ' recording' : '');
+
+  eStopActive = s.e_stop || false;
+  const esEl = document.getElementById('estop-status');
+  esEl.textContent = eStopActive ? 'ACTIVE' : 'Clear';
+  esEl.style.color = eStopActive ? '#e74c3c' : '#52b788';
+  document.getElementById('estop-btn').className =
+    'e-stop-btn' + (eStopActive ? ' active' : '');
+  document.getElementById('estop-clear').style.display =
+    eStopActive ? 'block' : 'none';
+
+  // Mobile status strip
+  const mOdom = document.getElementById('m-odom-hz');
+  mOdom.textContent = hz.toFixed(0) + 'Hz';
+  mOdom.style.color = hz > 40 ? '#52b788' : hz > 10 ? '#f4a261' : '#e76f51';
+  const mMotor = document.getElementById('m-motor');
+  mMotor.textContent = !driveOnline ? 'Off' : motorsArmed ? 'Armed' : 'IDLE';
+  mMotor.style.color = !driveOnline ? '#e76f51' : motorsArmed ? '#52b788' : '#f4a261';
+  const mEstop = document.getElementById('m-estop');
+  mEstop.textContent = eStopActive ? 'ACTIVE' : 'Clear';
+  mEstop.style.color = eStopActive ? '#e74c3c' : '#52b788';
+}
+
+// ── Driving ──
+function startDriving() {
+  if (driving) return;
+  if (!motorsArmed || eStopActive) return;
+  driving = true;
+  driveInd.textContent = 'Driving';
+  driveInd.className = 'drive-indicator drive-active';
+  cmdInterval = setInterval(sendCmd, CMD_RATE);
+}
+
+function stopDriving() {
+  driving = false;
+  joyX = 0; joyY = 0;
+  driveInd.textContent = 'Idle';
+  driveInd.className = 'drive-indicator drive-idle';
+  if (cmdInterval) { clearInterval(cmdInterval); cmdInterval = null; }
+  send({type:'cmd_vel', linear:0, angular:0});
+  cmdLin.textContent = '0.00';
+  cmdAng.textContent = '0.00';
+  drawJoystick(0, 0);
+}
+
+function sendCmd() {
+  const lin = joyY * speedScale;
+  const ang = -joyX * speedScale * 2; // angular feels better at 2x
+  send({type:'cmd_vel', linear: lin, angular: ang});
+  cmdLin.textContent = lin.toFixed(2);
+  cmdAng.textContent = ang.toFixed(2);
+}
+
+// ── Joystick Drawing ──
+function drawJoystick(nx, ny) {
+  const w = canvas.width, h = canvas.height;
+  const cx = w/2, cy = h/2, r = w/2 - 10;
+  ctx.clearRect(0, 0, w, h);
+
+  // Outer ring
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.stroke();
+
+  // Cross hair
+  ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx, cy+r);
+  ctx.moveTo(cx-r, cy); ctx.lineTo(cx+r, cy);
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke();
+
+  // Thumb
+  const tx = cx + nx * (r - 20);
+  const ty = cy - ny * (r - 20);
+  ctx.beginPath(); ctx.arc(tx, ty, 20, 0, Math.PI*2);
+  ctx.fillStyle = driving ? '#2d6a4f' : '#444';
+  ctx.fill();
+  ctx.strokeStyle = driving ? '#52b788' : '#666';
+  ctx.lineWidth = 2; ctx.stroke();
+}
+
+// ── Touch Joystick ──
+let touchId = null;
+const canvasRect = () => canvas.getBoundingClientRect();
+
+function touchToJoy(clientX, clientY) {
+  const rect = canvasRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top + rect.height/2;
+  const r = rect.width/2 - 30;
+  let dx = (clientX - cx) / r;
+  let dy = -(clientY - cy) / r;
+  const mag = Math.sqrt(dx*dx + dy*dy);
+  if (mag > 1) { dx /= mag; dy /= mag; }
+  return [dx, dy];
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  touchId = e.pointerId;
+  const [x, y] = touchToJoy(e.clientX, e.clientY);
+  joyX = x; joyY = y;
+  drawJoystick(x, y);
+  startDriving();
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== touchId) return;
+  e.preventDefault();
+  const [x, y] = touchToJoy(e.clientX, e.clientY);
+  joyX = x; joyY = y;
+  drawJoystick(x, y);
+});
+
+canvas.addEventListener('pointerup', (e) => {
+  if (e.pointerId !== touchId) return;
+  touchId = null;
+  stopDriving();
+});
+
+canvas.addEventListener('pointercancel', (e) => {
+  touchId = null;
+  stopDriving();
+});
+
+// ── Keyboard ──
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) {
+    e.preventDefault();
+    keysDown.add(k);
+    updateKeyJoy();
+    startDriving();
+  }
+  if (k === ' ') { e.preventDefault(); stopDriving(); }
+  if (k === 'escape') { toggleEStop(); }
+});
+
+document.addEventListener('keyup', (e) => {
+  const k = e.key.toLowerCase();
+  keysDown.delete(k);
+  if (keysDown.size === 0) stopDriving();
+  else updateKeyJoy();
+});
+
+function updateKeyJoy() {
+  let x = 0, y = 0;
+  if (keysDown.has('w') || keysDown.has('arrowup')) y += 1;
+  if (keysDown.has('s') || keysDown.has('arrowdown')) y -= 1;
+  if (keysDown.has('a') || keysDown.has('arrowleft')) x -= 1;
+  if (keysDown.has('d') || keysDown.has('arrowright')) x += 1;
+  joyX = x; joyY = y;
+  drawJoystick(x, y);
+}
+
+// ── Motor Enable/Disable ──
+function enableMotors() {
+  send({type:'motor_enable', active: true});
+}
+function disableMotors() {
+  stopDriving();
+  send({type:'motor_enable', active: false});
+}
+
+// ── E-Stop ──
+function toggleEStop() {
+  send({type:'e_stop', active: !eStopActive});
+  stopDriving();
+}
+
+function clearEStop() {
+  send({type:'e_stop', active: false});
+}
+
+// ── Recording ──
+function toggleRecording() {
+  send({type:'recording', action: recording ? 'stop' : 'start'});
+}
+
+// ── Speed Slider ──
+speedSlider.addEventListener('input', () => {
+  speedScale = speedSlider.value / 100;
+  speedVal.textContent = speedSlider.value + '%';
+});
+
+// ── Page Visibility ──
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopDriving();
+});
+window.addEventListener('blur', stopDriving);
+
+// ── Canvas Resize (responsive) ──
+function resizeCanvas() {
+  const isMobile = window.innerWidth <= 700;
+  const size = isMobile ? Math.min(window.innerWidth - 40, 180) : 220;
+  canvas.width = size;
+  canvas.height = size;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  drawJoystick(joyX, joyY);
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ── Init ──
+resizeCanvas();
+connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+<root main_tree_to_execute="SingleWaypoint">
+  <BehaviorTree ID="SingleWaypoint">
+    <NavigateToPose x="{goal_x}" y="{goal_y}" theta="{goal_theta}"
+                    server_name="navigate_to_pose"/>
+  </BehaviorTree>
+</root>

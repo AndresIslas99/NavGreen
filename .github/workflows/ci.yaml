@@ -1,0 +1,72 @@
+name: AGV Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:humble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y python3-colcon-common-extensions python3-rosdep
+          rosdep init || true
+          rosdep update
+          # Install only our package dependencies (skip Isaac ROS which needs GPU)
+          rosdep install --from-paths src/agv_odrive src/agv_interfaces src/agv_map_manager \
+            src/agv_waypoint_manager src/agv_markers src/agv_behaviors \
+            src/agv_sensor_fusion src/agv_navigation src/agv_bringup \
+            src/agv_description src/agv_integration_tests \
+            --ignore-src -y --skip-keys="isaac_ros_visual_slam isaac_ros_nvblox isaac_ros_apriltag_interfaces" || true
+
+      - name: Build AGV packages
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build \
+            --packages-select agv_interfaces agv_odrive agv_map_manager \
+              agv_waypoint_manager agv_markers agv_behaviors \
+              agv_sensor_fusion agv_navigation agv_bringup \
+              agv_description agv_integration_tests \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Werror" \
+            --event-handlers console_direct+
+        shell: bash
+
+      - name: Run tests
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          colcon test \
+            --packages-select agv_odrive agv_interfaces agv_map_manager \
+              agv_waypoint_manager agv_markers agv_behaviors \
+            --event-handlers console_direct+
+          colcon test-result --all --verbose
+        shell: bash
+
+  typescript-lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build UI backend
+        working-directory: src/agv_ui_backend
+        run: npm ci && npm run build
+
+      - name: Build dashboard
+        working-directory: web/agv_dashboard
+        run: npm ci && npx tsc --noEmit && npx vite build
+
+      - name: Build fleet packages
+        run: |
+          cd fleet/agv_vda5050_adapter && npm ci && npm run build && cd ../..
+          cd fleet/agv_fleet_manager && npm ci && npm run build

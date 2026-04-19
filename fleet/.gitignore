@@ -1,0 +1,4 @@
+node_modules/
+dist/
+mosquitto/data/
+mosquitto/log/

@@ -1,0 +1,30 @@
+task_version: "1.0"
+package: "agv_behaviors"
+owner_role: "architect_agent"
+language: "C++17 and BehaviorTree XML"
+priority: "post_mvp"
+notes: "De-prioritized per retro. For MVP, single-goal /navigate_to_pose dispatch from dashboard is sufficient. Full behavior tree mission execution is a post-MVP enhancement."
+
+objective: "Implement behavior trees for single-goal execution, waypoint patrol, recovery behaviors, and mission dispatch."
+
+inputs:
+  data_sources:
+    - "missions from agv_waypoint_manager"
+    - "goal requests from UI or services"
+
+outputs:
+  artifacts:
+    - "patrol.xml"
+    - "navigate_with_recovery.xml"
+    - "single_waypoint.xml"
+    - "mission executor action or service integration"
+
+rules:
+  - "Do not hardcode waypoint lists in source"
+  - "Recovery behaviors must be configurable"
+  - "Mission execution must consume external mission data"
+
+done_definition:
+  - "missions execute from persisted mission definitions"
+  - "recoveries trigger correctly under failure"
+  - "single goal and multi-waypoint execution both pass"

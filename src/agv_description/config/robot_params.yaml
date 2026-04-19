@@ -1,0 +1,54 @@
+# AGV Robot Physical Parameters — Single Source of Truth
+# Measured 2026-03-18 on production chassis, ZED re-measured 2026-04-18.
+#
+# base_link origin: geometric center of chassis, 200mm above ground
+# All coordinates relative to base_link unless noted otherwise
+#
+#   TOP VIEW (base_link at center)
+#
+#          +X (forward)
+#           ^
+#           |
+#    LW ----+---- RW      LW = left wheel, RW = right wheel
+#           |
+#           |
+#      ZED mounted 700mm forward, 10mm above base_link
+#      (= 210mm above ground — direct tape measurement 2026-04-18,
+#       supersedes the earlier -55mm estimate from CAD).
+#
+#   SIDE VIEW
+#
+#       base_link (0,0,0)
+#           |
+#          ZED (z = +10mm — in front, slightly above base_link plane)
+#           |
+#     ------+------ chassis top plate
+#           |
+#     ------+------ axle height (z = -137.5mm)
+#        [wheel]
+#           | 62.5mm radius
+#     ------+------ ground (z = -200mm from base_link)
+#
+
+robot:
+  base_link:
+    height_above_ground: 0.200  # meters
+
+  wheels:
+    radius: 0.0625               # meters (125mm diameter)
+    left:
+      xyz: [0.0, 0.3675, -0.1375]
+    right:
+      xyz: [0.0, -0.3675, -0.1375]
+    track_width: 0.735            # meters (367.5mm × 2)
+
+  sensors:
+    zed2i:
+      # z=+0.010 puts the ZED optical centre at 0.210 m above ground,
+      # matching the physical mount. Floor tags at z=0.002 become visible
+      # from ~1.0 m forward of base_link (0.21 / tan(35° VFOV bottom) +
+      # 0.70 m ZED offset). Do not reduce below +0.005 without re-measuring
+      # — agv_markers + rail_approach rely on this geometry for 2 cm
+      # precision via floor AprilTags.
+      xyz: [0.700, 0.0, 0.010]
+      rpy: [0.0, 0.0, 0.0]

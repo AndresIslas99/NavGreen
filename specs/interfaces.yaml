@@ -1,0 +1,773 @@
+spec_version: "2.0"
+last_updated: "2026-04-13"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-4"
+verified_by: "tools/verify_specs/verify_interfaces.py"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGV ROS 2 Interface Contracts
+#
+# Every topic, service, and action that crosses package boundaries. Each entry
+# declares owner, type, QoS, and subscribers/clients. This file is the
+# contract; the code is checked against it by verify_interfaces.py.
+#
+# NOT in scope for this spec:
+# - Internal node state (parameters that don't cross boundaries)
+# - Topics that are emitted and consumed within a single package
+# - Topics from external packages (nav2_msgs, isaac_ros_*) that the AGV
+#   does not redefine
+#
+# Namespace convention:
+# - All AGV topics are namespaced under `/agv/` (default robot_namespace)
+# - Topics outside `/agv/` belong to external packages (cuVSLAM, nvblox)
+# ─────────────────────────────────────────────────────────────────────────────
+
+ros:
+  default_namespace: "agv"
+  namespace_parameter: "robot_namespace"
+  tf_tree:
+    - "map"
+    - "odom"
+    - "base_link"
+  tf_ownership:
+    "map→odom":
+      owner_node: "ekf_global"
+      owner_pkg: "agv_sensor_fusion"
+      invariant: "Single publisher only. cuVSLAM TF disabled via cuvslam_greenhouse.yaml /**: key."
+    "odom→base_link":
+      owner_node: "ekf_local"
+      owner_pkg: "agv_sensor_fusion"
+      invariant: "Single publisher only. ZED wrapper publish_tf=false."
+    "base_link→children":
+      owner_node: "robot_state_publisher"
+      owner_pkg: "agv_description"
+      source: "URDF xacro"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Topics
+# ─────────────────────────────────────────────────────────────────────────────
+
+topics:
+
+  # ── Velocity command chain ────────────────────────────────────────────────
+  # Phase 2 inserts agv_mode_arbiter as the single owner of /agv/cmd_vel.
+  # Upstream controllers (Nav2, rail_approach, rail_driver) publish to
+  # per-controller topics; the arbiter selects exactly one and relays. In
+  # legacy/production launches without mode_arbiter, the controllers can
+  # still publish directly to /agv/cmd_vel (via remap).
+  - name: "/agv/cmd_vel"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "agv_mode_arbiter"
+    owner_node: "mode_arbiter"
+    code_ref: "src/agv_mode_arbiter/src/mode_arbiter_node.cpp"
+    publishers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "3-mode selector (Phase 2)", active_when: "mode_arbiter running — default in HIL + production"}
+      - {pkg: "agv_ui_backend", node: "teleop_server", role: "operator joystick / dashboard", active_when: "currentMode ∈ {teleop, mapping} AND mode_arbiter source == NONE"}
+    qos:
+      reliability: "reliable"
+      durability: "volatile"
+      history: "keep_last"
+      depth: 10
+    rate_hz: {min: 0, target: 20, max: 50}
+    subscribers:
+      - {pkg: "nav2 velocity_smoother", role: "Nav2 chain input when layer_2_has_map=with_map"}
+      - {pkg: "agv_odrive", role: "direct consumer when layer_2_has_map=without_map"}
+    notes: |
+      In Phase 2, mode_arbiter is the only regular publisher. It relays from
+      cmd_vel_nav | cmd_vel_approach | cmd_vel_rail (see below). teleop_server
+      writes to /agv/cmd_vel directly only when the operator_mode override is
+      'teleop' (arbiter holds its own publisher silent in that case).
+
+  - name: "/agv/cmd_vel_nav"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "nav2_controller (external)"
+    owner_node: "controller_server"
+    code_ref: "src/agv_navigation/launch/navigation.launch.py (controller_cmd_vel_topic arg)"
+    publishers:
+      - {pkg: "nav2_controller (external)", node: "controller_server", role: "Nav2 MPPI output (Phase 2)"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "source for CORRIDOR_NAV mode"}
+    notes: |
+      Only published when the HIL launch passes controller_cmd_vel_topic:=cmd_vel_nav.
+      Legacy launches keep the default controller_cmd_vel_topic=cmd_vel which
+      sends controller_server output straight to /agv/cmd_vel.
+
+  - name: "/agv/cmd_vel_approach"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "agv_rail_approach"
+    owner_node: "rail_approach"
+    code_ref: "src/agv_rail_approach/src/rail_approach_node.cpp"
+    publishers:
+      - {pkg: "agv_rail_approach", node: "rail_approach", role: "AprilTag-guided alignment velocity (Phase 2)"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "source for RAIL_APPROACH_ACTIVE mode"}
+    notes: |
+      rail_approach_node publishes to the relative topic 'cmd_vel' and the
+      HIL launch remaps it to cmd_vel_approach (Phase 2). Drops to this topic
+      only while an execute service call is active.
+
+  - name: "/agv/cmd_vel_rail"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "agv_rail_driver"
+    owner_node: "rail_driver"
+    code_ref: "src/agv_rail_driver/src/rail_driver_node.cpp"
+    publishers:
+      - {pkg: "agv_rail_driver", node: "rail_driver", role: "longitudinal-only with wz=0 hard (Phase 2)"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 0, target: 20, max: 50}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "source for RAIL_DRIVE mode"}
+    notes: |
+      angular.z is HARD-CODED 0 in rail_controller.hpp. The arbiter relays
+      directly; no smoothing needed between controller and cmd_vel because
+      rail_driver already produces 20 Hz clean commands.
+
+  - name: "/agv/cmd_vel_smoothed"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "nav2_velocity_smoother (external)"
+    owner_node: "velocity_smoother"
+    qos:
+      reliability: "reliable"
+      history: "keep_last"
+      depth: 10
+    subscribers:
+      - {pkg: "nav2_collision_monitor", role: "collision polygon check"}
+
+  - name: "/agv/cmd_vel_collision_safe"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "nav2_collision_monitor (external)"
+    owner_node: "collision_monitor"
+    code_ref: "src/agv_navigation/config/collision_monitor.yaml:26 (cmd_vel_out_topic)"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    subscribers:
+      - {pkg: "agv_safety", node: "cmd_vel_gate", role: "gated forwarding"}
+
+  - name: "/agv/cmd_vel_safe"
+    type: "geometry_msgs/msg/Twist"
+    owner_pkg: "agv_safety"
+    owner_node: "cmd_vel_gate"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    subscribers:
+      - {pkg: "agv_odrive", role: "final motor command input in has_map=true mode"}
+    notes: "Currently broken due to cmd_vel_gate watchdog — see audit bug #1."
+
+  # ── Odometry and state estimation ─────────────────────────────────────────
+  - name: "/agv/wheel_odom"
+    type: "nav_msgs/msg/Odometry"
+    owner_pkg: "agv_odrive"
+    owner_node: "agv_odrive_node"
+    code_ref: "src/agv_odrive/src/odrive_can_node.cpp:102"
+    qos: {reliability: "best_effort", history: "keep_last", depth: 10}
+    rate_hz: {min: 40, target: 50, max: 55}
+    subscribers:
+      - {pkg: "robot_localization", node: "ekf_local", role: "odom0 for dual EKF"}
+    hil_override:
+      owner_pkg: "agv_hil_bridges"
+      owner_node: "joint_states_to_wheel_odom"
+      code_ref: "src/agv_hil_bridges/scripts/joint_states_to_wheel_odom.py"
+      since: "2026-04-17 (agv-greenhouse-sim 3d44cec)"
+      rationale: |
+        Sim host stopped publishing /agv/wheel_odom because it is Jetson
+        software work in production. In HIL the bridge integrates
+        /agv/joint_states (sim encoder emulation) using the SAME
+        wheel_radius / track_width as odrive_params.yaml, so ekf_local
+        sees the same robot kinematically in HIL and prod.
+
+  - name: "/agv/odometry/local"
+    type: "nav_msgs/msg/Odometry"
+    owner_pkg: "robot_localization (external, via agv_sensor_fusion)"
+    owner_node: "ekf_local"
+    qos: {reliability: "best_effort", history: "keep_last", depth: 10}
+    rate_hz: {target: 50}
+    subscribers:
+      - {pkg: "robot_localization", node: "ekf_global", role: "differential odom1"}
+      - {pkg: "agv_ui_backend", role: "dashboard velocity + Hz tracking"}
+
+  - name: "/agv/odometry/global"
+    type: "nav_msgs/msg/Odometry"
+    owner_pkg: "robot_localization (external)"
+    owner_node: "ekf_global"
+    qos: {reliability: "best_effort", history: "keep_last", depth: 10}
+    rate_hz: {target: 10}
+    subscribers:
+      - {pkg: "nav2_bt_navigator", role: "goal progress monitoring"}
+      - {pkg: "agv_sensor_fusion", node: "fusion_monitor", role: "pose republish"}
+
+  - name: "/agv/imu/filtered"
+    type: "sensor_msgs/msg/Imu"
+    owner_pkg: "agv_sensor_fusion"
+    owner_node: "imu_filter"
+    qos: {reliability: "best_effort"}
+    subscribers:
+      - {pkg: "robot_localization", node: "ekf_local"}
+      - {pkg: "robot_localization", node: "ekf_global"}
+
+  - name: "/visual_slam/tracking/odometry"
+    type: "nav_msgs/msg/Odometry"
+    owner_pkg: "isaac_ros_visual_slam (external)"
+    owner_node: "visual_slam"
+    notes: "cuVSLAM has TF DISABLED via cuvslam_greenhouse.yaml /**: override — topic only."
+    subscribers:
+      - {pkg: "robot_localization", node: "ekf_global", role: "differential mode"}
+    hil_override:
+      owner_pkg: "isaac_ros_visual_slam (external, runs on Jetson in HIL consuming sim /agv/zed/* + IMU)"
+      fallback_owner_pkg: "agv_hil_bridges"
+      fallback_owner_node: "vslam_fallback_relay"
+      fallback_code_ref: "src/agv_hil_bridges/scripts/vslam_fallback_relay.py"
+      fallback_gate: "cuvslam_in_hil:=false in agv_hil_full.launch.py"
+      since: "2026-04-17"
+      rationale: |
+        Sim no longer shims this topic. Primary path: cuVSLAM runs on
+        Jetson (IfCondition cuvslam_in_hil). Fallback: relay wheel_odom
+        with inflated covariance so ekf_global still has odom1 input
+        when cuVSLAM is disabled or failing on raytracing-quality images.
+
+  # ── Perception ────────────────────────────────────────────────────────────
+  - name: "/agv/scan"
+    type: "sensor_msgs/msg/LaserScan"
+    owner_pkg: "pointcloud_to_laserscan (external)"
+    owner_node: "pointcloud_to_laserscan"
+    qos: {reliability: "best_effort"}
+    subscribers:
+      - {pkg: "slam_toolbox (external)"}
+      - {pkg: "nav2_collision_monitor", role: "2D obstacle source"}
+      - {pkg: "agv_ui_backend", role: "dashboard scan visualization"}
+    hil_notes: |
+      Post 2026-04-17 refactor sim no longer publishes /agv/scan.
+      agv_hil_full.launch.py starts pointcloud_to_laserscan on the Jetson
+      consuming /agv/zed/point_cloud/cloud_registered (from sim). QoS
+      override pins the subscription to RELIABLE because Isaac's Replicator
+      publishes RELIABLE; the default BEST_EFFORT subscriber silently drops
+      all messages (blocker observed in Round 2).
+
+  - name: "/agv/joint_states"
+    type: "sensor_msgs/msg/JointState"
+    owner_pkg: "sim_host:agv_isaac_sim"
+    owner_node: "isaac_joint_states_publisher"
+    cross_distro_boundary: false
+    host: "sim_host"
+    qos: {reliability: "best_effort", history: "keep_last", depth: 10}
+    rate_hz: {min: 30, target: 50}
+    semantics: |
+      Sim-side encoder emulation after 2026-04-17 refactor. Contains
+      `name: [left_wheel_joint, right_wheel_joint]` with position (rad)
+      and velocity (rad/s). Consumed by the Jetson-side
+      joint_states_to_wheel_odom bridge.
+    subscribers:
+      - {pkg: "agv_hil_bridges", node: "joint_states_to_wheel_odom", role: "encoder input for wheel_odom integration (HIL)"}
+
+  - name: "/agv/live_map"
+    type: "nav_msgs/msg/OccupancyGrid"
+    owner_pkg: "agv_scan_mapper"
+    owner_node: "scan_grid_mapper"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard live map overlay"}
+
+  - name: "/agv/map"
+    type: "nav_msgs/msg/OccupancyGrid"
+    owner_pkg: "nav2_map_server (external)"
+    owner_node: "map_server"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    subscribers:
+      - {pkg: "nav2 costmap", role: "static layer"}
+      - {pkg: "agv_ui_backend", role: "dashboard map view"}
+
+  # ── Localization and map events ───────────────────────────────────────────
+  - name: "/agv/maps/loaded"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_map_manager"
+    owner_node: "map_manager"
+    alternative_publishers:
+      - {pkg: "agv_ui_backend", role: "boot-time publish from AGV_BOOT_MAP_NAME"}
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    payload: "map name without extension"
+    subscribers:
+      - {pkg: "agv_map_manager", role: "self (to update current_map and last_map)"}
+      - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "trigger Path A0/A/B/C cascade"}
+
+  - name: "/agv/current_map"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_map_manager"
+    owner_node: "map_manager"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    payload: "map name or empty string for mapping-first"
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard header MAP pill"}
+
+  - name: "/agv/localization/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_localization_init"
+    owner_node: "auto_init_orchestrator"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    payload: 'JSON {"action":"INITIALIZING|LOCALIZED|DEGRADED|FAILED","detail":"...","map":"..."}'
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard LOC pill"}
+
+  - name: "/agv/marker_pose"
+    type: "geometry_msgs/msg/PoseWithCovarianceStamped"
+    owner_pkg: "agv_markers"
+    owner_node: "marker_correction"
+    subscribers:
+      - {pkg: "robot_localization", node: "ekf_global", role: "pose0 when tag visible"}
+      - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "AprilTag fallback hint"}
+
+  - name: "/agv/marker_raw_detected"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_markers"
+    owner_node: "marker_correction"
+    payload: 'tag_<id> on every detection'
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard apriltag registry UI"}
+
+  # ── Safety ────────────────────────────────────────────────────────────────
+  - name: "/agv/safety/status"
+    type: "agv_interfaces/msg/SafetyStatus"
+    owner_pkg: "agv_safety"
+    owner_node: "safety_supervisor"
+    qos: {reliability: "reliable"}
+    rate_hz: {target: 10}
+    subscribers:
+      - {pkg: "agv_safety", node: "cmd_vel_gate"}
+      - {pkg: "agv_ui_backend", role: "dashboard safety badge"}
+
+  - name: "/agv/collision_monitor_state"
+    type: "nav2_msgs/msg/CollisionMonitorState"
+    owner_pkg: "nav2_collision_monitor (external)"
+    owner_node: "collision_monitor"
+    qos: {reliability: "reliable"}
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard safety pill + freshness watchdog for nav goals"}
+      - {pkg: "agv_safety", node: "safety_supervisor", role: "liveness monitoring"}
+    notes: "The spec previously declared this as std_msgs/msg/String which matched an older Nav2 version. Updated 2026-04-13 after audit bug #1 revealed the type mismatch was causing safety_supervisor to mark the topic silent and block cmd_vel."
+
+  - name: "/agv/e_stop"
+    type: "std_msgs/msg/Bool"
+    owner_pkg: "agv_ui_backend"
+    owner_node: "teleop_server"
+    qos: {reliability: "reliable"}
+    semantics: "true means immediate stop, persists until false"
+    subscribers:
+      - {pkg: "agv_odrive", role: "motor disable"}
+      - {pkg: "agv_safety", node: "cmd_vel_gate", role: "zero output"}
+
+  - name: "/agv/hardware_estop"
+    type: "std_msgs/msg/Bool"
+    status: "planned"
+    intended_owner_pkg: "agv_hw_interface (future hardware bridge to ODrive estop pin or bumper)"
+    subscribers:
+      - {pkg: "agv_safety", node: "cmd_vel_gate"}
+    notes: "Until a hardware bridge exists, the gate's watchdog treats missing messages as stale → unsafe → blocks motion. See audit bug #1. Tracked in Fase 6."
+
+  - name: "/agv/software_estop"
+    type: "std_msgs/msg/Bool"
+    status: "planned"
+    intended_owner_pkg: "agv_ui_backend (operator-triggered software estop distinct from /agv/e_stop)"
+    subscribers:
+      - {pkg: "agv_safety", node: "safety_supervisor"}
+
+  # ── Mode and mission ──────────────────────────────────────────────────────
+  - name: "/agv/mode"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_ui_backend"
+    owner_node: "teleop_server"
+    payload: "'teleop' | 'mapping' | 'nav'"
+    subscribers:
+      - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "reacts on nav transition"}
+
+  # ── Phase 2: mode arbiter + zone detector + rail driver state ────────────
+  - name: "/agv/mode/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_mode_arbiter"
+    owner_node: "mode_arbiter"
+    payload: |
+      JSON {"mode": str, "source": str, "zone": str,
+            "operator_mode": str, "transitions": int}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 18, target: 20, max: 22}
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard mode pill (P2.S7 UI hookup follow-up)"}
+      - {pkg: "agv_integration_tests", role: "test_waypoint_precision mode-transition oracle"}
+
+  - name: "/agv/mode/set"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_ui_backend"
+    owner_node: "teleop_server"
+    payload: "'nav' | 'teleop' | 'idle'"
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "operator override input"}
+
+  - name: "/agv/zone/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_zone_detector"
+    owner_node: "zone_detector"
+    payload: |
+      JSON {"zone": str, "section": str, "aisle_y_center": float|null,
+            "rail_offset_lat": float|null, "rail_yaw_error": float|null,
+            "approach_tag_id": int|null, "confidence": float, "source": "pose"}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 8, target: 10, max: 12}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
+      - {pkg: "agv_rail_driver", node: "rail_driver"}
+
+  - name: "/agv/rail_driver/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_rail_driver"
+    owner_node: "rail_driver"
+    payload: |
+      JSON {"state": str, "linear_x": float, "remaining_m": float,
+            "in_rail_zone": bool, "collision_stop": bool}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 18, target: 20, max: 22}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
+
+  - name: "/agv/rail_approach/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_rail_approach"
+    owner_node: "rail_approach"
+    payload: |
+      JSON {"state": str ("idle"|"driving"|"settled"|"aborted"),
+            "detail": str (internal fine-grained state),
+            "target_tag": int}
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {min: 8, target: 10, max: 12}
+    subscribers:
+      - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
+
+  # ── Phase 2 Stage J: visual rail feedback (depth → BEV → RANSAC) ──────────
+  - name: "/agv/rail_detections"
+    type: "geometry_msgs/msg/PoseArray"
+    owner_pkg: "agv_rail_detector"
+    owner_node: "rail_detector"
+    payload: |
+      Two poses per detection, one per rail line. Position = nearest point of
+      each rail to the robot origin in base_link. Orientation yaw = rail axis
+      direction (not normal). frame_id: base_link.
+    qos: {reliability: "reliable", history: "keep_last", depth: 5}
+    rate_hz: {min: 3, target: 5, max: 7}
+    subscribers:
+      - {pkg: "agv_rail_driver", node: "rail_driver", role: "visual lateral correction (Stage K, optional)"}
+
+  - name: "/agv/rail_detector/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_rail_detector"
+    owner_node: "rail_detector"
+    payload: |
+      JSON {"confidence": float, "inliers_left": int, "inliers_right": int,
+            "n_points": int, "has_detection": bool}
+    qos: {reliability: "reliable", history: "keep_last", depth: 5}
+    rate_hz: {min: 3, target: 5, max: 7}
+    subscribers:
+      - {pkg: "agv_rail_driver", node: "rail_driver", role: "confidence gating (Stage K, optional)"}
+
+  # ── HIL simulation validation overlay ─────────────────────────────────────
+  # The /agv/sim/* namespace belongs to the separate sim host repo
+  # `agv-greenhouse-sim` (not this workspace). It is published by the
+  # overlay `agv_sim_validation` package running on the sim host
+  # (Linux PC, Humble) and consumed by the Jetson brain (Jazzy) over
+  # Cyclone DDS on ROS_DOMAIN_ID=42 (unicast peer list in sim repo
+  # cyclonedds.xml).
+  #
+  # INVARIANT cross_distro_boundary:
+  #   Payloads MUST use only standard ROS message types
+  #   (std_msgs/*, geometry_msgs/*, nav_msgs/*, nav2_msgs/*). Any
+  #   custom package type (e.g. agv_interfaces/*) would require the
+  #   exact same IDL build on both Humble and Jazzy, which we do not
+  #   guarantee. String-JSON payloads carry structured data instead.
+  #
+  # OWNERSHIP: owner_pkg deliberately uses prefix "sim_host:" so it does
+  # NOT start with "agv_" — verify_interfaces.py skips entries whose
+  # owner is not an agv_* package in this workspace. These topics are
+  # declared for brain-side consumers, not owned by this repo.
+  #
+  # AUTHORITATIVE SPEC: sim repo's docs/TOPIC_CONTRACT.md. If this file
+  # diverges from that one, that one wins — update here to match.
+
+  - name: "/agv/sim/ground_truth/pose"
+    type: "geometry_msgs/msg/PoseStamped"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "ground_truth_publisher"
+    cross_distro_boundary: true
+    host: "sim_host"
+    repo: "agv-greenhouse-sim"
+    frame_id: "map"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 10}
+    semantics: "PhysX-truth robot pose. Not derived from any EKF. Used by brain-side harness as ground truth oracle."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "terminal-error measurement vs /navigate_to_pose goal"}
+
+  - name: "/agv/sim/ground_truth/twist"
+    type: "geometry_msgs/msg/TwistStamped"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "ground_truth_publisher"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 10}
+    semantics: "Numerically derived velocity from GT pose."
+
+  - name: "/agv/sim/ground_truth/visible_markers"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "visible_markers"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 5}
+    payload: 'JSON {"stamp": sim_sec, "visible": [{"id": int, "range_m": float, "bearing_rad": float, "incidence_deg": float}]}'
+    semantics: "AprilTags currently inside the ZED frustum (HFOV 110°, ≤5m range, incidence ≤80°). Used to cross-check brain-side /detections pipeline."
+
+  - name: "/agv/sim/ground_truth/obstacles"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "obstacles_publisher"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    rate_hz: {publish: "latched once at start"}
+    payload: 'JSON {"obstacles": [{"name": str, "kind": "wall|crate|prop", "pose": {x,y,z,yaw}, "bbox": {sx,sy,sz}}]}'
+    semantics: "Static catalogue from world_config.yaml. Consumed by map_diff.py to compare saved .pgm vs ground truth geometry."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "map_diff.py fidelity metric"}
+
+  - name: "/agv/sim/localization_error"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "localization_monitor"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 1}
+    payload: 'JSON {"stamp": sim_sec, "pos_err_m": float, "yaw_err_rad": float, "rmse_xy_m": float}'
+    semantics: "Rolling error between GT and brain /agv/odometry/global. 1 Hz avoids alias with 10 Hz sources."
+
+  - name: "/agv/sim/events"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "events_detector"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_all", depth: 100}
+    rate_hz: {publish: "event-driven"}
+    payload: 'JSON {"stamp": sim_sec, "event": "collision|stuck|drift|drift_recovered|marker_seen|goal_succeeded|goal_aborted", "with": str?, "impulse_n_s": float?}'
+    semantics: "Discrete event timeline. Collisions from PhysX contact reports in sim handler."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "hard-fail test on collision events during waypoint runs"}
+
+  - name: "/agv/sim/episode_summary"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "episode_tracker"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    rate_hz: {publish: "latched per episode"}
+    payload: 'JSON {"episode_id": str, "path_length_m": float, "efficiency": float, "collisions": int, "mean_loc_err_m": float, "max_loc_err_m": float, "bag_path": str}'
+    semantics: "Per-mission summary. bag_path points to /tmp/agv_runs/ on sim host (not brain-side)."
+
+  - name: "/agv/sim/reset_request"
+    type: "geometry_msgs/msg/Pose"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "sim_api"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 1}
+    rate_hz: {publish: "on-demand"}
+    semantics: "Request to teleport the chassis rigid body to an absolute map-frame pose. Consumed by sim_isaac_handler inside the Isaac Kit process. Response signaled on /agv/sim/reset_done."
+    publishers:
+      - {pkg: "agv_integration_tests", role: "per-waypoint reset in test_waypoint_precision"}
+    subscribers:
+      - {pkg: "sim_host:agv_isaac_sim", node: "sim_isaac_handler (in-sim, Kit process)", role: "physical teleport via omni.isaac.dynamic_control"}
+
+  - name: "/agv/sim/reset_done"
+    type: "std_msgs/msg/Bool"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "sim_isaac_handler"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
+    rate_hz: {publish: "on completion of reset_request"}
+    semantics: "Latched True after the in-sim handler completes the teleport and zeroes wheel velocities. Subscribers wait for this edge before reading GT pose."
+    subscribers:
+      - {pkg: "agv_integration_tests", role: "barrier between reset and navigate in per-waypoint loop"}
+
+  - name: "/agv/sim/control"
+    type: "std_msgs/msg/String"
+    owner_pkg: "sim_host:agv_sim_validation"
+    owner_node: "sim_isaac_handler"
+    cross_distro_boundary: true
+    host: "sim_host"
+    qos: {reliability: "reliable", history: "keep_last", depth: 1}
+    rate_hz: {publish: "on-demand"}
+    payload: 'JSON {"command": "play"|"stop"|"pause"}'
+    semantics: "Timeline control consumed inside the Isaac Kit process. HTTP `POST /sim/play` and `POST /sim/stop` on sim_api are the mirror endpoints used by the LLM agent. /sim/restart is NOT represented here because it kills the Kit process — the supervisor relaunches it."
+    publishers:
+      - {pkg: "sim_host:agv_sim_validation", node: "sim_api", role: "HTTP /sim/play|stop → topic"}
+
+  # ── Dashboard and diagnostics ─────────────────────────────────────────────
+  - name: "/agv/battery"
+    type: "sensor_msgs/msg/BatteryState"
+    owner_pkg: "agv_odrive"
+    owner_node: "agv_odrive_node"
+    status: "planned"
+    rate_hz: {target: 1}
+    subscribers:
+      - {pkg: "agv_ui_backend", role: "dashboard BAT pill"}
+    notes: "agv_odrive does NOT currently publish this topic. agv_ui_backend subscribes at src/agv_ui_backend/src/index.ts:630 but receives nothing. Planned: agv_odrive::odrive_can_node should parse DC bus voltage from ODrive CAN GET_VBUS_VOLTAGE (cmd 0x017) and publish. Tracked in Fase 6 or later."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Services
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  - name: "/agv/map_manager/save_map"
+    type: "agv_interfaces/srv/SaveMap"
+    owner_pkg: "agv_map_manager"
+    owner_node: "map_manager"
+    callers:
+      - {pkg: "agv_ui_backend", role: "POST /api/maps/save"}
+
+  - name: "/agv/map_manager/load_map"
+    type: "agv_interfaces/srv/LoadMap"
+    owner_pkg: "agv_map_manager"
+    owner_node: "map_manager"
+    callers:
+      - {pkg: "agv_ui_backend", role: "POST /api/maps/load"}
+
+  - name: "/agv/map_manager/update_zone"
+    type: "agv_interfaces/srv/UpdateZone"
+    owner_pkg: "agv_map_manager"
+    owner_node: "map_manager"
+    callers:
+      - {pkg: "agv_ui_backend", role: "PUT /api/maps/zones"}
+
+  - name: "/agv/localization/reinitialize"
+    type: "std_srvs/srv/Trigger"
+    owner_pkg: "agv_localization_init"
+    owner_node: "auto_init_orchestrator"
+    callers:
+      - {pkg: "agv_ui_backend", role: "dashboard recovery button when LOC=FAILED"}
+
+  - name: "/agv/localization/save_last_known_pose"
+    type: "std_srvs/srv/Trigger"
+    owner_pkg: "agv_localization_init"
+    owner_node: "auto_init_orchestrator"
+    callers:
+      - {pkg: "agv_map_manager", node: "map_manager", role: "synchronous meta.json flush during on_save_map"}
+    notes: "Added 2026-04-13 Fase 6 bug #2. Writes <map>_meta.json with the current pose at the moment of Save Map, so Path C is usable immediately without waiting for the next 30s periodic save tick."
+
+  - name: "/agv/map_server/load_map"
+    type: "nav2_msgs/srv/LoadMap"
+    owner_pkg: "nav2_map_server (external)"
+    owner_node: "map_server"
+    callers:
+      - {pkg: "agv_map_manager", role: "delegated from map_manager/load_map to actually swap the nav2 static map"}
+      - {pkg: "agv_ui_backend", role: "direct fallback when map_manager unavailable"}
+
+  - name: "/agv/zed/save_area_memory"
+    type: "std_srvs/srv/Trigger"
+    owner_pkg: "zed_components (external, patched)"
+    owner_node: "/agv/zed"
+    callers:
+      - {pkg: "agv_map_manager", role: "Save Map chain"}
+    notes: "Wrapper reads pos_tracking.area_memory_db_path live. The map_manager copies landing pad to per-map file after success."
+
+  - name: "/agv/zed/reset_pos_tracking"
+    type: "std_srvs/srv/Trigger"
+    owner_pkg: "zed_components (external, patched)"
+    owner_node: "/agv/zed"
+    callers:
+      - {pkg: "agv_map_manager", role: "Load Map chain — triggers re-read of area file"}
+    notes: "With AGV wrapper patch, calling this re-reads pos_tracking.area_memory_db_path param live so a file swap via reset_pos_tracking takes effect."
+
+  - name: "/visual_slam/save_map"
+    type: "isaac_ros_visual_slam_interfaces/srv/FilePath"
+    owner_pkg: "isaac_ros_visual_slam (external)"
+    owner_node: "visual_slam"
+    callers:
+      - {pkg: "agv_map_manager", role: "Save Map chain — writes keyframe DB to <map>_cuvslam/"}
+
+  - name: "/visual_slam/load_map"
+    type: "isaac_ros_visual_slam_interfaces/srv/FilePath"
+    owner_pkg: "isaac_ros_visual_slam (external)"
+    owner_node: "visual_slam"
+    callers:
+      - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "Path A loads keyframe DB"}
+
+  - name: "/visual_slam/localize_in_map"
+    type: "isaac_ros_visual_slam_interfaces/srv/LocalizeInExistMap"
+    owner_pkg: "isaac_ros_visual_slam (external)"
+    owner_node: "visual_slam"
+    callers:
+      - {pkg: "agv_localization_init", node: "auto_init_orchestrator", role: "Path A relocalization with pose hint"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Actions
+# ─────────────────────────────────────────────────────────────────────────────
+
+actions:
+
+  - name: "/agv/navigate_to_pose"
+    type: "nav2_msgs/action/NavigateToPose"
+    owner_pkg: "nav2_bt_navigator (external)"
+    owner_node: "bt_navigator"
+    callers:
+      - pkg: "agv_ui_backend"
+        role: "dashboard Go To Goal button (via sendNavGoal function)"
+        gates:
+          - "currentMode == 'nav'"
+          - "motors armed"
+          - "collision_monitor_state fresh (<2s old) OR never seen (cold boot)"
+          - "localization.action != 'FAILED' (added Fase 7 F4, 2026-04-13)"
+          - "Nav2 action server available"
+        code_ref: "src/agv_ui_backend/src/index.ts::sendNavGoal"
+      - pkg: "agv_waypoint_manager"
+        role: "mission execution"
+        gates:
+          - "NONE — mission executor uses its own action client directly, bypassing the backend gates"
+        known_gap: "Mission execution is unprotected by the localization gate. Tracked for Fase 8 refactor."
+        code_ref: "src/agv_waypoint_manager/src/waypoint_manager_node.cpp:109"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WebSocket and REST (non-ROS interfaces the dashboard uses)
+# ─────────────────────────────────────────────────────────────────────────────
+
+websocket:
+  endpoint: "ws://<robot>:8090/ws/control"
+  server_to_client_types: ["status", "event", "map_update", "acc_map", "path", "scan", "recording_result", "apriltag_pending"]
+  client_to_server_types: ["cmd_vel", "e_stop", "mode", "nav_goal", "motor_enable"]
+  auth: "JWT token in ?token= query param when AGV_AUTH_ENABLED=true"
+
+rest:
+  endpoint: "http://<robot>:8090/api/*"
+  endpoints:
+    - {method: "GET",    path: "/api/status",             role: "robot status snapshot"}
+    - {method: "GET",    path: "/api/maps",               role: "list saved maps"}
+    - {method: "GET",    path: "/api/maps/:name/image",   role: "PGM → PNG conversion"}
+    - {method: "POST",   path: "/api/maps/save",          role: "trigger Save Map"}
+    - {method: "POST",   path: "/api/maps/load",          role: "trigger Load Map"}
+    - {method: "GET",    path: "/api/acc_map/image",      role: "live mapping overlay PNG"}
+    - {method: "DELETE", path: "/api/acc_map",            role: "clear scan_grid_mapper"}
+    - {method: "GET",    path: "/api/missions",           role: "list missions"}
+    - {method: "POST",   path: "/api/missions",           role: "create mission"}
+    - {method: "DELETE", path: "/api/missions/:id"}
+    - {method: "POST",   path: "/api/missions/:id/execute"}
+    - {method: "POST",   path: "/api/nav/cancel"}
+    - {method: "GET",    path: "/api/events"}
+    - {method: "GET",    path: "/api/analytics"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Coverage notes
+# ─────────────────────────────────────────────────────────────────────────────
+
+coverage:
+  completeness: "~70%. External ROS topics from nav2_*, isaac_ros_*, zed_* that are not consumed by agv_* packages are not listed here."
+  known_gaps:
+    - "Internal nav2 topics (cost_cloud, marker, etc.) consumed only within nav2 stack — not in scope"
+    - "Internal cuVSLAM diagnostics — not in scope"
+  coverage_target: "Every topic consumed by an agv_* package MUST be listed here."

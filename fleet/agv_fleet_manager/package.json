@@ -1,0 +1,22 @@
+{
+  "name": "agv-fleet-manager",
+  "version": "1.0.0",
+  "description": "VDA 5050 fleet manager — multi-robot state aggregation and order dispatch",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "mqtt": "^5.10.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.2"
+  }
+}

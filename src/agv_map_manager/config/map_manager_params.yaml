@@ -1,0 +1,5 @@
+map_manager:
+  ros__parameters:
+    map_dir: ""            # set via launch argument
+    default_map: ""        # map to load on startup (optional)
+    map_topic: "/agv/map"  # topic for map_saver to subscribe to

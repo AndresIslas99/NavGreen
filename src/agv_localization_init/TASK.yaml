@@ -1,0 +1,40 @@
+task_version: "1.0"
+package: "agv_localization_init"
+owner_role: "localization"
+status: "integrated"
+language: "C++17"
+dev_only: false
+
+objective: |
+  Autonomous localization orchestrator. Listens for map load events and
+  runs a cascade (Path A0 ZED Area Memory → Path A cuVSLAM + AprilTag →
+  Path B AprilTag only → Path C last-known pose) to bring the robot to
+  LOCALIZED without manual intervention. Publishes localization state
+  for dashboard consumption.
+
+inputs:
+  topics:
+    - "/agv/maps/loaded"
+    - "/agv/marker_pose"
+    - "/agv/zed/pose (area memory covariance signal)"
+  services_called:
+    - "/visual_slam/load_map"
+    - "/visual_slam/localize_in_map"
+    - "set_pose of ekf_global (optional fallback)"
+
+outputs:
+  topics:
+    - "/agv/localization/state (std_msgs/String with JSON payload)"
+  services:
+    - "/agv/localization/reinitialize (std_srvs/Trigger)"
+
+rules:
+  - "Never publish TF"
+  - "Never call set_pose on ekf_local (only on ekf_global)"
+  - "Paths must be parametrized, not hardcoded (zed_area_file_path, map_dir)"
+
+done_definition:
+  - "Builds with -Werror + zero warnings"
+  - "LOC pill reaches LOCALIZED within 8s on a well-mapped site"
+  - "Falls through to DEGRADED if only AprilTag available"
+  - "Reports FAILED with clear reason when all paths exhausted"

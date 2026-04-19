@@ -1,0 +1,18 @@
+# Simulation-only overrides.
+#
+# Per Rule 8 (production-first development), simulation must NOT introduce
+# code paths that don't exist in production. This file may only override:
+#  - sensor source topic names (sim publishes to different topics than ZED)
+#  - sim_time flag
+#  - per-sensor frame_ids when the sim's frame naming differs
+
+simulation:
+  use_sim_time: true
+
+  remappings:
+    # cmd: from -> to. Apply via launch_ros remappings argument.
+    # The "from" is what the production node subscribes to; the "to" is what
+    # the sim publishes.
+    zed_image: ["/agv/zed/left/image_rect_color", "/sim/camera/image"]
+    zed_depth: ["/agv/zed/depth/depth_registered", "/sim/camera/depth"]
+    zed_imu:   ["/agv/zed/imu/data",               "/sim/imu"]

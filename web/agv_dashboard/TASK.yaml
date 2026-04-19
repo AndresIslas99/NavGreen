@@ -1,0 +1,29 @@
+task_version: "1.0"
+package: "web/agv_dashboard"
+owner_role: "refactor_agent"
+language: "TypeScript/React"
+
+objective: "Provide the operator dashboard with live map, robot state, teleop joystick, mission management, and zone editing."
+
+inputs:
+  transport:
+    - "WebSocket stream from agv_ui_backend"
+    - "REST API from agv_ui_backend"
+
+outputs:
+  components:
+    - "MapCanvas"
+    - "TeleopJoystick"
+    - "MissionPanel"
+    - "RobotStatus"
+    - "MapEditor"
+
+rules:
+  - "Use live state from WebSocket, not localStorage for robot state"
+  - "Map coordinates are in meters, not hardcoded pixels"
+  - "Support reconnect and degraded UI states gracefully"
+
+done_definition:
+  - "dashboard loads in <= 5 seconds on local WiFi"
+  - "teleop is responsive"
+  - "operator can map, save/load, create waypoint, create mission, and run it"

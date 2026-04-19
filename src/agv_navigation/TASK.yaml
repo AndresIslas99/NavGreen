@@ -1,0 +1,34 @@
+task_version: "1.1"
+package: "agv_navigation"
+owner_role: "architect_agent"
+language: "C++17 config and integration"
+
+objective: "Configure Nav2 for autonomous navigation with collision monitoring, costmaps, and greenhouse-safe route execution."
+
+inputs:
+  config_files:
+    - "nav2_params.yaml"
+    - "collision_monitor.yaml"
+    - "costmap_params.yaml"
+
+outputs:
+  action_interface:
+    - "/navigate_to_pose"
+  behaviors:
+    - "path planning"
+    - "path following"
+    - "dynamic obstacle handling"
+
+rules:
+  - "Canonical goal dispatch is action /navigate_to_pose"
+  - "No greenhouse-specific logic hardcoded into navigation source"
+  - "Use configured keepout and speed zones instead of code branches"
+  - "Planner default is Smac Hybrid-A* unless a benchmarked alternative is explicitly justified"
+  - "Controller default is Regulated Pure Pursuit for MVP predictability unless a benchmarked alternative is explicitly justified"
+  - "Collision Monitor is an operational safeguard, not certified functional safety"
+
+done_definition:
+  - "robot reaches goal with <= 0.15 m error"
+  - "robot stops or reroutes around obstacle"
+  - "navigation stack activates cleanly through lifecycle"
+  - "navigation behavior respects keepout and speed zone overlays"

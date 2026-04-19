@@ -1,0 +1,29 @@
+task_version: "1.0"
+package: "agv_description"
+owner_role: "generator_agent"
+language: "Xacro/URDF"
+
+objective: "Represent the AGV chassis, wheels, and sensor mounts in URDF/Xacro for TF correctness and downstream navigation consistency."
+
+inputs:
+  mechanical_specs:
+    - "wheel radius"
+    - "track width"
+    - "sensor mounting transforms"
+    - "base dimensions"
+
+outputs:
+  artifacts:
+    - "agv_base.xacro"
+    - "zed2i.xacro"
+    - "agv_full.urdf.xacro"
+
+rules:
+  - "No guessed dimensions in final production files"
+  - "Use parameterized Xacro macros for wheel and sensor placement"
+  - "Maintain canonical frames from specs/interfaces.yaml"
+
+done_definition:
+  - "URDF renders correctly"
+  - "TF tree is complete and consistent"
+  - "all dimensions are parameterized or documented as provisional"

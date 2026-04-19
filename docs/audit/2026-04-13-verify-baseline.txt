@@ -1,0 +1,243 @@
+
+── verify_canonical_sources.sh ──
+verify_canonical_sources: OK
+RESULT: OK
+
+── verify_no_hardcoded_paths.sh ──
+FAIL: hardcoded '/home/orza/' at src/agv_localization_init/src/auto_init_orchestrator_node.cpp:131
+                    std::string("/home/orza/agv_data/maps/.current.area"));
+
+FAIL: hardcoded '/home/orza/' at src/agv_localization_init/src/auto_init_orchestrator_node.cpp:1001
+                std::string zed_area_file_path_{"/home/orza/agv_data/maps/.current.area"};
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/config/sites/chada/site.yaml:10
+                maps_dir: "/home/orza/agv_data/maps"
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/config/sites/chada/site.yaml:11
+                marker_registry: "/home/orza/agv_data/runtime_markers_registry.yaml"
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/config/sites/_template/site.yaml:12
+                maps_dir: "/home/orza/agv_data/maps"
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/config/sites/_template/site.yaml:15
+                marker_registry: "/home/orza/agv_data/runtime_markers_registry.yaml"
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/agv_full.launch.py:379
+                                      'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/agv_full.launch.py:397
+                                      'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/agv_full.launch.py:419
+                                      {'map_dir': '/home/orza/agv_data/maps'},
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/agv_full.launch.py:457
+                                      'AGV_DATA_DIR': '/home/orza/agv_data',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/nav.launch.py:158
+                                  'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/nav.launch.py:176
+                                  'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/nav.launch.py:192
+                                  {'map_dir': '/home/orza/agv_data/maps'},
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/dashboard.launch.py:34
+                              'AGV_DATA_DIR': '/home/orza/agv_data',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/agv_mapping.launch.py:138
+                                      'AGV_DATA_DIR': '/home/orza/agv_data',
+
+FAIL: hardcoded '/home/orza/' at src/agv_bringup/launch/agv_hil_full.launch.py:261
+                              'AGV_DATA_DIR': '/home/orza/agv_data',
+
+FAIL: hardcoded '/home/orza/' at src/agv_map_manager/src/map_manager_node.cpp:45
+                    std::string("/home/orza/agv_data/maps/.current.area"));
+
+FAIL: hardcoded '/home/orza/' at src/agv_slam/config/rtabmap.yaml:170
+                  database_path:                '/home/orza/slam_maps/greenhouse.db'
+
+FAIL: hardcoded '/home/orza/' at src/agv_slam/config/zed2i_override.yaml:38
+                          area_memory_db_path: '/home/orza/agv_data/maps/.current.area'
+
+FAIL: hardcoded '/home/orza/' at src/agv_slam/scripts/jetson_setup.sh:168
+              mkdir -p /home/orza/slam_maps 2>/dev/null || true
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_bringup/scripts/field_test.py:23
+                ./field_test.py analyze --session-dir /mnt/ssd/field_tests/2026-04-09_baseline
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_bringup/scripts/field_test.py:27
+                - /mnt/ssd/ mounted with sufficient free space (>20GB)
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_bringup/scripts/field_test.py:68
+              OUTPUT_BASE = '/mnt/ssd/field_tests'
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/config/recording.yaml:11
+                  output_base_dir: "/mnt/ssd/sessions"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/launch/recording_only.launch.py:100
+                           parameters=[{'output_dir': '/mnt/ssd/sessions'}])])
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/launch/playback.launch.py:8
+              #   ros2 launch agv_slam playback.launch.py bag_path:=/mnt/ssd/sessions/session_xxx/bag
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/src/slam_gui_node.cpp:455
+                  this, "Load SLAM Map", "/mnt/ssd/slam_maps/", "Database (*.db)");
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/src/pipeline_watchdog_node.cpp:30
+                this->declare_parameter("log_directory", "/mnt/ssd/slam_logs/");
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/run_slam.sh:69
+                  source /mnt/ssd/ros2_ws/install/setup.bash
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/slam_gui.py:518
+                      self.map_info_lbl = QLabel("Saves PLY mesh + nvblox map to /mnt/ssd/maps/")
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/slam_gui.py:665
+                      results = self.ros.save_3d_map('/mnt/ssd/maps')
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:159
+              sudo mkdir -p /mnt/ssd/slam_maps
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:160
+              sudo mkdir -p /mnt/ssd/slam_logs
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:164
+              sudo mkdir -p /mnt/ssd/areas
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:165
+              sudo chown -R $(whoami):$(whoami) /mnt/ssd/slam_maps /mnt/ssd/slam_logs /mnt/ssd/areas 2>/dev/null || true
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:170
+              echo "  Map directory:   /mnt/ssd/slam_maps/"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:171
+              echo "  Log directory:   /mnt/ssd/slam_logs/"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/jetson_setup.sh:172
+              echo "  Area Memory dir: /mnt/ssd/areas/"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/export_session.sh:8
+              #   ./export_session.sh /mnt/ssd/sessions/session_20260203_171239
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/export_session.sh:9
+              #   ./export_session.sh /mnt/ssd/sessions/session_20260203_171239 --compress
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/export_session.sh:19
+                  echo "Example: $0 /mnt/ssd/sessions/session_20260203_171239"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/export_session.sh:109
+                  ARCHIVE="/mnt/ssd/sessions/${SESSION_NAME}.tar.zst"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/export_session.sh:116
+                      ARCHIVE="/mnt/ssd/sessions/${SESSION_NAME}.tar.gz"
+
+FAIL: hardcoded '/mnt/ssd/' at src/agv_slam/scripts/session_recorder.py:96
+                          self.declare_parameter('output_dir', '/mnt/ssd/sessions')
+
+FAIL: hardcoded '192.168.' at src/agv_ui_backend/node_modules/@types/node/os.d.ts:202
+                   *       address: '192.168.1.108',
+
+FAIL: hardcoded '192.168.' at src/agv_ui_backend/node_modules/@types/node/os.d.ts:207
+                   *       cidr: '192.168.1.108/24'
+
+FAIL: hardcoded '192.168.' at src/agv_ui_backend/node_modules/@types/node/net.d.ts:307
+                       * connects on `'192.168.1.1'`, the value of `socket.localAddress` would be`'192.168.1.1'`.
+
+FAIL: hardcoded '192.168.' at src/agv_ui_backend/node_modules/@types/node/net.d.ts:692
+                       *   'Subnet: IPv4 192.168.1.0/24',
+
+FAIL: hardcoded '192.168.' at src/agv_ui_backend/node_modules/@types/node/net.d.ts:694
+                       *   'Range: IPv4 192.168.2.1-192.168.2.10',
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/systemd/agv.service:18
+              # Default ROS_DOMAIN_ID=0 was allowing a connected dev PC (192.168.55.100 via
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/config/cyclonedds_production.xml:24
+                      <Peer address="192.168.55.100"/>
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/config/cyclonedds_hil.xml:28
+                      <Peer address="192.168.15.79"/>
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/scripts/setup_production_network.sh:11
+              #   IP:      192.168.1.100/24
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/scripts/setup_production_network.sh:12
+              #   GATEWAY: 192.168.1.1
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/scripts/setup_production_network.sh:23
+              IP="${1:-192.168.1.100/24}"
+
+FAIL: hardcoded '192.168.' at src/agv_bringup/scripts/setup_production_network.sh:24
+              GATEWAY="${2:-192.168.1.1}"
+
+FAIL: hardcoded '192.168.' at src/agv_slam/config/cyclonedds.xml:24
+                      <Peer address="192.168.55.100"/>  <!-- PC sim via USB -->
+
+FAIL: hardcoded '192.168.' at src/agv_slam/launch/agv_slam.launch.py:254
+                      LogInfo(msg='=== Pipeline launched: ZED + cuVSLAM + nvblox | Web GUI: http://192.168.50.34:8080 ==='),
+
+FAIL: hardcoded '192.168.' at src/agv_slam/scripts/run_slam.sh:17
+              JETSON_HOST="192.168.55.1"
+
+verify_no_hardcoded_paths: 59 violation(s)
+Fix: parametrize via ${AGV_DATA_DIR} env var or ROS param. See specs/persistence.yaml.
+RESULT: BLOCKING FAIL
+
+── verify_werror.sh ──
+FAIL: src/agv_rail_approach/CMakeLists.txt is missing -Werror
+       Fix: add -Werror to target_compile_options or add_compile_options
+FAIL: src/agv_odrive/CMakeLists.txt is missing -Werror
+       Fix: add -Werror to target_compile_options or add_compile_options
+FAIL: src/agv_slam/CMakeLists.txt is missing -Werror
+       Fix: add -Werror to target_compile_options or add_compile_options
+verify_werror: 3 violation(s)
+RESULT: BLOCKING FAIL
+
+── verify_dev_only.py ──
+FAIL: /home/orza/ros2_ws/src/agv_slam/launch/agv_slam.launch.py launches Python node session_recorder.py from package agv_slam which does NOT have dev_only: true in TASK.yaml
+FAIL: /home/orza/ros2_ws/src/agv_slam/launch/agv_slam.launch.py launches Python node slam_gui.py from package agv_slam which does NOT have dev_only: true in TASK.yaml
+FAIL: /home/orza/ros2_ws/src/agv_slam/launch/agv_slam.launch.py launches Python node slam_web_gui_node.py from package agv_slam which does NOT have dev_only: true in TASK.yaml
+verify_dev_only: 3 violation(s)
+Fix: add `dev_only: true` to src/<pkg>/TASK.yaml OR port the script to C++17.
+RESULT: BLOCKING FAIL
+
+── verify_interfaces.py ──
+FAIL: topic '/agv/battery' declared with owner_pkg=agv_odrive but no code match for 'battery' in src/agv_odrive/
+verify_interfaces: 1 violation(s)
+Fix: either update the code to publish the declared interface, OR remove/relocate the spec entry.
+RESULT: BLOCKING FAIL
+
+── verify_claude_md_coverage.sh ──
+WARN: src/agv_factor_graph/ missing CLAUDE.md
+WARN: src/agv_factor_graph/ missing TASK.yaml
+WARN: src/agv_image_server/ missing TASK.yaml
+WARN: src/agv_integration_tests/ missing TASK.yaml
+WARN: src/agv_interfaces/ missing TASK.yaml
+WARN: src/agv_localization_init/ missing TASK.yaml
+WARN: src/agv_rail_approach/ missing CLAUDE.md
+WARN: src/agv_rail_approach/ missing TASK.yaml
+WARN: src/agv_scan_mapper/ missing TASK.yaml
+verify_claude_md_coverage: 9 warning(s)
+RESULT: WARNING
+
+── verify_persistence.py ──
+WARN: artifact 'per_map_artifacts.last_known_pose_meta' reader.code_ref points to missing file: auto_init_orchestrator_node.cpp::try_last_known_pose Path C
+verify_persistence: 1 warning(s)
+RESULT: WARNING
+
+── verify_state_machine.py ──
+verify_state_machine: OK
+RESULT: OK
+
+── verify_launch_sequence.py ──
+verify_launch_sequence: OK
+RESULT: OK
+
+──────────── SUMMARY ────────────
+scripts run:       9
+blocking failures: 4
+warnings:          2
+
+all.sh: FAILED — 4 blocking script(s) failed

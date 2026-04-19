@@ -1,0 +1,44 @@
+# Factor graph parameters — sliding window iSAM2 sensor fusion
+#
+# Replaces ekf_global. Sliding window of N pose nodes connected by:
+#   - BetweenFactors from local odometry (ekf_local output)
+#   - BetweenFactors from cuVSLAM visual odometry
+#   - PriorFactors from AprilTag absolute corrections
+#
+# Sigmas are the diagonal of the noise model covariance — units are
+# meters for xy and radians for yaw. SMALLER sigma = MORE trust.
+
+/**:
+  ros__parameters:
+    # Sliding window size (number of pose nodes kept active)
+    # 200 nodes ~ 20 seconds at 10Hz local odometry rate
+    window_size: 200
+
+    # Local odometry trust (from ekf_local)
+    # ekf_local fuses wheel + IMU, so this is fairly trusted but has slip
+    local_odom_xy_sigma: 0.05      # 5cm per delta
+    local_odom_yaw_sigma: 0.03     # ~1.7° per delta
+
+    # Visual odometry trust (from cuVSLAM)
+    # Visual odometry is more accurate over short distances
+    visual_odom_xy_sigma: 0.02     # 2cm per delta
+    visual_odom_yaw_sigma: 0.01    # ~0.6° per delta
+
+    # AprilTag marker correction trust (absolute pose)
+    # Tighter than odometry — these are ground truth observations
+    marker_xy_sigma: 0.05          # 5cm absolute
+    marker_yaw_sigma: 0.05         # ~3° absolute
+
+    # Initial prior (anchors first pose to local odom origin)
+    # Loose because we don't know absolute origin a priori
+    prior_xy_sigma: 1.0            # 1m
+    prior_yaw_sigma: 1.0           # ~57°
+
+    # Frames
+    map_frame: "map"
+    odom_frame: "odom"
+    base_frame: "base_link"
+
+    # TF publishing — START WITH FALSE for parallel validation mode
+    # When validated, set to true to take over from ekf_global
+    publish_tf: false

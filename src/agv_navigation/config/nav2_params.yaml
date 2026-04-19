@@ -1,0 +1,392 @@
+# Nav2 parameters for AGV greenhouse — real hardware mode
+#
+# Parameter categories:
+#   [TUNABLE]       Safe to adjust during field commissioning
+#   [ARCHITECTURAL] Do not change without understanding Nav2 internals
+#   [FIXED]         Tied to hardware or system design; change requires validation
+#
+# For HIL/sim mode, use nav2_hil_overrides.yaml to override frequencies/tolerances.
+#
+# Planner: SmacPlanner2D (flat greenhouse floor)
+# Controller: RegulatedPurePursuit (smooth, predictable)
+# No AMCL — dual EKF owns map->odom and odom->base_link
+
+/**/bt_navigator:
+  ros__parameters:
+    global_frame: map                    # [FIXED] Must match ekf_global world_frame
+    robot_base_frame: base_link          # [FIXED] Must match URDF base link
+    odom_topic: odometry/global          # [FIXED] From ekf_global output
+    bt_loop_duration: 10                 # [ARCHITECTURAL] BT tick period (ms)
+    default_server_timeout: 20           # [ARCHITECTURAL] Action server timeout (s)
+    # Note: default_nav_to_pose_bt_xml is injected at launch time from
+    # navigation.launch.py because YAML doesn't expand $(find-pkg-share ...)
+    # substitutions. The custom BT is at:
+    #   share/agv_navigation/behavior_trees/navigate_to_pose_forward_only.xml
+    navigators: ['navigate_to_pose']
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"
+
+/**/controller_server:
+  ros__parameters:
+    controller_frequency: 20.0           # [ARCHITECTURAL] MPPI plugin requires controller_period <= model_dt (0.05s = 20Hz). MPPI workload was reduced via batch_size and time_steps to fit Jetson budget at 20Hz instead of lowering this rate.
+    min_x_velocity_threshold: 0.001      # [FIXED] Dead zone threshold
+    min_y_velocity_threshold: 0.5        # [FIXED] Differential drive: no lateral motion
+    min_theta_velocity_threshold: 0.001  # [FIXED] Dead zone threshold
+    progress_checker_plugins: ["progress_checker"]
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5      # [TUNABLE] [0.3-1.0] m — lower if robot crawls in tight spaces
+      movement_time_allowance: 10.0      # [TUNABLE] [5-20] s — increase if robot needs time to maneuver
+
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.15            # [TUNABLE] [0.10-0.25] m — tighten for precision, loosen for speed
+      yaw_goal_tolerance: 0.25           # [TUNABLE] [0.15-0.40] rad — tighten if heading matters at goal
+
+    # MPPI Controller — Model Predictive Path Integral
+    # Sampling-based MPC. nav2_mppi_controller in Humble is CPU-based (not GPU).
+    # Tuned for Jetson Orin: 1000 samples × 32 time_steps = 32k cost evals per
+    # cycle at 20Hz = ~640k evals/sec. Previous (2000 × 56 = 112k) was missing
+    # the 20Hz target with "Control loop missed its desired rate" warnings.
+    # AGV max speed 0.4 m/s → 32 × 0.05s = 1.6s horizon = 0.64m lookahead.
+    #
+    # FORWARD-ONLY MOTION MODEL
+    # The robot has a single ZED 2i camera mounted forward; there is no rear
+    # obstacle perception and the collision_monitor stop/slowdown polygons are
+    # almost entirely forward-extending. Reverse motion is structurally unsafe.
+    # We enforce this in three places:
+    #   1. vx_min: 0.0 — hard constraint, no reverse samples
+    #   2. wz_max: 1.5 — fast in-place rotation so MPPI can correct heading
+    #      instead of trying to "back up and turn"
+    #   3. PreferForwardCritic.cost_weight: 18.0 — out-weighs PathAlignCritic
+    #      (14.0) so MPPI never sacrifices forward-ness for path alignment
+    # Also see behavior_trees/navigate_to_pose_forward_only.xml for the BT-side
+    # removal of the BackUp recovery action.
+    # RotationShimController wraps MPPIController. When the heading error to
+    # the upcoming path exceeds `angular_dist_threshold`, the shim performs a
+    # clean in-place rotation and only hands control to MPPI once the robot
+    # is aligned. This fixes the "oscillating spiral" symptom caused by MPPI
+    # with vx_min=0.0 being unable to sample forward trajectories when facing
+    # away from the path.
+    #
+    # Humble YAML structure: primary_controller is a FLAT STRING (not a nested
+    # sub-namespace), and the primary controller's parameters share the same
+    # yaml namespace as the shim parameters — both live directly under
+    # FollowPath. Verified against docs.nav2.org and the nav2_rotation_shim
+    # README on the humble branch.
+    #
+    # rotate_to_goal_heading: true is CRITICAL for forward-only robots. The
+    # default is false. It was backported to Humble in Nav2 1.1.15 (PR #4332);
+    # the Jetson currently runs 1.1.20, so this flag is available.
+    FollowPath:
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_mppi_controller::MPPIController"
+
+      # ── RotationShim parameters ──
+      angular_dist_threshold: 0.785         # [TUNABLE] rad (~45°) — rotate in-place if heading error exceeds this
+      forward_sampling_distance: 0.5        # [TUNABLE] m — look-ahead along the path to sample target heading
+      rotate_to_heading_angular_vel: 1.0    # [TUNABLE] rad/s — conservative indoor (default 1.8)
+      max_angular_accel: 1.5                # [TUNABLE] rad/s² — conservative (default 3.2)
+      simulate_ahead_time: 1.0              # [ARCHITECTURAL] s — collision-check window during rotation
+      rotate_to_goal_heading: true          # [FIXED-HW] Forward-only robot cannot adjust final heading otherwise
+      # Leave defaults: angular_disengage_threshold (0.3925), closed_loop (true),
+      # rotate_to_heading_once (false), use_path_orientations (false).
+
+      # ── MPPI parameters (flat, same namespace as the shim) ──
+      # All values below are preserved from the 2026-04-12 smoothness tune
+      # and the 2026-04-13 safety cap. Do NOT re-tune MPPI in this PR.
+      time_steps: 32                     # [ARCHITECTURAL] 32 × 0.05s = 1.6s horizon
+      model_dt: 0.05                     # [ARCHITECTURAL] Time step duration (s)
+      batch_size: 1000                   # [ARCHITECTURAL] Halved for Jetson Orin CPU budget
+      vx_std: 0.2                        # [TUNABLE] Std dev for linear velocity sampling
+      vy_std: 0.0                        # [FIXED] Differential drive: no lateral motion
+      wz_std: 0.4                        # [TUNABLE] Std dev for angular velocity sampling
+      vx_max: 0.25                       # [SAFETY] Capped at 0.25 m/s so MPPI cannot demand a velocity that the safety chain (collision_monitor + smoother + odrive) cannot stop within the 20cm stop_zone safety margin. At 0.25 m/s, stopping distance is ~3.1cm + reaction ~2.5cm = ~6cm; well within the 20cm margin. Energy at impact is also 2.5x lower than at 0.4 m/s.
+      vx_min: 0.0                        # [FIXED-HW] No reverse — robot has no rear sensor
+      vy_max: 0.0                        # [FIXED] Differential drive
+      wz_max: 1.5                        # [FIXED-HW] Fast in-place rotation enables forward-only escape
+      iteration_count: 1                 # [ARCHITECTURAL] Optimizer iterations per cycle
+      prune_distance: 1.0                # [TUNABLE] m — matches shorter horizon
+      transform_tolerance: 0.5           # [ARCHITECTURAL] Looser TF tolerance, more forgiving
+      temperature: 0.3                   # [ARCHITECTURAL] Softmax temperature for trajectory weighting
+      gamma: 0.015                       # [ARCHITECTURAL] Discount factor
+      motion_model: "DiffDrive"          # [FIXED] Differential drive kinematics
+      visualize: false                   # [TUNABLE] Publish trajectory candidates (debug)
+      regenerate_noises: false           # [ARCHITECTURAL] Regenerate noise samples each cycle
+
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+
+      AckermannConstraints:
+        min_turning_r: 0.0               # [FIXED] DiffDrive: 0 = in-place rotation OK
+
+      # Critics — weighted cost terms that shape trajectory selection
+      critics: ["ConstraintCritic", "ObstaclesCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
+
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 12.0                # [FIXED-HW] Still dominant for forward-only motion, but no longer steamrolls PathAlign (was 18.0 → 12.0 in 2026-04-12 smoothness tune)
+        threshold_to_consider: 0.5
+
+      ObstaclesCritic:
+        enabled: true
+        cost_power: 1
+        repulsion_weight: 1.5            # [TUNABLE] Higher = stay further from obstacles
+        critical_weight: 20.0            # [TUNABLE] Penalty for collision-imminent paths
+        consider_footprint: true
+        collision_cost: 10000.0
+        collision_margin_distance: 0.10
+        near_goal_distance: 0.5
+
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 20.0                # [TUNABLE] Higher = follow path more closely (was 14.0 → 20.0 in 2026-04-12 smoothness tune — now the primary smoothness driver, beats PreferForward)
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 7.0                 # [TUNABLE] Mild boost to look-ahead tracking (was 5.0 → 7.0 in 2026-04-12 smoothness tune)
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
+
+/**/planner_server:
+  ros__parameters:
+    expected_planner_frequency: 5.0      # [ARCHITECTURAL] Planning rate (Hz)
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.125                   # [TUNABLE] [0.05-0.25] m — goal search tolerance
+      downsample_costmap: false          # [ARCHITECTURAL] Keep full resolution
+      downsampling_factor: 1             # [ARCHITECTURAL] No downsampling
+      allow_unknown: true                # [TUNABLE] Allow planning through unknown space
+      max_iterations: 1000000            # [ARCHITECTURAL] Search limit
+      max_on_approach_iterations: 1000   # [ARCHITECTURAL] Near-goal refinement
+      max_planning_time: 2.0             # [ARCHITECTURAL] Timeout (s). Increase if plans fail.
+      cost_travel_multiplier: 2.0        # [TUNABLE] [1.0-4.0] — higher prefers shorter paths
+      use_final_approach_orientation: false  # [FIXED] Goal orientation from request, not path
+      smoother:
+        max_iterations: 1000             # [ARCHITECTURAL]
+        w_smooth: 0.3                    # [ARCHITECTURAL] Smoothing weight
+        w_data: 0.2                      # [ARCHITECTURAL] Data fidelity weight
+        tolerance: 1.0e-10               # [ARCHITECTURAL]
+
+# --- Nav2 Smoother Server (post-plan smoothing) ---
+# SmacPlanner2D outputs a grid-aligned path with ~5cm waypoint spacing. MPPI
+# then tries to track every waypoint, which on a straight-line goal induces
+# steering corrections proportional to waypoint noise — the "searching"
+# behaviour the operator reported. The SmootherServer accepts the raw plan
+# and post-processes it into a curvature-continuous path that MPPI can
+# sample along smoothly. Invoked from the behavior tree via SmoothPath
+# action between ComputePathToPose and FollowPath.
+#
+# SimpleSmoother is chosen over ConstrainedSmoother for v1: fewer
+# parameters, no kinematic model required, and the post-smoothed path is
+# visibly cleaner while still respecting obstacles (the plugin checks
+# costmap cost for each smoothed point and backs off if a smoothing step
+# would cross a lethal cell).
+/**/smoother_server:
+  ros__parameters:
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10                 # [ARCHITECTURAL] Convergence tolerance
+      max_its: 1000                      # [ARCHITECTURAL] Max iterations per smoothing pass
+      do_refinement: true                # [TUNABLE] Run a second refinement pass
+      refinement_num: 2                  # [TUNABLE] Number of refinement iterations
+
+# --- Costmap configuration ---
+# Footprint: front=0.50m, rear=0.30m, left=0.37m, right=0.37m
+# Total: 0.80m x 0.74m rectangle
+
+/**/local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0              # [ARCHITECTURAL] Local costmap refresh (Hz)
+      publish_frequency: 2.0             # [ARCHITECTURAL] Publication rate for UI
+      global_frame: odom                 # [FIXED] Local costmap in odom frame
+      robot_base_frame: base_link        # [FIXED]
+      rolling_window: true               # [FIXED] Local costmap follows robot
+      width: 3                           # [TUNABLE] [2-5] m — local costmap width
+      height: 3                          # [TUNABLE] [2-5] m — local costmap height
+      resolution: 0.05                   # [FIXED] 5cm cells (matches map resolution)
+      footprint: "[[0.50, 0.37], [0.50, -0.37], [-0.30, -0.37], [-0.30, 0.37]]"  # [FIXED] Robot outline
+      # nvblox_layer was removed: nvblox's TSDF accumulates obstacles seen by the
+      # forward-facing depth camera but CANNOT clear cells the camera doesn't
+      # currently see — including the cells directly under and behind the robot.
+      # Once a cell is marked occupied by nvblox, it stays. The robot drives past,
+      # then nvblox keeps that cell as lethal forever, breaking the planner with
+      # "Starting point in lethal space" the next time the operator wants to
+      # navigate from there. Structurally incompatible with backtracking through
+      # already-visited corridors. nvblox keeps running for visualization, mesh,
+      # and ground plane estimation but does NOT feed the costmap.
+      plugins: ["voxel_layer", "denoise_layer", "inflation_layer"]
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: true
+        publish_voxel_map: false
+        # Voxel layer is fed by LaserScan only. The ZED depth pointcloud goes to
+        # nvblox (TSDF) which feeds the costmap via nvblox_layer instead. Sending
+        # raw ZED depth into voxel_layer marks ~99% of cells lethal because every
+        # cell in the local 3m×3m window has at least one ZED point in the Z range
+        # [min_obstacle_height, max_obstacle_height], even with mark_threshold>0.
+        # Use nvblox_layer for 3D obstacles + scan for 2D plane.
+        origin_z: 0.0                   # [FIXED] LaserScan plane is at robot z=0
+        z_resolution: 0.05
+        z_voxels: 16                    # 16 × 0.05 = 0.80m, sufficient for scan plane
+        min_obstacle_height: 0.10
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+        scan:
+          topic: /agv/scan              # [FIXED] From pointcloud_to_laserscan
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0       # [TUNABLE] [2.0-5.0] m — max clearing ray length
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5       # [TUNABLE] [1.5-4.0] m — max marking range
+          obstacle_min_range: 0.0
+      # DenoiseLayer removes isolated salt-and-pepper noise cells before they
+      # reach the inflation layer. Placed between voxel_layer (which receives
+      # raw scan observations) and inflation_layer (which amplifies any single
+      # lethal cell into a full obstacle footprint). minimal_group_size: 2 uses
+      # the fast erosion path (~10x faster than connected-component for >2).
+      denoise_layer:
+        plugin: "nav2_costmap_2d::DenoiseLayer"
+        enabled: true
+        minimal_group_size: 2
+        group_connectivity_type: 8
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # inflation_radius reduced from 1.0 → 0.55 to fit 2.0m corridors.
+        # Math: with inscribed radius r=0.37m and I=0.55m, the free margin at
+        # a 2.0m corridor center is W - 2(r+I) = 2.0 - 1.84 = 0.16m. Previous
+        # value 1.0 produced 2.74m total footprint+inflation in a 2.0m corridor,
+        # fully saturating the center and causing MPPI to freeze.
+        # cost_scaling_factor raised from 2.0 → 3.0 for a steeper potential
+        # field and a clearer gradient for MPPI to follow. Nav2 Issue #4314
+        # warns that 4.0/5.0 degrade SmacPlannerHybrid, but this repo uses
+        # SmacPlanner2D and 3.0 is safe in both.
+        cost_scaling_factor: 3.0        # [TUNABLE] [1.0-3.0] — higher = faster cost falloff
+        inflation_radius: 0.55          # [TUNABLE] [0.4-0.7] m — sized for 2m corridors
+
+/**/global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0             # [ARCHITECTURAL] Global costmap refresh (Hz)
+      publish_frequency: 1.0            # [ARCHITECTURAL] Publication rate
+      global_frame: map                 # [FIXED]
+      robot_base_frame: base_link       # [FIXED]
+      resolution: 0.05                  # [FIXED] Must match map resolution
+      track_unknown_space: true         # [TUNABLE] Track vs ignore unknown cells
+      footprint: "[[0.50, 0.37], [0.50, -0.37], [-0.30, -0.37], [-0.30, 0.37]]"  # [FIXED]
+      # nvblox_layer removed for the same reason as in local_costmap above:
+      # forward-only camera + TSDF accumulation = cells under/behind the robot
+      # never get cleared, leading to "starting point in lethal space" planner
+      # failures after any backtracking. nvblox keeps running but does NOT feed
+      # this costmap.
+      plugins: ["static_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true   # [ARCHITECTURAL] Late subscriber support
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: true
+        publish_voxel_map: false
+        # Same as local_costmap: LaserScan only.
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        min_obstacle_height: 0.10
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+        scan:
+          topic: /agv/scan
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+      # Mirror of local_costmap DenoiseLayer. See local_costmap/denoise_layer
+      # comment for rationale.
+      denoise_layer:
+        plugin: "nav2_costmap_2d::DenoiseLayer"
+        enabled: true
+        minimal_group_size: 2
+        group_connectivity_type: 8
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # Mirror of local_costmap/inflation_layer. See local_costmap comment
+        # for the corridor math justifying 0.55m.
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+
+/**/map_server:
+  ros__parameters:
+    yaml_filename: ""                   # [FIXED] Set via launch argument
+
+/**/behavior_server:
+  ros__parameters:
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0               # [ARCHITECTURAL] Recovery behavior rate
+    # NOTE on backup behavior: the plugin is intentionally KEPT loaded so the
+    # bt_navigator can resolve the "backup" action server (Nav2's default BT for
+    # navigate_through_poses references it). The OPERATIONAL guarantee that the
+    # robot never reverses comes from our custom BT
+    # (navigate_to_pose_forward_only.xml) which omits BackUp from the RoundRobin.
+    # See bt_navigator.default_nav_to_pose_bt_xml above.
+    behavior_plugins: ["spin", "backup", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    wait:
+      plugin: "nav2_behaviors/Wait"

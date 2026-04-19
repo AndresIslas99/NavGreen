@@ -1,0 +1,174 @@
+# Global EKF: local estimate + cuVSLAM → map→odom
+#
+# This filter owns the map→odom transform.
+# It fuses the local EKF output (continuous odom) with cuVSLAM
+# visual odometry to correct drift in the map frame.
+
+/**:
+  ros__parameters:
+    frequency: 10.0
+    two_d_mode: true
+    publish_tf: true
+    print_diagnostics: true
+
+    dynamic_process_noise_covariance: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: map                # global filter operates in map frame
+
+    # ── Local EKF output (continuous odometry) ──
+    odom0: odometry/local
+    odom0_config: [true,  true,  false,    # x, y, z
+                   false, false, true,     # roll, pitch, yaw
+                   false, false, false,    # vx, vy, vz
+                   false, false, false,    # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    # Differential mode prevents double-counting wheel odometry drift.
+    # The global EKF only uses velocity-like increments from the local EKF,
+    # allowing cuVSLAM and AprilTag absolute corrections to dominate position estimation.
+    odom0_differential: true
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    # ── cuVSLAM visual odometry ──
+    odom1: /visual_slam/tracking/odometry
+    odom1_config: [true,  true,  false,    # x, y, z
+                   false, false, true,     # roll, pitch, yaw
+                   false, false, false,    # vx, vy, vz
+                   false, false, false,    # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    odom1_differential: true
+    odom1_relative: false
+    odom1_queue_size: 5
+
+    # Reject cuVSLAM outliers via Mahalanobis distance
+    odom1_pose_rejection_threshold: 3.5     # Tighter for greenhouse aliasing
+    odom1_twist_rejection_threshold: 2.5
+
+    # ── AprilTag marker corrections ──
+    # PoseWithCovarianceStamped in map frame from marker_correction_node
+    pose0: marker_pose
+    pose0_config: [true,  true,  false,    # x, y, z
+                   false, false, true,     # roll, pitch, yaw
+                   false, false, false,    # vx, vy, vz
+                   false, false, false,    # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    pose0_differential: false              # absolute pose (not differential)
+    pose0_relative: false
+    pose0_queue_size: 1
+    pose0_rejection_threshold: 3.0         # reject outlier detections
+
+    # ── ZED SDK positional tracking with Area Memory ──
+    # PoseWithCovarianceStamped in the SDK map frame from the wrapper.
+    # Provides a tag-free absolute pose source so cold-start works without
+    # an AprilTag in view (Stereolabs SDK relocalises against the .area
+    # landmark database loaded at startup). Runs in parallel with cuVSLAM
+    # (odom1) and AprilTags (pose0); the EKF rejects outliers via
+    # Mahalanobis gating.
+    #
+    # Rejection threshold ordering (tighter = more skeptical):
+    #   pose0 (AprilTag)         3.0  ← strictest, absolute ground truth
+    #   odom1 (cuVSLAM)          3.5  ← differential VO velocities
+    #   pose1 (ZED Area Memory)  4.0  ← absolute, but matches can drift
+    #                                   slightly between loop closures, so
+    #                                   we accept slightly larger residuals
+    pose1: /agv/zed/pose_with_covariance
+    pose1_config: [true,  true,  false,    # x, y, z (z off — 2D mode)
+                   false, false, true,     # roll, pitch, yaw (yaw only)
+                   false, false, false,    # vx, vy, vz
+                   false, false, false,    # vroll, vpitch, vyaw
+                   false, false, false]    # ax, ay, az
+    pose1_differential: false              # absolute — anchored by Area Memory
+    pose1_relative: false
+    pose1_queue_size: 5
+    # Tightened from 4.0 → 3.0 on 2026-04-12 to match pose0 (AprilTag). When
+    # both absolute sources fire, the symmetric threshold lets the tighter
+    # one win on disagreement instead of pose1's looser gate pulling the
+    # filter toward ZED SDK outliers. Cut down the "localization wander"
+    # during navigation.
+    pose1_rejection_threshold: 3.0
+    pose1_nodelay: false
+
+    # REMOVED: cuVSLAM provides meaningful state-dependent covariances that
+    # indicate tracking quality. Overriding with fixed values prevents the EKF
+    # from down-weighting cuVSLAM during poor tracking conditions.
+    # Use covariance_override_node in simulation only.
+    # odom1_pose_covariance: [0.01,  0.0,   0.0,   0.0,   0.0,   0.0,
+    #                         0.0,   0.01,  0.0,   0.0,   0.0,   0.0,
+    #                         0.0,   0.0,   1e6,   0.0,   0.0,   0.0,
+    #                         0.0,   0.0,   0.0,   1e6,   0.0,   0.0,
+    #                         0.0,   0.0,   0.0,   0.0,   1e6,   0.0,
+    #                         0.0,   0.0,   0.0,   0.0,   0.0,   0.05]
+
+    # ── Process noise covariance (tighter than 2x local for smoothness) ──
+    # Changed 2026-04-12 as part of motion smoothness tune. The x/y/yaw
+    # diagonal terms were halved (0.10 → 0.05, 0.10 → 0.05, 0.08 → 0.04) so
+    # the filter anchors harder on its prior between corrections. This
+    # reduces the "wander" observed when pose0 (AprilTag) and pose1 (ZED
+    # SDK Area Memory) briefly disagree — the filter now trusts its own
+    # prediction more instead of averaging discordant measurements.
+    # Robot max speed is 0.25 m/s and filter runs at 10 Hz, so per-step
+    # prediction lag is <2.5 cm — acceptable.
+    process_noise_covariance:
+      [0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.12,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.06,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.04,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.05,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.08,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.04,  0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.02,  0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.03]
+
+    # ── Initial estimate covariance — cold-start convergence ──
+    # The robot_localization default for this matrix is ~1e-9 on every
+    # diagonal, which tells the EKF "I'm absolutely certain about my initial
+    # state." At boot, that is false: we have no idea where the robot is
+    # until the first absolute pose (ZED Area Memory via pose1, or an
+    # AprilTag via pose0 when enabled) arrives. With overconfident priors,
+    # the EKF innovation S = H·P·H^T + R is tiny, so the Mahalanobis distance
+    # D = sqrt(innov^T · S^{-1} · innov) for the first absolute pose becomes
+    # huge even for a 1 m jump, and the measurement gets rejected until
+    # wheel-odom drift grows P to a reasonable level. That costs 5-15 s of
+    # "stuck at the wrong pose" on every cold-start.
+    #
+    # Raising X, Y to 1.0 m² and Yaw to 0.5 rad² (~40° 1-sigma) makes the
+    # filter start "uncertain" so the first absolute pose is absorbed on
+    # arrival. Velocities and accelerations stay at the default 1e-9 —
+    # the robot is stationary at boot, so "zero with high confidence" is
+    # correct for those states. Z, roll, pitch are zeroed by two_d_mode
+    # regardless.
+    #
+    # This addresses PR3 FIX 1 from the PR1+PR2+PR3 navigation refactor.
+    # PR3 FIX 2 (raising pose1_rejection_threshold from 3.0 to 5.0) was
+    # INTENTIONALLY NOT APPLIED: the current 3.0 was chosen on 2026-04-12
+    # specifically to reduce "localization wander" during navigation by
+    # making pose0 and pose1 symmetric (see pose1_rejection_threshold comment
+    # above). The cold-start issue is fully addressed by FIX 1 without
+    # touching the post-convergence rejection behavior. If field data after
+    # this PR shows pose1 rejection rates above a few per 30 s during normal
+    # navigation with enable_markers:=false, revisit FIX 2 separately.
+    initial_estimate_covariance:
+      [1.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   1.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.5,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,   0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9,  0.0,
+       0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   1e-9]

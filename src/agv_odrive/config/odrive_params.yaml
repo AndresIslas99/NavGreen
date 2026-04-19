@@ -1,0 +1,39 @@
+/**:
+  ros__parameters:
+    can_interface: "can0"
+    left_axis_id: 0
+    right_axis_id: 1
+    # Measured 2026-03-18 on production chassis
+    wheel_radius: 0.0781       # meters — calibrated 2026-04-08 (ratio 2.66/2.13 from 3-trial test)
+    track_width: 0.960         # meters — calibrated 2026-04-08 (effective, from 2 spin trials)
+    gear_ratio: 10.0           # 10:1 planetary gearbox (motor turns per wheel turn)
+    odom_frame_id: "odom"
+    base_frame_id: "base_link"
+    publish_rate_hz: 50
+    cmd_vel_timeout_ms: 200    # stop motors if no cmd_vel for this long (was 500 — faster stop)
+    # Motor direction inversion (differential drive: one side faces opposite)
+    # Set to true for the motor that needs its CAN velocity negated
+    invert_left: true          # CAN 0
+    invert_right: false        # CAN 1
+    # Per-side trim (compensates mechanical mismatch between left/right)
+    left_scale: 1.0
+    right_scale: 1.0
+    # Low-speed control shaping
+    zero_vel_epsilon: 0.03     # turns/s — below this, bypass all shaping and send exact zero
+    min_effective_vel: 0.0     # turns/s — disabled; re-enable (e.g. 0.05) if stiction observed
+    stiction_torque_ff: 0.03   # Nm — compensates caster wheel static friction
+    max_wheel_accel: 0.5       # turns/s² — gentler ramp reduces wheel slip on caster resistance
+    max_wheel_decel: 1.5       # turns/s² — decel 3x faster than accel for responsive stopping
+    # Caster wheel resistance compensation — inflates odometry covariance during
+    # direction changes when caster wheels resist and then realign, corrupting
+    # wheel encoder accuracy. The EKF then naturally shifts weight to IMU/VSLAM.
+    caster_enable_compensation: true     # master enable for caster compensation
+    caster_settling_tau: 0.5             # seconds — exponential decay time constant
+    caster_covariance_multiplier: 10.0   # peak covariance inflation factor on direction change
+    caster_angular_accel_threshold: 1.0  # rad/s² — angular acceleration trigger threshold
+    # Encoder velocity filter (EMA low-pass)
+    velocity_filter_alpha: 0.3           # 0.0=max smooth, 1.0=no filter. 0.3 ≈ 8Hz cutoff at 50Hz
+    # Wheel slip detection (caster resistance during straight-line motion)
+    slip_velocity_threshold: 0.5         # turns/s — encoder velocity difference to trigger slip detection
+    slip_reduction_factor: 0.7           # scale cmd_vel by this factor during slip
+    slip_cooldown_ms: 200.0              # ms — hold reduction after slip clears
