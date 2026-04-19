@@ -214,10 +214,8 @@ def _post_sim_api(path: str, payload: dict, timeout: float = 5.0) -> dict:
 
 
 def _arm_and_clear_estop(verbose: bool = False) -> None:
-    """POST /reset leaves motors disarmed AND e_stop latched on. Every
-    waypoint must arm motors and explicitly clear e_stop, otherwise
-    sim_drive_shaping_node emits zero wheel targets (see RUNBOOK §6.3
-    + iteration_loop.md 'goal_no_motion' for full diagnosis).
+    """Legacy two-call arm sequence — kept as fallback when /motor/prepare
+    is unavailable. iter-22 workflow prefers _motor_prepare() below.
     """
     try:
         _post_sim_api("/e_stop", {"on": False}, timeout=3.0)
@@ -229,6 +227,38 @@ def _arm_and_clear_estop(verbose: bool = False) -> None:
     except Exception as e:
         if verbose:
             print(f"[arm] motor enable warn: {e}")
+
+
+def _motor_prepare(verbose: bool = False) -> dict:
+    """Iter-22: atomic arm-and-clear via /motor/prepare. The sim handler
+    clears e_stop, arms motors, and confirms via /agv/motor_state before
+    returning. Response: {"ok": bool, "armed": bool, "e_stop": bool,
+    "wait_ms": int}. Replaces the previous two-call sequence which had a
+    50-100 ms race window where cmd_vel_rail could leak through.
+    """
+    try:
+        resp = _post_sim_api("/motor/prepare", {}, timeout=5.0)
+        if verbose:
+            print(f"[motor_prepare] {resp}")
+        return resp
+    except Exception as e:
+        if verbose:
+            print(f"[motor_prepare] warn: {e}; falling back to legacy arm")
+        _arm_and_clear_estop(verbose=verbose)
+        return {"ok": False, "armed": False, "e_stop": True, "wait_ms": 0}
+
+
+def _sim_clock_pause() -> bool:
+    """Iter-22: pause physics without killing watchdog. sim_time freezes
+    until /sim/clock_resume. Used to eliminate post-teleport race windows
+    by completing all brain-side setup before physics resumes.
+    """
+    return _post_sim_api_empty("/sim/clock_pause", timeout=3.0)
+
+
+def _sim_clock_resume() -> bool:
+    """Iter-22: resume physics after setup complete."""
+    return _post_sim_api_empty("/sim/clock_resume", timeout=3.0)
 
 
 def _post_sim_api_empty(path: str, timeout: float = 5.0) -> bool:
@@ -1239,20 +1269,21 @@ def _run_one_waypoint(
     #    goal during the post-reset settle window (round 18 wp02 symptom).
     _cancel_all_nav_goals(harness)
 
-    # 0b. Round 44 iter-7: rail_driver has no "cancel" API and latches
-    #    have_goal_=true until the current goal's stop-band fires or an
-    #    external system republishes a zero-distance goal. After a
-    #    rail_drive waypoint, the next waypoint's teleport moves the
-    #    robot to a NEW pose; rail_driver then recomputes err_body_x
-    #    against the STALE goal and drives cmd_vel_rail toward it
-    #    (observed iter-5/iter-6 wp10: teleport to (5.5, 0, π) drifted
-    #    back to (7.05, 0, π) = wp09's rail goal).
-    #    The cancel publish happens AFTER teleport (below, step 1c) so
-    #    the cancel goal matches the NEW pose — avoiding a race where a
-    #    pre-reset publish would be interpreted relative to the new
-    #    pose after the teleport fires.
+    # Iter-22 workflow: pause physics → teleport → validate → arm → sync →
+    # resume. The sim-side enhancements (commit-ref 2026-04-19) let the
+    # brain eliminate the post-teleport race entirely. Previous iterations
+    # (7/8/9) papered over this with a "publish zero-distance cancel goal"
+    # hack that had its own race with the arbiter's auto-EXIT_PUSH
+    # (evidence: clearance_now=-2.95 in iter-20/21 brain_log). That hack
+    # is removed here — rail_driver never sees a rail goal during setup.
 
-    # 1. Teleport, with one self-heal retry on RESET_TIMEOUT if the budget allows.
+    # 0b. Pause physics so nothing moves during teleport + brain sync.
+    pause_ok = _sim_clock_pause()
+    if not pause_ok:
+        print(f"[warn {wp_id}] /sim/clock_pause failed; proceeding live.",
+              flush=True)
+
+    # 1. Teleport. The enhanced /reset response carries 5 readiness flags.
     t_reset_issue = time.time()
     reset_ok = False
     reset_response: Optional[dict] = None
@@ -1265,6 +1296,16 @@ def _run_one_waypoint(
         except (urllib.error.URLError, urllib.error.HTTPError, OSError):
             # sim_api unreachable — probably restarting; fall through to wait.
             pass
+        # Prefer the sim's own convergence flags when available. Fall back
+        # to the legacy GT-based wait_for_reset if the response is partial.
+        if (
+            isinstance(reset_response, dict)
+            and reset_response.get("pose_converged") is True
+            and reset_response.get("velocities_zeroed") is True
+            and reset_response.get("encoders_reset") is True
+        ):
+            reset_ok = True
+            break
         if harness.wait_for_reset(
             start_x=float(start["x"]),
             start_y=float(start["y"]),
@@ -1282,6 +1323,9 @@ def _run_one_waypoint(
             continue
         break
     if not reset_ok:
+        # Resume physics before bailing so downstream iterations aren't
+        # frozen with a paused sim.
+        _sim_clock_resume()
         return WaypointResult(
             wp_id=wp_id,
             goal_x=goal["x"], goal_y=goal["y"], goal_yaw=goal["yaw"],
@@ -1297,33 +1341,17 @@ def _run_one_waypoint(
             dispatch_used=_dispatch_for(wp),
         )
 
-    # 1b. Round 44 iter-8: cancel any pending rail_driver goal BEFORE
-    #     arming motors. The previous waypoint's rail_drive goal is
-    #     still latched in rail_driver's have_goal_=true state.
-    #     Arming motors first would let cmd_vel_rail pull the robot off
-    #     the teleport pose during the POST_RESET_SETTLE window. Publish
-    #     a zero-distance goal at the CURRENT GT pose (which is the
-    #     teleport target immediately after /reset) so rail_driver
-    #     latches "reached" and drops have_goal_ to idle before any
-    #     motor activity.
-    gt_post_reset = harness.current_gt_xy()
-    if gt_post_reset is not None:
-        cancel = PoseStamped()
-        cancel.header.stamp = harness.get_clock().now().to_msg()
-        cancel.header.frame_id = "map"
-        cancel.pose.position.x = float(gt_post_reset[0])
-        cancel.pose.position.y = float(gt_post_reset[1])
-        cancel.pose.orientation.w = 1.0
-        harness.ensure_rail_goal_publisher().publish(cancel)
-        # Give rail_driver a couple ticks (at 20 Hz ≈ 100 ms) to absorb
-        # the zero-distance goal, latch "reached", and drop have_goal_.
-        time.sleep(0.2)
-        rclpy.spin_once(harness, timeout_sec=0.05)
+    # 1b. Atomic motor prepare: single REST call replaces the old
+    #     /e_stop + /motor/enable two-step (which had a 50–100 ms window
+    #     where cmd_vel_rail could leak through because motors were
+    #     armed before e_stop was cleared).
+    prepare_resp = _motor_prepare(verbose=False)
+    if not prepare_resp.get("armed", False):
+        print(f"[warn {wp_id}] /motor/prepare did not confirm armed: "
+              f"{prepare_resp}", flush=True)
 
-    # 1c. Clear e_stop (latched on by /reset) and arm motors.
-    _arm_and_clear_estop()
-
-    # 2. Settle — let ekf_local absorb teleport.
+    # 2. Settle — still give ekf_local a beat to ingest the first
+    #    post-teleport /agv/joint_states (v≈0, per encoders_reset).
     time.sleep(POST_RESET_SETTLE_S)
     rclpy.spin_once(harness, timeout_sec=0.1)
 
@@ -1366,6 +1394,14 @@ def _run_one_waypoint(
     # This is "at_start" — after teleport + sync, with the camera looking at
     # whatever tag the waypoint targets.
     markers_at_start = harness.visible_markers_snapshot()
+
+    # Iter-22: brain setup complete (teleport, motor prepare, EKF sync).
+    # Resume physics right before dispatch so the clock advances only once
+    # Nav2 / rail_approach / rail_driver is about to command cmd_vel.
+    resume_ok = _sim_clock_resume()
+    if not resume_ok:
+        print(f"[warn {wp_id}] /sim/clock_resume failed; dispatch may see "
+              f"frozen sim_time.", flush=True)
 
     # 4. Navigate — pick the driver based on the waypoint's dispatch.
     t_nav_start = time.time()
