@@ -64,8 +64,10 @@ try:
     from nav_msgs.msg import Odometry
     from std_msgs.msg import Bool, String
     from nav2_msgs.action import NavigateToPose
+    import tf2_ros
 except ImportError:
-    pytest.skip("rclpy / nav2_msgs not available", allow_module_level=True)
+    pytest.skip("rclpy / nav2_msgs / tf2_ros not available",
+                allow_module_level=True)
 
 try:
     from robot_localization.srv import SetPose
@@ -261,6 +263,54 @@ def _sim_clock_resume() -> bool:
     return _post_sim_api_empty("/sim/clock_resume", timeout=3.0)
 
 
+def _wait_for_fresh_tf(
+    harness: Node,
+    target_frame: str = "base_link",
+    source_frame: str = "map",
+    consecutive_hits: int = 5,
+    timeout_s: float = 3.0,
+    poll_interval_s: float = 0.05,
+) -> bool:
+    """Iter-22 brain 1.3: gate a nav2 dispatch behind a fresh-TF check.
+
+    Nav2's rotation_shim_controller does lookupTransform(map, base_link,
+    now) on every tick. Post-teleport there is a 100–300 ms window where
+    ekf_global has not yet published the map→odom matching the new robot
+    pose; during that window the shim logs "Failed to transform pose to
+    base frame!" and MPPI never commands motion. If the harness
+    dispatches into that window, the robot stalls and stall_abort
+    (>90 s no delta) returns ABORTED with err ≈ full distance.
+
+    This helper polls `can_transform(source, target, Time())` on the
+    Harness's tf_buffer and requires `consecutive_hits` successes in a
+    row before declaring the TF fresh. Returns True on success, False on
+    timeout.
+
+    Only the nav2 dispatch path needs this — rail_approach uses its own
+    camera→base TF chain (separate from map→odom) and rail_driver /
+    rail_exit operate on odom frame directly.
+    """
+    deadline = time.monotonic() + timeout_s
+    hits = 0
+    # Drain any pending TF messages first.
+    rclpy.spin_once(harness, timeout_sec=0.1)
+    while time.monotonic() < deadline:
+        try:
+            ok = harness.tf_buffer.can_transform(
+                target_frame, source_frame, rclpy.time.Time()
+            )
+        except Exception:
+            ok = False
+        if ok:
+            hits += 1
+            if hits >= consecutive_hits:
+                return True
+        else:
+            hits = 0
+        rclpy.spin_once(harness, timeout_sec=poll_interval_s)
+    return False
+
+
 def _post_sim_api_empty(path: str, timeout: float = 5.0) -> bool:
     url = f"http://{SIM_API_HOST}:{SIM_API_PORT}{path}"
     req = urllib.request.Request(url, data=b"", method="POST")
@@ -408,6 +458,15 @@ class Harness(Node):
         # Round 44 Q1: per-waypoint accumulators, cleared by begin_waypoint_modes.
         self._event_types_since: dict[str, int] = {}
         self._events_cursor: int = 0
+
+        # Iter-22 brain 1.3: TF buffer for the fresh-TF gate pre-nav2 dispatch.
+        # wp02 flakiness (~50 % ABORT 1.0 m) traced to Nav2
+        # rotation_shim_controller's lookupTransform(map, base_link, now)
+        # failing during the 100–300 ms post-teleport window where
+        # ekf_global has not yet emitted an up-to-date map→odom. Gating
+        # on this buffer avoids dispatching into a stale TF state.
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.create_subscription(
             PoseStamped,
@@ -1442,9 +1501,16 @@ def _run_one_waypoint(
             NAV_TIMEOUT_S * 1.5)
     else:
         # Default: Nav2 via sim_api HTTP /goal.
-        status = harness.navigate_to(
-            float(goal["x"]), float(goal["y"]), float(goal["yaw"]),
-            NAV_TIMEOUT_S)
+        # Iter-22 brain 1.3: gate on fresh TF before dispatch so Nav2's
+        # rotation_shim doesn't fail lookupTransform and stall.
+        if not _wait_for_fresh_tf(harness, timeout_s=3.0):
+            print(f"    [dispatch] nav2 skipped — map→base_link TF not "
+                  f"fresh after 3 s", flush=True)
+            status = "TF_NOT_READY"
+        else:
+            status = harness.navigate_to(
+                float(goal["x"]), float(goal["y"]), float(goal["yaw"]),
+                NAV_TIMEOUT_S)
 
     # 5. Snapshot both poses at terminal.
     rclpy.spin_once(harness, timeout_sec=0.2)
