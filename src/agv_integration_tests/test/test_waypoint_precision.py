@@ -1156,6 +1156,8 @@ def _publish_rail_exit_and_await_corridor(
 
     deadline = time.monotonic() + timeout_s
     saw_rail_exit = False
+    saw_corridor_after_exit = False
+    rail_exit_index = None
     while time.monotonic() < deadline:
         rclpy.spin_once(harness, timeout_sec=0.1)
         # Early abort on rail_driver blocked.
@@ -1168,11 +1170,22 @@ def _publish_rail_exit_and_await_corridor(
             if state in ("blocked_lateral", "blocked_misaligned"):
                 return "ABORTED"
         modes = harness.modes_observed()
-        if "rail_exit" in modes:
+        # Iter-21: track sequence instead of latching on modes[-1].
+        # The FSM oscillates rail_exit ↔ corridor_nav ↔ rail_drive during
+        # the push phase (observed iter-20 wp13: ~300 ms corridor_nav
+        # window sandwiched between rail_exit and rail_drive). At 10 Hz
+        # polling the harness often missed the corridor_nav tick because
+        # modes[-1] had already advanced. The intent is "release to
+        # corridor_nav was observed after rail_exit," so record a sticky
+        # flag the moment the pattern appears in the history.
+        if "rail_exit" in modes and rail_exit_index is None:
+            rail_exit_index = modes.index("rail_exit")
             saw_rail_exit = True
-        # Release condition: corridor_nav observed AFTER rail_exit (arbiter
-        # left RAIL_EXIT because the robot is past the tag + out of zones).
-        if saw_rail_exit and modes and modes[-1] == "corridor_nav":
+        if saw_rail_exit and rail_exit_index is not None:
+            tail = modes[rail_exit_index + 1:]
+            if "corridor_nav" in tail:
+                saw_corridor_after_exit = True
+        if saw_corridor_after_exit:
             return "SUCCEEDED"
     return "NAV_TIMEOUT"
 
