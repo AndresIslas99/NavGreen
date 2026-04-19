@@ -1,0 +1,38 @@
+# Scan-based occupancy grid mapper parameters
+#
+# Builds a 2D occupancy grid from LaserScan data using Bayesian log-odds update.
+# Used during mapping commissioning — the output can be saved with map_saver_cli.
+
+/**/scan_grid_mapper:
+  ros__parameters:
+    # Grid dimensions (auto-expands as scan data arrives)
+    resolution: 0.025         # meters per cell (2.5cm — captures fine contours)
+    initial_width: 400        # starting cells (400 × 0.025 = 10m), grows dynamically
+    initial_height: 400       # starting cells, grows dynamically
+    expand_margin_cells: 80   # cells of margin added on each expansion (80 × 0.025 = 2m)
+
+    # Publishing
+    publish_rate_hz: 2.0      # OccupancyGrid publish rate (lower for finer grid)
+    map_frame: "map"          # frame_id for the published map
+
+    # Log-odds update parameters
+    l_occupied: 1.2           # log-odds increase for occupied (stronger per-hit for finer cells)
+    l_free: -0.4              # log-odds decrease for free (less aggressive to protect thin objects)
+    l_min: -5.0               # clamp minimum (prevents overconfidence in free)
+    l_max: 5.0                # clamp maximum (prevents overconfidence in occupied)
+
+    # Thresholds for OccupancyGrid values
+    occupied_threshold: 0.65  # probability above this → occupied (100)
+    free_threshold: 0.35      # probability below this → free (0)
+    # Between thresholds → scaled value [1-99]
+    # Untouched cells (log-odds ≈ 0) → unknown (-1)
+
+    # Scan processing
+    max_range: 8.0            # ignore rays beyond this (meters)
+    min_range: 0.3            # ignore rays closer than this
+    ray_subsample: 1          # process every ray (full angular resolution)
+    min_travel_distance: 0.03 # meters — more frequent updates for denser coverage
+
+    # Warm-up gating (wait for stable cuVSLAM tracking before accepting scans)
+    warmup_seconds: 5.0       # seconds after first TF to skip (cuVSLAM stabilization)
+    warmup_min_scans: 30      # minimum scans to skip regardless of time

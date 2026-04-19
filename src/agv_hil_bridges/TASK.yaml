@@ -1,0 +1,37 @@
+name: agv_hil_bridges
+status: active
+dev_only: true
+description: |
+  HIL-only bridge nodes that publish the standard brain-side topics that
+  hardware would produce on the real robot, consuming the sim host's
+  hardware-emulator topics.
+
+  Required only when AGV_MODE=hil. In production, these nodes are not
+  launched — agv_odrive and isaac_ros_visual_slam replace them with real
+  sensors and real CAN bus.
+
+  Nodes:
+    - joint_states_to_wheel_odom.py
+        Subscribes /agv/joint_states (sim encoder emulation)
+        Publishes  /agv/wheel_odom (nav_msgs/Odometry @50 Hz)
+        Uses the same wheel_radius/track_width constants as
+        src/agv_odrive/config/odrive_params.yaml so the EKF treats HIL
+        and production as the same robot kinematically.
+    - vslam_fallback_relay.py
+        OPTIONAL, activated when cuvslam_in_hil:=false. Relays
+        /agv/wheel_odom → /visual_slam/tracking/odometry in differential
+        mode, so ekf_global still gets an odom1 input even when cuVSLAM
+        is not running.
+
+motivations:
+  - "agv-greenhouse-sim commit 3d44cec (2026-04-17) removed /agv/wheel_odom, /visual_slam/tracking/odometry, and /agv/scan from sim — those are brain-side work in production."
+  - "Without these bridges, ekf_local has no odom0 input and Nav2 cannot plan."
+
+goals:
+  - wheel_odom hz on Jetson ≥ 30
+  - position covariance matches covariance_override output (0.005 x/y, 1e-6 yaw)
+  - drift integrated vs production odrive_can_node within 5% over 10 m
+
+out_of_scope:
+  - "real hardware replacement (this package is dev-only by design)"
+  - "publishing IMU — the sim already emulates BMI088 on /agv/imu/data"

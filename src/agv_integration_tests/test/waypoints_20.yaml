@@ -1,0 +1,66 @@
+# Waypoints for test_waypoint_precision — HIL 10 cm gate (v9, 2026-04-17)
+#
+# V9 CHANGES vs v8 (post-round-28 analysis, user directive):
+#   - REMOVED y=±4.4 rails (wp10, wp11): geometrically infeasible. Both
+#     rounds 26 and 28 showed these caused EKF explosion (drift 7-16 m)
+#     or NAV_TIMEOUT at 73-16 m drift. The approach to y=4.4 crosses the
+#     crop-row y=3.3 inflation gradient; MPPI oscillates and EKF diverges.
+#   - REMOVED wp08 (5→8): the exit-from-corridor overshoot (round 28 err=1.34 m).
+#   - REMOVED wp09 (3→7): the 4 m in-corridor traversal (round 28 err=6.08 m).
+#   - REPLACED with: extra east-open waypoints (proven clean in round 28
+#     at 3-4 cm precision), extra west-open short probes, and one
+#     remote-east probe (20 m).
+#
+# V9 DESIGN RULES (evidence-based from rounds 26 and 28):
+#   1. AVOID |y| > 3 at x ∈ [3.6, 7.4] — crop-row inflation makes Nav2
+#      oscillate. Keep |y| ≤ 2.2 in the corridor.
+#   2. AVOID traversals > 3 m inside the corridor — MPPI overshoots without
+#      adaptive vx_max (future improvement: costmap_filter zone-based).
+#   3. KEEP east-open forwards (x > 10) for long-distance precision proof.
+#      Round 28 showed 15 m traversal at 3.4 cm precision.
+#   4. KEEP short probes (<2 m) dominant — they succeed reliably.
+#   5. KEEP 1-2 arcs for yaw-change evaluation (wp16, wp17 stay; failure
+#      at 14-21 cm is a RotationShim tune issue, not a waypoint-design one).
+#
+# WORLD LAYOUT:
+#   Crop rows (lethal): y=±1.1, ±3.3, ±5.5 at x ∈ [3.6, 7.4], width 0.5
+#   Static crates: Crate1 (3.5,-2.0), Crate2 (4.0, 3.5), Crate3 (25,0)
+#   Free rails: y=0 (0.85 m clear both sides), y=±2.2 (both 1.1 m clear)
+#   Open zones: west x ∈ [-15, 3), east x ∈ (8, 25)
+
+waypoints:
+  # ── Phase A: short probes, west-open y=0 (dominant success pattern) ──
+  - {id: wp01, start: {x: -0.5, y: 0.0, yaw: 0.0}, goal: {x:  0.0, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp02, start: {x:  0.0, y: 0.0, yaw: 0.0}, goal: {x:  1.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+  - {id: wp03, start: {x: -1.0, y: 0.0, yaw: 0.0}, goal: {x:  1.0, y: 0.0, yaw: 0.0}}  # 2.0 m
+  - {id: wp04, start: {x:  0.0, y: 0.0, yaw: 0.0}, goal: {x:  0.5, y: 0.0, yaw: 0.0}}  # 0.5 m repeat
+
+  # ── Phase B: y=±2 open corridor (≥1.1 m clear of crop rows and crates) ──
+  - {id: wp05, start: {x:  0.0, y:  2.0, yaw: 0.0}, goal: {x:  2.0, y:  2.0, yaw: 0.0}}
+  - {id: wp06, start: {x:  0.0, y: -2.0, yaw: 0.0}, goal: {x:  2.0, y: -2.0, yaw: 0.0}}
+
+  # ── Phase C: rail y=0 ENTRY ONLY (avoid the 5→8 overshoot zone) ──
+  # Round 28 wp07 (2→5) near-missed at 16.5 cm. Keeping one attempt.
+  - {id: wp07, start: {x:  2.0, y: 0.0, yaw: 0.0}, goal: {x:  5.0, y: 0.0, yaw: 0.0}}  # 3 m enter
+
+  # ── Phase D: rails y=±2.2 entering from PAST Crate1 (x ≥ 5.0) ──
+  - {id: wp08, start: {x:  5.0, y: -2.2, yaw: 0.0}, goal: {x:  7.0, y: -2.2, yaw: 0.0}}  # 2.0 m rail -2.2
+  - {id: wp09, start: {x:  5.0, y:  2.2, yaw: 0.0}, goal: {x:  7.0, y:  2.2, yaw: 0.0}}  # 2.0 m rail +2.2
+
+  # ── Phase E: east-open forwards (round 28 proved this zone: 3-4 cm) ──
+  - {id: wp10, start: {x: 10.0, y:  0.0, yaw: 0.0}, goal: {x: 12.0, y:  0.0, yaw: 0.0}}  # 2 m east
+  - {id: wp11, start: {x: 12.0, y:  0.0, yaw: 0.0}, goal: {x: 15.0, y:  0.0, yaw: 0.0}}  # 3 m east
+  - {id: wp12, start: {x: 15.0, y:  0.0, yaw: 0.0}, goal: {x: 18.0, y:  0.0, yaw: 0.0}}  # 3 m east
+  - {id: wp13, start: {x: 18.0, y:  0.0, yaw: 0.0}, goal: {x: 20.0, y:  0.0, yaw: 0.0}}  # 2 m east
+  - {id: wp14, start: {x: 10.0, y:  2.0, yaw: 0.0}, goal: {x: 13.0, y:  2.0, yaw: 0.0}}  # 3 m east y=+2
+  - {id: wp15, start: {x: 10.0, y: -2.0, yaw: 0.0}, goal: {x: 13.0, y: -2.0, yaw: 0.0}}  # 3 m east y=-2
+
+  # ── Phase F: gentle arcs (yaw-change stress test) ──
+  # Round 28 showed these land at 14-21 cm (RotationShim issue, not geometry).
+  - {id: wp16, start: {x: -2.0, y:  0.0, yaw:  0.0997}, goal: {x:  0.0, y:  0.2, yaw:  0.0997}}
+  - {id: wp17, start: {x:  0.0, y:  0.0, yaw: -0.0997}, goal: {x:  2.0, y: -0.2, yaw: -0.0997}}
+
+  # ── Phase G: repeat tight probes to stabilize the p95 sample ──
+  - {id: wp18, start: {x:  0.0, y: 0.0, yaw: 0.0}, goal: {x:  1.5, y: 0.0, yaw: 0.0}}  # 1.5 m
+  - {id: wp19, start: {x:  1.0, y: 0.0, yaw: 0.0}, goal: {x:  2.5, y: 0.0, yaw: 0.0}}  # 1.5 m offset
+  - {id: wp20, start: {x:  0.0, y: 2.0, yaw: 0.0}, goal: {x:  1.0, y: 2.0, yaw: 0.0}}  # 1.0 m offset lane

@@ -1,0 +1,379 @@
+spec_version: "2.0"
+last_updated: "2026-04-13"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-3"
+verified_by: "tools/verify_specs/verify_persistence.py"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGV Persistent Artifacts — canonical inventory
+#
+# Every file or folder the runtime stack writes to disk, its owner, readers,
+# format, lifecycle, and the rules for extending the set.
+#
+# The ONLY canonical base directory is AGV_DATA_DIR, with a default of
+# /home/orza/agv_data. Any new persistent artifact goes under AGV_DATA_DIR.
+# ─────────────────────────────────────────────────────────────────────────────
+
+base_directories:
+
+  canonical_data:
+    env_var: "AGV_DATA_DIR"
+    default: "/home/orza/agv_data"
+    owner: "agv_ui_backend (read), agv_map_manager (read+write), agv_localization_init (read+write)"
+    description: "All application-level persistent artifacts."
+    ownership: "orza:orza"
+    permissions: "0755"
+    rationale: "Single root for maps, events, settings, cuVSLAM DBs. Future SSD mount goes here to avoid path churn."
+
+  boot_state:
+    path: "~/.agv"
+    owner: "agv_start.sh (read), agv_map_manager (write)"
+    description: "State read by shell scripts BEFORE the ROS stack is sourced. Must be readable without ROS environment. Contains only small text markers."
+    ownership: "orza:orza"
+    permissions: "0755"
+
+  ros_framework:
+    path: "~/.ros/log"
+    owner: "ROS 2 framework"
+    description: "Launch logs. Rolling. Not managed by this project."
+
+  systemd_journal:
+    path: "/var/log/journal"
+    owner: "systemd"
+    description: "Service logs for agv.service, agv-watchdog.service, agv-healthcheck.service."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-map artifacts (the whole set for a single saved map <X>)
+# ─────────────────────────────────────────────────────────────────────────────
+
+per_map_artifacts:
+
+  occupancy_grid_yaml:
+    path_pattern: "${AGV_DATA_DIR}/maps/<X>.yaml"
+    format: "Nav2 map metadata (YAML)"
+    writer:
+      package: "agv_map_manager"
+      code_ref: "src/agv_map_manager/src/map_manager_node.cpp::on_save_map"
+      mechanism: "invokes nav2_map_server/map_saver_cli"
+    readers:
+      - package: "nav2_map_server"
+        role: "map_server/load_map service"
+      - package: "agv_ui_backend"
+        code_ref: "src/agv_ui_backend/src/routes/maps.ts"
+        role: "list maps in /api/maps endpoint"
+    lifecycle: "persistent"
+    required: true
+
+  occupancy_grid_pgm:
+    path_pattern: "${AGV_DATA_DIR}/maps/<X>.pgm"
+    format: "Portable GrayMap 8-bit"
+    writer:
+      package: "agv_map_manager"
+      code_ref: "src/agv_map_manager/src/map_manager_node.cpp::on_save_map"
+      mechanism: "invokes nav2_map_server/map_saver_cli"
+    readers:
+      - package: "nav2_map_server"
+      - package: "agv_ui_backend"
+        code_ref: "src/agv_ui_backend/src/routes/maps.ts (sharp conversion)"
+    lifecycle: "persistent"
+    required: true
+
+  cuvslam_keyframe_db:
+    path_pattern: "${AGV_DATA_DIR}/maps/<X>_cuvslam/"
+    format: "Isaac ROS cuVSLAM binary keyframe database (folder)"
+    writer:
+      package: "agv_map_manager"
+      code_ref: "src/agv_map_manager/src/map_manager_node.cpp::save_cuvslam_map"
+      mechanism: "service call /visual_slam/save_map"
+    readers:
+      - package: "agv_localization_init"
+        code_ref: "src/agv_localization_init/src/auto_init_orchestrator_node.cpp::on_maps_loaded Path A"
+        role: "/visual_slam/load_map before localize_in_map"
+    lifecycle: "persistent"
+    required: false
+    note: "Missing on maps saved before cuVSLAM integration. auto_init falls through to Path B if absent."
+
+  zed_area_memory:
+    path_pattern: "${AGV_DATA_DIR}/maps/<X>.area"
+    format: "ZED SDK binary Area Memory landmark database"
+    writer:
+      package: "agv_map_manager"
+      code_ref: "src/agv_map_manager/src/map_manager_node.cpp::copy_landing_pad_to_per_map"
+      mechanism: "copy .current.area landing pad after /agv/zed/save_area_memory service call"
+    readers:
+      - package: "agv_map_manager"
+        code_ref: "src/agv_map_manager/src/map_manager_node.cpp::swap_area_memory_for_map on Load Map"
+        role: "swapped onto landing pad before reset_pos_tracking"
+    lifecycle: "persistent"
+    required: false
+    note: "Per-map file. Landing pad is the ZED wrapper interface; per-map file is the persistence mechanism."
+
+  last_known_pose_meta:
+    path_pattern: "${AGV_DATA_DIR}/maps/<X>_meta.json"
+    format: 'JSON {"x": float, "y": float, "theta": float, "saved_at": unix_seconds, "reason": string}'
+    writer:
+      package: "agv_localization_init"
+      code_ref: "src/agv_localization_init/src/auto_init_orchestrator_node.cpp"
+      mechanism: "on orchestrator shutdown, periodic save (30s), AND synchronously when map_manager calls /agv/localization/save_last_known_pose during on_save_map"
+    readers:
+      - package: "agv_localization_init"
+        code_ref: "src/agv_localization_init/src/auto_init_orchestrator_node.cpp"
+        role: "fallback pose when Paths A0/A/B fail (try_last_known_pose, Path C)"
+    lifecycle: "persistent"
+    required: false
+    note: "Save/load symmetry fixed 2026-04-13 Fase 6 bug #2 — was previously only written on shutdown/periodic. Now also written synchronously on Save Map via the new /agv/localization/save_last_known_pose service."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global artifacts (not per-map)
+# ─────────────────────────────────────────────────────────────────────────────
+
+global_artifacts:
+
+  zed_area_landing_pad:
+    path: "${AGV_DATA_DIR}/maps/.current.area"
+    format: "ZED SDK binary Area Memory (same as per-map)"
+    writers:
+      - package: "zed_components (ZED wrapper)"
+        code_ref: "src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp::callback_saveAreaMemory"
+        mechanism: "service /agv/zed/save_area_memory (operator-triggered or periodic auto-save)"
+      - package: "agv_map_manager"
+        code_ref: "src/agv_map_manager/src/map_manager_node.cpp::swap_area_memory_for_map"
+        mechanism: "cp <X>.area → .current.area on Load Map"
+    readers:
+      - package: "zed_components (ZED wrapper)"
+        code_ref: "src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp::startPosTracking"
+        role: "re-read on each reset_pos_tracking to hot-swap landmarks"
+    lifecycle: "session (overwritten on every map load)"
+    required: false
+    note: "This is the ZED wrapper's view of the landmark DB. The wrapper has been patched to re-read the param live so file swaps via reset_pos_tracking take effect."
+
+  zones_json:
+    path: "${AGV_DATA_DIR}/maps/zones.json"
+    format: "JSON lines (one zone per line: zone_id, type, polygon_x, polygon_y)"
+    writer:
+      package: "agv_map_manager"
+      code_ref: "src/agv_map_manager/src/map_manager_node.cpp::on_update_zone"
+    readers:
+      - package: "agv_map_manager (self, for CRUD)"
+      - package: "Nav2 costmap filters (future integration)"
+    lifecycle: "persistent"
+    required: false
+
+  last_map_marker:
+    path: "${HOME}/.agv/last_map"
+    format: "Plain text, single line, map name (no extension)"
+    writer:
+      package: "agv_map_manager"
+      code_ref: "src/agv_map_manager/src/map_manager_node.cpp::persist_last_map"
+      mechanism: "atomic tmp+rename on maps/loaded event"
+    readers:
+      - package: "agv_bringup (shell script)"
+        code_ref: "src/agv_bringup/scripts/agv_start.sh"
+        role: "resolve AGV_MAP before ROS starts"
+    lifecycle: "persistent"
+    required: false
+    note: "Deliberately lives outside AGV_DATA_DIR so shell script can read it without sourcing ROS."
+
+  event_log:
+    path: "${AGV_DATA_DIR}/events.jsonl"
+    format: "JSONL {timestamp, severity, subsystem, text}"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/event_log.ts::EventLog.emit"
+    readers:
+      - package: "agv_ui_backend"
+        role: "REST /api/events and dashboard event pane"
+    lifecycle: "rolling (30 days via AGV_RETENTION_DAYS env var)"
+    required: false
+
+  telemetry_db:
+    path: "${AGV_DATA_DIR}/telemetry.db"
+    format: "SQLite 3 (time-series metrics)"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/telemetry_store.ts"
+    readers:
+      - package: "agv_ui_backend"
+        role: "REST /api/analytics"
+    lifecycle: "rolling (30 days)"
+    required: false
+
+  users_json:
+    path: "${AGV_DATA_DIR}/users.json"
+    format: "JSON array of {username, role, password_hash}"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/auth.ts::AuthManager"
+    readers:
+      - package: "agv_ui_backend"
+        role: "JWT validation"
+    lifecycle: "persistent"
+    required: false
+
+  apriltag_registry:
+    path: "${AGV_DATA_DIR}/apriltags.json"
+    format: "JSON of defined tags and hardware assignments"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/apriltag_manager.ts"
+    readers:
+      - package: "marker_correction_node (via runtime registry YAML file)"
+      - package: "agv_ui_backend (UI)"
+    lifecycle: "persistent"
+    required: false
+
+  runtime_markers_registry:
+    path: "${AGV_DATA_DIR}/runtime_markers_registry.yaml"
+    format: "YAML dict of marker_id → {pose, size, type}"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/apriltag_manager.ts::writeRegistry"
+    readers:
+      - package: "agv_markers"
+        code_ref: "src/agv_markers/src/marker_correction_node.cpp"
+      - package: "agv_rail_approach"
+        code_ref: "src/agv_rail_approach/src/rail_approach_node.cpp"
+    lifecycle: "persistent"
+    required: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HIL validation artifacts (not iterated by verify_persistence.py)
+# ─────────────────────────────────────────────────────────────────────────────
+# Separate top-level section because these artifacts are either (a) written
+# by integration tests — which only exist at test time — or (b) located on
+# the sim host, outside this workspace's writable surface. Declared here for
+# traceability, not for the verifier's code_ref check.
+
+hil_artifacts:
+
+  brain_side_precision_report:
+    path_pattern: "${AGV_DATA_DIR}/sim_episodes/precision_run_<ts>/report.json"
+    format: 'JSON {"waypoints": [{"goal", "gt_final", "brain_final", "err_xy", "err_yaw", "brain_drift", "status", "bag_path", "events_slice"}], "summary": {"p95_err_xy", "max_err_xy", "success_rate"}}'
+    writer:
+      package: "agv_integration_tests"
+      test_ref: "src/agv_integration_tests/test/test_waypoint_precision.py"
+      mechanism: "written at end of test_waypoint_precision run"
+    readers:
+      - package: "agv_integration_tests"
+        test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+        role: "consumed for summary.json consolidation"
+      - package: "(human/LLM agent)"
+        role: "iteration loop reads p95 and event distribution to pick tuning actions"
+    lifecycle: "persistent (one dir per run, not rotated)"
+    required: false
+
+  brain_side_full_flow_summary:
+    path_pattern: "${AGV_DATA_DIR}/sim_episodes/full_flow_<ts>/summary.json"
+    format: 'JSON {"map_name", "map_fidelity": {...}, "waypoint_precision": {...}, "pass": bool}'
+    writer:
+      package: "agv_integration_tests"
+      test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+    readers:
+      - package: "(CI / PR review)"
+        role: "merge gate evidence"
+    lifecycle: "persistent"
+    required: false
+
+  brain_side_map_diff_report:
+    path_pattern: "${AGV_DATA_DIR}/sim_episodes/<run>/map_diff_<map_name>.json"
+    format: 'JSON {"centroid_errors_m", "ious", "corridor_slack", "free_space_precision", "free_space_recall", "pass": bool}'
+    writer:
+      package: "agv_integration_tests"
+      tool_ref: "src/agv_integration_tests/scripts/map_diff.py"
+    readers:
+      - package: "agv_integration_tests"
+        test_ref: "src/agv_integration_tests/test/test_full_flow.py"
+    lifecycle: "persistent"
+    required: false
+
+  sim_host_episode_rosbags:
+    path_pattern: "/tmp/agv_runs/<episode_id>/ (on sim host, NOT on brain)"
+    format: "rosbag2 (mcap or sqlite3)"
+    writer:
+      host: "sim_host"
+      package: "sim_host:agv_sim_validation"
+      node: "episode_tracker"
+      note: "Not tracked by verify_persistence.py — path lives outside AGV_DATA_DIR on a different host."
+    readers:
+      - package: "(human/LLM agent via sim_api GET /episodes/{id}/bag)"
+        role: "postmortem for failed runs; rsync to brain-side archive before sim host reboot (volatile path)"
+    lifecycle: "volatile (sim host /tmp — lost on reboot). For permanent archive: rsync -av /tmp/agv_runs/ ~/agv_runs_archive/$(date +%F)/ on sim host."
+    required: false
+    rotation_policy:
+      max_episode_duration_s: 600
+      max_episode_size_mb: 500
+      total_cap_gb: 10
+      enforcement: "episode_tracker node in sim repo (not enforced by this spec)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Session artifacts (non-canonical, scheduled for cleanup in Fase 5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+session_artifacts_to_migrate:
+
+  session_recordings:
+    current_path: "/mnt/ssd/sessions/"
+    target_path: "${AGV_DATA_DIR}/sessions/"
+    writer: "src/agv_slam/scripts/session_recorder.py"
+    format: "rosbag2 + SVO2 + TUM trajectory"
+    migration: "Fase 5 item 8 — change src/agv_slam/config/recording.yaml:11"
+
+  slam_logs:
+    current_path: "/mnt/ssd/slam_logs/"
+    target_path: "${AGV_DATA_DIR}/slam_logs/"
+    writer: "src/agv_slam/src/pipeline_watchdog_node.cpp"
+    migration: "Fase 5 item 8"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Rules for adding new artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+
+rules:
+
+  - id: "R1-location"
+    rule: "New persistent artifacts MUST live under ${AGV_DATA_DIR}."
+    exception: "~/.agv/* (boot markers readable by shell scripts)"
+    enforcement: "verify_no_hardcoded_paths.sh rejects /home/orza/ outside whitelist"
+
+  - id: "R2-owner"
+    rule: "Every artifact in this spec must have a single owner package."
+    enforcement: "verify_persistence.py checks that the declared writer code_ref exists and contains a write operation"
+
+  - id: "R3-symmetry"
+    rule: "Every artifact written by a Save operation must be readable by its corresponding Load operation (symmetry)."
+    current_violations: []
+    resolved_violations:
+      - "_meta.json asymmetry (audit bug #2) — resolved 2026-04-13 Fase 6 via /agv/localization/save_last_known_pose service called from map_manager::on_save_map."
+
+  - id: "R4-atomicity"
+    rule: "Writes that must survive crashes (last_map, _meta.json) MUST use atomic tmp+rename."
+    enforcement: "code review; verify_persistence.py can grep for std::ofstream directly on these paths"
+
+  - id: "R5-env_vs_param"
+    rule: "Paths used BEFORE ROS is sourced (shell scripts) read env vars. Paths used AFTER ROS is sourced read ROS params or env vars. Avoid hardcoded strings in source code."
+    enforcement: "verify_no_hardcoded_paths.sh"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Known issues (reported in audit, tracked for Fase 5/6)
+# ─────────────────────────────────────────────────────────────────────────────
+known_issues:
+  - issue: "Hardcoded /home/orza/agv_data/maps/.current.area in 4 places"
+    locations:
+      - "src/agv_map_manager/src/map_manager_node.cpp:45 (ROS param default)"
+      - "src/agv_slam/config/zed2i_override.yaml:38 (ZED wrapper pos_tracking.area_memory_db_path)"
+      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp:131 (declare_parameter default)"
+      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp:1001 (member initializer)"
+    current_status: "Whitelisted in verify_no_hardcoded_paths.sh pending a proper refactor."
+    fix: "Read AGV_DATA_DIR env var at construction and build the path programmatically. Tracked as Fase 6 follow-up (not critical-path but desirable for portability)."
+
+  - issue: "map_manager_node.map_dir drift to install share"
+    status: "FIXED 2026-04-13 Fase 7 F3"
+    was: "agv_bringup/launch/agv_full.launch.py:53 set maps_dir = os.path.join(nav_dir, 'maps') where nav_dir is the colcon install share. This made map_manager_node write per-map sidecars (.area, _cuvslam/, _meta.json) into a read-only template directory while agv_ui_backend read/listed from AGV_DATA_DIR. Save/load asymmetry."
+    now: "maps_dir = os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data') + '/maps' — all consumers agree on the same canonical directory."
+    evidence: "Live observation during 2026-04-13 trip: I2.area ended up in install/agv_navigation/share/agv_navigation/maps/ instead of /home/orza/agv_data/maps/."
+
+  - issue: "/mnt/ssd is a bare directory, not a real mount — fake SSD"
+    fix: "Fase 5 item 8: move session/log artifacts under AGV_DATA_DIR"
+
+  - issue: "_meta.json asymmetry: written on shutdown only"
+    status: "FIXED 2026-04-13 Fase 6 bug #2"
+    fix: "Added /agv/localization/save_last_known_pose service in agv_localization_init; called synchronously from agv_map_manager::on_save_map after Area Memory flush."

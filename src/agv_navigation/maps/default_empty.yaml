@@ -1,0 +1,12 @@
+# Empty 20m x 20m default map used when the robot boots without any saved map.
+# Nav2 still comes up with the full safety chain (velocity_smoother + collision
+# monitor + cmd_vel_gate), so the operator can teleoperate and, when ready,
+# call /agv/map_server/load_map (via the dashboard "Load Map" button) to
+# replace this with a real saved map without rebooting the stack.
+image: default_empty.pgm
+mode: trinary
+resolution: 0.050
+origin: [-10.0, -10.0, 0.0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.25

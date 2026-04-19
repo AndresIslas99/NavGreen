@@ -1,0 +1,32 @@
+task_version: "1.0"
+package: "agv_factor_graph"
+owner_role: "architect"
+status: "validation_parallel"
+language: "C++17"
+dev_only: false
+
+objective: |
+  Factor-graph based state estimator running parallel to the dual-EKF
+  for validation of a potential cutover. publish_tf=false so the EKFs
+  remain the TF authority.
+
+inputs:
+  topics:
+    - "/agv/wheel_odom"
+    - "/agv/imu/filtered"
+    - "/visual_slam/tracking/odometry"
+    - "/agv/marker_pose"
+
+outputs:
+  topics:
+    - "/agv/factor_graph/odometry (nav_msgs/Odometry) — validation only"
+
+rules:
+  - "publish_tf MUST remain false until an explicit cutover from ekf_global"
+  - "Graph optimization must not block the sensor thread"
+
+done_definition:
+  - "Builds with -Werror + zero warnings"
+  - "Node spawns correctly from agv_full.launch.py at t=4.5s"
+  - "Validation topic visible on ros2 topic list"
+  - "Divergence metrics documented vs ekf_global"

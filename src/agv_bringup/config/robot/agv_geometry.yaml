@@ -1,0 +1,43 @@
+# Physical identity of THIS AGV. Calibrated 2026-04-08.
+#
+# These values are also referenced (today) by:
+#   - src/agv_odrive/config/odrive_params.yaml          (wheel_radius, track_width, gear_ratio)
+#   - src/agv_description/urdf/agv_base.xacro            (track width, wheel position)
+#   - src/agv_navigation/config/nav2_params.yaml         (footprint)
+#
+# When this file becomes the canonical source (Gap 3 step 1 of the migration in
+# config/README.md), the above will be deleted and launch files will load this
+# instead.
+
+robot:
+  identity:
+    name: "agv-01"
+    deployment: "greenhouse-mexico"
+
+  wheels:
+    radius_m: 0.0781               # calibrated 2026-04-08
+    track_width_m: 0.960           # effective wheel-to-wheel distance
+    gear_ratio: 10.0               # motor turns / wheel turns (10:1 planetary)
+    invert_left: true
+    invert_right: false
+
+  motor_can:
+    interface: "can0"
+    left_axis_id: 0
+    right_axis_id: 1
+
+  footprint:
+    # [x, y] pairs in base_link frame, counter-clockwise.
+    # MUST match agv_navigation/config/nav2_params.yaml#robot_radius/footprint.
+    polygon:
+      - [ 0.50,  0.37]
+      - [ 0.50, -0.37]
+      - [-0.30, -0.37]
+      - [-0.30,  0.37]
+
+  camera_mount:
+    # ZED 2i in base_link frame.
+    parent: "base_link"
+    xyz: [0.70, 0.0, -0.055]
+    rpy: [0.0, 0.0, 0.0]
+    blind_zone_m: 0.30             # ZED 2i hardware min depth

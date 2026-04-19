@@ -1,0 +1,21 @@
+joint_states_to_wheel_odom:
+  ros__parameters:
+    # Kinematic constants — MUST match src/agv_odrive/config/odrive_params.yaml
+    # so the EKF sees the same robot in HIL and production.
+    wheel_radius_m: 0.0781       # m — calibrated 2026-04-08
+    track_width_m: 0.960         # m — calibrated 2026-04-08
+    publish_rate_hz: 50.0
+    left_joint: "left_wheel_joint"
+    right_joint: "right_wheel_joint"
+    odom_frame_id: "odom"
+    base_frame_id: "base_link"
+    joint_states_topic: "/agv/joint_states"
+    wheel_odom_topic: "/agv/wheel_odom"
+
+vslam_fallback_relay:
+  ros__parameters:
+    input_topic: "/agv/wheel_odom"
+    output_topic: "/visual_slam/tracking/odometry"
+    pose_cov_xy: 0.02            # higher than wheel_odom's 0.005 so ekf_global
+                                  # does not double-count wheel-derived signal
+    pose_cov_yaw: 0.005

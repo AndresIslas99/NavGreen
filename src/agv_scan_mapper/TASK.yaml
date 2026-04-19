@@ -1,0 +1,35 @@
+task_version: "1.0"
+package: "agv_scan_mapper"
+owner_role: "perception"
+status: "stable"
+language: "C++17"
+dev_only: false
+
+objective: |
+  C++17 node that builds a live occupancy grid from /agv/scan while the
+  robot is mapping. Used by the dashboard as the real-time mapping
+  overlay. Not the authoritative nav2 map — that is owned by map_server
+  after an explicit Save Map.
+
+inputs:
+  topics:
+    - "/agv/scan (sensor_msgs/LaserScan)"
+    - "/agv/odometry/local (nav_msgs/Odometry)"
+  parameters:
+    - "resolution (float, m/pixel)"
+    - "warm_up_frames (int, frames before publishing)"
+    - "grid_center_mode (enum: robot|origin)"
+
+outputs:
+  topics:
+    - "/agv/live_map (nav_msgs/OccupancyGrid, transient_local)"
+
+rules:
+  - "No hardcoded paths"
+  - "Must tolerate transient loss of odometry (hold last pose for N frames)"
+  - "Grid size must be dynamic — growing as the robot explores"
+
+done_definition:
+  - "Builds with -Werror + zero warnings"
+  - "Live map visible on dashboard during mapping"
+  - "Memory usage bounded even in multi-hour sessions"

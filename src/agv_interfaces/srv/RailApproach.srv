@@ -1,0 +1,9 @@
+int32 tag_id              # Which rail-start tag to approach
+float64 offset_x          # Desired camera-to-tag forward distance (m), 0 = use default
+float64 offset_y          # Desired camera-to-tag lateral offset (m), 0 = centered
+---
+bool success
+string message
+float64 final_error_x     # Achieved forward error (m)
+float64 final_error_y     # Achieved lateral error (m)
+float64 final_error_yaw   # Achieved heading error (rad)

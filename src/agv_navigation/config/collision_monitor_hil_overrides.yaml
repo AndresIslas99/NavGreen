@@ -1,0 +1,38 @@
+# Nav2 collision_monitor HIL override.
+#
+# Applied by navigation.launch.py when hil_mode:=true. Loaded AFTER the base
+# collision_monitor.yaml, so matching keys win.
+#
+# WHY THIS EXISTS
+# ---------------
+# The production collision_monitor watches two independent observation sources
+# (see collision_monitor.yaml `observation_sources`):
+#
+#   1. scan_source       — LaserScan on /agv/scan (fast 2D slice)
+#   2. pointcloud_source — raw PointCloud2 on /agv/zed/point_cloud/cloud_registered
+#                          (3D defense-in-depth: catches obstacles above/below the
+#                          laser slice, e.g., low ceilings, cables, hanging
+#                          branches)
+#
+# In production, both topics are published locally on the Jetson by the ZED
+# wrapper (zero network cost), so the 3D coverage is effectively free.
+#
+# In HIL (sim PC on WiFi), the raw ZED point cloud is ~1.2 MB × 15 Hz = ~180 Mbps.
+# The Jetson cannot sustain that over the radio AND the small BEST_EFFORT
+# /agv/scan from the sim at the same time — the large messages starve the small
+# ones and safety_supervisor flips safety_ok=false on "silent: /agv/scan".
+#
+# Dropping pointcloud_source in HIL keeps the bandwidth within budget. We lose
+# the 3D defense-in-depth layer, but:
+#   * scan_source alone is the same safety layer the robot had before the
+#     2026-04-13 audit added pointcloud_source as gap #3 (see agv_navigation
+#     CLAUDE.md "The 8 audit gaps"). It is sufficient for HIL validation.
+#   * This override only ever applies in HIL. Production behavior is untouched.
+#
+# Scope: override only `observation_sources`. Everything else (stop/slowdown
+# polygons, frequencies, polygon_pub_topic, etc.) stays as-is in the base
+# config.
+
+/**/collision_monitor:
+  ros__parameters:
+    observation_sources: ["scan_source"]

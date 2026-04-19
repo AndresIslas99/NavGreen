@@ -1,0 +1,224 @@
+# AprilTag marker registry — known marker poses in map frame
+# Family: tag36h11, tag face 0.20m × 0.20m (override per-tag via tag_size).
+# Border plate 0.25m × 0.25m × 5 mm (OmniPBR white). Tag thickness 1 mm.
+# Positions baked into agv-greenhouse-sim USD (greenhouse_with_robot.usd,
+# operator-confirmed 2026-04-18). 36 tags total, IDs 0–37 (ID 32 unused).
+#
+# Categories (by z-height and purpose):
+#   - wall (z=0.145m): drift-correction via agv_markers (global EKF hint)
+#   - row_start (z=0.145m): vertical tags at x=7.40 (FRONT) and x=3.60 (REAR)
+#     marking the start of each crop row — consumed by agv_markers.
+#   - floor_rail_entry (z=0.002m): face-up tags at x=7.00 (FRONT entry) and
+#     x=4.00 (REAR entry) used by agv_rail_approach for 2 cm alignment
+#     before the robot enters a rail aisle.
+# The type field is optional — defaults to wall/row_start/floor_rail_entry
+# based on z-height and x-coordinate.
+
+markers:
+  # Pared oeste
+  - id: 0
+    x: -16.88
+    y: 0.00
+    z: 0.145
+    yaw: 0.0
+  - id: 5
+    x: -16.88
+    y: -5.00
+    z: 0.145
+    yaw: 0.0
+  - id: 21
+    x: -16.88
+    y: -4.40
+    z: 0.145
+    yaw: 0.0
+  - id: 22
+    x: -16.88
+    y: -2.20
+    z: 0.145
+    yaw: 0.0
+  - id: 23
+    x: -16.88
+    y: 0.00
+    z: 0.145
+    yaw: 0.0
+  - id: 24
+    x: -16.88
+    y: 2.20
+    z: 0.145
+    yaw: 0.0
+  - id: 25
+    x: -16.88
+    y: 4.40
+    z: 0.145
+    yaw: 0.0
+
+  # Pared este
+  - id: 1
+    x: 27.88
+    y: 0.00
+    z: 0.145
+    yaw: 3.14159
+  - id: 16
+    x: 27.88
+    y: -4.40
+    z: 0.145
+    yaw: 3.14159
+  - id: 17
+    x: 27.88
+    y: -2.20
+    z: 0.145
+    yaw: 3.14159
+  - id: 18
+    x: 27.88
+    y: 0.00
+    z: 0.145
+    yaw: 3.14159
+  - id: 19
+    x: 27.88
+    y: 2.20
+    z: 0.145
+    yaw: 3.14159
+  - id: 20
+    x: 27.88
+    y: 4.40
+    z: 0.145
+    yaw: 3.14159
+
+  # Pared norte/sur
+  - id: 14
+    x: 15.00
+    y: 7.38
+    z: 0.145
+    yaw: -1.5708
+  - id: 15
+    x: 15.00
+    y: -7.38
+    z: 0.145
+    yaw: 1.5708
+
+  # Inicio hileras (frente, x=7.40)
+  - id: 6
+    x: 7.40
+    y: -5.50
+    z: 0.145
+    yaw: 3.14159
+  - id: 7
+    x: 7.40
+    y: -3.30
+    z: 0.145
+    yaw: 3.14159
+  - id: 8
+    x: 7.40
+    y: -1.10
+    z: 0.145
+    yaw: 3.14159
+  - id: 9
+    x: 7.40
+    y: 1.10
+    z: 0.145
+    yaw: 3.14159
+  - id: 10
+    x: 7.40
+    y: 3.30
+    z: 0.145
+    yaw: 3.14159
+  - id: 11
+    x: 7.40
+    y: 5.50
+    z: 0.145
+    yaw: 3.14159
+
+  # Inicio hileras (atrás, x=3.60)
+  - id: 26
+    x: 3.60
+    y: -5.50
+    z: 0.145
+    yaw: 0.0
+  - id: 27
+    x: 3.60
+    y: -3.30
+    z: 0.145
+    yaw: 0.0
+  - id: 28
+    x: 3.60
+    y: -1.10
+    z: 0.145
+    yaw: 0.0
+  - id: 29
+    x: 3.60
+    y: 1.10
+    z: 0.145
+    yaw: 0.0
+  - id: 30
+    x: 3.60
+    y: 3.30
+    z: 0.145
+    yaw: 0.0
+  - id: 31
+    x: 3.60
+    y: 5.50
+    z: 0.145
+    yaw: 0.0
+
+  # Suelo pasillos (frente, x=7.00)
+  - id: 2
+    x: 7.00
+    y: -4.40
+    z: 0.002
+    yaw: 0.0
+  - id: 3
+    x: 7.00
+    y: -2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 4
+    x: 7.00
+    y: 0.00
+    z: 0.002
+    yaw: 0.0
+  - id: 12
+    x: 7.00
+    y: 2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 13
+    x: 7.00
+    y: 4.40
+    z: 0.002
+    yaw: 0.0
+
+  # Suelo pasillos (atrás, x=4.00)
+  - id: 33
+    x: 4.00
+    y: -4.40
+    z: 0.002
+    yaw: 0.0
+  - id: 34
+    x: 4.00
+    y: -2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 35
+    x: 4.00
+    y: 0.00
+    z: 0.002
+    yaw: 0.0
+  - id: 36
+    x: 4.00
+    y: 2.20
+    z: 0.002
+    yaw: 0.0
+  - id: 37
+    x: 4.00
+    y: 4.40
+    z: 0.002
+    yaw: 0.0
+
+  # ── Rail entry floor tags (used by agv_rail_approach) ──
+  # The 10 floor tags above (IDs 2,3,4,12,13 FRONT x=7.00; IDs 33,34,35,36,37
+  # REAR x=4.00) are the approach targets for the RAIL_APPROACH mode. Robot
+  # detects them at ~1.0–2.5 m range with the ZED mounted at z=0.21 m, drives
+  # the final metre with the agv_rail_approach P-controller, settles, and
+  # hands off to agv_rail_driver for the longitudinal traversal.
+  # These entries are the floor tags listed above — no separate registry
+  # block needed. Field-deploy surveyed positions override these values.

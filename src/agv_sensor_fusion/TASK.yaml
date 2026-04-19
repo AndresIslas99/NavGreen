@@ -1,0 +1,35 @@
+task_version: "1.1"
+package: "agv_sensor_fusion"
+owner_role: "architect_agent"
+language: "C++17 config and integration around robot_localization"
+
+objective: "Fuse wheel odometry, IMU, visual SLAM, and optional marker correction into a stable dual-EKF local and global estimate."
+
+inputs:
+  topics:
+    - "/{robot_namespace}/wheel_odom"
+    - "IMU topic from ZED 2i"
+    - "visual SLAM pose source"
+    - "/{robot_namespace}/marker_pose"
+  config_files:
+    - "ekf_local.yaml"
+    - "ekf_global.yaml"
+
+outputs:
+  tf_requirements:
+    - "odom -> base_link"
+    - "map -> odom"
+
+rules:
+  - "Keep local and global filters clearly separated"
+  - "Do not mix frame responsibilities"
+  - "Covariance settings must be configurable, not embedded in code"
+  - "Local filter owns odom -> base_link using wheel odometry and IMU continuity"
+  - "Global filter owns map -> odom using visual SLAM and optional marker corrections"
+  - "Temporary visual degradation must not collapse local odom tracking"
+
+done_definition:
+  - "TF tree remains complete without gaps"
+  - "covariance trends are reasonable under motion"
+  - "global pose remains stable after map load and relocalization"
+  - "local odom remains usable during brief visual degradation"

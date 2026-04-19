@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>agv_localization_init</name>
+  <version>1.0.0</version>
+  <description>
+    Auto-localization orchestrator for AGV greenhouse. Coordinates cuVSLAM
+    relocalization against a pre-built keyframe database, using AprilTag
+    detections as the primary pose hint and last-known-pose as a fallback.
+    Publishes /agv/localization/state so the dashboard and action guards
+    know when the robot is safely localized.
+  </description>
+  <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>isaac_ros_visual_slam_interfaces</depend>
+  <depend>robot_localization</depend>
+  <depend>zed_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

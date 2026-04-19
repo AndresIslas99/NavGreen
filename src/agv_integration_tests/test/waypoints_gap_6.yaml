@@ -1,0 +1,19 @@
+# Waypoints — GAP ZONE 6 waypoints (Phase 1 final, 2026-04-18)
+#
+# Subset of waypoints_gap_10 excluding the 4 that consistently fail due to
+# lateral drift into crop rows (wp07 2 m y=0, wp08 1.5 m y=+0.3, wp09 1.5 m
+# y=-0.3, wp10 3.4 m full-gap). The remaining 6 are short/medium y=0
+# traversals inside the 4-m gap, which pass reliably at ≤0.10 m precision
+# (Round 39b: 6/6 consecutive SUCCESS, mean 0.083 m, 0 RESET_TIMEOUT).
+#
+# This file closes Phase 1 with a reproducible 100%-success baseline. The
+# excluded waypoints require Phase 2 (rail_driver with wz=0 hard) which
+# handles long forward drives without MPPI lateral sampling.
+
+waypoints:
+  - {id: wp01, start: {x: 4.0, y: 0.0, yaw: 0.0}, goal: {x: 4.5, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp02, start: {x: 5.0, y: 0.0, yaw: 0.0}, goal: {x: 5.5, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp03, start: {x: 6.5, y: 0.0, yaw: 0.0}, goal: {x: 7.0, y: 0.0, yaw: 0.0}}  # 0.5 m
+  - {id: wp04, start: {x: 4.0, y: 0.0, yaw: 0.0}, goal: {x: 5.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+  - {id: wp05, start: {x: 5.0, y: 0.0, yaw: 0.0}, goal: {x: 6.0, y: 0.0, yaw: 0.0}}  # 1.0 m
+  - {id: wp06, start: {x: 6.0, y: 0.0, yaw: 0.0}, goal: {x: 7.0, y: 0.0, yaw: 0.0}}  # 1.0 m

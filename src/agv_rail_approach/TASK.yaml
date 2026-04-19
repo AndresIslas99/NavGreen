@@ -1,0 +1,35 @@
+task_version: "1.0"
+package: "agv_rail_approach"
+owner_role: "navigation"
+status: "partially_integrated"
+language: "C++17"
+dev_only: false
+
+objective: |
+  AprilTag-guided precision docking / rail approach controller. Publishes
+  velocity commands during an active approach and a state topic the
+  dashboard mirrors.
+
+inputs:
+  topics:
+    - "/agv/marker_pose"
+    - "/agv/odometry/global"
+    - "/agv/e_stop"
+  files:
+    - "runtime_markers_registry.yaml (shared with agv_markers)"
+
+outputs:
+  topics:
+    - "/agv/cmd_vel (shared with teleop — must be mutually exclusive)"
+    - "/agv/rail_approach/status"
+
+rules:
+  - "Must honor /agv/e_stop with zero cmd_vel output"
+  - "Must not run in autonomous mode without an explicit approach request"
+  - "Cross-package cmd_vel authorship must be coordinated by the backend state machine"
+
+done_definition:
+  - "Builds with -Werror + zero warnings"
+  - "Launches at t=7s in agv_full.launch.py with enable_markers=true"
+  - "State topic visible on ros2 topic list with expected transitions"
+  - "Integration test for approach → settled → handover flow"

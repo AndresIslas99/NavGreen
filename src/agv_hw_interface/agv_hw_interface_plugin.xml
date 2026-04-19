@@ -1,0 +1,14 @@
+<library path="agv_hw_interface">
+  <class
+    name="agv_hw_interface/AgvDiffDriveSystem"
+    type="agv_hw_interface::AgvDiffDriveSystem"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ros2_control SystemInterface for the AGV ODrive CAN driver. Exposes
+      left_wheel_joint and right_wheel_joint as state (position, velocity)
+      and command (velocity) interfaces. Wraps the same SocketCAN protocol
+      that agv_odrive uses, but speaks ros2_control instead of being a
+      standalone ROS2 node.
+    </description>
+  </class>
+</library>

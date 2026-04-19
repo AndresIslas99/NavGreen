@@ -1,0 +1,93 @@
+# Heuristics consumed by iteration_report.py to diagnose failed waypoints.
+#
+# Each rule has:
+#   id:        stable short identifier referenced in the generated markdown
+#   when:      dict of field → condition. All must match for the rule to fire.
+#              Supported operators per-field: gt, gte, lt, lte, eq, in, contains
+#   category:  "root_cause" (likely explanation) or "recommendation"
+#   message:   one-line diagnosis + suggested next step; may reference fields
+#              by {braces} at render time.
+#   bucket:    optional filter — if set, only applies to waypoints whose
+#              dispatch matches (nav2 | rail_approach | rail_drive | rail_exit).
+#
+# Keep rules SHORT. If a rule's message grows past 160 chars, split it into
+# a root_cause + recommendation pair.
+
+rules:
+  - id: collision_any_bucket
+    when:
+      event_histogram.collision: {gt: 0}
+    category: root_cause
+    message: "Collision event(s) observed ({event_histogram.collision}). Inspect snapshot and nearest_obstacle_at_end — likely clipped {nearest_obstacle_at_end.name} ({nearest_obstacle_at_end.distance_m:.2f} m)."
+
+  - id: drift_event_fired
+    when:
+      event_histogram.drift: {gt: 0}
+    category: root_cause
+    message: "Localization monitor fired {event_histogram.drift} drift event(s); peak pos_err {localization.peak_pos_err_m:.3f} m. Likely EKF cold-start or wheel_odom covariance drift."
+
+  - id: watchdog_recovery
+    when:
+      event_histogram.watchdog_recovery: {gt: 0}
+    category: root_cause
+    message: "Sim watchdog teleported robot ({event_histogram.watchdog_recovery}×) — physics ejection. Inspect snapshot and recent events JSON; often a collision into a thin wall."
+
+  - id: unstick_fired
+    when:
+      event_histogram.sim_unstick: {gt: 0}
+    category: root_cause
+    message: "sim_unstick fired {event_histogram.sim_unstick}× — commanded velocity not producing motion. Check drive chain (motor gate, cmd_vel → odrive relay, dock)."
+
+  - id: nav_timeout_high_loc_err
+    when:
+      status: {eq: "NAV_TIMEOUT"}
+      localization.peak_pos_err_m: {gt: 0.25}
+    category: root_cause
+    message: "Timed out AND peak localization error {localization.peak_pos_err_m:.3f} m > 0.25 m. EKF lost the pose — Nav2 replans in circles. Investigate set_pose flow or cuVSLAM jumps."
+
+  - id: rail_approach_missing_tag_at_apex
+    bucket: rail_approach
+    when:
+      visible_markers_at_end.contains_id: {not_in_expected_tag: true}
+    category: root_cause
+    message: "Expected approach tag {modes_expected} was not among visible_markers_at_end. Camera FoV or mounting offset may have regressed."
+
+  - id: rail_drive_lat_drift
+    bucket: rail_drive
+    when:
+      localization.peak_pos_err_m: {gt: 0.05}
+    category: root_cause
+    message: "Peak lateral drift during rail_drive: {localization.peak_pos_err_m:.3f} m > 0.05 m gate. Consider visual feedback from rail_detector (Stage K) or tuning rail_driver kP / speed_max."
+
+  - id: rail_exit_missing_mode
+    bucket: rail_exit
+    when:
+      modes_observed.contains: {missing: "rail_exit"}
+    category: root_cause
+    message: "Mode stream never reached rail_exit. Arbiter shortcut didn't fire — verify mode_arbiter is running and /agv/rail_driver/state publishes 'driving'."
+
+  - id: rail_exit_insufficient_clearance
+    bucket: rail_exit
+    when:
+      status: {eq: "NAV_TIMEOUT"}
+      modes_observed.contains: {contains: "rail_exit"}
+    category: root_cause
+    message: "Entered rail_exit but never released to corridor_nav. Geometry params (rail_exit_gap_x_min/max, rear/front tag_x) may not match the map in use."
+
+  - id: reset_slow
+    when:
+      reset_wait_ms: {gt: 3000}
+    category: recommendation
+    message: "Teleport took {reset_wait_ms:.0f} ms — approaching the 5 s timeout. Investigate sim-side PhysX settle; consider bumping RESET_TIMEOUT_S or warm-up budget."
+
+# Thresholds consumed by summary-level analysis (not per-waypoint).
+summary_thresholds:
+  p95_err_xy_m: 0.10
+  max_err_xy_m: 0.15
+  p95_err_yaw_rad: 0.25
+  min_success_rate: 0.95
+  per_bucket:
+    nav2:          {mean_err_xy_m: 0.15}
+    rail_approach: {lat_err_m: 0.02, yaw_err_rad: 0.017}
+    rail_drive:    {peak_lat_m: 0.05, collisions: 0}
+    rail_exit:     {final_clearance_m: 1.0, wz_zero: true}
