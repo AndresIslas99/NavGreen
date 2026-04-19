@@ -88,6 +88,41 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
 - next run (iter-3) expected to fix: wp06 oscillation, wp10/wp13/wp14
   release failures. rail_approach bucket deferred.
 
+## iter-3 (2026-04-18) — FSM oscillation fix applied
+
+- report: `sim_episodes/precision_run_20260418_225028/report.json`
+- analysis: `sim_episodes/precision_run_20260418_225028/iteration_3_analysis.md`
+- bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4, rail_exit 0/2
+- success rate: **7/16 (43.8 %)**, 0 collisions
+- delta vs iter-2: **nav2 ↑ (2→3), rail_drive ↑ (3→4), rail_approach →, rail_exit →**
+- **Confirmed fixes:**
+  - wp06 ABORTED-via-oscillation is GONE (iter-3 SUCCEEDED 0.052 m / 64 s).
+  - FSM release sequence now shows clean `['rail_exit', 'corridor_nav']`
+    transitions on wp07/wp11/wp15, proving the `rail_driver_state !=
+    "driving"` gate lets the arbiter hand back to Nav2 without bouncing.
+  - rail_drive bucket is now fully green (4/4) with peak_pos_err under
+    the 0.05 m gate on all four waypoints.
+- **Remaining blockers (5 NAV_TIMEOUT + 2 ABORTED):**
+  1. `rail_approach` bucket 0/5 — all 5 waypoints (wp04, wp07, wp11,
+     wp12, wp16) NAV_TIMEOUT. Root cause: apriltag_ros image_transport
+     subscription receives 0 images from `/agv/zed/left/image_rect_color`
+     even though rclpy raw subscriptions see ~20 Hz. Probably a QoS /
+     plugin handshake issue across CycloneDDS USB-eth hop. Deferred
+     iter-4 work item.
+  2. `rail_exit` bucket 0/2 — wp13/wp14 NAV_TIMEOUT at err_xy ≈ 1.54 m
+     (robot reached initial tag but never completed the 1.5 m exit push
+     within the 270 s budget). Possibly sim-speed-related (RTF ~0.16)
+     and/or an arbiter push-goal issue worth separate investigation.
+  3. `nav2` wp10 ABORTED 1.5 m (stalled after teleport — GT didn't
+     advance despite cmd_vel), wp15 ABORTED 2.60 m with non-trivial yaw
+     (0.29 rad) — sim-side motor-gate flakiness post-waypoint.
+- decisions: no code changes in iter-3 — iter-2's FSM refinement was the
+  single change validated by this run.
+- next run (iter-4) expected to fix: the apriltag image-delivery chain
+  (plan: sim-oracle-to-apriltag shim that bypasses the broken
+  image_transport path). If successful, rail_approach unlocks 5 more
+  waypoints in one stroke (projected 12/16 = 75 %).
+
 <!--
 Template for each subsequent iteration:
 
