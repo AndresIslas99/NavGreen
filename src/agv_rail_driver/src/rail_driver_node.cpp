@@ -25,6 +25,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #include "agv_rail_driver/rail_controller.hpp"
 
@@ -92,6 +93,20 @@ class RailDriverNode : public rclcpp::Node {
 
     pub_cmd_ = create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, rclcpp::QoS{10});
     pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, rclcpp::QoS{10});
+
+    // Iter-22: cancel_goal service — atomic, synchronous cancel of any
+    // active rail goal. Replaces the iter-7/8/9 "publish a zero-distance
+    // PoseStamped at the current pose" hack in the test harness, which
+    // had a race with the mode_arbiter's auto-EXIT_PUSH (observed as
+    // `clearance_now=-2.95` and the robot drifting 2.95 m before the
+    // teleport took effect). The service invalidates have_goal_ in the
+    // service callback, publishes a one-shot CANCELED state tick via
+    // cancel_requested_, and stops the robot (cmd_vel=0). The next
+    // on_tick() sees have_goal=false and compute() returns IDLE.
+    cancel_srv_ = create_service<std_srvs::srv::Trigger>(
+        "/agv/rail_driver/cancel_goal",
+        std::bind(&RailDriverNode::on_cancel_goal, this,
+                  std::placeholders::_1, std::placeholders::_2));
 
     timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -185,8 +200,47 @@ class RailDriverNode : public rclcpp::Node {
     }
   }
 
+  void on_cancel_goal(
+      const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
+      std::shared_ptr<std_srvs::srv::Trigger::Response> resp) {
+    // Synchronous drop: clear have_goal_ AND arm the one-shot CANCELED
+    // tick that on_tick() will honor on its next invocation. We also
+    // publish a zero cmd_vel immediately so downstream consumers
+    // (collision_monitor, arbiter relay) see the stop without waiting
+    // for the next 20 Hz tick.
+    have_goal_ = false;
+    cancel_requested_ = true;
+    geometry_msgs::msg::Twist stop;
+    pub_cmd_->publish(stop);
+    resp->success = true;
+    resp->message = "rail_driver goal canceled";
+    RCLCPP_INFO(get_logger(), "cancel_goal: have_goal_=false, "
+                "emitting CANCELED tick");
+  }
+
   void on_tick() {
     if (!last_odom_) return;
+
+    // Iter-22: if cancel was requested since last tick, emit a one-shot
+    // CANCELED state message and publish cmd_vel=0 before running the
+    // control law. Skips compute() entirely to avoid races with visual
+    // feedback or lateral-abort checks firing on stale inputs.
+    if (cancel_requested_) {
+      cancel_requested_ = false;
+      geometry_msgs::msg::Twist stop;
+      pub_cmd_->publish(stop);
+      std::ostringstream cs;
+      cs.precision(4);
+      cs << std::fixed << "{\"state\":\"canceled\","
+         << "\"linear_x\":0.0000,"
+         << "\"remaining_m\":0.0000,"
+         << "\"in_rail_zone\":" << (last_in_rail_ ? "true" : "false") << ","
+         << "\"collision_stop\":" << (last_collision_stop_ ? "true" : "false") << "}";
+      std_msgs::msg::String cm;
+      cm.data = cs.str();
+      pub_state_->publish(cm);
+      return;
+    }
 
     RailControllerInputs in;
     in.current_x = last_odom_->pose.pose.position.x;
@@ -250,10 +304,12 @@ class RailDriverNode : public rclcpp::Node {
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_rail_detector_state_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_state_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr cancel_srv_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   nav_msgs::msg::Odometry::ConstSharedPtr last_odom_;
   bool have_goal_ = false;
+  bool cancel_requested_ = false;   // Iter-22: set by cancel_goal service.
   double goal_x_ = 0.0;
   double goal_y_ = 0.0;
   double last_rail_yaw_error_ = std::nan("");
