@@ -144,6 +144,17 @@ class WaypointResult:
     modes_match: Optional[bool] = None
     # Phase 2 G: which driver was dispatched for this waypoint.
     dispatch_used: Optional[str] = None
+    # Round 44 Q3: oracle-derived diagnostics. All optional so legacy
+    # report.json consumers stay backward-compatible.
+    localization: Optional[dict] = None             # peak + rmse stats
+    visible_markers_at_start: Optional[list] = None
+    visible_markers_at_end: Optional[list] = None
+    nearest_obstacle_at_end: Optional[dict] = None
+    event_histogram: Optional[dict] = None          # {collision, drift, watchdog_recovery, sim_unstick, ...}
+    sim_api_snapshots: Optional[dict] = None        # {pre: {...}, post: {...}, reset: {...}}
+    episode_summary: Optional[dict] = None
+    snapshot_paths: Optional[dict] = None           # {fail_jpg, events_json} when failure
+    reset_wait_ms: Optional[float] = None
 
 
 def _quat_to_yaw(x: float, y: float, z: float, w: float) -> float:
@@ -299,6 +310,18 @@ class Harness(Node):
         # Phase 2: lazy-created publisher for /agv/rail_driver/goal.
         self._rail_goal_pub = None
 
+        # Round 44 Q1: sim-side ground-truth oracle caches. Parsed once
+        # per message; the harness does not dedupe identical payloads.
+        self.last_visible_markers: list[dict] = []  # [{id, distance_m, bearing_rad, incidence_deg}]
+        self.obstacle_catalog: list[dict] = []      # latched once; static list
+        self._loc_err_window: list[dict] = []       # bounded-length ring of recent localization_error samples
+        self._loc_err_window_cap = 600              # ~10 min at 1 Hz
+        self.last_localization_error: Optional[dict] = None
+        self.last_episode_summary: Optional[dict] = None
+        # Round 44 Q1: per-waypoint accumulators, cleared by begin_waypoint_modes.
+        self._event_types_since: dict[str, int] = {}
+        self._events_cursor: int = 0
+
         self.create_subscription(
             PoseStamped,
             "/agv/sim/ground_truth/pose",
@@ -345,6 +368,34 @@ class Harness(Node):
             reliable_qos,
         )
 
+        # Round 44 Q1: sim-side ground-truth oracle subscriptions. visible_markers
+        # + localization_error stream at 5/1 Hz; obstacles is latched (catalogue
+        # parsed once). episode_summary is latched per Nav2 episode.
+        self.create_subscription(
+            String,
+            "/agv/sim/ground_truth/visible_markers",
+            self._on_visible_markers,
+            reliable_qos,
+        )
+        self.create_subscription(
+            String,
+            "/agv/sim/ground_truth/obstacles",
+            self._on_obstacles,
+            latched_qos,
+        )
+        self.create_subscription(
+            String,
+            "/agv/sim/localization_error",
+            self._on_localization_error,
+            reliable_qos,
+        )
+        self.create_subscription(
+            String,
+            "/agv/sim/episode_summary",
+            self._on_episode_summary,
+            latched_qos,
+        )
+
         # NOTE: no ActionClient here. rclpy's internal feedback-subscription
         # triggers a pybind11 TypeError on nav2_msgs/NavigateToPose feedback
         # (observed 2026-04-17). navigate_to() uses sim_api HTTP /goal instead.
@@ -366,15 +417,138 @@ class Harness(Node):
             payload = {"raw": msg.data}
         payload["_received_wall_s"] = time.time()
         self._events.append(payload)
+        # Round 44 Q1: accumulate type histogram for the current waypoint.
+        # begin_waypoint_modes() resets the counters at the start of each wp.
+        etype = payload.get("event")
+        if isinstance(etype, str):
+            self._event_types_since[etype] = self._event_types_since.get(etype, 0) + 1
+
+    # ── Round 44 Q1: sim-side oracle parsers ──────────────────────────
+
+    def _on_visible_markers(self, msg: String) -> None:
+        try:
+            data = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        # Accept either a top-level list or {"markers": [...]} for robustness.
+        markers = data if isinstance(data, list) else data.get("markers", [])
+        if isinstance(markers, list):
+            self.last_visible_markers = [m for m in markers if isinstance(m, dict)]
+
+    def _on_obstacles(self, msg: String) -> None:
+        try:
+            data = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        items = data if isinstance(data, list) else data.get("obstacles", [])
+        if isinstance(items, list):
+            self.obstacle_catalog = [o for o in items if isinstance(o, dict)]
+
+    def _on_localization_error(self, msg: String) -> None:
+        try:
+            data = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(data, dict):
+            return
+        data["_received_wall_s"] = time.time()
+        self.last_localization_error = data
+        self._loc_err_window.append(data)
+        if len(self._loc_err_window) > self._loc_err_window_cap:
+            # Drop oldest; ring behaviour.
+            self._loc_err_window = self._loc_err_window[-self._loc_err_window_cap:]
+
+    def _on_episode_summary(self, msg: String) -> None:
+        try:
+            data = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if isinstance(data, dict):
+            self.last_episode_summary = data
 
     def _on_mode_state(self, msg: String) -> None:
         self._mode_recorder.record_transition(msg.data)
 
     def begin_waypoint_modes(self) -> None:
         self._mode_recorder.begin_waypoint()
+        # Round 44 Q1: the per-waypoint diagnostic accumulators share the
+        # same lifecycle as the mode recorder.
+        self._event_types_since = {}
+        self._events_cursor = len(self._events)
+        self._loc_err_window = []  # bounded localization-error stream for this wp
 
     def modes_observed(self) -> list:
         return self._mode_recorder.modes_seen()
+
+    # ── Round 44 Q1: oracle-derived snapshots + aggregates ─────────────
+
+    def visible_markers_snapshot(self) -> list:
+        """Return the latest visible_markers (deep-copied, no system fields)."""
+        return [dict(m) for m in self.last_visible_markers]
+
+    def localization_stats(self) -> dict:
+        """Aggregate peak + rmse over the localization_error ring buffer.
+
+        Returns a dict with peak_pos_err_m, peak_yaw_err_rad, rmse_pos_m,
+        rmse_yaw_rad, sample_count. All-zero + count=0 when no samples
+        arrived during the waypoint.
+        """
+        samples = self._loc_err_window
+        if not samples:
+            return {
+                "peak_pos_err_m": 0.0,
+                "peak_yaw_err_rad": 0.0,
+                "rmse_pos_m": 0.0,
+                "rmse_yaw_rad": 0.0,
+                "sample_count": 0,
+            }
+        pos = [float(s.get("pos_err_m", 0.0)) for s in samples]
+        yaw = [float(s.get("yaw_err_rad", 0.0)) for s in samples]
+        return {
+            "peak_pos_err_m": max(pos) if pos else 0.0,
+            "peak_yaw_err_rad": max(abs(v) for v in yaw) if yaw else 0.0,
+            # Prefer the node's own rolling RMSE when available (it's
+            # computed over its own window_s), else fall back to the last
+            # sample field the node exposes.
+            "rmse_pos_m": float(samples[-1].get("rmse_pos_m", 0.0)),
+            "rmse_yaw_rad": float(samples[-1].get("rmse_yaw_rad", 0.0)),
+            "sample_count": len(samples),
+        }
+
+    def nearest_obstacle(self, x: float, y: float) -> Optional[dict]:
+        """Find the closest entry in obstacle_catalog to (x, y).
+
+        Returns {name, kind, distance_m, obstacle_x, obstacle_y} or None
+        when the catalog is empty (oracle not yet received).
+        """
+        if not self.obstacle_catalog:
+            return None
+        best = None
+        best_d = float("inf")
+        for o in self.obstacle_catalog:
+            # Expected shape per spec: {name, kind, pose: {x, y}, size: {...}}
+            pose = o.get("pose") if isinstance(o.get("pose"), dict) else o
+            ox = float(pose.get("x", 0.0))
+            oy = float(pose.get("y", 0.0))
+            d = math.hypot(x - ox, y - oy)
+            if d < best_d:
+                best_d = d
+                best = {
+                    "name": o.get("name"),
+                    "kind": o.get("kind"),
+                    "distance_m": d,
+                    "obstacle_x": ox,
+                    "obstacle_y": oy,
+                }
+        return best
+
+    def event_histogram(self) -> dict:
+        """Counts per event type accumulated since begin_waypoint_modes."""
+        return dict(self._event_types_since)
+
+    def events_since_cursor(self) -> list:
+        """Slice of raw events captured during the current waypoint."""
+        return list(self._events[self._events_cursor:])
 
     def ensure_rail_goal_publisher(self):
         """Lazy-create the one-shot publisher for /agv/rail_driver/goal.
@@ -918,6 +1092,7 @@ def _run_one_waypoint(
     harness: Harness,
     wp: dict,
     budget: Optional[RestartBudget] = None,
+    report_dir: Optional[Path] = None,
 ) -> WaypointResult:
     wp_id = wp["id"]
     start = wp["start"]
@@ -927,6 +1102,10 @@ def _run_one_waypoint(
     # Phase 2: clear the recorder so modes_observed() tracks only this wp.
     harness.begin_waypoint_modes()
 
+    # Round 44 Q2: snapshot sim_api telemetry BEFORE the teleport so the
+    # post-waypoint delta captures watchdog/unstick counters for THIS wp.
+    pre_telemetry = _get_sim_api("/sim/telemetry", timeout=3.0)
+
     # 0. Cancel any active Nav2 action from the previous waypoint before
     #    teleporting — otherwise Nav2 keeps driving the robot toward the old
     #    goal during the post-reset settle window (round 18 wp02 symptom).
@@ -935,9 +1114,10 @@ def _run_one_waypoint(
     # 1. Teleport, with one self-heal retry on RESET_TIMEOUT if the budget allows.
     t_reset_issue = time.time()
     reset_ok = False
+    reset_response: Optional[dict] = None
     for attempt in range(2):
         try:
-            _post_sim_api(
+            reset_response = _post_sim_api(
                 "/reset",
                 {"x": float(start["x"]), "y": float(start["y"]), "yaw": float(start["yaw"])},
             )
@@ -1014,6 +1194,11 @@ def _run_one_waypoint(
                 _reinit_localization(harness)
                 harness.spin_until(lambda: False, 0.5)
 
+    # Round 44 Q1: snapshot the markers the robot sees right BEFORE dispatch.
+    # This is "at_start" — after teleport + sync, with the camera looking at
+    # whatever tag the waypoint targets.
+    markers_at_start = harness.visible_markers_snapshot()
+
     # 4. Navigate — pick the driver based on the waypoint's dispatch.
     t_nav_start = time.time()
     t_events_start = time.time()
@@ -1059,6 +1244,18 @@ def _run_one_waypoint(
     brain_final = harness.current_brain_xy()
     events_during = harness.events_since(t_events_start)
 
+    # Round 44 Q1/Q2: post-dispatch oracle snapshots. visible_markers_at_end
+    # captures what was visible at the terminal pose (useful for diagnosing
+    # rail_approach that settled on the wrong tag). post_telemetry closes
+    # the per-waypoint sim-side delta begun by pre_telemetry above.
+    markers_at_end = harness.visible_markers_snapshot()
+    post_telemetry = _get_sim_api("/sim/telemetry", timeout=3.0)
+    loc_stats = harness.localization_stats()
+    event_hist = harness.event_histogram()
+    nearest_obs = None
+    if gt_final is not None:
+        nearest_obs = harness.nearest_obstacle(gt_final[0], gt_final[1])
+
     # For rail_exit waypoints, the meaningful terminal pose is the push
     # target (≥ 1 m past the tag), not the initial rail_drive goal at the
     # tag. The harness records err_xy against exit_goal when supplied.
@@ -1091,6 +1288,50 @@ def _run_one_waypoint(
         from mode_transitions_oracle import is_subsequence
         modes_match = is_subsequence(expected_modes, modes_obs)
 
+    # Round 44 Q2: on failure, preserve forensic artefacts alongside
+    # report.json so iteration_report.py can link to them.
+    snapshot_paths: Optional[dict] = None
+    if report_dir is not None and status in ("COLLISION", "NAV_TIMEOUT", "ABORTED",
+                                              "RESET_TIMEOUT", "DISPATCH_ERROR",
+                                              "GOAL_SEND_TIMEOUT"):
+        snap_dir = report_dir / "snapshots"
+        snap_dir.mkdir(parents=True, exist_ok=True)
+        jpg_path = snap_dir / f"{wp_id}_fail.jpg"
+        events_path = snap_dir / f"{wp_id}_events.json"
+        try:
+            url = f"http://{SIM_API_HOST}:{SIM_API_PORT}/snapshot.jpg"
+            with urllib.request.urlopen(url, timeout=5.0) as r:
+                jpg_path.write_bytes(r.read())
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError):
+            jpg_path = None
+        events_tail = _get_sim_api(
+            f"/events?since={t_nav_start:.3f}", timeout=5.0)
+        if events_tail is not None:
+            try:
+                events_path.write_text(json.dumps(events_tail, indent=2))
+            except OSError:
+                events_path = None
+        else:
+            events_path = None
+        snapshot_paths = {
+            "fail_jpg": str(jpg_path) if jpg_path else None,
+            "events_json": str(events_path) if events_path else None,
+        }
+
+    # Round 44 Q2/Q3: bundle sim_api snapshots for the report.
+    sim_api_snapshots = {
+        "pre": pre_telemetry,
+        "post": post_telemetry,
+        "reset": reset_response,
+    }
+    reset_wait_ms = None
+    if isinstance(reset_response, dict):
+        w = reset_response.get("wait_ms")
+        try:
+            reset_wait_ms = float(w) if w is not None else None
+        except (TypeError, ValueError):
+            reset_wait_ms = None
+
     return WaypointResult(
         wp_id=wp_id,
         goal_x=goal["x"], goal_y=goal["y"], goal_yaw=goal["yaw"],
@@ -1110,6 +1351,15 @@ def _run_one_waypoint(
         modes_expected=expected_modes if expected_modes else None,
         modes_match=modes_match,
         dispatch_used=dispatch,
+        localization=loc_stats,
+        visible_markers_at_start=markers_at_start,
+        visible_markers_at_end=markers_at_end,
+        nearest_obstacle_at_end=nearest_obs,
+        event_histogram=event_hist,
+        sim_api_snapshots=sim_api_snapshots,
+        episode_summary=harness.last_episode_summary,
+        snapshot_paths=snapshot_paths,
+        reset_wait_ms=reset_wait_ms,
     )
 
 
@@ -1142,16 +1392,35 @@ def _summarize(results: list[WaypointResult]) -> dict:
     }
 
 
+def _make_report_dir() -> Path:
+    """Create the per-run report directory and refresh `latest/` symlink.
+
+    Round 44 Q7: a stable `latest/` symlink lets iteration_report.py default
+    to the newest run without threading the timestamp around.
+    """
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = AGV_DATA_DIR / "sim_episodes"
+    out_dir = base / f"precision_run_{ts}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    latest = base / "latest"
+    try:
+        if latest.is_symlink() or latest.exists():
+            latest.unlink()
+        latest.symlink_to(out_dir.name)  # relative symlink
+    except OSError:
+        pass  # filesystem may not support symlinks — non-fatal
+    return out_dir
+
+
 def _write_report(
     results: list[WaypointResult],
     summary: dict,
+    out_dir: Path,
     budget: Optional[RestartBudget] = None,
 ) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_dir = AGV_DATA_DIR / "sim_episodes" / f"precision_run_{ts}"
-    out_dir.mkdir(parents=True, exist_ok=True)
     report = {
-        "run_id": f"precision_run_{ts}",
+        "run_id": out_dir.name,
+        "report_version": 2,
         "gates": {
             "p95_err_xy_m": P95_ERR_XY_M,
             "max_err_xy_m": MAX_ERR_XY_M,
@@ -1207,15 +1476,21 @@ def test_waypoint_precision():
 
         budget = RestartBudget(AUTO_RESTART_MAX, AUTO_RESTART_COOLDOWN_S)
 
+        # Round 44 Q2/Q7: the report directory is created up front so each
+        # waypoint can drop failure snapshots into its `snapshots/` subdir.
+        report_dir = _make_report_dir()
+        print(f"[waypoint_precision] report dir: {report_dir}", flush=True)
+
         results: list[WaypointResult] = []
         for wp in waypoints[:MIN_WAYPOINTS]:
             print(f"[wp {wp['id']}] → ({wp['goal']['x']}, {wp['goal']['y']}, {wp['goal']['yaw']:.2f})")
-            results.append(_run_one_waypoint(harness, wp, budget=budget))
+            results.append(_run_one_waypoint(
+                harness, wp, budget=budget, report_dir=report_dir))
             r = results[-1]
             print(f"    {r.status}  err_xy={r.err_xy}  err_yaw={r.err_yaw}  drift={r.brain_drift}  dur={r.duration_s:.1f}s")
 
         summary = _summarize(results)
-        report_path = _write_report(results, summary, budget=budget)
+        report_path = _write_report(results, summary, report_dir, budget=budget)
         print(f"\nREPORT: {report_path}")
         print(f"SUMMARY: {json.dumps(summary, indent=2)}")
         if budget.events:
