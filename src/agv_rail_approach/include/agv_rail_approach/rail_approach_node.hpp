@@ -74,6 +74,7 @@ private:
   double kp_yaw_;
   double max_fine_linear_;
   double max_fine_angular_;
+  bool check_yaw_convergence_{false};
   double tag_loss_timeout_;
   double tag_reacquire_timeout_;
   double acquisition_timeout_;
