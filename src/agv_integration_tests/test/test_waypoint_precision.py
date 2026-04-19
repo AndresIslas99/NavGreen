@@ -430,8 +430,15 @@ class Harness(Node):
             data = json.loads(msg.data)
         except (json.JSONDecodeError, TypeError):
             return
-        # Accept either a top-level list or {"markers": [...]} for robustness.
-        markers = data if isinstance(data, list) else data.get("markers", [])
+        # Sim wire format: {"t_sim": ..., "robot_pose": [...],
+        #                   "camera_pose": [...], "count": N, "visible": [...]}
+        # Also accept top-level list / {"markers": [...]} for other oracles.
+        if isinstance(data, list):
+            markers = data
+        elif isinstance(data, dict):
+            markers = data.get("visible", data.get("markers", []))
+        else:
+            markers = []
         if isinstance(markers, list):
             self.last_visible_markers = [m for m in markers if isinstance(m, dict)]
 
@@ -440,7 +447,16 @@ class Harness(Node):
             data = json.loads(msg.data)
         except (json.JSONDecodeError, TypeError):
             return
-        items = data if isinstance(data, list) else data.get("obstacles", [])
+        # Sim wire format: {"t_sim": ..., "source": "...", "count": N,
+        #                   "static_obstacles": [...]}. Also accept
+        # top-level list or {"obstacles": [...]} for robustness.
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = data.get("static_obstacles",
+                             data.get("obstacles", []))
+        else:
+            items = []
         if isinstance(items, list):
             self.obstacle_catalog = [o for o in items if isinstance(o, dict)]
 
@@ -614,9 +630,12 @@ class Harness(Node):
         # sim_api proxies NavigateToPose via its own ActionClient; we poll its
         # HTTP surface. Since /goal maps 1:1 to the action server, availability
         # of the action server implies sim_api is wired.
+        # /sim/telemetry is the stable liveness endpoint; /state can return
+        # 500 transiently when the brain's est_pose pipeline is stale.
         try:
             urllib.request.urlopen(
-                f"http://{SIM_API_HOST}:{SIM_API_PORT}/state", timeout=timeout_s
+                f"http://{SIM_API_HOST}:{SIM_API_PORT}/sim/telemetry",
+                timeout=timeout_s,
             ).read()
             return True
         except (urllib.error.URLError, urllib.error.HTTPError, OSError):
@@ -884,8 +903,14 @@ def _check_preconditions() -> None:
         pytest.skip("ROS_DOMAIN_ID must be 42 to see /agv/sim/* topics. See docs/validation/RUNBOOK_lan_hil.md.")
     if not WAYPOINTS_PATH.is_file():
         pytest.fail(f"missing waypoint spec: {WAYPOINTS_PATH}")
+    # Ping the sim_api liveness. /sim/telemetry is lightweight and always
+    # reflects the sim host's health; /state can throw 500 transiently when
+    # the brain's est_pose path is stale, which is NOT a reason to skip the
+    # HIL test itself.
     try:
-        urllib.request.urlopen(f"http://{SIM_API_HOST}:{SIM_API_PORT}/state", timeout=3.0).read()
+        urllib.request.urlopen(
+            f"http://{SIM_API_HOST}:{SIM_API_PORT}/sim/telemetry",
+            timeout=3.0).read()
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
         pytest.skip(f"sim_api at {SIM_API_HOST}:{SIM_API_PORT} unreachable: {e}")
 
