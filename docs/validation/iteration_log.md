@@ -123,6 +123,52 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
   image_transport path). If successful, rail_approach unlocks 5 more
   waypoints in one stroke (projected 12/16 = 75 %).
 
+## iter-4 (2026-04-19) — sim-side e_stop + SIGKILL fixes applied
+
+- sim-side changes (ad86eaf + c26a5ba + 9fc0416): `/state` → NaN-safe,
+  `/motor/enable` also clears e_stop, `/sim/restart` escalates to SIGKILL
+  after 3 s.
+- brain stack: fully restarted before iter-4 to reset TF cache (sim_time
+  had reset after `/sim/restart`).
+- report: `sim_episodes/precision_run_20260419_005754/report.json`
+- analysis: `sim_episodes/precision_run_20260419_005754/iteration_4_analysis.md`
+- status histogram: **SUCCEEDED 5, NAV_TIMEOUT 3, ABORTED 1,
+  RESET_TIMEOUT 7** — iter-4 was split in half by a mid-run sim hang.
+- success rate: **5/16 (31.3 %)**, 0 collisions
+- **Validated wins (first 7 wp, before sim hung):**
+  - nav2 was 5/5 clean in what iter-4 actually ran (wp01 0.077 m /
+    22 s — iter-3 had been ABORTED at 93 s; wp02 **0.013 m / 21 s**,
+    the first sub-2-cm landing; wp03 0.076 m / 21 s).
+  - Per-waypoint times dropped ~30 % (30 s → 20 s) on nav2 from the
+    fresh RTF (0.24 vs prior 0.16).
+  - e_stop latch fix + NaN-safe /state confirmed: no silent stalls,
+    no harness skip-on-500.
+- **Mid-run failure mode (from wp08 onward):**
+  - sim self-heal restart kicked in (`self_heal_restarts_total: 1` in
+    /sim/telemetry) after a ~38 s clock gap, so sim_time reset.
+  - Every waypoint launched after the self-heal got `RESET_TIMEOUT`
+    (sim not responding) or `ABORTED` (brain TF cache at the old sim
+    clock, extrapolation errors in Nav2 costmaps).
+  - wp04 / wp07 / wp16 rail_approach all NAV_TIMEOUT at ~start pose —
+    the apriltag image-delivery issue is the remaining rail_approach
+    blocker, same as iter-3.
+- **Clean-segment projection:** if the sim had stayed up, the 7
+  usable waypoints show 5/7 success (71 %). The only genuine brain-
+  side failures in that segment are the 2 rail_approach apriltag
+  cases. Everything the brain-side iter-1/2/3 fixes targeted is now
+  behaving on first try.
+- decisions: no new code in iter-4 — it was a pure validation of the
+  sim-side fixes. Two follow-ups for iter-5+:
+  - Harness should detect sim self-heal (monitor `last_clock_msg_ago_s`
+    or `self_heal_restarts_total` via /sim/telemetry) and reset brain
+    TF cache via a partial node restart, or skip-with-note the
+    waypoint and fence the rest until sim is stable for ≥ 30 s.
+  - apriltag bypass shim (iter-5 proposal) still blocked 5 rail_
+    approach waypoints; only actionable after the TF-sensitive
+    recovery path is decided.
+- next run (iter-5) focus: **harness resilience to sim self-heal**
+  (detect + recover) + **apriltag shim**.
+
 <!--
 Template for each subsequent iteration:
 
