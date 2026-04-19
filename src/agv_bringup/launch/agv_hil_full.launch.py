@@ -423,8 +423,12 @@ def generate_launch_description():
                 'use_sim_time': True,
             }],
             remappings=[
-                ('image_rect', '/zed/zed_node/left/image_rect_color'),
-                ('camera_info', '/zed/zed_node/left/camera_info'),
+                # Post-2026-04-17 sim contract: the sim publishes ZED under
+                # /agv/zed/*, NOT the vendor's /zed/zed_node/* path. apriltag
+                # saw CameraInfo but 0 images because the image topic did
+                # not exist at the vendor path. Round 44 fix.
+                ('image_rect', '/agv/zed/left/image_rect_color'),
+                ('camera_info', '/agv/zed/left/camera_info'),
             ],
             output='log',
         ),
@@ -479,8 +483,9 @@ def generate_launch_description():
             namespace=ns,
             parameters=[{
                 'port': 8091,
-                'camera_topic': '/zed/zed_node/left/image_rect_color',
-                'depth_topic': '/zed/zed_node/depth/depth_registered',
+                # Round 44: sim publishes under /agv/zed/*, not /zed/zed_node/*.
+                'camera_topic': '/agv/zed/left/image_rect_color',
+                'depth_topic': '/agv/zed/depth/depth_registered',
                 'jpeg_quality': 70,
                 'max_width': 640,
                 'use_sim_time': True,
