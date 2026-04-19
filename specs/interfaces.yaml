@@ -437,6 +437,32 @@ topics:
     subscribers:
       - {pkg: "agv_mode_arbiter", node: "mode_arbiter"}
 
+  # ── Phase 2 Stage J: visual rail feedback (depth → BEV → RANSAC) ──────────
+  - name: "/agv/rail_detections"
+    type: "geometry_msgs/msg/PoseArray"
+    owner_pkg: "agv_rail_detector"
+    owner_node: "rail_detector"
+    payload: |
+      Two poses per detection, one per rail line. Position = nearest point of
+      each rail to the robot origin in base_link. Orientation yaw = rail axis
+      direction (not normal). frame_id: base_link.
+    qos: {reliability: "reliable", history: "keep_last", depth: 5}
+    rate_hz: {min: 3, target: 5, max: 7}
+    subscribers:
+      - {pkg: "agv_rail_driver", node: "rail_driver", role: "visual lateral correction (Stage K, optional)"}
+
+  - name: "/agv/rail_detector/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_rail_detector"
+    owner_node: "rail_detector"
+    payload: |
+      JSON {"confidence": float, "inliers_left": int, "inliers_right": int,
+            "n_points": int, "has_detection": bool}
+    qos: {reliability: "reliable", history: "keep_last", depth: 5}
+    rate_hz: {min: 3, target: 5, max: 7}
+    subscribers:
+      - {pkg: "agv_rail_driver", node: "rail_driver", role: "confidence gating (Stage K, optional)"}
+
   # ── HIL simulation validation overlay ─────────────────────────────────────
   # The /agv/sim/* namespace belongs to the separate sim host repo
   # `agv-greenhouse-sim` (not this workspace). It is published by the
