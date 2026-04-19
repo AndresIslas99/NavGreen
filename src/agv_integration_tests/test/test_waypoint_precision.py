@@ -412,17 +412,34 @@ class Harness(Node):
         )
         # Phase 2: rail_approach + rail_driver state subscriptions feed the
         # dispatch router (_wait_for_state_value) and the reporter.
+        # Iter-20: state subscriptions use depth=1 (latest-only) so the
+        # harness's _wait_for_state_value never reads a buffered stale
+        # message. Previous depth=10 reliable_qos kept up to 10 messages
+        # of history: after a rail_approach ABORTED for a prior waypoint
+        # (iter-17's SETTLED/ABORTED fix kept the terminal label
+        # latched until the next execute call), the queue held 5–10
+        # "aborted" messages that were still being processed one per
+        # rclpy.spin_once call in the polling loop. The first poll in
+        # the next waypoint's wait matched on the stale "aborted" and
+        # reported ABORTED dur=0.0s (observed wp07/wp11/wp12 across
+        # iter-17/18/19). Depth-1 KEEP_LAST guarantees the callback
+        # always sees the newest publish.
+        latest_only_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
         self.create_subscription(
             String,
             "/agv/rail_approach/state",
             lambda m: setattr(self, "last_rail_approach_state", m.data),
-            reliable_qos,
+            latest_only_qos,
         )
         self.create_subscription(
             String,
             "/agv/rail_driver/state",
             lambda m: setattr(self, "last_rail_driver_state", m.data),
-            reliable_qos,
+            latest_only_qos,
         )
 
         # Round 44 Q1: sim-side ground-truth oracle subscriptions. visible_markers
