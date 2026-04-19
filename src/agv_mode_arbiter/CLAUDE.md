@@ -34,10 +34,20 @@ relays its Twist downstream and publishes the current mode.
 ## Invariantes
 
 - The FSM lives in `include/agv_mode_arbiter/mode_fsm.hpp` (header-only,
-  ROS-free). 16 unit tests cover every valid transition.
+  ROS-free). 22 unit tests cover every valid transition.
 - Safety stop (`collision_monitor_state == "stop"`) overrides every state
   → `BLOCKED_HANDOFF` with `source=NONE` (zero cmd_vel).
 - Operator `idle` / `teleop` override the FSM before zone-based logic.
+- **RAIL_EXIT hard-lock**: once inside a rail (RAIL_DRIVE or RAIL_EXIT), the
+  FSM never hands back to Nav2 until the robot is physically out of the
+  rail + approach zones AND ≥ 1 m past the exit AprilTag (Stage M). This
+  prevents MPPI from sampling rotations while the robot is inside the
+  51 mm rail tubes or within reach of the crop rows flanking the tag.
+  rail_driver's `wz == 0` hard-lock stays in charge until the release
+  condition is met.
+- Inside a rail, **reverse is allowed** (rail_driver can command
+  `linear.x < 0` to back out). Outside a rail, Nav2's MPPI is configured
+  with `vx_min: 0` so reverse is forbidden in corridor zones for safety.
 
 ## Failure modes
 

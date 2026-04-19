@@ -27,6 +27,11 @@ enum class Mode {
   RAIL_APPROACH_ACTIVE,  // rail_approach is driving (service accepted).
   RAIL_DRIVE,            // rail_approach declared settled; rail_driver
                          // has the goal and is traversing.
+  RAIL_EXIT,             // Post-rail transition: rail_driver keeps driving
+                         // (wz=0 hard) past the exit AprilTag with a +1 m
+                         // extension goal, so Nav2 never rotates inside the
+                         // aisle. Source stays RAIL until rail_exit_clearance_m
+                         // ≥ 1.0 AND the zone is no longer rail/approach.
   BLOCKED_HANDOFF,       // collision_monitor stop OR e_stop — hold 0 cmd_vel
                          // until the signal clears, then recover to prior mode.
   TELEOP,                // Operator override via /agv/mode/set teleop.
@@ -46,6 +51,7 @@ inline const char *mode_to_str(Mode m) {
     case Mode::RAIL_APPROACH_PEND:   return "rail_approach_pend";
     case Mode::RAIL_APPROACH_ACTIVE: return "rail_approach_active";
     case Mode::RAIL_DRIVE:           return "rail_drive";
+    case Mode::RAIL_EXIT:            return "rail_exit";
     case Mode::BLOCKED_HANDOFF:      return "blocked_handoff";
     case Mode::TELEOP:               return "teleop";
     case Mode::IDLE:                 return "idle";
@@ -95,6 +101,12 @@ struct FsmInputs {
   // call for the current approach window. Consumed so the arbiter does not
   // double-call on every FSM tick.
   bool approach_request_in_flight = false;
+  // Signed clearance past the last exit AprilTag, in metres along the rail's
+  // axial direction. ≥ 1.0 means "robot is at least 1 m past the tag and
+  // safe to rotate"; below that, the arbiter must keep source=RAIL so
+  // rail_driver's wz=0 hard lock prevents Nav2 from turning near crop rows.
+  // Default 0 so the FSM errs on the side of holding RAIL_EXIT.
+  double rail_exit_clearance_m = 0.0;
 };
 
 struct FsmOutputs {
@@ -106,6 +118,10 @@ struct FsmOutputs {
   // True if the arbiter should publish /agv/rail_driver/goal to hand off
   // longitudinal traversal to the rail driver (transition into RAIL_DRIVE).
   bool request_rail_drive_goal = false;
+  // True when RAIL_DRIVE just latched "reached" and the arbiter must now
+  // publish an extended goal 1 m past the exit tag so the robot clears the
+  // aisle before Nav2 is allowed to rotate. Consumed once per transition.
+  bool request_rail_exit_push = false;
 };
 
 inline bool is_approach_zone(const std::string &zone) {
@@ -220,15 +236,36 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       return out;
 
     case Mode::RAIL_DRIVE:
-      if (in.rail_driver_state == "reached" && !is_rail_zone(in.zone) &&
-          !is_approach_zone(in.zone)) {
-        out.next_mode = Mode::CORRIDOR_NAV;
-        out.active_source = Source::NAV;
+      // Goal reached → enter RAIL_EXIT. Arbiter publishes an extended goal
+      // 1 m past the exit tag so the robot keeps driving with wz=0 until
+      // fully clear of the aisle. Never hand directly to Nav2 here: Nav2's
+      // MPPI would sample rotations and clip the 51 mm rail tubes.
+      if (in.rail_driver_state == "reached") {
+        out.next_mode = Mode::RAIL_EXIT;
+        out.active_source = Source::RAIL;
+        out.request_rail_exit_push = true;
         return out;
       }
+      // Aborts inside a rail aisle: stay on RAIL source so rail_driver (wz=0)
+      // keeps authority. The operator can issue a reverse goal to back out
+      // through /agv/rail_driver/goal; Nav2 must not take over inside the
+      // aisle because it can rotate into crop rows.
       if (in.rail_driver_state == "blocked_lateral" ||
           in.rail_driver_state == "blocked_misaligned") {
-        // Rail driver gave up; hand back to corridor for operator/Nav2 to resolve.
+        out.next_mode = Mode::RAIL_EXIT;
+        out.active_source = Source::RAIL;
+        return out;
+      }
+      out.active_source = Source::RAIL;
+      return out;
+
+    case Mode::RAIL_EXIT:
+      // Stay on rail_driver until (a) the robot has cleared the approach +
+      // rail zones AND (b) rail_exit_clearance_m ≥ 1 m past the exit tag.
+      // Only then can Nav2 safely resume — rotation is legal from here on.
+      if (in.rail_driver_state == "reached" &&
+          !is_rail_zone(in.zone) && !is_approach_zone(in.zone) &&
+          in.rail_exit_clearance_m >= 1.0) {
         out.next_mode = Mode::CORRIDOR_NAV;
         out.active_source = Source::NAV;
         return out;
