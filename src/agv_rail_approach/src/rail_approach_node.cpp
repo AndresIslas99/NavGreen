@@ -150,19 +150,31 @@ void RailApproachNode::load_registry_from(const std::string& path) {
   // Reads line-by-line looking for marker blocks with type field
   std::string line;
   int current_id = -1;
-  double x = 0, y = 0, yaw = 0;
+  double x = 0, y = 0, z = 0, yaw = 0;
   double tag_size = default_tag_size_;
   bool is_rail_start = false;
   bool in_marker = false;
 
+  // Round 44 iter-7: auto-classify floor tags as rail_start when no
+  // explicit type is set. markers_registry.yaml historically omitted the
+  // `type` field on the floor-plane rail entry tags (z=0.002 m at x=4.0
+  // REAR and x=7.0 FRONT for ids 2, 3, 4, 12, 13, 33–37), so every
+  // rail_approach service call returned "Unknown rail start tag ID" even
+  // though the detections were flowing. Falling back on z-height keeps
+  // the registry file as the single source of truth.
+  constexpr double FLOOR_TAG_Z_M = 0.05;  // ≤ this counts as floor-plane.
+
   auto flush_marker = [&]() {
-    if (in_marker && is_rail_start && current_id >= 0) {
+    const bool is_floor = z < FLOOR_TAG_Z_M;
+    if (in_marker && (is_rail_start || is_floor) && current_id >= 0) {
       rail_starts_[current_id] = {current_id, x, y, yaw, tag_size};
-      RCLCPP_INFO(get_logger(), "Rail start: tag %d at (%.2f, %.2f) yaw=%.2f size=%.3f",
-                  current_id, x, y, yaw, tag_size);
+      RCLCPP_INFO(get_logger(),
+                  "Rail start: tag %d at (%.2f, %.2f) yaw=%.2f size=%.3f%s",
+                  current_id, x, y, yaw, tag_size,
+                  (is_rail_start ? "" : " [auto: floor tag]"));
     }
     current_id = -1;
-    x = y = yaw = 0;
+    x = y = z = yaw = 0;
     tag_size = default_tag_size_;
     is_rail_start = false;
   };
@@ -195,6 +207,8 @@ void RailApproachNode::load_registry_from(const std::string& path) {
     if (!std::isnan(val)) { x = val; continue; }
     val = parse_double(trimmed, "y:");
     if (!std::isnan(val)) { y = val; continue; }
+    val = parse_double(trimmed, "z:");
+    if (!std::isnan(val)) { z = val; continue; }
     val = parse_double(trimmed, "yaw:");
     if (!std::isnan(val)) { yaw = val; continue; }
     val = parse_double(trimmed, "tag_size:");

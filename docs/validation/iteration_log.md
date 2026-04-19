@@ -236,6 +236,62 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
   incidence threshold relax or Jetson-side self-sufficient shim) +
   `wait_for_reset` yaw/x strict check.
 
+## iter-6 (2026-04-19) — registry-driven apriltag shim + strict reset
+
+- brain-side changes:
+  - `apriltag_sim_shim.py` rewritten as a self-sufficient projector:
+    loads `markers_registry.yaml` at startup, ticks at 5 Hz, reads
+    the brain's TF for world→camera, and projects every registered
+    tag that passes geometric gates (FoV + incidence). No dependency
+    on the sim visible_markers oracle.
+  - `Harness.wait_for_reset()` strict: xy tolerance 30 → 15 cm, added
+    yaw tolerance 0.15 rad (was unchecked). Matches the sim's own
+    "teleport converged" criterion.
+- sim-side change (user commit, parallel): floor-tag incidence filter
+  relaxed so the oracle now includes tag 36 and siblings (inc ≤ 74°).
+  Not required by the Jetson-side shim but kept as belt+suspenders
+  for any consumer that reads the oracle directly.
+- report: `sim_episodes/precision_run_20260419_022212/report.json`
+- analysis: `sim_episodes/precision_run_20260419_022212/iteration_6_analysis.md`
+- bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4,
+  rail_exit 0/2
+- success rate: **7/16 (43.8 %)**, 0 collisions, 31:10 full run.
+- **Validated wins:**
+  - Shim registry path works: every rail_approach waypoint's
+    `visible_markers_at_end` now includes its target floor tag
+    (wp04 sees tag 35, wp07 tag 4, wp11 tag 36, wp12/wp16 tag 3).
+    Previous iter-5 saw only wall tags for these same waypoints.
+  - Strict wait_for_reset caught at least one silent teleport
+    failure this round (the early abort on wp10 was the rail_driver
+    residual goal, not a teleport issue — see below).
+  - Full-run stability preserved; no mid-run sim self-heal fired.
+- **NEW root cause surfaced (blocker for rail_approach):**
+  `rail_approach` rejects the service call with "Unknown rail start
+  tag ID" because `markers_registry.yaml` does NOT tag the floor
+  entries with `type: rail_start` (or any `type`). The node's parser
+  only registered tags with explicit `type: rail_start` — so
+  `rail_starts_.size() == 0` at startup (logged as
+  "Rail approach node ready, 0 rail starts loaded"). Every
+  rail_approach dispatch is hitting the early-return. The shim was
+  never the real blocker; the registry schema is.
+  - **Fix applied for iter-7:** modify the parser to auto-classify
+    tags with `z < 0.05 m` as rail_start when no explicit `type`
+    is set. Keeps markers_registry.yaml as the single source of
+    truth without schema duplication.
+- **NEW root cause surfaced (blocker for wp10 / wp15 nav2 stall):**
+  After a rail_drive waypoint, `rail_driver` still has `have_goal_`
+  latched TRUE until the stop-band fires. The next waypoint's
+  teleport moves the robot to a new pose — but rail_driver then
+  re-evaluates `err_body_x` against the STALE goal and commands
+  cmd_vel_rail toward it, driving the robot off start. wp10
+  teleported to (5.5, 0, π) but the robot drifted back to (7.05,
+  0, π) == wp09's goal.
+  - **Fix applied for iter-7:** before each teleport, publish a
+    PoseStamped to `/agv/rail_driver/goal` at the CURRENT GT pose.
+    rail_driver latches "reached" → state == "idle" → no more
+    cmd_vel_rail during the new waypoint's setup.
+- next run (iter-7) tests both new fixes.
+
 <!--
 Template for each subsequent iteration:
 

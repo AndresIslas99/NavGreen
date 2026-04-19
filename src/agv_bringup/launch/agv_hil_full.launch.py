@@ -408,27 +408,34 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration('enable_slam_toolbox')),
         ),
 
-        # ── AprilTag detection (HIL shim, Round 44 iter-5) ──
+        # ── AprilTag detection (HIL shim, Round 44 iter-6 rewrite) ──
         # apriltag_ros's image_transport subscription fails to deliver
         # images across the USB-eth CycloneDDS hop (observed in iter-1..4:
-        # subscription registered but 0 messages received). Instead we
-        # synthesize AprilTagDetectionArray from the sim-side oracle
-        # /agv/sim/ground_truth/visible_markers (pose + tag_world_pose)
-        # and project each visible tag's 3D corners into pixel space via
-        # camera_info + brain TF. rail_approach + marker_correction
-        # consume /agv/detections unchanged.
+        # subscription registered but 0 messages received).
+        # iter-5 used the sim's visible_markers oracle, but that oracle
+        # drops floor tags (z=0, normal=+Z) due to incidence filtering
+        # — so rail_approach targets (ids 2, 3, 4, 12, 13, 33–37) were
+        # never emitted. iter-6 rewrites the shim to be self-sufficient:
+        # it loads markers_registry.yaml directly, reads the brain's TF
+        # for world→camera, and projects every registered tag that
+        # passes geometric visibility (FoV + incidence) checks. No sim
+        # oracle dependency for detections.
         Node(
             package='agv_hil_bridges',
             executable='apriltag_sim_shim.py',
             name='apriltag_sim_shim',
             namespace=ns,
             parameters=[{
-                'visible_markers_topic': '/agv/sim/ground_truth/visible_markers',
+                'registry_file': os.path.join(
+                    get_package_share_directory('agv_markers'),
+                    'config', 'markers_registry.yaml'),
                 'camera_info_topic': '/agv/zed/left/camera_info',
                 'detections_topic': '/agv/detections',
                 'image_frame': 'zed_left_camera_frame_optical',
                 'world_frame': 'map',
                 'default_tag_size_m': 0.2,
+                'publish_rate_hz': 5.0,
+                'max_incidence_deg': 85.0,
                 'use_sim_time': True,
             }],
             output='log',

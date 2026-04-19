@@ -1,87 +1,84 @@
 #!/usr/bin/env python3
-"""apriltag_sim_shim — HIL-only bypass for the broken apriltag_ros image
-pipeline.
+"""apriltag_sim_shim — HIL-only AprilTag detection synthesizer.
 
 Why this exists
 ---------------
 `apriltag_ros`'s `image_transport`-based subscription fails to deliver
-images across the USB-eth CycloneDDS hop (observed in Round 44 iter-1..4:
-`ros2 node info /agv/apriltag_node` shows the subscription, but
-"Image messages received: 0" even though rclpy raw subscriptions on the
-same topic see ~20 Hz). Without detections, `marker_correction` +
-`rail_approach` cannot localize against floor tags → every
-`rail_approach` waypoint times out at start pose.
+images across the USB-eth CycloneDDS hop (observed Round 44 iter-1..4:
+subscription registered, "Image messages received: 0" even though rclpy
+raw subscriptions on the same topic see ~20 Hz). Without detections,
+`marker_correction` + `rail_approach` cannot localize against floor
+tags → every `rail_approach` waypoint times out at start pose.
 
-The sim's visible_markers oracle already knows which AprilTags are in
-the ZED's FoV each tick, along with each tag's world-frame pose
-(added by sim commit dd2cf06, `tag_world_pose` key). This shim:
+Design (iter-6 rewrite, self-sufficient)
+----------------------------------------
+iter-5 relied on the sim's `/agv/sim/ground_truth/visible_markers`
+oracle. That worked for wall tags but the sim filters out **floor
+tags** (z=0) because the viewing incidence angle against their
+straight-up normal exceeds the oracle's threshold — and every target
+for `rail_approach` is a floor tag (ids 2, 3, 4, 12, 13, 33–37).
 
-  1. Subscribes `/agv/sim/ground_truth/visible_markers` (String JSON).
-  2. Looks up `world → zed_left_camera_frame_optical` in the brain's TF
-     tree (map → odom → base_link → … → optical).
-  3. For each visible tag, projects the 3D corner positions (derived
-     from `tag_world_pose` + known tag_size) into image pixels using
-     the cached camera_info intrinsics.
-  4. Publishes `apriltag_msgs/AprilTagDetectionArray` on `/agv/detections`
-     with the same shape apriltag_ros would have produced if image
-     delivery worked — same `id`, same `corners[4]`, same `centre`,
-     same `family` ("tag36h11").
+This version drops the oracle dependency entirely. At startup the
+node loads `markers_registry.yaml` (same file marker_correction uses,
+so the tag list is authoritative). At 5 Hz it reads the brain's TF
+tree to learn the camera's current world pose and, for every
+registered tag, checks visibility from geometry alone:
 
-rail_approach then runs its own solvePnP on the synthesized corners, so
-its control loop is unchanged. marker_correction sees the id + corners,
-queries its own world pose from markers_registry.yaml, and emits the
-pose correction exactly as if apriltag_ros were working.
+  1. transform the tag's 4 world corners into camera-optical frame,
+  2. reject the tag if any corner is behind the image plane (Z ≤ 0.01 m),
+  3. project each corner with the pinhole intrinsics from camera_info,
+  4. reject the tag if any pixel is outside the image (±2 % margin), and
+  5. reject the tag if its outward normal makes an angle > `max_incidence_deg`
+     with the camera→tag direction (camera looking at the back of the tag).
 
-IMPORTANT: this is HIL-only. Real deployments rely on the ZED image
-stream + apriltag_ros; the shim depends on the sim-side oracle which
-does not exist in production. Gated via `hil_mode:=true` in
-agv_hil_full.launch.py.
+Tags that pass all five gates are emitted as
+`apriltag_msgs/AprilTagDetectionArray` on `/agv/detections` with the
+same `id` / `corners[4]` / `centre` / `family` shape apriltag_ros would
+produce — rail_approach runs its own `solvePnP` on the corners, so its
+control loop is unchanged.
 
-Wire-format input (from sim commit dd2cf06):
-  { "t_sim": ...,
-    "robot_pose": [x,y,yaw],
-    "camera_pose": [x,y,z],
-    "count": N,
-    "visible": [ { "id": ..., "distance_m": ..., "bearing_rad": ...,
-                   "incidence_deg": ..., "tag_world_pose": {
-                       "x": ..., "y": ..., "z": ...,
-                       "qx": ..., "qy": ..., "qz": ..., "qw": ... } }, ... ] }
+Tag orientation
+---------------
+The registry records only `yaw` (Z-axis rotation in world). The
+geometric face direction depends on tag type, inferred from `z`:
 
-Behavior when inputs are missing
---------------------------------
-- camera_info not yet received → drop silently (first ~1 s after start).
-- TF lookup fails (tree incomplete, EKF just teleported) → drop this
-  tick; next oracle message will try again.
-- tag_world_pose absent (sim running older build) → skip that tag but
-  keep processing others; shim emits a WARN once per start-up.
-- Projected corner outside the camera FoV (behind, sideways, or past
-  frame edges) → tag is dropped; consistent with apriltag_ros's "out
-  of FoV → no detection" behavior.
+  - **floor tag** (`z < 0.05 m`): plane = world XY. Normal = world +Z.
+    Local corner axes = RotZ(yaw) applied to (1,0,0) and (0,1,0).
+  - **wall tag** (`z ≥ 0.05 m`): plane = vertical. Normal points
+    outward horizontally; the registry's `yaw` sweeps the normal in
+    world XY, so normal = (cos(yaw), sin(yaw), 0). Local `right` axis
+    is perpendicular to both normal and world +Z = (−sin(yaw),
+     cos(yaw), 0) rotated; `up` axis = world +Z.
+
+Both cases share the same frame convention apriltag_ros uses:
+corners indexed bottom-left, bottom-right, top-right, top-left (CCW
+viewed from the outward face), tag face in the local XY plane.
+
+IMPORTANT: this is HIL-only. Real deployments keep apriltag_ros on a
+working ZED stream. Gated via `agv_hil_full.launch.py` + TASK.yaml
+`dev_only: true`.
 """
 from __future__ import annotations
 
-import json
 import math
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import rclpy
+import tf2_ros
+import yaml
+from apriltag_msgs.msg import AprilTagDetection, AprilTagDetectionArray
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-
-import tf2_ros
-from std_msgs.msg import String
 from sensor_msgs.msg import CameraInfo
-from apriltag_msgs.msg import AprilTagDetection, AprilTagDetectionArray
+
+
+FLOOR_Z_THRESHOLD = 0.05  # tags below this z-height are treated as floor.
 
 
 def _quat_to_matrix(qx: float, qy: float, qz: float, qw: float) -> np.ndarray:
-    """Return 3x3 rotation matrix from a unit quaternion.
-
-    Small and allocation-free — called once per visible tag per tick.
-    """
-    # Normalize defensively (sim oracle should already, but float drift).
     n = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
     if n < 1e-9:
         return np.eye(3)
@@ -97,15 +94,80 @@ def _quat_to_matrix(qx: float, qy: float, qz: float, qw: float) -> np.ndarray:
 
 
 def _transform_to_matrix(ts) -> np.ndarray:
-    """Turn a geometry_msgs/TransformStamped into a 4x4 homogeneous matrix."""
     t = ts.transform.translation
     q = ts.transform.rotation
     M = np.eye(4)
     M[:3, :3] = _quat_to_matrix(q.x, q.y, q.z, q.w)
-    M[0, 3] = t.x
-    M[1, 3] = t.y
-    M[2, 3] = t.z
+    M[0, 3], M[1, 3], M[2, 3] = t.x, t.y, t.z
     return M
+
+
+class TagGeometry:
+    """Precomputed world-frame corner + normal for one registered tag."""
+
+    __slots__ = ("id", "corners_world", "normal_world")
+
+    def __init__(self, tag_id: int, corners_world: np.ndarray,
+                 normal_world: np.ndarray) -> None:
+        self.id = tag_id
+        # 4x4 homogeneous coordinates (columns), corners order BL, BR, TR, TL.
+        self.corners_world = corners_world
+        # Unit normal in world frame.
+        self.normal_world = normal_world
+
+
+def _build_tag_geometry(tag_id: int, x: float, y: float, z: float,
+                        yaw: float, tag_size: float) -> TagGeometry:
+    half = tag_size / 2.0
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    if z < FLOOR_Z_THRESHOLD:
+        # Floor tag: face up (+Z). Local axes rotated about Z by `yaw`.
+        # Corners lie in the world XY plane at the tag's (x, y, z).
+        local_right = np.array([cy, sy, 0.0])
+        local_up = np.array([-sy, cy, 0.0])
+        normal = np.array([0.0, 0.0, 1.0])
+    else:
+        # Wall tag: normal swept in world XY by `yaw`. Up direction is
+        # world +Z. `right` perpendicular to both, preserving the
+        # BL/BR/TR/TL CCW order when viewed from the outward face.
+        normal = np.array([cy, sy, 0.0])
+        local_up = np.array([0.0, 0.0, 1.0])
+        # `right = up × normal` so (right, up, normal) is right-handed.
+        local_right = np.cross(local_up, normal)
+    centre = np.array([x, y, z])
+    corners = np.zeros((4, 4))
+    # BL, BR, TR, TL
+    offsets = [(-half, -half), (half, -half), (half, half), (-half, half)]
+    for i, (u, v) in enumerate(offsets):
+        pt = centre + u * local_right + v * local_up
+        corners[0, i] = pt[0]
+        corners[1, i] = pt[1]
+        corners[2, i] = pt[2]
+        corners[3, i] = 1.0
+    return TagGeometry(tag_id, corners, normal)
+
+
+def _load_registry(path: Path, default_tag_size: float) -> list[TagGeometry]:
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    raw = data.get("markers", [])
+    tags: list[TagGeometry] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            tag_id = int(entry["id"])
+            x = float(entry["x"])
+            y = float(entry["y"])
+            z = float(entry["z"])
+            yaw = float(entry.get("yaw", 0.0))
+        except (KeyError, TypeError, ValueError):
+            continue
+        tag_size = float(entry.get("size", default_tag_size))
+        tags.append(_build_tag_geometry(tag_id, x, y, z, yaw, tag_size))
+    return tags
 
 
 class AprilTagSimShim(Node):
@@ -121,26 +183,55 @@ class AprilTagSimShim(Node):
             ],
         )
         self.declare_parameter(
-            "visible_markers_topic", "/agv/sim/ground_truth/visible_markers")
-        self.declare_parameter(
             "camera_info_topic", "/agv/zed/left/camera_info")
         self.declare_parameter("detections_topic", "/agv/detections")
         self.declare_parameter(
             "image_frame", "zed_left_camera_frame_optical")
         self.declare_parameter("world_frame", "map")
+        self.declare_parameter("registry_file", "")
         self.declare_parameter("default_tag_size_m", 0.2)
+        self.declare_parameter("publish_rate_hz", 5.0)
+        self.declare_parameter("max_incidence_deg", 85.0)
+        self.declare_parameter("image_margin_frac", 0.02)
         self.declare_parameter("tf_lookup_timeout_s", 0.2)
+        self.declare_parameter("family", "tag36h11")
 
         self._image_frame = self.get_parameter("image_frame").value
         self._world_frame = self.get_parameter("world_frame").value
-        self._tag_size = float(self.get_parameter("default_tag_size_m").value)
+        self._default_tag_size = float(
+            self.get_parameter("default_tag_size_m").value)
+        self._max_cos_offaxis = math.cos(math.radians(
+            float(self.get_parameter("max_incidence_deg").value)))
+        self._image_margin = float(
+            self.get_parameter("image_margin_frac").value)
         self._tf_timeout = Duration(
             seconds=float(self.get_parameter("tf_lookup_timeout_s").value))
+        self._family = str(self.get_parameter("family").value)
+
+        registry_path_s = str(self.get_parameter("registry_file").value)
+        if not registry_path_s:
+            self.get_logger().error(
+                "registry_file parameter required — set it to the absolute "
+                "path of markers_registry.yaml at launch.")
+            raise RuntimeError("registry_file unset")
+        registry_path = Path(registry_path_s)
+        self._tags = _load_registry(registry_path, self._default_tag_size)
+        if not self._tags:
+            self.get_logger().error(
+                f"no markers loaded from {registry_path}; detections would "
+                f"always be empty")
+        else:
+            floor = sum(
+                1 for t in self._tags
+                if t.corners_world[2, 0] < FLOOR_Z_THRESHOLD)
+            wall = len(self._tags) - floor
+            self.get_logger().info(
+                f"loaded {len(self._tags)} tags from {registry_path.name} "
+                f"(floor={floor}, wall={wall})")
 
         self._cam_info: Optional[CameraInfo] = None
         self._tf_buf = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buf, self)
-        self._warned_no_pose = False
 
         rel = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -152,21 +243,17 @@ class AprilTagSimShim(Node):
             self.get_parameter("camera_info_topic").value,
             self._on_cam_info, rel,
         )
-        self.create_subscription(
-            String,
-            self.get_parameter("visible_markers_topic").value,
-            self._on_markers, rel,
-        )
         self._pub = self.create_publisher(
             AprilTagDetectionArray,
             self.get_parameter("detections_topic").value, rel,
         )
+        rate = float(self.get_parameter("publish_rate_hz").value)
+        self._timer = self.create_timer(1.0 / rate, self._on_tick)
         self.get_logger().info(
-            f"apriltag_sim_shim up: "
-            f"{self.get_parameter('visible_markers_topic').value} → "
-            f"{self.get_parameter('detections_topic').value} "
+            f"apriltag_sim_shim up: registry-driven projector "
             f"(cam_frame={self._image_frame}, world_frame={self._world_frame}, "
-            f"tag_size={self._tag_size:.3f} m)")
+            f"rate={rate:.1f} Hz, "
+            f"max_incidence={math.degrees(math.acos(self._max_cos_offaxis)):.0f}°)")
 
     def _on_cam_info(self, msg: CameraInfo) -> None:
         if self._cam_info is None and msg.k[0] > 0:
@@ -179,7 +266,6 @@ class AprilTagSimShim(Node):
 
     def _lookup_world_to_cam(self) -> Optional[np.ndarray]:
         try:
-            # Latest-available — sim_time is already synced via use_sim_time.
             ts = self._tf_buf.lookup_transform(
                 self._image_frame, self._world_frame,
                 rclpy.time.Time(), self._tf_timeout)
@@ -187,90 +273,69 @@ class AprilTagSimShim(Node):
             return None
         return _transform_to_matrix(ts)
 
-    def _on_markers(self, msg: String) -> None:
-        if self._cam_info is None:
+    def _on_tick(self) -> None:
+        if self._cam_info is None or not self._tags:
             return
-        try:
-            data = json.loads(msg.data)
-        except (json.JSONDecodeError, TypeError):
-            return
-        markers = data.get("visible") or data.get("markers") or []
-        if not markers:
-            return
-
         M_world_to_cam = self._lookup_world_to_cam()
         if M_world_to_cam is None:
             return
+        # Camera position in world = -R_cw^T t_cw. We use it for the
+        # incidence check against each tag's normal.
+        R_cw = M_world_to_cam[:3, :3]
+        t_cw = M_world_to_cam[:3, 3]
+        cam_pos_world = -R_cw.T @ t_cw
 
         fx, fy = self._cam_info.k[0], self._cam_info.k[4]
         cx, cy = self._cam_info.k[2], self._cam_info.k[5]
         w_px, h_px = int(self._cam_info.width), int(self._cam_info.height)
-        half = self._tag_size / 2.0
-
-        # Local tag corners on the Z=0 plane. ApritlTag convention is
-        # bottom-left, bottom-right, top-right, top-left (CCW when viewed
-        # from +Z), matching apriltag_ros's Corners order.
-        local_corners = np.array([
-            [-half, -half, 0.0, 1.0],
-            [ half, -half, 0.0, 1.0],
-            [ half,  half, 0.0, 1.0],
-            [-half,  half, 0.0, 1.0],
-        ]).T  # shape 4x4
+        m_w = self._image_margin * w_px
+        m_h = self._image_margin * h_px
 
         out = AprilTagDetectionArray()
         out.header.stamp = self.get_clock().now().to_msg()
         out.header.frame_id = self._image_frame
 
-        for m in markers:
-            if not isinstance(m, dict):
+        for tg in self._tags:
+            # Incidence test: camera should be on the outward side.
+            tag_centre = np.array([
+                tg.corners_world[0, :].mean(),
+                tg.corners_world[1, :].mean(),
+                tg.corners_world[2, :].mean(),
+            ])
+            view = cam_pos_world - tag_centre
+            view_n = np.linalg.norm(view)
+            if view_n < 1e-6:
                 continue
-            tid = m.get("id")
-            pose = m.get("tag_world_pose")
-            if tid is None or pose is None:
-                if not self._warned_no_pose:
-                    self.get_logger().warn(
-                        "visible_markers missing tag_world_pose; "
-                        "sim likely pre-dd2cf06. Shim returns no detections.")
-                    self._warned_no_pose = True
+            view /= view_n
+            cos_incidence = float(np.dot(tg.normal_world, view))
+            if cos_incidence < self._max_cos_offaxis:
+                # Camera is too oblique to the tag, or looking at the back.
                 continue
 
-            M_tag_world = np.eye(4)
-            M_tag_world[:3, :3] = _quat_to_matrix(
-                float(pose.get("qx", 0.0)), float(pose.get("qy", 0.0)),
-                float(pose.get("qz", 0.0)), float(pose.get("qw", 1.0)))
-            M_tag_world[0, 3] = float(pose.get("x", 0.0))
-            M_tag_world[1, 3] = float(pose.get("y", 0.0))
-            M_tag_world[2, 3] = float(pose.get("z", 0.0))
-
-            world_corners = M_tag_world @ local_corners
-            cam_corners = M_world_to_cam @ world_corners  # 4x4
+            cam_corners = M_world_to_cam @ tg.corners_world  # 4x4
 
             pixels = []
-            all_in_frame = True
+            in_frame = True
             for i in range(4):
                 Xc, Yc, Zc = cam_corners[0, i], cam_corners[1, i], cam_corners[2, i]
                 if Zc <= 0.01:
-                    # Tag corner behind camera plane — drop whole tag.
-                    all_in_frame = False
+                    in_frame = False
                     break
                 u = fx * Xc / Zc + cx
                 v = fy * Yc / Zc + cy
-                # Allow modest overshoot (~1 % per side) so tags near the
-                # edge are still reported; apriltag_ros accepts the same.
-                margin = 0.02
-                if u < -margin * w_px or u > (1.0 + margin) * w_px:
-                    all_in_frame = False
+                if u < -m_w or u > w_px + m_w:
+                    in_frame = False
                     break
-                if v < -margin * h_px or v > (1.0 + margin) * h_px:
-                    all_in_frame = False
+                if v < -m_h or v > h_px + m_h:
+                    in_frame = False
                     break
                 pixels.append((u, v))
-            if not all_in_frame or len(pixels) != 4:
+            if not in_frame or len(pixels) != 4:
                 continue
 
             det = AprilTagDetection()
-            det.family = "tag36h11"
-            det.id = int(tid)
+            det.family = self._family
+            det.id = int(tg.id)
             det.hamming = 0
             det.goodness = 1.0
             det.decision_margin = 100.0
@@ -279,8 +344,6 @@ class AprilTagSimShim(Node):
             for i, (u, v) in enumerate(pixels):
                 det.corners[i].x = u
                 det.corners[i].y = v
-            # Homography is not used by rail_approach / marker_correction
-            # (they only consume corners + id). Leave as zeros.
             out.detections.append(det)
 
         if out.detections:
@@ -289,7 +352,11 @@ class AprilTagSimShim(Node):
 
 def main() -> None:
     rclpy.init()
-    node = AprilTagSimShim()
+    try:
+        node = AprilTagSimShim()
+    except RuntimeError:
+        rclpy.shutdown()
+        return
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
