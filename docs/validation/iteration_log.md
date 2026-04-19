@@ -292,6 +292,45 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
     cmd_vel_rail during the new waypoint's setup.
 - next run (iter-7) tests both new fixes.
 
+## iter-7 (2026-04-19) — rail_approach finally drives
+
+- brain-side changes (already committed):
+  - `rail_approach_node.cpp` auto-classifies tags with `z < 0.05 m`
+    as rail_start when no explicit `type` is set. 10 rail_starts
+    loaded at boot (tags 2, 3, 4, 12, 13, 33–37).
+  - Harness publishes a zero-distance PoseStamped to
+    `/agv/rail_driver/goal` before every teleport so rail_driver
+    latches "reached" and stops steering toward the stale goal.
+- report: `sim_episodes/precision_run_20260419_030148/report.json`
+- analysis: `sim_episodes/precision_run_20260419_030148/iteration_7_analysis.md`
+- bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4,
+  rail_exit 0/2
+- success rate: **7/16 (43.8 %)**, 0 collisions, 31:53 run.
+- **Big qualitative win:** rail_approach is now ACTIVELY driving.
+  err_xy on the 5 rail_approach waypoints dropped drastically from
+  iter-6's 1.0–1.3 m plateau (robot never moved) to iter-7's
+  0.33–0.78 m. Three of the five are within 0.35 m of the goal —
+  they just didn't finish the 2 cm convergence in the 180 s budget.
+  - wp04 1.00 → 0.71 m
+  - wp07 1.30 → **0.35 m**
+  - wp11 1.00 → 0.78 m
+  - wp12 1.30 → **0.34 m**
+  - wp16 1.30 → **0.33 m**
+- **wp10 nav2 ABORTED still** (err=1.5 m). The pre-/reset
+  rail_driver cancel I added had a race: publish happens before
+  /reset, but rail_driver processes it AFTER teleport — so
+  err_body_x is computed against the OLD goal from the NEW pose,
+  reverses the robot back to (7.05, 0, π). Fix for iter-8: move
+  the cancel to AFTER /reset and add a 200 ms settle so
+  rail_driver absorbs the zero-distance goal and drops have_goal_
+  before the next dispatch.
+- **rail_exit wp13/wp14** — same err≈1.54 m stuck on push target.
+  Budget or RTF issue; iter-8 will bump the rail_exit-specific
+  timeout.
+- next run (iter-8) expected to fix: wp10 rail_driver residual
+  (via the post-reset cancel) + rail_approach convergence (via
+  extended 300 s timeout for approach dispatches).
+
 <!--
 Template for each subsequent iteration:
 
