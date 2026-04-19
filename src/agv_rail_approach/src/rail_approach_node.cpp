@@ -334,6 +334,9 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   // reject reason so the state topic reflects this run only.
   last_reject_reason_ = "none";
   last_reject_stamp_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+  // Iter-12 / Option C: drop any prior-approach solvePnP samples so
+  // the median filter doesn't bias the first fine_servoing ticks.
+  pnp_filter_.reset();
 
   if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
     RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
@@ -480,7 +483,25 @@ void RailApproachNode::process_fine_servoing(
   params.max_angular_rps = max_fine_angular_;
   params.check_yaw_convergence = check_yaw_convergence_;
 
-  const auto out = fine_servo_step(corners, cam_to_base, params);
+  // Iter-12 / Option C: solvePnP → median filter → compute. Keeps the
+  // control law's stateless contract while damping the per-frame
+  // jitter solvePnP exhibits on edge-on floor tags.
+  cv::Vec3d tvec, rvec;
+  FineServoVerdict pnp_verdict = FineServoVerdict::OK;
+  if (!solvepnp_tag(corners, params, tvec, rvec, pnp_verdict)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "fine_servo reject: %s", verdict_to_str(pnp_verdict));
+    last_reject_reason_ = verdict_to_str(pnp_verdict);
+    last_reject_stamp_ = now();
+    return;
+  }
+  pnp_filter_.push(tvec, rvec);
+  const cv::Vec3d tvec_used = pnp_filter_.filled()
+      ? pnp_filter_.tvec_median() : tvec;
+  const cv::Vec3d rvec_used = pnp_filter_.filled()
+      ? pnp_filter_.rvec_median() : rvec;
+
+  const auto out = fine_servo_compute(tvec_used, rvec_used, cam_to_base, params);
   if (out.verdict != FineServoVerdict::OK) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
         "fine_servo reject: %s (range=%.3f m)",
