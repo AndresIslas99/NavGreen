@@ -331,6 +331,32 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
   (via the post-reset cancel) + rail_approach convergence (via
   extended 300 s timeout for approach dispatches).
 
+## iter-8 (2026-04-19) — post-reset cancel + 270 s rail_approach
+
+- changes applied (committed):
+  - `rail_approach` timeout bumped to NAV_TIMEOUT_S × 1.5 (270 s).
+  - post-reset rail_driver cancel (publishes zero-distance goal to
+    clear have_goal_ before the next dispatch) — but ordered
+    **after** `_arm_and_clear_estop` + `POST_RESET_SETTLE_S`.
+- report: `sim_episodes/precision_run_20260419_033524/report.json`
+- success rate: **7/16 (43.8 %)**, 0 collisions, 38:21 run.
+- **Qualitative pattern holds:** 3 of 5 rail_approach waypoints now
+  within ~0.33 m of goal (wp07 / wp12 / wp16 at 0.33 m, wp11 at
+  0.84 m, wp04 at 1.19 m). The coarse-approach gets close but the
+  fine servo stalls at ~0.33 m — convergence control needs work
+  (likely solvePnP noise on edge-on floor tags, or servo gain too
+  low), not budget.
+- **wp10 still ABORTED 1.50 m**: the cancel landed AFTER
+  `_arm_and_clear_estop` + `time.sleep(POST_RESET_SETTLE_S=1.0)`.
+  Robot drifts back to (7.05, 0, π) during that 1 s sleep because
+  rail_driver is already armed and has the stale goal. Fix for
+  iter-9: move the cancel IMMEDIATELY after /reset, BEFORE
+  arming/sleeping. Applied to src.
+- **wp15 nav2 ABORTED 1.02 m** (down from 2.32 m). Improving but
+  still fails. Might share the same root cause once wp10 is fixed.
+- rail_exit wp13/wp14 unchanged at err≈1.54 m.
+- next run (iter-9) tests the cancel-before-arm reordering.
+
 <!--
 Template for each subsequent iteration:
 
