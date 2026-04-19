@@ -1364,21 +1364,16 @@ def _run_one_waypoint(
     #    goal during the post-reset settle window (round 18 wp02 symptom).
     _cancel_all_nav_goals(harness)
 
-    # Iter-22 workflow: pause physics → teleport → validate → arm → sync →
-    # resume. The sim-side enhancements (commit-ref 2026-04-19) let the
-    # brain eliminate the post-teleport race entirely. Previous iterations
-    # (7/8/9) papered over this with a "publish zero-distance cancel goal"
-    # hack that had its own race with the arbiter's auto-EXIT_PUSH
-    # (evidence: clearance_now=-2.95 in iter-20/21 brain_log). That hack
-    # is removed here — rail_driver never sees a rail goal during setup.
+    # Iter-22 workflow: reset → validate → motor_prepare → cancel_goal →
+    # sync → TF-gate → dispatch. No /sim/clock_pause — pausing breaks
+    # brain timer callbacks (use_sim_time=true → timer-driven TF and EKF
+    # publishing both freeze). The combination of /reset's enhanced
+    # readiness flags (velocities_zeroed + encoders_reset) +
+    # /motor/prepare (atomic arm) + rail_driver cancel_goal service
+    # (iter-22 brain 1.1) closes the post-teleport race without needing
+    # to freeze the sim clock.
 
-    # 0b. Pause physics so nothing moves during teleport + brain sync.
-    pause_ok = _sim_clock_pause()
-    if not pause_ok:
-        print(f"[warn {wp_id}] /sim/clock_pause failed; proceeding live.",
-              flush=True)
-
-    # 1. Teleport. The enhanced /reset response carries 5 readiness flags.
+    # 1. Teleport. Response carries 5 readiness flags.
     t_reset_issue = time.time()
     reset_ok = False
     reset_response: Optional[dict] = None
@@ -1418,9 +1413,6 @@ def _run_one_waypoint(
             continue
         break
     if not reset_ok:
-        # Resume physics before bailing so downstream iterations aren't
-        # frozen with a paused sim.
-        _sim_clock_resume()
         return WaypointResult(
             wp_id=wp_id,
             goal_x=goal["x"], goal_y=goal["y"], goal_yaw=goal["yaw"],
@@ -1498,14 +1490,6 @@ def _run_one_waypoint(
     # This is "at_start" — after teleport + sync, with the camera looking at
     # whatever tag the waypoint targets.
     markers_at_start = harness.visible_markers_snapshot()
-
-    # Iter-22: brain setup complete (teleport, motor prepare, EKF sync).
-    # Resume physics right before dispatch so the clock advances only once
-    # Nav2 / rail_approach / rail_driver is about to command cmd_vel.
-    resume_ok = _sim_clock_resume()
-    if not resume_ok:
-        print(f"[warn {wp_id}] /sim/clock_resume failed; dispatch may see "
-              f"frozen sim_time.", flush=True)
 
     # 4. Navigate — pick the driver based on the waypoint's dispatch.
     t_nav_start = time.time()
