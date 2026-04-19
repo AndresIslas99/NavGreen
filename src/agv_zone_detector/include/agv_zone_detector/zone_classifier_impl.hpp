@@ -61,7 +61,17 @@ inline ClassifyResult classify(double x, double y, double yaw,
     r.zone = "rail_approach_rear";
     r.aisle_y_center = AISLE_CENTERS[best_idx];
     r.rail_offset_lat = y - r.aisle_y_center;
-    r.rail_yaw_error = wrap_to_pi(yaw);
+    // Rails run along the +X/-X axis; either direction is a valid
+    // traversal. Pick the smaller-magnitude signed error vs {0, π} so
+    // a robot facing -X (yaw≈π) reports rail_yaw_error ≈ 0 — otherwise
+    // rail_driver's BLOCKED_MISALIGNED kicks in on correct reverse-
+    // direction goals. wp05 of Round 42c was the repro case.
+    {
+      const double err_fwd = wrap_to_pi(yaw);
+      const double err_rev = wrap_to_pi(yaw - M_PI);
+      r.rail_yaw_error = (std::abs(err_fwd) <= std::abs(err_rev))
+          ? err_fwd : err_rev;
+    }
     r.approach_tag_id = tag_id_for_rear_approach(best_idx);
     r.confidence = 1.0 - 0.8 * (best_abs_offset / aisle_half_width);
     return r;
@@ -71,7 +81,17 @@ inline ClassifyResult classify(double x, double y, double yaw,
     r.zone = "rail_approach_front";
     r.aisle_y_center = AISLE_CENTERS[best_idx];
     r.rail_offset_lat = y - r.aisle_y_center;
-    r.rail_yaw_error = wrap_to_pi(yaw);
+    // Rails run along the +X/-X axis; either direction is a valid
+    // traversal. Pick the smaller-magnitude signed error vs {0, π} so
+    // a robot facing -X (yaw≈π) reports rail_yaw_error ≈ 0 — otherwise
+    // rail_driver's BLOCKED_MISALIGNED kicks in on correct reverse-
+    // direction goals. wp05 of Round 42c was the repro case.
+    {
+      const double err_fwd = wrap_to_pi(yaw);
+      const double err_rev = wrap_to_pi(yaw - M_PI);
+      r.rail_yaw_error = (std::abs(err_fwd) <= std::abs(err_rev))
+          ? err_fwd : err_rev;
+    }
     r.approach_tag_id = tag_id_for_front_approach(best_idx);
     r.confidence = 1.0 - 0.8 * (best_abs_offset / aisle_half_width);
     return r;
@@ -102,7 +122,17 @@ inline ClassifyResult classify(double x, double y, double yaw,
     r.zone = AISLE_NAMES[best_idx];
     r.aisle_y_center = AISLE_CENTERS[best_idx];
     r.rail_offset_lat = y - r.aisle_y_center;
-    r.rail_yaw_error = wrap_to_pi(yaw);
+    // Rails run along the +X/-X axis; either direction is a valid
+    // traversal. Pick the smaller-magnitude signed error vs {0, π} so
+    // a robot facing -X (yaw≈π) reports rail_yaw_error ≈ 0 — otherwise
+    // rail_driver's BLOCKED_MISALIGNED kicks in on correct reverse-
+    // direction goals. wp05 of Round 42c was the repro case.
+    {
+      const double err_fwd = wrap_to_pi(yaw);
+      const double err_rev = wrap_to_pi(yaw - M_PI);
+      r.rail_yaw_error = (std::abs(err_fwd) <= std::abs(err_rev))
+          ? err_fwd : err_rev;
+    }
     r.confidence = 1.0 - 0.8 * (best_abs_offset / aisle_half_width);
   } else {
     r.zone = "unknown";
