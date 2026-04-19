@@ -357,6 +357,54 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
 - rail_exit wp13/wp14 unchanged at err≈1.54 m.
 - next run (iter-9) tests the cancel-before-arm reordering.
 
+## iter-9 (2026-04-19) — cancel-before-arm breaks the 7/16 plateau
+
+- change applied: rail_driver cancel reordered to fire BEFORE
+  `_arm_and_clear_estop` + `POST_RESET_SETTLE_S`, eliminating the
+  race window where motors armed with a stale goal still latched.
+- report: `sim_episodes/precision_run_20260419_041457/report.json`
+- success rate: **8/16 (50.0 %)** — first break above the 7/16
+  (43.8 %) plateau held since iter-3. 0 collisions, 37:26 run.
+- **New win: wp15 SUCCEEDED 0.041 m / 69 s.** Every prior iteration
+  aborted it (iter-5 2.68 m, iter-6 2.16 m, iter-7 2.32 m, iter-8
+  1.02 m). The lane-change nav2 leg finally clears because the
+  post-rail_exit state hand-off no longer drops residual cmd_vel_rail.
+- wp10 still ABORTED 1.50 m — this one specifically follows a
+  direct-dispatch rail_drive (wp09), not a rail_exit flow. The
+  cancel-before-arm works for the rail_exit → next-wp hand-off but
+  not for this specific transition. Leftover root cause possibly
+  sim physics momentum carrying through /reset (velocity latched
+  when rail_driver was decelerating) or mode_arbiter stuck in
+  RAIL_EXIT relaying pre-reset cmd_vel_rail briefly.
+- rail_approach still 0/5 but consistently in the 0.33–0.76 m
+  "close-but-not-convergent" regime. Control-tuning territory for
+  iter-10+ (solvePnP on edge-on floor tags has noise that the
+  default servo gains don't damp; needs Kp_lateral increase OR a
+  median filter on the tag pose estimate).
+- rail_exit 0/2 unchanged; push goal still unreachable in 270 s.
+
+## Trajectory summary (9 iterations)
+
+| iter | success | buckets (nav / app / drv / exit) | highlight |
+|---|---|---|---|
+| 1 | 6/16 | 2 / 0 / 4 / 0 | baseline, 3 root causes identified |
+| 2 | 5/16 | 2 / 0 / 3 / 0 | fixes applied but FSM regression |
+| 3 | 7/16 | 3 / 0 / 4 / 0 | FSM oscillation fix, rail_drive fully green |
+| 4 | 5/16 | — (mid-run collapse) | sim self-heal disrupted |
+| 5 | 7/16 | 3 / 0 / 4 / 0 | self-heal gate, apriltag shim oracle-based |
+| 6 | 7/16 | 3 / 0 / 4 / 0 | shim registry-based, strict reset |
+| 7 | 7/16 | 3 / 0 / 4 / 0 | **rail_approach activates** (err 1.0 → 0.33 m) |
+| 8 | 7/16 | 3 / 0 / 4 / 0 | post-reset cancel in wrong order |
+| 9 | **8/16** | **4** / 0 / 4 / 0 | **wp15 unlocks**, cancel-before-arm |
+
+Per-bucket status after iter-9:
+- **nav2 4/5** — wp01/02/03/15 at 4–6 cm. wp10 remains stuck
+  (post-rail_drive-direct-dispatch transition).
+- **rail_drive 4/4** — stable since iter-3.
+- **rail_approach 0/5** — robot drives into range (0.33 m) but
+  2 cm convergence stalls in the fine servo.
+- **rail_exit 0/2** — push target out of budget.
+
 <!--
 Template for each subsequent iteration:
 
