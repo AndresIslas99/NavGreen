@@ -1267,14 +1267,15 @@ def _run_one_waypoint(
             dispatch_used=_dispatch_for(wp),
         )
 
-    # 1b. Clear e_stop (latched on by /reset) and arm motors.
-    _arm_and_clear_estop()
-
-    # 1c. Round 44 iter-7: send rail_driver a zero-distance goal at the
-    #     NEW pose so it latches "reached" immediately and drops
-    #     have_goal_ to idle. Without this, the previous waypoint's
-    #     rail_drive goal is still active and rail_driver publishes
-    #     cmd_vel_rail toward it (pulls robot off the new start pose).
+    # 1b. Round 44 iter-8: cancel any pending rail_driver goal BEFORE
+    #     arming motors. The previous waypoint's rail_drive goal is
+    #     still latched in rail_driver's have_goal_=true state.
+    #     Arming motors first would let cmd_vel_rail pull the robot off
+    #     the teleport pose during the POST_RESET_SETTLE window. Publish
+    #     a zero-distance goal at the CURRENT GT pose (which is the
+    #     teleport target immediately after /reset) so rail_driver
+    #     latches "reached" and drops have_goal_ to idle before any
+    #     motor activity.
     gt_post_reset = harness.current_gt_xy()
     if gt_post_reset is not None:
         cancel = PoseStamped()
@@ -1288,6 +1289,9 @@ def _run_one_waypoint(
         # the zero-distance goal, latch "reached", and drop have_goal_.
         time.sleep(0.2)
         rclpy.spin_once(harness, timeout_sec=0.05)
+
+    # 1c. Clear e_stop (latched on by /reset) and arm motors.
+    _arm_and_clear_estop()
 
     # 2. Settle — let ekf_local absorb teleport.
     time.sleep(POST_RESET_SETTLE_S)
