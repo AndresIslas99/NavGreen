@@ -10,10 +10,11 @@ find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(rail_driver_node src/rail_driver_node.cpp)
 ament_target_dependencies(rail_driver_node
-  rclcpp nav_msgs geometry_msgs std_msgs)
+  rclcpp nav_msgs geometry_msgs std_msgs std_srvs)
 target_compile_features(rail_driver_node PUBLIC cxx_std_17)
 target_include_directories(rail_driver_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
