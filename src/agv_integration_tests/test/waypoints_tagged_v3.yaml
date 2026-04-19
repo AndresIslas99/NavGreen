@@ -42,7 +42,16 @@ waypoints:
     offset_x: 0.3
     offset_y: 0.0
     start: {x: 5.2, y: 0.0, yaw: 3.14159}
-    goal:  {x: 4.2, y: 0.0, yaw: 3.14159}
+    # Iter-18: corrected goal. rail_approach's offset_x is the CAMERA→tag
+    # forward distance (fine_servo_controller.hpp docs "camera-optical Z =
+    # forward"). The ZED is mounted 0.7 m forward of base_link, so the
+    # settled base_link pose is tag_x ± (0.3 + 0.7) in the robot's forward
+    # direction. For yaw=π the approach direction is -X, so base settles
+    # at tag_x + 1.0 = 5.0. The previous (4.2, ...) goal put the target
+    # 0.8 m PAST the tag — unreachable because the camera would need to
+    # see the tag behind itself. Observed in iter-16/17 as err_xy≈0.89 m
+    # NAV_TIMEOUT even while fine_servo was converging correctly.
+    goal:  {x: 5.0, y: 0.0, yaw: 3.14159}
     expected_modes: [corridor_nav, rail_approach_active]
 
   # ── Phase C–D: rail_drive center aisle (v2 unchanged) ──────────────────
@@ -64,7 +73,9 @@ waypoints:
     offset_x: 0.3
     offset_y: 0.0
     start: {x: 5.5, y: 0.0, yaw: 0.0}
-    goal:  {x: 6.8, y: 0.0, yaw: 0.0}
+    # Iter-18: corrected from (6.8, ...). yaw=0 → approach in +X direction;
+    # base settles at tag_x - (0.3+0.7) = 7.0 - 1.0 = 6.0. See wp04 comment.
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active]
   - id: wp08
     dispatch: rail_drive
@@ -95,7 +106,9 @@ waypoints:
     offset_x: 0.3
     offset_y: 0.0
     start: {x: 5.2, y: 2.2, yaw: 3.14159}
-    goal:  {x: 4.2, y: 2.2, yaw: 3.14159}
+    # Iter-18: see wp04 comment. Tag 36 at (4.0, 2.2). base_x settles at
+    # 4.0 + 1.0 = 5.0 for yaw=π approach.
+    goal:  {x: 5.0, y: 2.2, yaw: 3.14159}
     expected_modes: [corridor_nav, rail_approach_active]
   - id: wp12
     dispatch: rail_approach
@@ -103,7 +116,9 @@ waypoints:
     offset_x: 0.3
     offset_y: 0.0
     start: {x: 5.5, y: -2.2, yaw: 0.0}
-    goal:  {x: 6.8, y: -2.2, yaw: 0.0}
+    # Iter-18: see wp07 comment. Tag 3 at (7.0, -2.2). base_x settles at
+    # 7.0 - 1.0 = 6.0 for yaw=0 approach.
+    goal:  {x: 6.0, y: -2.2, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active]
 
   # ── Phase I: rail exits with RAIL_EXIT push ────────────────────────────
@@ -141,5 +156,6 @@ waypoints:
     offset_x: 0.3
     offset_y: 0.0
     start: {x: 5.5, y: -2.2, yaw: 0.0}
-    goal:  {x: 6.8, y: -2.2, yaw: 0.0}
+    # Iter-18: see wp12. base_x settles at 7.0 - 1.0 = 6.0.
+    goal:  {x: 6.0, y: -2.2, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active]
