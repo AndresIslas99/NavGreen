@@ -652,23 +652,39 @@ class Harness(Node):
         return [e for e in self._events if e.get("_received_wall_s", 0.0) >= t0]
 
     def wait_for_reset(self, start_x: float = 0.0, start_y: float = 0.0,
-                       tol_m: float = 0.30) -> bool:
+                       start_yaw: Optional[float] = None,
+                       tol_m: float = 0.15,
+                       tol_yaw_rad: float = 0.15) -> bool:
         """Wait until the teleport takes effect.
 
         Trust ONLY the ground truth: the test POSTed /reset with a specific
         pose, so the teleport is complete when GT lands within `tol_m` of
-        that pose. /agv/sim/reset_done is unreliable — the TRANSIENT_LOCAL
-        latched True from prior sessions fires the callback at subscriber
-        creation time, which can race ahead of the new /reset.
+        the target xy AND (when `start_yaw` is provided) `tol_yaw_rad` of
+        the target heading. `/agv/sim/reset_done` is unreliable — the
+        TRANSIENT_LOCAL latched True from prior sessions fires the callback
+        at subscriber creation time, which can race ahead of the new /reset.
+
+        Round 44 iter-6 hardening: the xy tolerance was 30 cm and yaw was
+        not validated at all. wp04/wp07/wp10/wp15 passed the gate with
+        stale GT (robot still at the previous waypoint's goal) because
+        the xy distance happened to be under 30 cm OR the yaw was wrong.
+        The tighter 15 cm + 0.15 rad (~8.6°) thresholds match what the
+        sim's `/reset` response claims as its own convergence criteria.
         """
         deadline = time.monotonic() + RESET_TIMEOUT_S
         while time.monotonic() < deadline:
             rclpy.spin_once(self, timeout_sec=0.05)
             gt = self.current_gt_xy()
-            if gt is not None:
-                d = math.hypot(gt[0] - start_x, gt[1] - start_y)
-                if d <= tol_m:
-                    return True
+            if gt is None:
+                continue
+            d = math.hypot(gt[0] - start_x, gt[1] - start_y)
+            if d > tol_m:
+                continue
+            if start_yaw is None:
+                return True
+            dyaw = abs(_wrap_angle(gt[2] - start_yaw))
+            if dyaw <= tol_yaw_rad:
+                return True
         return False
 
     def current_gt_xy(self) -> Optional[tuple[float, float, float]]:
@@ -1193,6 +1209,26 @@ def _run_one_waypoint(
     #    goal during the post-reset settle window (round 18 wp02 symptom).
     _cancel_all_nav_goals(harness)
 
+    # 0b. Round 44 iter-7: rail_driver has no "cancel" API and latches
+    #    have_goal_=true until the current goal's stop-band fires or the
+    #    robot is teleported past it. After a rail_drive waypoint, the
+    #    next non-rail waypoint teleports the robot into a NEW position —
+    #    rail_driver then re-computes err_body_x and immediately commands
+    #    cmd_vel_rail toward the stale goal, driving the robot away from
+    #    the new start pose (observed iter-5/iter-6 wp10: teleport to
+    #    (5.5, 0, π) drifted back to (7.05, 0, π) = wp09's rail goal).
+    #    Force rail_driver to latch "reached" by publishing a goal AT
+    #    the current GT pose before the teleport.
+    gt_now = harness.current_gt_xy()
+    if gt_now is not None:
+        cancel = PoseStamped()
+        cancel.header.stamp = harness.get_clock().now().to_msg()
+        cancel.header.frame_id = "map"
+        cancel.pose.position.x = float(gt_now[0])
+        cancel.pose.position.y = float(gt_now[1])
+        cancel.pose.orientation.w = 1.0
+        harness.ensure_rail_goal_publisher().publish(cancel)
+
     # 1. Teleport, with one self-heal retry on RESET_TIMEOUT if the budget allows.
     t_reset_issue = time.time()
     reset_ok = False
@@ -1207,7 +1243,11 @@ def _run_one_waypoint(
             # sim_api unreachable — probably restarting; fall through to wait.
             pass
         if harness.wait_for_reset(
-            start_x=float(start["x"]), start_y=float(start["y"]), tol_m=0.30
+            start_x=float(start["x"]),
+            start_y=float(start["y"]),
+            start_yaw=float(start["yaw"]),
+            tol_m=0.15,
+            tol_yaw_rad=0.15,
         ):
             reset_ok = True
             break
