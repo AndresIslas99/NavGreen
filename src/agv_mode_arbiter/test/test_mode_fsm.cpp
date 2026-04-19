@@ -171,6 +171,17 @@ TEST(ModeFsm, ApproachOnFrontAisleAlsoTriggersEntry) {
   EXPECT_TRUE(out.request_rail_approach);
 }
 
+TEST(ModeFsm, DirectRailDriverGoalShortcutsToRailDrive) {
+  // Stage G+I fix: the dispatch router publishes directly to
+  // /agv/rail_driver/goal and rail_driver transitions to state=="driving".
+  // The arbiter must pick that up from CORRIDOR_NAV and relay cmd_vel_rail.
+  auto in = base_inputs();
+  in.rail_driver_state = "driving";
+  auto out = step(Mode::CORRIDOR_NAV, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_DRIVE);
+  EXPECT_EQ(out.active_source, Source::RAIL);
+}
+
 TEST(ModeFsm, AutoApproachOffStaysInCorridor) {
   auto in = base_inputs();
   in.auto_approach = false;

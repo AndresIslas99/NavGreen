@@ -44,13 +44,18 @@ struct RailControllerInputs {
   // Pose (map frame)
   double current_x = 0.0;
   double current_y = 0.0;
-  // Goal (map frame) — rail axis is +X, so goal_x/goal_y are the longitudinal
-  // target and the expected lateral line, respectively.
+  // Robot yaw in map frame. Used to project the world-frame error onto the
+  // robot body's +X axis so the commanded linear.x is correct regardless of
+  // the robot's heading (yaw=0 or yaw=π both work — robot drives body-forward
+  // toward goal). Callers that don't track yaw can leave it 0, matching the
+  // original "rail assumed aligned with world +X" semantics.
+  double current_yaw = 0.0;
+  // Goal (map frame).
   double goal_x = 0.0;
   double goal_y = 0.0;
-  // Rail axis sign: +1 = drive toward +X (forward), -1 = drive toward -X (reverse).
-  // The sign should match (goal_x - current_x)'s sign; mismatches mean "already
-  // past the goal" and the controller holds still.
+  // Rail axis sign kept for backwards-compat and unit tests, but with
+  // current_yaw propagated the controller no longer depends on it for
+  // direction; err is computed via body-frame projection.
   double rail_axis_sign = 1.0;
   // From zone_detector: rail_yaw_error is robot heading vs rail axis, NaN if
   // not in a rail aisle. For gap-zone drives, pass yaw directly instead.
@@ -80,8 +85,19 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
     return out;
   }
 
-  const double err_x_world = in.goal_x - in.current_x;
-  const double err_x_rail  = err_x_world * in.rail_axis_sign;
+  // Distance-to-goal in world.
+  const double dx_world = in.goal_x - in.current_x;
+  const double dy_world = in.goal_y - in.current_y;
+  // Body-frame error: positive means goal is in front of the robot, regardless
+  // of world-frame yaw. This replaces the old `err_x_rail` sign logic so the
+  // controller works with any goal orientation once the robot is pre-aligned
+  // (alignment is the mode_arbiter / rail_approach responsibility).
+  const double c = std::cos(in.current_yaw);
+  const double s = std::sin(in.current_yaw);
+  const double err_body_x = dx_world * c + dy_world * s;
+  // Keep the old naming for the stop-band comparison and the unit-test
+  // API: "remaining_m" is still the along-rail distance magnitude.
+  const double err_x_rail = err_body_x;
   out.remaining_m = std::abs(err_x_rail);
 
   // Highest-priority gating — collision has overriding stop authority.
@@ -113,16 +129,12 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
     return out;
   }
 
-  // Nominal P-controller. Sign of err_x_rail may be negative if the robot is
-  // past the goal along the rail axis; clamp keeps us inside the speed cap.
-  double raw_linear_rail = p.kP * err_x_rail;
-  double clamped_rail = std::clamp(raw_linear_rail,
-                                   -p.speed_max_mps, p.speed_max_mps);
-  // Translate back to robot frame: robot's +x always is forward; when
-  // rail_axis_sign == +1 the rail-forward direction equals robot-forward, and
-  // when -1 the rail-forward direction is robot-backward. Our command in
-  // robot frame is rail-linear * rail_axis_sign.
-  out.linear_x = clamped_rail * in.rail_axis_sign;
+  // Nominal P-controller in BODY frame — linear.x is commanded directly in
+  // robot's +X. Sign comes from err_body_x (negative if goal is behind the
+  // robot; the controller will then command linear.x<0, but with wz=0 the
+  // robot can't flip around, so aligned approach is required upstream).
+  const double raw_linear = p.kP * err_x_rail;
+  out.linear_x = std::clamp(raw_linear, -p.speed_max_mps, p.speed_max_mps);
   out.state = RailState::DRIVING;
   return out;
 }

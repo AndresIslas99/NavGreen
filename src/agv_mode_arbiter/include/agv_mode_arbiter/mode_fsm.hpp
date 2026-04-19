@@ -145,6 +145,24 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
   // FSM transitions proper.
   switch (current) {
     case Mode::CORRIDOR_NAV:
+      // Direct-dispatch shortcut: if something external published a goal
+      // straight to /agv/rail_driver/goal, rail_driver's state reports
+      // "driving". Swap source to RAIL so cmd_vel_rail is relayed.
+      // Supports test harnesses (Stage G dispatch) and operator consoles
+      // that bypass the auto-approach ceremony.
+      if (in.rail_driver_state == "driving") {
+        out.next_mode = Mode::RAIL_DRIVE;
+        out.active_source = Source::RAIL;
+        return out;
+      }
+      // Similarly: if rail_approach was fired externally and already reached
+      // fine_servoing ("driving" bucket), we should have been observing. This
+      // covers the case where the arbiter booted mid-approach.
+      if (in.rail_approach_state == "driving") {
+        out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
+        out.active_source = Source::APPROACH;
+        return out;
+      }
       // Auto-trigger only when explicitly opted in. Without opt-in the
       // arbiter stays in CORRIDOR_NAV and source=NAV even inside approach
       // strips — the caller (test harness / operator UI) is responsible
