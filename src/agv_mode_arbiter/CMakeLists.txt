@@ -29,6 +29,10 @@ if(BUILD_TESTING)
   target_include_directories(test_mode_fsm PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   target_compile_features(test_mode_fsm PUBLIC cxx_std_17)
+  ament_add_gtest(test_rail_exit_geometry test/test_rail_exit_geometry.cpp)
+  target_include_directories(test_rail_exit_geometry PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+  target_compile_features(test_rail_exit_geometry PUBLIC cxx_std_17)
 endif()
 
 ament_package()

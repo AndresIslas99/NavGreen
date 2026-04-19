@@ -37,6 +37,22 @@ def test_dispatch_explicit_rail_drive():
     assert _dispatch_for({"dispatch": "rail_drive"}) == "rail_drive"
 
 
+def test_dispatch_explicit_rail_exit():
+    # Stage O: rail_exit is the new dispatch for Round 44's exit waypoints.
+    assert _dispatch_for({"dispatch": "rail_exit"}) == "rail_exit"
+
+
+def test_dispatch_derived_from_last_mode_rail_exit():
+    # If a waypoint's expected_modes ends in rail_exit, the dispatcher
+    # should also pick rail_exit (symmetric with rail_drive).
+    wp = {"expected_modes": ["rail_drive", "rail_exit", "corridor_nav"]}
+    # "corridor_nav" is the last → nav2. Test the one where rail_exit is
+    # last, which would happen for shorter expected sequences.
+    assert _dispatch_for(wp) == "nav2"
+    wp2 = {"expected_modes": ["rail_drive", "rail_exit"]}
+    assert _dispatch_for(wp2) == "rail_exit"
+
+
 def test_dispatch_derived_from_last_mode_corridor():
     wp = {"expected_modes": ["corridor_nav"]}
     assert _dispatch_for(wp) == "nav2"
