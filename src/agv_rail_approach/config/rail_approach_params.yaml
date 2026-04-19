@@ -1,4 +1,4 @@
-rail_approach:
+/**:
   ros__parameters:
     # Registry file (loaded at startup; only type: rail_start entries are used)
     registry_file: ""
