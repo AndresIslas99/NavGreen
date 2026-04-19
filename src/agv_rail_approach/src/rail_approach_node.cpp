@@ -271,7 +271,14 @@ void RailApproachNode::on_execute(
     const agv_interfaces::srv::RailApproach::Request::SharedPtr req,
     agv_interfaces::srv::RailApproach::Response::SharedPtr resp) {
 
-  if (state_ != State::IDLE) {
+  // Iter-17: IDLE is the pristine ready state, but after a prior run the
+  // node now latches SETTLED (success) or ABORTED (failure) so the
+  // harness can see the outcome. Both are safe re-entry points for a
+  // new approach — only the active-flow states (COARSE_APPROACH,
+  // TAG_ACQUISITION, FINE_SERVOING) should reject a new service call.
+  if (state_ != State::IDLE &&
+      state_ != State::SETTLED &&
+      state_ != State::ABORTED) {
     resp->success = false;
     resp->message = "Approach already in progress (state: " + state_name() + ")";
     return;
@@ -644,7 +651,14 @@ void RailApproachNode::finish(bool success, const std::string& message,
     nav_goal_handle_ = nullptr;
   }
 
-  state_ = State::IDLE;
+  // Iter-17: distinguish success (SETTLED) from failure (ABORTED) so the
+  // test harness + operator dashboard can detect a finished approach
+  // without polling to NAV_TIMEOUT. Previous code collapsed both outcomes
+  // to IDLE, which made a tag-not-found failure look identical to
+  // "ready for the next approach" and forced the harness to wait the
+  // full 270 s budget before reporting the waypoint. on_execute now
+  // accepts IDLE, SETTLED, or ABORTED as ready-for-new-call states.
+  state_ = success ? State::SETTLED : State::ABORTED;
   target_tag_id_ = -1;
   settle_count_ = 0;
 

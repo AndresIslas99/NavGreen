@@ -435,7 +435,18 @@ def generate_launch_description():
                 'world_frame': 'map',
                 'default_tag_size_m': 0.2,
                 'publish_rate_hz': 5.0,
-                'max_incidence_deg': 85.0,
+                # Iter-16 / Round-44 wp04 diagnosis: the AGV's ZED optical
+                # frame in HIL sits 10 mm above base_link (robot_params.yaml,
+                # z re-measured 2026-04-18). base_link itself rests at
+                # world z=0 under the sim's /reset teleport, so the camera
+                # is ~1 cm above the floor tags. Incidence against a
+                # ground-plane tag normal (+Z) is 89–90°. The previous 85°
+                # gate silently rejected every floor tag from the
+                # registry-driven shim, making rail_approach unable to
+                # find its target even though the tag was geometrically
+                # in frame. 89.5° lets grazing views through while still
+                # rejecting views facing the tag's back (incidence > 90°).
+                'max_incidence_deg': 89.5,
                 'use_sim_time': True,
             }],
             output='log',
