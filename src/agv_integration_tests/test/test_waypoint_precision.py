@@ -731,11 +731,12 @@ _DISPATCH_FROM_LAST_MODE = {
     "rail_approach_pend":   "nav2",        # pre-ACTIVE → Nav2 still owns cmd_vel
     "rail_approach_active": "rail_approach",
     "rail_drive":           "rail_drive",
+    "rail_exit":            "rail_exit",
     "blocked_handoff":      "nav2",
     "teleop":               "nav2",
     "idle":                 "nav2",
 }
-_VALID_DISPATCH = {"nav2", "rail_approach", "rail_drive"}
+_VALID_DISPATCH = {"nav2", "rail_approach", "rail_drive", "rail_exit"}
 
 # Floor-tag ID lookup for aisles {-4.4, -2.2, 0, +2.2, +4.4} (idx 0..4).
 # REAR entry at x=4.0 facing +Z: IDs 33..37.
@@ -836,6 +837,55 @@ def _publish_rail_goal(harness: "Harness", goal_x: float, goal_y: float,
             "ABORTED": ["blocked_lateral", "blocked_misaligned"],
         },
         timeout_s=timeout_s)
+
+
+def _publish_rail_exit_and_await_corridor(
+    harness: "Harness", goal_x: float, goal_y: float, timeout_s: float) -> str:
+    """Publish an initial rail_drive goal and observe the full RAIL_EXIT flow.
+
+    Sequence expected (observed via /agv/mode/state):
+      1. arbiter transitions to `rail_drive` (shortcut on rail_driver
+         state == "driving").
+      2. arbiter transitions to `rail_exit` after rail_driver "reached" —
+         arbiter publishes the internal push goal 1.5 m past the exit tag.
+      3. arbiter releases to `corridor_nav` once rail_exit_clearance_m ≥ 1
+         AND the zone is no longer rail/approach.
+
+    Returns:
+      "SUCCEEDED" — all three transitions observed within timeout.
+      "ABORTED"   — rail_driver reported blocked_* (bail without corridor release).
+      "NAV_TIMEOUT" — some step did not complete in time.
+    """
+    pub = harness.ensure_rail_goal_publisher()
+    goal = PoseStamped()
+    goal.header.stamp = harness.get_clock().now().to_msg()
+    goal.header.frame_id = "map"
+    goal.pose.position.x = float(goal_x)
+    goal.pose.position.y = float(goal_y)
+    goal.pose.orientation.w = 1.0
+    pub.publish(goal)
+
+    deadline = time.monotonic() + timeout_s
+    saw_rail_exit = False
+    while time.monotonic() < deadline:
+        rclpy.spin_once(harness, timeout_sec=0.1)
+        # Early abort on rail_driver blocked.
+        driver_payload = getattr(harness, "last_rail_driver_state", None)
+        if isinstance(driver_payload, str) and driver_payload:
+            try:
+                state = json.loads(driver_payload).get("state")
+            except (json.JSONDecodeError, TypeError):
+                state = None
+            if state in ("blocked_lateral", "blocked_misaligned"):
+                return "ABORTED"
+        modes = harness.modes_observed()
+        if "rail_exit" in modes:
+            saw_rail_exit = True
+        # Release condition: corridor_nav observed AFTER rail_exit (arbiter
+        # left RAIL_EXIT because the robot is past the tag + out of zones).
+        if saw_rail_exit and modes and modes[-1] == "corridor_nav":
+            return "SUCCEEDED"
+    return "NAV_TIMEOUT"
 
 
 def _wait_for_state_value(harness: "Harness", topic_attr: str,
@@ -986,6 +1036,17 @@ def _run_one_waypoint(
               f"{goal['y']:.2f})", flush=True)
         status = _publish_rail_goal(
             harness, float(goal["x"]), float(goal["y"]), NAV_TIMEOUT_S)
+    elif dispatch == "rail_exit":
+        # Publish the initial rail_drive goal (at the approach tag), then
+        # observe the arbiter's RAIL_DRIVE → RAIL_EXIT → CORRIDOR_NAV flow.
+        # The initial goal is the tag position; the arbiter itself emits
+        # the follow-up 1.5 m push goal once rail_driver reports "reached".
+        print(f"    [dispatch] rail_exit initial_goal=({goal['x']:.2f}, "
+              f"{goal['y']:.2f})", flush=True)
+        # rail_exit needs longer than rail_drive — two sequential reaches.
+        status = _publish_rail_exit_and_await_corridor(
+            harness, float(goal["x"]), float(goal["y"]),
+            NAV_TIMEOUT_S * 1.5)
     else:
         # Default: Nav2 via sim_api HTTP /goal.
         status = harness.navigate_to(
@@ -998,12 +1059,24 @@ def _run_one_waypoint(
     brain_final = harness.current_brain_xy()
     events_during = harness.events_since(t_events_start)
 
+    # For rail_exit waypoints, the meaningful terminal pose is the push
+    # target (≥ 1 m past the tag), not the initial rail_drive goal at the
+    # tag. The harness records err_xy against exit_goal when supplied.
+    eval_goal_x = goal["x"]
+    eval_goal_y = goal["y"]
+    eval_goal_yaw = goal["yaw"]
+    if dispatch == "rail_exit" and isinstance(wp.get("exit_goal"), dict):
+        eg = wp["exit_goal"]
+        eval_goal_x = float(eg.get("x", goal["x"]))
+        eval_goal_y = float(eg.get("y", goal["y"]))
+        # yaw stays the initial goal's — rail_driver kept wz=0 throughout.
+
     err_xy = None
     err_yaw = None
     brain_drift = None
     if gt_final is not None:
-        err_xy = math.hypot(gt_final[0] - goal["x"], gt_final[1] - goal["y"])
-        err_yaw = abs(_wrap_angle(gt_final[2] - goal["yaw"]))
+        err_xy = math.hypot(gt_final[0] - eval_goal_x, gt_final[1] - eval_goal_y)
+        err_yaw = abs(_wrap_angle(gt_final[2] - eval_goal_yaw))
     if gt_final is not None and brain_final is not None:
         brain_drift = math.hypot(gt_final[0] - brain_final[0], gt_final[1] - brain_final[1])
 

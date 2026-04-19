@@ -1,0 +1,145 @@
+# Waypoints — TAGGED v3 (Round 44: entry + exit + rail-to-rail transition)
+#
+# 2026-04-18 Stage N: extends v2 with 6 new waypoints that validate what
+# Rounds 41/42/43 never exercised in HIL:
+#   * Rail entries at off-center aisles (±2.2).
+#   * The full RAIL_DRIVE → RAIL_EXIT → CORRIDOR_NAV sequence (wp13/14).
+#   * A rail-to-rail transition (wp15 nav2 lane-change + wp16 FRONT entry).
+#
+# Floor-tag table (same as v2, reproduced for quick reference):
+#   APPROACH_REAR  x=4.0, ids: 33=(−4.4)  34=(−2.2)  35=(0)  36=(+2.2)  37=(+4.4)
+#   APPROACH_FRONT x=7.0, ids:  2=(−4.4)   3=(−2.2)   4=(0)  12=(+2.2)  13=(+4.4)
+#
+# dispatch values:
+#   nav2           → HTTP POST /goal via sim_api (legacy)
+#   rail_approach  → /agv/rail_approach/execute service (requires tag_id)
+#   rail_drive     → /agv/rail_driver/goal publish, waits for state=="reached"
+#   rail_exit      → same publish, waits for /agv/mode/state through
+#                    rail_drive → rail_exit → corridor_nav (Stage O)
+
+waypoints:
+  # ── Phase A: gap probes — pure Nav2 (v2 unchanged) ─────────────────────
+  - id: wp01
+    dispatch: nav2
+    start: {x: 4.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 4.5, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav]
+  - id: wp02
+    dispatch: nav2
+    start: {x: 5.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav]
+  - id: wp03
+    dispatch: nav2
+    start: {x: 5.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav]
+
+  # ── Phase B: rail_approach — center aisle (v2 unchanged) ───────────────
+  - id: wp04
+    dispatch: rail_approach
+    tag_id: 35
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.2, y: 0.0, yaw: 3.14159}
+    goal:  {x: 4.2, y: 0.0, yaw: 3.14159}
+    expected_modes: [corridor_nav, rail_approach_active]
+
+  # ── Phase C–D: rail_drive center aisle (v2 unchanged) ──────────────────
+  - id: wp05
+    dispatch: rail_drive
+    start: {x: 4.0, y: 0.0, yaw: 3.14159}
+    goal:  {x: 1.0, y: 0.0, yaw: 3.14159}
+    expected_modes: [rail_drive]
+  - id: wp06
+    dispatch: rail_drive
+    start: {x: 1.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 4.2, y: 0.0, yaw: 0.0}
+    expected_modes: [rail_drive]
+
+  # ── Phase E–F: FRONT entry + rail_drive (v2 unchanged) ─────────────────
+  - id: wp07
+    dispatch: rail_approach
+    tag_id: 4
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.5, y: 0.0, yaw: 0.0}
+    goal:  {x: 6.8, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active]
+  - id: wp08
+    dispatch: rail_drive
+    start: {x: 7.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 10.0, y: 0.0, yaw: 0.0}
+    expected_modes: [rail_drive]
+  - id: wp09
+    dispatch: rail_drive
+    start: {x: 10.0, y: 0.0, yaw: 3.14159}
+    goal:  {x: 7.0, y: 0.0, yaw: 3.14159}
+    expected_modes: [rail_drive]
+
+  # ── Phase G: FRONT exit back to gap — Nav2 (v2 unchanged) ──────────────
+  - id: wp10
+    dispatch: nav2
+    start: {x: 7.0, y: 0.0, yaw: 3.14159}
+    goal:  {x: 5.5, y: 0.0, yaw: 3.14159}
+    expected_modes: [corridor_nav]
+
+  # ──────────────────── Round 44 additions ──────────────────────────────
+
+  # ── Phase H: off-center rail entries ───────────────────────────────────
+  # Validates the approach/EKF/tag pipeline at aisles ±2.2 (never exercised
+  # before Round 44). Same 2 cm lateral target as wp04/07.
+  - id: wp11
+    dispatch: rail_approach
+    tag_id: 36          # REAR aisle +2.2
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.2, y: 2.2, yaw: 3.14159}
+    goal:  {x: 4.2, y: 2.2, yaw: 3.14159}
+    expected_modes: [corridor_nav, rail_approach_active]
+  - id: wp12
+    dispatch: rail_approach
+    tag_id: 3           # FRONT aisle -2.2
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.5, y: -2.2, yaw: 0.0}
+    goal:  {x: 6.8, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active]
+
+  # ── Phase I: rail exits with RAIL_EXIT push ────────────────────────────
+  # Robot teleports INSIDE the rail and drives toward the approach tag.
+  # On "reached" the arbiter enters RAIL_EXIT and publishes a follow-up
+  # goal 1.5 m past the tag (aisle-side geometry, no cached entry). The
+  # harness observes the full mode sequence; rail_driver's wz=0 ensures
+  # no rotation can happen inside the rail.
+  - id: wp13
+    dispatch: rail_exit
+    start: {x: 1.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 4.0, y: 0.0, yaw: 0.0}    # approach tag 35
+    exit_goal:  {x: 5.5, y: 0.0}          # push target = tag_x + 1.5
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+  - id: wp14
+    dispatch: rail_exit
+    start: {x: 10.0, y: 2.2, yaw: 3.14159}
+    goal:  {x: 7.0, y: 2.2, yaw: 3.14159}  # approach tag 12
+    exit_goal:  {x: 5.5, y: 2.2}            # push target = tag_x − 1.5
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  # ── Phase J: rail-to-rail transition via intermediate gap lane change ──
+  # wp15 pure Nav2 lane-change at the gap centerline so the robot ends at
+  # the entry pose for wp16 (FRONT aisle -2.2). Each waypoint still
+  # teleports, but the pair validates the two legs that would chain in a
+  # continuous production run.
+  - id: wp15
+    dispatch: nav2
+    start: {x: 5.5, y: 0.0, yaw: 0.0}
+    goal:  {x: 5.5, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav]
+  - id: wp16
+    dispatch: rail_approach
+    tag_id: 3           # FRONT aisle -2.2 (same tag as wp12; tests re-entry after lane change)
+    offset_x: 0.3
+    offset_y: 0.0
+    start: {x: 5.5, y: -2.2, yaw: 0.0}
+    goal:  {x: 6.8, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active]
