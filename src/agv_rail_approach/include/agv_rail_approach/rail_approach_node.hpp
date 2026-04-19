@@ -75,6 +75,13 @@ private:
   double max_fine_linear_;
   double max_fine_angular_;
   bool check_yaw_convergence_{false};
+  // Iter-11 / Option B: observability for fine-servo rejections.
+  // last_reject_reason_ is "none" by default and updated to
+  // verdict_to_str(...) when fine_servo_step returns a non-OK verdict
+  // OR when the TF lookup fails. Both get stamped; publish_status
+  // includes the age so stale rejects decay without needing a clear.
+  std::string last_reject_reason_{"none"};
+  rclcpp::Time last_reject_stamp_{0, 0, RCL_ROS_TIME};
   double tag_loss_timeout_;
   double tag_reacquire_timeout_;
   double acquisition_timeout_;
@@ -134,6 +141,7 @@ private:
 
   // Helpers
   std::string state_name() const;
+  std::string last_reject_age_str() const;
 };
 
 }  // namespace agv_rail_approach

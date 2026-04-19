@@ -330,6 +330,10 @@ void RailApproachNode::on_list(
 
 void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   state_ = State::COARSE_APPROACH;
+  // Iter-11 / Option B: fresh approach attempt — clear any stale
+  // reject reason so the state topic reflects this run only.
+  last_reject_reason_ = "none";
+  last_reject_stamp_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
 
   if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
     RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
@@ -441,6 +445,8 @@ void RailApproachNode::process_fine_servoing(
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
         "TF lookup %s->%s failed: %s",
         camera_frame_.c_str(), base_frame_.c_str(), e.what());
+    last_reject_reason_ = "tf_missing";
+    last_reject_stamp_ = now();
     return;
   }
   const tf2::Quaternion q(
@@ -479,8 +485,12 @@ void RailApproachNode::process_fine_servoing(
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
         "fine_servo reject: %s (range=%.3f m)",
         verdict_to_str(out.verdict), out.range_m);
+    last_reject_reason_ = verdict_to_str(out.verdict);
+    last_reject_stamp_ = now();
     return;
   }
+  // Happy path clears the last reject so operators see the recovery.
+  last_reject_reason_ = "none";
 
   // Publish target pose for visualization.
   geometry_msgs::msg::PoseStamped target_msg;
@@ -564,11 +574,31 @@ void RailApproachNode::publish_status() {
       break;  // idle/coarse_approach/tag_acquisition/settled/aborted pass through.
   }
 
+  // Iter-11 / Option B: expose the last rejection that the fine servo
+  // emitted so consumers (harness, operator dashboard, mode_arbiter)
+  // can tell WHY an approach is stalled without digging through
+  // WARN_THROTTLE log lines. "none" means the controller last reported
+  // OK (or has never been stepped — the node resets this to "none" on
+  // each start_coarse_approach).
   std_msgs::msg::String msg;
   msg.data = "{\"state\":\"" + arbiter_state +
              "\",\"detail\":\"" + detail +
-             "\",\"target_tag\":" + std::to_string(target_tag_id_) + "}";
+             "\",\"target_tag\":" + std::to_string(target_tag_id_) +
+             ",\"last_reject_reason\":\"" + last_reject_reason_ + "\"" +
+             ",\"last_reject_age_s\":" + last_reject_age_str() + "}";
   status_pub_->publish(msg);
+}
+
+std::string RailApproachNode::last_reject_age_str() const {
+  if (last_reject_reason_ == "none" || last_reject_stamp_.nanoseconds() == 0) {
+    return "null";
+  }
+  const auto dt = (now() - last_reject_stamp_).seconds();
+  // JSON doesn't allow NaN/Inf; clamp to a reasonable max.
+  if (!std::isfinite(dt) || dt < 0.0 || dt > 1e6) return "null";
+  // Round to 2 decimals without pulling in <iomanip>.
+  const double rounded = std::round(dt * 100.0) / 100.0;
+  return std::to_string(rounded);
 }
 
 std::string RailApproachNode::state_name() const {
