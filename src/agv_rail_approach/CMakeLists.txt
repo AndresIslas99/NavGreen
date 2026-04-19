@@ -52,4 +52,16 @@ install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_fine_servo_controller
+    test/test_fine_servo_controller.cpp)
+  target_include_directories(test_fine_servo_controller PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    ${OpenCV_INCLUDE_DIRS}
+  )
+  target_link_libraries(test_fine_servo_controller ${OpenCV_LIBS})
+  target_compile_features(test_fine_servo_controller PUBLIC cxx_std_17)
+endif()
+
 ament_package()
