@@ -92,38 +92,72 @@ TEST(ModeFsm, ActiveStaysActiveWhileDriving) {
   EXPECT_EQ(out.active_source, Source::APPROACH);
 }
 
-TEST(ModeFsm, RailDriveExitsOnReachedAndLeftRailZone) {
+TEST(ModeFsm, RailDriveReachedEntersRailExitWithPushRequest) {
+  // Stage M: reaching rail_driver's goal does NOT release to Nav2.
+  // Arbiter must enter RAIL_EXIT with source=RAIL and ask for an extended
+  // goal 1 m past the exit tag so the robot drives out with wz=0.
   auto in = base_inputs();
   in.zone = "gap";
   in.rail_driver_state = "reached";
   auto out = step(Mode::RAIL_DRIVE, in);
-  EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
-  EXPECT_EQ(out.active_source, Source::NAV);
-}
-
-TEST(ModeFsm, RailDriveStaysInRailWhileReachedButStillInAisle) {
-  // Robot at the end of an aisle traversal but rail_driver latched "reached"
-  // while zone is still a rail aisle — we must stay in RAIL_DRIVE until the
-  // robot physically exits the aisle (prevents Nav2 from rotating inside a rail).
-  auto in = base_inputs();
-  in.zone = "rail_aisle_0";
-  in.rail_driver_state = "reached";
-  auto out = step(Mode::RAIL_DRIVE, in);
-  EXPECT_EQ(out.next_mode, Mode::RAIL_DRIVE);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT);
   EXPECT_EQ(out.active_source, Source::RAIL);
+  EXPECT_TRUE(out.request_rail_exit_push);
 }
 
-TEST(ModeFsm, RailDriveExitsOnLateralAbort) {
+TEST(ModeFsm, RailDriveAbortInsideRailStaysWithRail) {
+  // blocked_lateral / blocked_misaligned inside a rail aisle must NOT hand
+  // back to Nav2 — Nav2 could rotate into crop rows. Stay on RAIL so the
+  // operator can issue a reverse goal to back out.
   auto in = base_inputs();
   in.zone = "rail_aisle_p22";
   in.rail_driver_state = "blocked_lateral";
   auto out = step(Mode::RAIL_DRIVE, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT);
+  EXPECT_EQ(out.active_source, Source::RAIL);
+  EXPECT_FALSE(out.request_rail_exit_push);
+}
+
+TEST(ModeFsm, RailExitHoldsWhileInsideRailZone) {
+  // Even if rail_driver reports "reached", zone still "rail_aisle_*" means
+  // the robot has not physically cleared the aisle. Stay in RAIL_EXIT.
+  auto in = base_inputs();
+  in.zone = "rail_aisle_0";
+  in.rail_driver_state = "reached";
+  in.rail_exit_clearance_m = 1.5;  // would satisfy clearance on its own
+  auto out = step(Mode::RAIL_EXIT, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT);
+  EXPECT_EQ(out.active_source, Source::RAIL);
+}
+
+TEST(ModeFsm, RailExitHoldsUntilClearanceMet) {
+  // Zone is corridor but we're still within 1 m of the exit tag. The 1 m
+  // no-rotation guard must keep us on RAIL.
+  auto in = base_inputs();
+  in.zone = "gap";
+  in.rail_driver_state = "reached";
+  in.rail_exit_clearance_m = 0.4;  // < 1.0
+  auto out = step(Mode::RAIL_EXIT, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT);
+  EXPECT_EQ(out.active_source, Source::RAIL);
+}
+
+TEST(ModeFsm, RailExitReleasesToCorridorOnFullClearance) {
+  // All three conditions met: rail_driver reached, zone not rail/approach,
+  // clearance ≥ 1 m. Hand over to Nav2.
+  auto in = base_inputs();
+  in.zone = "gap";
+  in.rail_driver_state = "reached";
+  in.rail_exit_clearance_m = 1.25;
+  auto out = step(Mode::RAIL_EXIT, in);
   EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
+  EXPECT_EQ(out.active_source, Source::NAV);
 }
 
 TEST(ModeFsm, SafetyStopOverridesEverything) {
   for (Mode m : {Mode::CORRIDOR_NAV, Mode::RAIL_APPROACH_PEND,
-                 Mode::RAIL_APPROACH_ACTIVE, Mode::RAIL_DRIVE}) {
+                 Mode::RAIL_APPROACH_ACTIVE, Mode::RAIL_DRIVE,
+                 Mode::RAIL_EXIT}) {
     auto in = base_inputs();
     in.safety_stop = true;
     in.zone = "rail_aisle_0";
@@ -223,6 +257,7 @@ TEST(ModeFsm, LabelsCoverAllStates) {
   EXPECT_STREQ(mode_to_str(Mode::RAIL_APPROACH_PEND), "rail_approach_pend");
   EXPECT_STREQ(mode_to_str(Mode::RAIL_APPROACH_ACTIVE), "rail_approach_active");
   EXPECT_STREQ(mode_to_str(Mode::RAIL_DRIVE), "rail_drive");
+  EXPECT_STREQ(mode_to_str(Mode::RAIL_EXIT), "rail_exit");
   EXPECT_STREQ(mode_to_str(Mode::BLOCKED_HANDOFF), "blocked_handoff");
   EXPECT_STREQ(mode_to_str(Mode::TELEOP), "teleop");
   EXPECT_STREQ(mode_to_str(Mode::IDLE), "idle");
