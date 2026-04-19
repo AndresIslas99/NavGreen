@@ -250,6 +250,63 @@ def _get_sim_api(path: str, timeout: float = 5.0) -> Optional[dict]:
         return None
 
 
+# Round 44 iter-5: detect sim-side self-heal and wait for brain TF cache
+# to catch up to the new sim_time before issuing the next goal.
+#
+# The sim exposes (commit dd2cf06):
+#   self_heal_restarts_total — monotonic restart count
+#   clock_healthy_streak_s   — seconds since last /clock gap >2 s
+#
+# Pattern: before each waypoint, compare current restart count vs the
+# last observed value; if incremented, pause until the streak is >=
+# SIM_STABLE_STREAK_S so NEW TF messages have populated the brain's
+# buffer at the new sim_time range.
+SIM_STABLE_STREAK_S = 30.0
+SIM_STABLE_POLL_TIMEOUT_S = 180.0
+
+
+def _wait_sim_healthy(last_restarts: int) -> int:
+    """Block until the sim has been publishing /clock cleanly for ≥30 s.
+
+    Returns the latest `self_heal_restarts_total`, for the caller to
+    carry forward as the next baseline. When the sim is already healthy
+    (no recent restart, long streak) this returns immediately.
+
+    If `/sim/telemetry` is unavailable, skip with a warning — we cannot
+    validate without the new fields but the waypoint itself can still
+    run (degraded detection, not a blocker).
+    """
+    deadline = time.monotonic() + SIM_STABLE_POLL_TIMEOUT_S
+    warned = False
+    while time.monotonic() < deadline:
+        t = _get_sim_api("/sim/telemetry", timeout=3.0)
+        if t is None:
+            if not warned:
+                print("[sim-heal] telemetry unreachable; skipping health gate", flush=True)
+                warned = True
+            return last_restarts
+        rc = int(t.get("self_heal_restarts_total", 0))
+        streak = float(t.get("clock_healthy_streak_s", 0.0))
+        if "clock_healthy_streak_s" not in t:
+            # Older sim build — no streak field, just use restart count.
+            return rc
+        if rc > last_restarts:
+            print(f"[sim-heal] detected restart (#{rc}); waiting for "
+                  f"clock_healthy_streak_s≥{SIM_STABLE_STREAK_S}s "
+                  f"(current {streak:.1f}s)", flush=True)
+            last_restarts = rc
+            time.sleep(5.0)
+            continue
+        if streak >= SIM_STABLE_STREAK_S:
+            return rc
+        # Newly-booted sim, still warming up — short poll until streak
+        # reaches the threshold.
+        time.sleep(2.0)
+    print(f"[sim-heal] WARN: still not streak-healthy after "
+          f"{SIM_STABLE_POLL_TIMEOUT_S:.0f}s; proceeding anyway", flush=True)
+    return last_restarts
+
+
 def _wait_for_sim_ready(timeout_s: float = AUTO_RESTART_READY_TIMEOUT_S) -> bool:
     """Poll GET /state until gt_pose is non-null — the supervisor post-restart signal."""
     deadline = time.monotonic() + timeout_s
@@ -1506,8 +1563,25 @@ def test_waypoint_precision():
         report_dir = _make_report_dir()
         print(f"[waypoint_precision] report dir: {report_dir}", flush=True)
 
+        # Round 44 iter-5: baseline the sim-side restart counter so a
+        # mid-run self-heal is detectable from the first recheck onward.
+        _initial = _get_sim_api("/sim/telemetry", timeout=3.0) or {}
+        last_sim_restarts = int(_initial.get("self_heal_restarts_total", 0))
+
         results: list[WaypointResult] = []
         for wp in waypoints[:MIN_WAYPOINTS]:
+            # Before each waypoint, verify the sim hasn't silently self-healed.
+            # If it has, pause until clock has been flowing cleanly for 30 s,
+            # then re-sync the brain EKF to GT so TF lookups aren't left in
+            # the previous sim_time window.
+            rc = _wait_sim_healthy(last_sim_restarts)
+            if rc != last_sim_restarts:
+                gt = harness.current_gt_xy()
+                if gt is not None:
+                    print(f"[sim-heal] re-syncing brain to GT after restart", flush=True)
+                    _sync_brain_to_gt(harness, gt[0], gt[1], gt[2], verbose=False)
+                    time.sleep(SYNC_SETTLE_S)
+                last_sim_restarts = rc
             print(f"[wp {wp['id']}] → ({wp['goal']['x']}, {wp['goal']['y']}, {wp['goal']['yaw']:.2f})")
             results.append(_run_one_waypoint(
                 harness, wp, budget=budget, report_dir=report_dir))

@@ -169,6 +169,73 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
 - next run (iter-5) focus: **harness resilience to sim self-heal**
   (detect + recover) + **apriltag shim**.
 
+## iter-5 (2026-04-19) — apriltag shim + sim self-heal gate
+
+- brain-side additions (this commit):
+  - `src/agv_hil_bridges/scripts/apriltag_sim_shim.py`: subscribes
+    `/agv/sim/ground_truth/visible_markers`, projects each tag's 4
+    world-frame corners into image pixels via camera_info + TF, emits
+    `apriltag_msgs/AprilTagDetectionArray` on `/agv/detections`.
+    Replaces the broken apriltag_ros path in `agv_hil_full.launch.py`.
+  - Harness: new `_wait_sim_healthy()` helper reads
+    `/sim/telemetry` per-waypoint, detects a `self_heal_restarts_total`
+    increment, and blocks until `clock_healthy_streak_s ≥ 30 s` before
+    continuing. Re-syncs brain EKF to GT after recovery.
+- report: `sim_episodes/precision_run_20260419_013412/report.json`
+- analysis: `sim_episodes/precision_run_20260419_013412/iteration_5_analysis.md`
+- bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4,
+  rail_exit 0/2
+- success rate: **7/16 (43.8 %)**, 0 collisions, run completed in
+  30:57 (iter-4 was 14:49 w/ collapse; iter-5 ran full suite).
+- **Validated wins:**
+  - Sim self-heal gate worked passively — the run had no mid-run
+    collapse, so the gate never had to fire. But `/sim/telemetry`
+    was polled 16× (once per wp); if it had detected a restart, the
+    pause-and-resync is implemented and ready.
+  - apriltag shim publishes detections (confirmed via
+    `ros2 topic echo /agv/detections`: 7-9 tags per tick seen on
+    wp01-09). No more 0-detection silence from apriltag_ros.
+  - Full-run stability confirms the brain no longer needs to cope
+    with mid-run sim clock jumps (gate prevents the scenario).
+- **rail_approach still 0/5 — root-caused but NOT fixed:**
+  Querying `/agv/sim/ground_truth/visible_markers` with the robot at
+  wp11's start pose (5.2, 2.2, π) — 1.2 m in front of floor tag 36 —
+  the sim reports only `[id=29, id=30]` (both wall tags at x=3.6,
+  z=0.145). **Floor tag 36 (z=0, face up) is not in the oracle.**
+  The sim's visible_markers filter drops ground-plane tags whose
+  surface normal is close to world +Z because the camera's optical
+  axis is nearly horizontal (incidence angle ~80°, outside the sim's
+  threshold). The shim can only emit what the oracle sees; it cannot
+  hallucinate tags the sim withholds.
+  - **Options for iter-6:**
+    - (A) Sim-side: relax the incidence filter for floor-plane tags,
+      or lower the threshold to ~85°.
+    - (B) Jetson-side: make the shim self-sufficient by reading
+      `markers_registry.yaml` directly and projecting all listed
+      tags, using the brain's own TF for world→camera. No sim
+      dependency for this piece.
+- **Other failures unchanged:**
+  - wp10/wp15 ABORTED: teleport didn't take full effect. wp10
+    requested (5.5, 0, π) but GT stayed at (7.05, 0, π) — same as
+    wp09's goal pose. `wait_for_reset` has 30 cm xy tolerance but no
+    yaw check + no validation that x matches target, so stale GT
+    passed the gate. Harness bug, iter-6 candidate.
+  - wp04/wp07 rail_approach: teleport put robot facing +x instead of
+    target yaw π (wait_for_reset ignored yaw). The shim did project
+    tag 35/4 correctly but they land behind the robot.
+  - wp13/wp14 rail_exit: NAV_TIMEOUT at err_xy≈1.54 m — same
+    behavior as iter-3. `modes_observed` shows the full
+    `rail_drive → rail_exit` transition, so FSM release logic is
+    firing; push target just never gets reached within 270 s under
+    RTF ~0.19.
+- decisions: no new code this iteration — iter-5 is the pure
+  validation of the harness self-heal gate + apriltag shim
+  scaffold. Next commit lifts the two remaining blockers from the
+  analysis above.
+- next run (iter-6) focus: apriltag floor-tag path (either sim-side
+  incidence threshold relax or Jetson-side self-sufficient shim) +
+  `wait_for_reset` yaw/x strict check.
+
 <!--
 Template for each subsequent iteration:
 
