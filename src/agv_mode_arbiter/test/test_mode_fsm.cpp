@@ -185,6 +185,53 @@ TEST(ModeFsm, RailExitReleasesOnIdleAfterClearance) {
   EXPECT_EQ(out.active_source, Source::NAV);
 }
 
+TEST(ModeFsm, RailExitReleasesInApproachWhenRailDriverIdle) {
+  // Iter-16: if the FSM ends up in RAIL_EXIT while the robot is parked
+  // in an approach zone and rail_driver has no goal (state=="idle"),
+  // release to CORRIDOR_NAV even if clearance is 0. Without this
+  // auxiliary path, the Round-44 harness traps wp01 at tag_x_rear
+  // (clearance ≡ 0, rail_driver idle, approach zone) forever.
+  auto in = base_inputs();
+  in.zone = "rail_approach_rear";
+  in.rail_driver_state = "idle";
+  in.rail_exit_clearance_m = 0.0;  // at the tag
+  auto out = step(Mode::RAIL_EXIT, in);
+  EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
+  EXPECT_EQ(out.active_source, Source::NAV);
+}
+
+TEST(ModeFsm, RailExitHoldsInApproachWhenRailDriverStillDriving) {
+  // Inverse of the idle-release path: if rail_driver is still driving
+  // (or reached / blocked_*), the approach-zone override must NOT fire.
+  // Only explicit "idle" qualifies as "operator released the rail".
+  for (const auto& st : {"driving", "reached", "blocked_lateral",
+                          "blocked_misaligned"}) {
+    auto in = base_inputs();
+    in.zone = "rail_approach_front";
+    in.rail_driver_state = st;
+    in.rail_exit_clearance_m = 0.0;
+    auto out = step(Mode::RAIL_EXIT, in);
+    EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT) << "state=" << st;
+    EXPECT_EQ(out.active_source, Source::RAIL) << "state=" << st;
+  }
+}
+
+TEST(ModeFsm, RailExitHoldsInsideRailZoneEvenWhenIdle) {
+  // The idle-in-approach release is approach-zone-only. Inside actual
+  // rail zones (aisle tubes) it must still hold so Nav2 never samples
+  // rotations between the 51 mm rail tubes.
+  for (const auto& z : {"rail_aisle_0", "rail_aisle_p22", "rail_aisle_m22",
+                        "rail_aisle_p44", "rail_aisle_m44"}) {
+    auto in = base_inputs();
+    in.zone = z;
+    in.rail_driver_state = "idle";
+    in.rail_exit_clearance_m = 0.0;
+    auto out = step(Mode::RAIL_EXIT, in);
+    EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT) << "zone=" << z;
+    EXPECT_EQ(out.active_source, Source::RAIL) << "zone=" << z;
+  }
+}
+
 TEST(ModeFsm, SafetyStopOverridesEverything) {
   for (Mode m : {Mode::CORRIDOR_NAV, Mode::RAIL_APPROACH_PEND,
                  Mode::RAIL_APPROACH_ACTIVE, Mode::RAIL_DRIVE,

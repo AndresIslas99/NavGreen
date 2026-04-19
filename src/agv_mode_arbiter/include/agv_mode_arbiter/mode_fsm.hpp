@@ -260,7 +260,7 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       return out;
 
     case Mode::RAIL_EXIT:
-      // Release to CORRIDOR_NAV needs three conditions:
+      // Release to CORRIDOR_NAV, primary gate — three conditions:
       //   1. zone is out of rail/approach
       //   2. clearance ≥ 1 m past the exit tag
       //   3. rail_driver is NOT actively "driving" — i.e. "reached", "idle",
@@ -274,6 +274,29 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       if (!is_rail_zone(in.zone) && !is_approach_zone(in.zone) &&
           in.rail_exit_clearance_m >= 1.0 &&
           in.rail_driver_state != "driving") {
+        out.next_mode = Mode::CORRIDOR_NAV;
+        out.active_source = Source::NAV;
+        return out;
+      }
+      // Iter-16 / Option E: auxiliary release for the "idle-in-approach"
+      // trap. Round-44 iter-15 observed on wp01: the harness publishes a
+      // zero-distance cancel goal to /agv/rail_driver/goal right after
+      // teleport, which makes rail_driver briefly emit "driving"/"reached"
+      // from CORRIDOR_NAV. The FSM short-circuits into RAIL_DRIVE →
+      // RAIL_EXIT. If the teleport lands on an approach-tag x-coord
+      // (e.g. wp01 at x=4.0 = tag_x_rear), rail_exit_clearance_m stays 0
+      // forever — rail_driver is now idle with no goal, so nothing
+      // advances. Nav2's cmd_vel_nav is dropped by the arbiter (source =
+      // RAIL) and the waypoint stalls.
+      //
+      // Approach zones sit OUTSIDE the rail tubes (floor tag at the
+      // aisle entrance), so MPPI rotation there is not a tube-hit
+      // hazard. It is therefore safe to hand back to Nav2 when the
+      // operator has explicitly parked rail_driver (have_goal_=false,
+      // state=="idle"). Only "idle" qualifies — "reached" and
+      // "blocked_*" still indicate an active rail flow the FSM should
+      // not pre-empt.
+      if (is_approach_zone(in.zone) && in.rail_driver_state == "idle") {
         out.next_mode = Mode::CORRIDOR_NAV;
         out.active_source = Source::NAV;
         return out;
