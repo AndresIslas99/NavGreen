@@ -143,12 +143,27 @@ TEST(ModeFsm, RailExitHoldsUntilClearanceMet) {
 }
 
 TEST(ModeFsm, RailExitReleasesToCorridorOnFullClearance) {
-  // All three conditions met: rail_driver reached, zone not rail/approach,
-  // clearance ≥ 1 m. Hand over to Nav2.
+  // Zone out of rail/approach AND clearance ≥ 1 m. Release regardless of
+  // rail_driver state — post-iter-1 fix: "reached" only latches one tick
+  // and the FSM would hang forever if it required that label to match
+  // simultaneously with the geometry.
   auto in = base_inputs();
   in.zone = "gap";
-  in.rail_driver_state = "reached";
+  in.rail_driver_state = "idle";
   in.rail_exit_clearance_m = 1.25;
+  auto out = step(Mode::RAIL_EXIT, in);
+  EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
+  EXPECT_EQ(out.active_source, Source::NAV);
+}
+
+TEST(ModeFsm, RailExitReleasesEvenWhenRailDriverStillDriving) {
+  // Same release conditions, but rail_driver is still "driving" toward the
+  // push target. Once clearance is satisfied we hand cmd_vel back to Nav2;
+  // rail_driver will latch reached on its own shortly.
+  auto in = base_inputs();
+  in.zone = "gap";
+  in.rail_driver_state = "driving";
+  in.rail_exit_clearance_m = 1.05;
   auto out = step(Mode::RAIL_EXIT, in);
   EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
   EXPECT_EQ(out.active_source, Source::NAV);

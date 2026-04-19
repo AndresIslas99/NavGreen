@@ -260,11 +260,15 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       return out;
 
     case Mode::RAIL_EXIT:
-      // Stay on rail_driver until (a) the robot has cleared the approach +
-      // rail zones AND (b) rail_exit_clearance_m ≥ 1 m past the exit tag.
-      // Only then can Nav2 safely resume — rotation is legal from here on.
-      if (in.rail_driver_state == "reached" &&
-          !is_rail_zone(in.zone) && !is_approach_zone(in.zone) &&
+      // Release condition: robot cleared the approach + rail zones AND is
+      // ≥ 1 m past the exit tag. rail_driver's state check is NOT required
+      // — the "reached" label is only latched for a single tick, and after
+      // that the driver goes back to "idle", which would leave the FSM
+      // permanently stuck in RAIL_EXIT even once geometry is satisfied
+      // (observed in Round 44 iter-1: every wp after a rail_drive success
+      // ran with mode="rail_exit" and source=RAIL, starving cmd_vel_nav
+      // and cmd_vel_approach).
+      if (!is_rail_zone(in.zone) && !is_approach_zone(in.zone) &&
           in.rail_exit_clearance_m >= 1.0) {
         out.next_mode = Mode::CORRIDOR_NAV;
         out.active_source = Source::NAV;
