@@ -137,6 +137,14 @@ class RailDriverNode : public rclcpp::Node {
     RailControllerInputs in;
     in.current_x = last_odom_->pose.pose.position.x;
     in.current_y = last_odom_->pose.pose.position.y;
+    // Extract yaw from odometry orientation so the controller can project
+    // the world-frame error onto the robot's body +X.
+    {
+      const auto &q = last_odom_->pose.pose.orientation;
+      in.current_yaw = std::atan2(
+          2.0 * (q.w * q.z + q.x * q.y),
+          1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+    }
     in.goal_x = goal_x_;
     in.goal_y = goal_y_;
     in.rail_axis_sign = (goal_x_ >= in.current_x) ? 1.0 : -1.0;

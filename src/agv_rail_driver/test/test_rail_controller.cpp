@@ -102,15 +102,34 @@ TEST(RailController, SpeedCap) {
   EXPECT_NEAR(out.linear_x, 0.5, 1e-9);
 }
 
-TEST(RailController, ReverseDirection) {
-  // rail_axis_sign = -1 means drive toward -X in world; goal_x < current_x.
+TEST(RailController, ReverseWhenRobotMisaligned) {
+  // Robot at (0,0) facing +X (yaw=0), goal at (-1, 0). Body-frame err = -1,
+  // so the controller commands negative linear.x — which, with wz=0, the
+  // robot cannot act on. Upstream is responsible for aligning the robot to
+  // face -X before handing off.
   auto in = base_inputs();
   in.current_x = 0.0;
   in.goal_x = -1.0;
-  in.rail_axis_sign = -1.0;
+  in.current_yaw = 0.0;
   auto out = compute(in, {});
   EXPECT_EQ(out.state, RailState::DRIVING);
-  EXPECT_LT(out.linear_x, 0.0);  // Robot commanded backward
+  EXPECT_LT(out.linear_x, 0.0);  // controller says reverse; wz=0
+  EXPECT_DOUBLE_EQ(out.angular_z, 0.0);
+}
+
+TEST(RailController, YawPiForwardDrivesTowardLowerWorldX) {
+  // Robot at (4, 0) facing world -X (yaw=π), goal at (1, 0). Body +X equals
+  // world -X at this yaw, so the controller must command POSITIVE linear.x
+  // to drive the robot toward world (1, 0). Regression test for Round 42b
+  // wp05 where the old sign-based controller drove the robot backward.
+  auto in = base_inputs();
+  in.current_x = 4.0;
+  in.goal_x = 1.0;
+  in.goal_y = 0.0;
+  in.current_yaw = M_PI;
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::DRIVING);
+  EXPECT_GT(out.linear_x, 0.0) << "with yaw=π, forward motion reduces world_x";
   EXPECT_DOUBLE_EQ(out.angular_z, 0.0);
 }
 
