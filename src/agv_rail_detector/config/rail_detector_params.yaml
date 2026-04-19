@@ -1,0 +1,22 @@
+rail_detector:
+  ros__parameters:
+    depth_topic: /agv/zed/depth/depth_registered
+    camera_info_topic: /agv/zed/left/camera_info
+    detections_topic: /agv/rail_detections
+    state_topic: /agv/rail_detector/state
+    publish_rate_hz: 5.0
+    # Camera mount offset from base_link (match robot_params.yaml 2026-04-18
+    # re-measurement: ZED at (0.700, 0.0, 0.21) above ground).
+    camera_x: 0.700
+    camera_y: 0.0
+    camera_z: 0.21
+    # Ground slice to isolate the rail tubes. Tubes are 51 mm diameter at
+    # floor level; a generous ±50 mm window absorbs depth noise.
+    z_slice_min: -0.02
+    z_slice_max:  0.08
+    # BEV processing window in base_link frame.
+    x_min: 0.3
+    x_max: 3.0
+    y_half_width: 1.0
+    depth_stride: 8
+    min_confidence: 0.3
