@@ -70,9 +70,22 @@ TEST(ZoneClassify, InRearSectionBetweenAislesIsUnknown) {
 }
 
 TEST(ZoneClassify, YawErrorInRail) {
-  auto r = classify(0.0, 0.0, 0.5);     // 0.5 rad heading error
+  auto r = classify(0.0, 0.0, 0.5);     // 0.5 rad heading error vs +X axis
   EXPECT_EQ(r.zone, "rail_aisle_0");
   EXPECT_NEAR(r.rail_yaw_error, 0.5, 1e-6);
+}
+
+TEST(ZoneClassify, YawPiIsAlignedWithReverseRail) {
+  // Robot facing -X (yaw=π) is valid for a rail traversal in either
+  // direction; rail_yaw_error should collapse to 0, not π. Regression
+  // for Round 42c wp05 where the old wrap_to_pi triggered BLOCKED_MISALIGNED.
+  auto r = classify(0.0, 0.0, M_PI);
+  EXPECT_NEAR(r.rail_yaw_error, 0.0, 1e-6);
+}
+
+TEST(ZoneClassify, YawPiMinusEpsilonIsNearZero) {
+  auto r = classify(0.0, 0.0, M_PI - 0.1);
+  EXPECT_NEAR(r.rail_yaw_error, -0.1, 1e-6);
 }
 
 TEST(ZoneClassify, ConfidenceTapersWithLateralOffset) {
