@@ -1210,24 +1210,17 @@ def _run_one_waypoint(
     _cancel_all_nav_goals(harness)
 
     # 0b. Round 44 iter-7: rail_driver has no "cancel" API and latches
-    #    have_goal_=true until the current goal's stop-band fires or the
-    #    robot is teleported past it. After a rail_drive waypoint, the
-    #    next non-rail waypoint teleports the robot into a NEW position —
-    #    rail_driver then re-computes err_body_x and immediately commands
-    #    cmd_vel_rail toward the stale goal, driving the robot away from
-    #    the new start pose (observed iter-5/iter-6 wp10: teleport to
-    #    (5.5, 0, π) drifted back to (7.05, 0, π) = wp09's rail goal).
-    #    Force rail_driver to latch "reached" by publishing a goal AT
-    #    the current GT pose before the teleport.
-    gt_now = harness.current_gt_xy()
-    if gt_now is not None:
-        cancel = PoseStamped()
-        cancel.header.stamp = harness.get_clock().now().to_msg()
-        cancel.header.frame_id = "map"
-        cancel.pose.position.x = float(gt_now[0])
-        cancel.pose.position.y = float(gt_now[1])
-        cancel.pose.orientation.w = 1.0
-        harness.ensure_rail_goal_publisher().publish(cancel)
+    #    have_goal_=true until the current goal's stop-band fires or an
+    #    external system republishes a zero-distance goal. After a
+    #    rail_drive waypoint, the next waypoint's teleport moves the
+    #    robot to a NEW pose; rail_driver then recomputes err_body_x
+    #    against the STALE goal and drives cmd_vel_rail toward it
+    #    (observed iter-5/iter-6 wp10: teleport to (5.5, 0, π) drifted
+    #    back to (7.05, 0, π) = wp09's rail goal).
+    #    The cancel publish happens AFTER teleport (below, step 1c) so
+    #    the cancel goal matches the NEW pose — avoiding a race where a
+    #    pre-reset publish would be interpreted relative to the new
+    #    pose after the teleport fires.
 
     # 1. Teleport, with one self-heal retry on RESET_TIMEOUT if the budget allows.
     t_reset_issue = time.time()
@@ -1276,6 +1269,25 @@ def _run_one_waypoint(
 
     # 1b. Clear e_stop (latched on by /reset) and arm motors.
     _arm_and_clear_estop()
+
+    # 1c. Round 44 iter-7: send rail_driver a zero-distance goal at the
+    #     NEW pose so it latches "reached" immediately and drops
+    #     have_goal_ to idle. Without this, the previous waypoint's
+    #     rail_drive goal is still active and rail_driver publishes
+    #     cmd_vel_rail toward it (pulls robot off the new start pose).
+    gt_post_reset = harness.current_gt_xy()
+    if gt_post_reset is not None:
+        cancel = PoseStamped()
+        cancel.header.stamp = harness.get_clock().now().to_msg()
+        cancel.header.frame_id = "map"
+        cancel.pose.position.x = float(gt_post_reset[0])
+        cancel.pose.position.y = float(gt_post_reset[1])
+        cancel.pose.orientation.w = 1.0
+        harness.ensure_rail_goal_publisher().publish(cancel)
+        # Give rail_driver a couple ticks (at 20 Hz ≈ 100 ms) to absorb
+        # the zero-distance goal, latch "reached", and drop have_goal_.
+        time.sleep(0.2)
+        rclpy.spin_once(harness, timeout_sec=0.05)
 
     # 2. Settle — let ekf_local absorb teleport.
     time.sleep(POST_RESET_SETTLE_S)
@@ -1336,8 +1348,12 @@ def _run_one_waypoint(
             offset_y = float(wp.get("offset_y", 0.0))
             print(f"    [dispatch] rail_approach tag_id={tag_id} "
                   f"offsets=({offset_x:.2f}, {offset_y:.2f})", flush=True)
+            # rail_approach runs a Nav2 coarse phase followed by a
+            # 20 Hz visual servo to 2 cm. Under sim RTF ~0.20 the full
+            # sequence runs ~4 min wall-clock. 1.5× NAV_TIMEOUT matches
+            # the rail_exit budget and covers the tail.
             status = _call_rail_approach(
-                harness, tag_id, offset_x, offset_y, NAV_TIMEOUT_S)
+                harness, tag_id, offset_x, offset_y, NAV_TIMEOUT_S * 1.5)
     elif dispatch == "rail_drive":
         print(f"    [dispatch] rail_drive goal=({goal['x']:.2f}, "
               f"{goal['y']:.2f})", flush=True)
