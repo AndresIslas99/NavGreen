@@ -37,6 +37,15 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   declare_parameter("tag_loss_timeout_s", 0.5);
   declare_parameter("tag_reacquire_timeout_s", 3.0);
   declare_parameter("acquisition_timeout_s", 3.0);
+  // Iter-13 / Option D: cap how long the fine-servo phase may run
+  // before the node declares the approach failed. Without this, a
+  // servo that oscillates inside the 2 cm ring but never latches
+  // settle_frames_ frames in a row stays in FINE_SERVOING forever —
+  // the harness was carrying the real deadline at NAV_TIMEOUT_S × 1.5.
+  // An internal budget gives rail_approach the chance to publish
+  // `state=aborted` with last_reject_reason='fine_servo_timeout' so
+  // operators see the failure specifically, not a generic NAV_TIMEOUT.
+  declare_parameter("max_fine_duration_s", 120.0);
   declare_parameter("camera_frame", "zed_left_camera_optical_frame");
   declare_parameter("base_frame", "base_link");
   declare_parameter("camera_info_topic", "/agv/zed/left/camera_info");
@@ -59,6 +68,7 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   tag_loss_timeout_ = get_parameter("tag_loss_timeout_s").as_double();
   tag_reacquire_timeout_ = get_parameter("tag_reacquire_timeout_s").as_double();
   acquisition_timeout_ = get_parameter("acquisition_timeout_s").as_double();
+  max_fine_duration_ = get_parameter("max_fine_duration_s").as_double();
   camera_frame_ = get_parameter("camera_frame").as_string();
   base_frame_ = get_parameter("base_frame").as_string();
 
@@ -337,6 +347,10 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   // Iter-12 / Option C: drop any prior-approach solvePnP samples so
   // the median filter doesn't bias the first fine_servoing ticks.
   pnp_filter_.reset();
+  // Iter-13 / Option D: arm the fine-servo deadline only when the
+  // state actually enters FINE_SERVOING (first detection). A zero
+  // timestamp here means "not yet armed".
+  fine_servo_start_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
 
   if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
     RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
@@ -406,6 +420,8 @@ void RailApproachNode::on_detection(
       RCLCPP_INFO(get_logger(), "Tag %d acquired, starting fine servoing", target_tag_id_);
       state_ = State::FINE_SERVOING;
       tag_last_seen_ = now();
+      // Iter-13 / Option D: stamp the fine-servo budget start.
+      fine_servo_start_ = now();
     }
 
     process_fine_servoing(det.id, corners, tag_size);
@@ -435,6 +451,28 @@ void RailApproachNode::process_fine_servoing(
     int /*tag_id*/, const std::vector<cv::Point2d>& corners, double tag_size) {
 
   tag_last_seen_ = now();
+
+  // Iter-13 / Option D: enforce an upper bound on fine_servoing
+  // duration. The legacy design relied on the harness-level deadline
+  // (NAV_TIMEOUT_S × 1.5), which meant a servo oscillating inside the
+  // 2 cm ring but never latching settle_frames_ stayed "driving"
+  // forever from rail_approach's perspective. Aborting here lets the
+  // arbiter and operator dashboard see the failure as its own class
+  // rather than a generic nav timeout.
+  if (max_fine_duration_ > 0.0 &&
+      fine_servo_start_.nanoseconds() > 0) {
+    const double elapsed = (now() - fine_servo_start_).seconds();
+    if (elapsed > max_fine_duration_) {
+      RCLCPP_WARN(get_logger(),
+          "fine_servo_timeout after %.1f s — aborting approach", elapsed);
+      last_reject_reason_ = "fine_servo_timeout";
+      last_reject_stamp_ = now();
+      finish(false, "fine_servo timeout: " +
+             std::to_string(elapsed) + " s > " +
+             std::to_string(max_fine_duration_) + " s");
+      return;
+    }
+  }
 
   // Resolve the camera→base_link transform once per tick; the
   // controller itself is ROS-free and accepts a 4×4 homogeneous matrix.
