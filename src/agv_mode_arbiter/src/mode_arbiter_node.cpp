@@ -59,6 +59,12 @@ class ModeArbiterNode : public rclcpp::Node {
     // 3 m keeps the robot inside the 20 m rail section and inside the
     // usable traversal band (operator-confirmed geometry).
     declare_parameter<double>("rail_drive_distance_m", 3.0);
+    // Distance past the exit AprilTag that the RAIL_EXIT push goal targets.
+    // Must exceed the FSM's `rail_exit_clearance_m >= 1.0` release threshold
+    // by a comfortable margin so rail_driver declares "reached" beyond the
+    // 1 m no-rotation line (prevents a corner case where the extension goal
+    // latches "reached" before the FSM is ready to release RAIL_EXIT).
+    declare_parameter<double>("rail_exit_push_m", 1.5);
     // Camera-to-tag desired forward offset when requesting rail_approach.
     declare_parameter<double>("approach_offset_x", 0.3);
     declare_parameter<double>("approach_offset_y", 0.0);
@@ -86,6 +92,7 @@ class ModeArbiterNode : public rclcpp::Node {
         get_parameter("rail_approach_service").as_string();
     const double rate           = get_parameter("publish_rate_hz").as_double();
     rail_drive_distance_m_ = get_parameter("rail_drive_distance_m").as_double();
+    rail_exit_push_m_ = get_parameter("rail_exit_push_m").as_double();
     approach_offset_x_ = get_parameter("approach_offset_x").as_double();
     approach_offset_y_ = get_parameter("approach_offset_y").as_double();
     auto_approach_ = get_parameter("auto_approach").as_bool();
@@ -198,6 +205,8 @@ class ModeArbiterNode : public rclcpp::Node {
   }
 
   void on_tick() {
+    refresh_exit_clearance_input();
+
     auto out = step(mode_, latest_inputs_);
 
     // One-shot side-effects from transitions.
@@ -207,13 +216,29 @@ class ModeArbiterNode : public rclcpp::Node {
     if (out.request_rail_drive_goal) {
       publish_rail_drive_goal();
     }
+    if (out.request_rail_exit_push) {
+      publish_rail_exit_push_goal();
+    }
 
     // Reset the in-flight latch when the FSM leaves the approach flow.
     if (out.next_mode == Mode::CORRIDOR_NAV) {
       latest_inputs_.approach_request_in_flight = false;
+      have_rail_entry_ = false;
     }
 
     if (out.next_mode != mode_) {
+      // Cache the entry position at any transition *into* RAIL_DRIVE. The
+      // arbiter-driven path (RAIL_APPROACH_ACTIVE → RAIL_DRIVE) already did
+      // this via publish_rail_drive_goal(); this branch covers the
+      // direct-dispatch shortcut (Stage G tests publish straight to
+      // /agv/rail_driver/goal). rail_entry_x_ drives both the exit-push
+      // goal and the clearance calculation.
+      if (out.next_mode == Mode::RAIL_DRIVE && !have_rail_entry_ &&
+          !std::isnan(latest_inputs_.current_x)) {
+        rail_entry_x_ = latest_inputs_.current_x;
+        exit_direction_ = 0.0;  // resolved at exit-push time from travelled dx
+        have_rail_entry_ = true;
+      }
       RCLCPP_INFO(get_logger(), "mode %s → %s (source=%s)",
                   mode_to_str(mode_), mode_to_str(out.next_mode),
                   source_to_str(out.active_source));
@@ -293,6 +318,12 @@ class ModeArbiterNode : public rclcpp::Node {
         latest_inputs_.current_x + dir * rail_drive_distance_m_;
     const double goal_y = latest_inputs_.aisle_y_center;
 
+    // Cache the entry position + outward direction for the later RAIL_EXIT
+    // push. Outward is the sign opposite to the inward rail_drive travel.
+    rail_entry_x_ = latest_inputs_.current_x;
+    exit_direction_ = -dir;
+    have_rail_entry_ = true;
+
     geometry_msgs::msg::PoseStamped goal;
     goal.header.stamp = get_clock()->now();
     goal.header.frame_id = "map";
@@ -305,6 +336,55 @@ class ModeArbiterNode : public rclcpp::Node {
                 "current=(%.3f, %.3f) dir=%+.0f",
                 goal_x, goal_y, latest_inputs_.zone.c_str(),
                 latest_inputs_.current_x, latest_inputs_.current_y, dir);
+  }
+
+  void publish_rail_exit_push_goal() {
+    if (!have_rail_entry_) {
+      RCLCPP_WARN(get_logger(),
+                  "request_rail_exit_push without cached entry; holding.");
+      return;
+    }
+    // Direction: outward = opposite of the direction we travelled inward.
+    // Resolved now (vs at RAIL_DRIVE entry) because the shortcut path has
+    // no a-priori goal to infer from — the robot has to have moved for us
+    // to know which way was "in".
+    if (exit_direction_ == 0.0) {
+      const double dx = latest_inputs_.current_x - rail_entry_x_;
+      exit_direction_ = (dx >= 0.0) ? -1.0 : +1.0;  // outward = back toward entry
+    }
+    const double goal_y = std::isnan(latest_inputs_.aisle_y_center)
+                              ? latest_inputs_.current_y
+                              : latest_inputs_.aisle_y_center;
+    const double goal_x = rail_entry_x_ + exit_direction_ * rail_exit_push_m_;
+    geometry_msgs::msg::PoseStamped goal;
+    goal.header.stamp = get_clock()->now();
+    goal.header.frame_id = "map";
+    goal.pose.position.x = goal_x;
+    goal.pose.position.y = goal_y;
+    goal.pose.orientation.w = 1.0;
+    pub_rail_goal_->publish(goal);
+    RCLCPP_INFO(get_logger(),
+                "→ /agv/rail_driver/goal EXIT_PUSH (%.3f, %.3f) "
+                "entry_x=%.3f out_dir=%+.0f",
+                goal_x, goal_y, rail_entry_x_, exit_direction_);
+  }
+
+  void refresh_exit_clearance_input() {
+    if (!have_rail_entry_) {
+      latest_inputs_.rail_exit_clearance_m = 0.0;
+      return;
+    }
+    // If exit_direction is not yet resolved (direct-dispatch case), derive
+    // it from the travelled dx so far. Same logic as in the push-goal
+    // publisher; keeping both in sync lets the FSM see meaningful clearance
+    // values before the push goal fires.
+    double dir = exit_direction_;
+    if (dir == 0.0) {
+      const double dx = latest_inputs_.current_x - rail_entry_x_;
+      dir = (dx >= 0.0) ? -1.0 : +1.0;
+    }
+    latest_inputs_.rail_exit_clearance_m =
+        dir * (latest_inputs_.current_x - rail_entry_x_);
   }
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_;
@@ -333,9 +413,16 @@ class ModeArbiterNode : public rclcpp::Node {
   size_t transition_count_ = 0;
 
   double rail_drive_distance_m_ = 3.0;
+  double rail_exit_push_m_ = 1.5;
   double approach_offset_x_ = 0.3;
   double approach_offset_y_ = 0.0;
   bool auto_approach_ = false;
+
+  // Entry pose cached at RAIL_APPROACH_ACTIVE → RAIL_DRIVE transition.
+  // Consumed by the RAIL_EXIT push goal and clearance computation.
+  double rail_entry_x_ = 0.0;
+  double exit_direction_ = 1.0;
+  bool have_rail_entry_ = false;
 };
 
 }  // namespace agv_mode_arbiter
