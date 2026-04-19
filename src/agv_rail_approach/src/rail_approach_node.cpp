@@ -307,6 +307,15 @@ void RailApproachNode::on_execute(
 
   start_coarse_approach(it->second);
 
+  // Iter-17c: publish status IMMEDIATELY so the harness's
+  // _wait_for_state_value doesn't latch onto the stale "aborted" /
+  // "settled" string from a prior approach. Without this, the next
+  // waypoint's rail_approach dispatch can read a state message that
+  // predates the new execute() call, fail instantly, and report
+  // ABORTED dur=0 before any motion happens (observed on wp07 in
+  // iter-17b right after wp04 aborted via the timeout path).
+  publish_status();
+
   // Don't respond yet — response will be sent when approach completes.
   // For now, respond immediately with "in progress" since ROS2 services are synchronous.
   resp->success = true;
