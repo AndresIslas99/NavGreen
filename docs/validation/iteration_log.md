@@ -11,9 +11,39 @@ Canonical loop + acceptance criteria: [iteration_runbook.md](iteration_runbook.m
 - Round 44 code landed on `main`: rail_detector (J, bea3208), rail_driver
   visual (K, 360a624), mode_arbiter RAIL_EXIT + rail_exit_geometry (M1,
   6d1674f), harness oracle subscriptions + iteration_report.py (Q1–Q7).
-- Unit test count: 86 green (22 + 4 + 19 + 9 + 17 + 11 + 4 across the
-  packages listed in the runbook).
+- Unit test count: 86 green.
 - No HIL run yet; first HIL sweep = iter-1.
+
+## iter-1 (2026-04-18) — baseline HIL run
+
+- report: `sim_episodes/precision_run_20260418_210819/report.json`
+- analysis: `sim_episodes/precision_run_20260418_210819/iteration_1_analysis.md`
+- bucket verdicts: nav2 2/5, rail_approach 0/5, rail_drive 4/4, rail_exit 0/2
+- success rate: **6/16 (37.5 %)**, 0 collisions
+- top rules fired (root causes):
+  1. **Apriltag topic remap wrong** — `/zed/zed_node/*` but sim publishes
+     `/agv/zed/*`; apriltag_node saw 0 images → rail_approach never
+     transitioned to "driving" → all 5 rail_approach waypoints NAV_TIMEOUT.
+  2. **FSM stuck in RAIL_EXIT** after the first rail_drive success —
+     release required `rail_driver_state=="reached"` which only latches
+     one tick. Every subsequent waypoint ran with `mode="rail_exit"` +
+     `source=RAIL`, starving cmd_vel_nav and cmd_vel_approach. All 3
+     nav2 ABORTEDs (wp02, wp10, wp15) + 5 rail_approach NAV_TIMEOUTs
+     trace to this.
+  3. Harness oracle parsers used wrong JSON keys (`markers` / `obstacles`)
+     — the sim actually emits `visible` / `static_obstacles`. Consequence:
+     `visible_markers_at_*` was `[]` everywhere.
+- decisions (all three applied for iter-2):
+  - `src/agv_bringup/launch/agv_hil_full.launch.py`: remap
+    `apriltag_node` + `image_server` to `/agv/zed/*`.
+  - `src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp`: drop
+    `rail_driver_state=="reached"` from RAIL_EXIT release; zone + clearance
+    alone suffices.
+  - `src/agv_integration_tests/test/test_waypoint_precision.py`: parse
+    `visible` and `static_obstacles` keys in the oracle callbacks.
+- delta vs iter-0: baseline, N/A.
+- next run (iter-2) expected to fix: rail_approach bucket (0/5 → ≥ 4/5),
+  nav2 ABORTEDs (3 → 0), rail_exit (0/2 → ≥ 1/2).
 
 <!--
 Template for each subsequent iteration:
