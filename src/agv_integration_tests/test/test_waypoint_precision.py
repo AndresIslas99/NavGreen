@@ -76,6 +76,13 @@ except ImportError:
     SetPose = None
     _HAS_SETPOSE = False
 
+try:
+    from std_srvs.srv import Trigger as _TriggerSrv
+    _HAS_TRIGGER = True
+except ImportError:
+    _TriggerSrv = None
+    _HAS_TRIGGER = False
+
 SIM_API_HOST = os.environ.get("SIM_API_HOST")
 SIM_API_PORT = int(os.environ.get("SIM_API_PORT", "8090"))
 AGV_DATA_DIR = Path(os.environ.get("AGV_DATA_DIR", str(Path.home() / "agv_data")))
@@ -261,6 +268,35 @@ def _sim_clock_pause() -> bool:
 def _sim_clock_resume() -> bool:
     """Iter-22: resume physics after setup complete."""
     return _post_sim_api_empty("/sim/clock_resume", timeout=3.0)
+
+
+def _rail_driver_cancel_goal(harness: Node, timeout_s: float = 2.0) -> bool:
+    """Iter-22: call /agv/rail_driver/cancel_goal to clear have_goal_
+    synchronously in rail_driver. Replaces the iter-7/8/9 hack of
+    publishing a zero-distance PoseStamped as "cancel". Expected to be
+    idempotent — safe to call even when rail_driver has no goal.
+    Returns True on successful response, False on timeout or error.
+    """
+    if not _HAS_TRIGGER:
+        return False
+    client = harness.create_client(_TriggerSrv, "/agv/rail_driver/cancel_goal")
+    try:
+        if not client.wait_for_service(timeout_sec=timeout_s):
+            return False
+        req = _TriggerSrv.Request()
+        fut = client.call_async(req)
+        # Spin the harness node while waiting so the future resolves.
+        deadline = time.monotonic() + timeout_s
+        while not fut.done() and time.monotonic() < deadline:
+            rclpy.spin_once(harness, timeout_sec=0.1)
+        if not fut.done():
+            return False
+        result = fut.result()
+        return bool(result and getattr(result, "success", False))
+    except Exception:
+        return False
+    finally:
+        harness.destroy_client(client)
 
 
 def _wait_for_fresh_tf(
@@ -1408,6 +1444,15 @@ def _run_one_waypoint(
     if not prepare_resp.get("armed", False):
         print(f"[warn {wp_id}] /motor/prepare did not confirm armed: "
               f"{prepare_resp}", flush=True)
+
+    # 1c. Iter-22 brain 1.1: synchronously cancel any stale rail_driver
+    #     goal BEFORE physics resumes. This replaces the iter-7/8/9
+    #     "publish zero-distance PoseStamped" hack which had a race
+    #     with the arbiter's auto-EXIT_PUSH. With the new service the
+    #     cancel is atomic: have_goal_ clears in the service callback,
+    #     rail_driver emits one tick of state="canceled", then falls to
+    #     "idle". Safe to call even when there is no pending goal.
+    _rail_driver_cancel_goal(harness, timeout_s=2.0)
 
     # 2. Settle — still give ekf_local a beat to ingest the first
     #    post-teleport /agv/joint_states (v≈0, per encoders_reset).
