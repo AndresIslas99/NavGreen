@@ -1,4 +1,5 @@
 #include "agv_rail_approach/rail_approach_node.hpp"
+#include "agv_rail_approach/fine_servo_controller.hpp"
 
 #include <opencv2/calib3d.hpp>
 #include <tf2/LinearMath/Transform.h>
@@ -19,6 +20,14 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   declare_parameter("default_offset_y", 0.0);
   declare_parameter("tolerance_xy", 0.003);
   declare_parameter("tolerance_yaw", 0.015);
+  // Iter-10 / Option A: the legacy yaw-convergence check assumes a
+  // wall tag (local X axis horizontal, face normal pointing at the
+  // camera). Floor-plane tags — which every rail_approach target in
+  // this project is — give a reference angle of π under the same
+  // formula, so `in_tolerance` never latches. Default false so the
+  // servo settles on position only; set true per-deployment if
+  // re-introducing wall-tag targets.
+  declare_parameter("check_yaw_convergence", false);
   declare_parameter("settle_frames", 5);
   declare_parameter("Kp_linear", 0.15);
   declare_parameter("Kp_lateral", 0.3);
@@ -46,6 +55,7 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   kp_yaw_ = get_parameter("Kp_yaw").as_double();
   max_fine_linear_ = get_parameter("max_fine_linear_vel").as_double();
   max_fine_angular_ = get_parameter("max_fine_angular_vel").as_double();
+  check_yaw_convergence_ = get_parameter("check_yaw_convergence").as_bool();
   tag_loss_timeout_ = get_parameter("tag_loss_timeout_s").as_double();
   tag_reacquire_timeout_ = get_parameter("tag_reacquire_timeout_s").as_double();
   acquisition_timeout_ = get_parameter("acquisition_timeout_s").as_double();
@@ -419,98 +429,87 @@ void RailApproachNode::process_fine_servoing(
 
   tag_last_seen_ = now();
 
-  // solvePnP: tag corners → tag pose in camera optical frame
-  double half = tag_size / 2.0;
-  std::vector<cv::Point3d> obj_pts = {
-    {-half, -half, 0}, { half, -half, 0},
-    { half,  half, 0}, {-half,  half, 0}
-  };
-
-  cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) <<
-    fx_, 0, cx_, 0, fy_, cy_, 0, 0, 1);
-  cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, CV_64F);
-
-  cv::Vec3d rvec, tvec;
-  if (!cv::solvePnP(obj_pts, corners, camera_matrix, dist_coeffs, rvec, tvec)) {
-    return;
-  }
-
-  double range = cv::norm(tvec);
-  if (range < 0.05 || range > 5.0) return;
-
-  // Transform tag position from camera optical frame to base_link
-  geometry_msgs::msg::TransformStamped cam_to_base;
+  // Resolve the camera→base_link transform once per tick; the
+  // controller itself is ROS-free and accepts a 4×4 homogeneous matrix.
+  geometry_msgs::msg::TransformStamped cam_to_base_msg;
   try {
-    cam_to_base = tf_buffer_->lookupTransform(base_frame_, camera_frame_,
-      rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
+    cam_to_base_msg = tf_buffer_->lookupTransform(
+        base_frame_, camera_frame_,
+        rclcpp::Time(0, 0, RCL_ROS_TIME),
+        rclcpp::Duration::from_seconds(0.5));
   } catch (const std::exception& e) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-      "TF lookup %s->%s failed: %s", camera_frame_.c_str(), base_frame_.c_str(), e.what());
+        "TF lookup %s->%s failed: %s",
+        camera_frame_.c_str(), base_frame_.c_str(), e.what());
+    return;
+  }
+  const tf2::Quaternion q(
+      cam_to_base_msg.transform.rotation.x,
+      cam_to_base_msg.transform.rotation.y,
+      cam_to_base_msg.transform.rotation.z,
+      cam_to_base_msg.transform.rotation.w);
+  const tf2::Matrix3x3 R(q);
+  cv::Matx44d cam_to_base = cv::Matx44d::eye();
+  for (int r = 0; r < 3; ++r) {
+    for (int c = 0; c < 3; ++c) cam_to_base(r, c) = R[r][c];
+  }
+  cam_to_base(0, 3) = cam_to_base_msg.transform.translation.x;
+  cam_to_base(1, 3) = cam_to_base_msg.transform.translation.y;
+  cam_to_base(2, 3) = cam_to_base_msg.transform.translation.z;
+
+  FineServoParams params;
+  params.fx = fx_;
+  params.fy = fy_;
+  params.cx = cx_;
+  params.cy = cy_;
+  params.tag_size_m = tag_size;
+  params.desired_offset_x = desired_offset_x_;
+  params.desired_offset_y = desired_offset_y_;
+  params.tolerance_xy = tolerance_xy_;
+  params.tolerance_yaw = tolerance_yaw_;
+  params.kp_linear = kp_linear_;
+  params.kp_lateral = kp_lateral_;
+  params.kp_yaw = kp_yaw_;
+  params.max_linear_mps = max_fine_linear_;
+  params.max_angular_rps = max_fine_angular_;
+  params.check_yaw_convergence = check_yaw_convergence_;
+
+  const auto out = fine_servo_step(corners, cam_to_base, params);
+  if (out.verdict != FineServoVerdict::OK) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "fine_servo reject: %s (range=%.3f m)",
+        verdict_to_str(out.verdict), out.range_m);
     return;
   }
 
-  tf2::Quaternion cam_to_base_q(
-    cam_to_base.transform.rotation.x, cam_to_base.transform.rotation.y,
-    cam_to_base.transform.rotation.z, cam_to_base.transform.rotation.w);
-  tf2::Transform cam_to_base_tf(cam_to_base_q, tf2::Vector3(
-    cam_to_base.transform.translation.x, cam_to_base.transform.translation.y,
-    cam_to_base.transform.translation.z));
-
-  // tvec is in camera optical frame (X-right, Y-down, Z-forward)
-  tf2::Vector3 tag_in_cam(tvec[0], tvec[1], tvec[2]);
-  tf2::Vector3 tag_in_base = cam_to_base_tf * tag_in_cam;
-
-  // Extract tag yaw in base_link frame from rvec
-  cv::Mat R_ct;
-  cv::Rodrigues(rvec, R_ct);
-  double tag_yaw_in_cam = std::atan2(R_ct.at<double>(0, 0), R_ct.at<double>(2, 0));
-
-  // Compute errors in base_link frame
-  // Forward error: how far off from desired offset
-  double error_x = tag_in_base.x() - desired_offset_x_;
-  // Lateral error: tag should be centered (or at desired_offset_y)
-  double error_y = tag_in_base.y() - desired_offset_y_;
-  // Yaw error: tag_yaw_in_cam should be ~PI (tag faces robot)
-  // Normalize to [-PI, PI]
-  double error_yaw = tag_yaw_in_cam - M_PI;
-  while (error_yaw > M_PI) error_yaw -= 2.0 * M_PI;
-  while (error_yaw < -M_PI) error_yaw += 2.0 * M_PI;
-
-  // Publish target pose for visualization
+  // Publish target pose for visualization.
   geometry_msgs::msg::PoseStamped target_msg;
   target_msg.header.stamp = now();
   target_msg.header.frame_id = base_frame_;
-  target_msg.pose.position.x = tag_in_base.x();
-  target_msg.pose.position.y = tag_in_base.y();
-  target_msg.pose.position.z = tag_in_base.z();
+  target_msg.pose.position.x = out.tag_x_base;
+  target_msg.pose.position.y = out.tag_y_base;
+  target_msg.pose.position.z = out.tag_z_base;
   target_pose_pub_->publish(target_msg);
 
-  // P-controller
-  double cmd_linear = std::clamp(kp_linear_ * error_x, -max_fine_linear_, max_fine_linear_);
-  double cmd_angular = std::clamp(
-    kp_yaw_ * error_yaw + kp_lateral_ * error_y,
-    -max_fine_angular_, max_fine_angular_);
-
-  // Check convergence
-  if (std::abs(error_x) < tolerance_xy_ &&
-      std::abs(error_y) < tolerance_xy_ &&
-      std::abs(error_yaw) < tolerance_yaw_) {
+  // Settle-frame counter lives in the node (the controller is stateless).
+  if (out.in_tolerance) {
     settle_count_++;
     if (settle_count_ >= settle_frames_) {
       stop_robot();
-      RCLCPP_INFO(get_logger(), "Settled! error: x=%.4f y=%.4f yaw=%.4f",
-                  error_x, error_y, error_yaw);
-      finish(true, "Precision approach complete", error_x, error_y, error_yaw);
+      RCLCPP_INFO(get_logger(),
+          "Settled! error: x=%.4f y=%.4f yaw=%.4f",
+          out.error_x, out.error_y, out.error_yaw);
+      finish(true, "Precision approach complete",
+             out.error_x, out.error_y, out.error_yaw);
       return;
     }
   } else {
     settle_count_ = 0;
   }
 
-  // Publish velocity command
   geometry_msgs::msg::Twist cmd;
-  cmd.linear.x = cmd_linear;
-  cmd.angular.z = cmd_angular;
+  cmd.linear.x = out.cmd_linear_mps;
+  cmd.angular.z = out.cmd_angular_rps;
   cmd_pub_->publish(cmd);
 }
 
