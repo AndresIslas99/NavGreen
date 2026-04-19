@@ -95,6 +95,11 @@ private:
   // still applies).
   double max_fine_duration_{120.0};
   rclcpp::Time fine_servo_start_{0, 0, RCL_ROS_TIME};
+  // Iter-15: if robot is already within this radius of the target tag
+  // (measured against map→base_link), skip Nav2 coarse_approach and
+  // jump straight to TAG_ACQUISITION. Default 2.0 m covers every Round-44
+  // teleport spawn distance. Set to 0 to always run Nav2 coarse.
+  double coarse_skip_radius_{2.0};
   std::string camera_frame_;
   std::string base_frame_;
 

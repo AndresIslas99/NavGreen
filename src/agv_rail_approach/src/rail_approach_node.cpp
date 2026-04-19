@@ -46,6 +46,12 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   // `state=aborted` with last_reject_reason='fine_servo_timeout' so
   // operators see the failure specifically, not a generic NAV_TIMEOUT.
   declare_parameter("max_fine_duration_s", 120.0);
+  // Iter-15: robot-to-tag distance threshold (m) below which the node
+  // skips Nav2 coarse_approach entirely. See start_coarse_approach for
+  // rationale (floor tags carry yaw=0, Nav2 would get a wrong-direction
+  // goal; spawn distances under 1.5 m are already inside fine_servo's
+  // range anyway).
+  declare_parameter("coarse_skip_radius", 2.0);
   declare_parameter("camera_frame", "zed_left_camera_optical_frame");
   declare_parameter("base_frame", "base_link");
   declare_parameter("camera_info_topic", "/agv/zed/left/camera_info");
@@ -69,6 +75,7 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   tag_reacquire_timeout_ = get_parameter("tag_reacquire_timeout_s").as_double();
   acquisition_timeout_ = get_parameter("acquisition_timeout_s").as_double();
   max_fine_duration_ = get_parameter("max_fine_duration_s").as_double();
+  coarse_skip_radius_ = get_parameter("coarse_skip_radius").as_double();
   camera_frame_ = get_parameter("camera_frame").as_string();
   base_frame_ = get_parameter("base_frame").as_string();
 
@@ -351,6 +358,50 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   // state actually enters FINE_SERVOING (first detection). A zero
   // timestamp here means "not yet armed".
   fine_servo_start_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+
+  // Iter-15: if the robot is already within acquisition range of the
+  // tag, skip Nav2 coarse_approach entirely and go straight to
+  // TAG_ACQUISITION. Two motivations:
+  //   1. Floor tags carry yaw=0 in markers_registry (their face
+  //      normal is +Z). The old code computed the Nav2 standoff pose
+  //      as rail.x - standoff·cos(rail.yaw) = rail.x - standoff,
+  //      which for wp04 (rail=(4, 0), robot=(5.2, 0, π)) pointed the
+  //      robot to (3.5, 0) with goal yaw 0 — i.e. asking the robot to
+  //      rotate 180° and drive PAST the tag. Nav2's forward-only MPPI
+  //      (vx_min ≈ 0) refused the path (observed: "follow_path" halt,
+  //      code=5).
+  //   2. Every Round-44 waypoint teleports the robot to a pose where
+  //      the tag is already ≤ 1.5 m away, which is well inside
+  //      fine_servoing's operating range (range_min_m=0.05,
+  //      range_max_m=5.0). Nav2's coarse phase adds time + failure
+  //      surface for no precision gain.
+  // Check distance to the registered tag using the brain's map→base_link
+  // TF (ekf_global publishes both legs; available as soon as EKF has a
+  // pose estimate, which the harness's _sync_brain_to_gt guarantees).
+  try {
+    const auto map_to_base = tf_buffer_->lookupTransform(
+        "map", base_frame_,
+        rclcpp::Time(0, 0, RCL_ROS_TIME),
+        rclcpp::Duration::from_seconds(0.5));
+    const double rx = map_to_base.transform.translation.x;
+    const double ry = map_to_base.transform.translation.y;
+    const double dist = std::hypot(rail.x - rx, rail.y - ry);
+    if (dist <= coarse_skip_radius_) {
+      RCLCPP_INFO(get_logger(),
+          "Skipping Nav2 coarse_approach: robot at (%.2f, %.2f) is "
+          "%.2f m from tag %d (≤ %.2f m threshold). Jumping straight "
+          "to TAG_ACQUISITION.",
+          rx, ry, dist, rail.id, coarse_skip_radius_);
+      state_ = State::TAG_ACQUISITION;
+      acquisition_start_ = now();
+      return;
+    }
+  } catch (const std::exception& e) {
+    RCLCPP_WARN(get_logger(),
+        "map→%s TF not yet available; falling through to Nav2 coarse "
+        "(%s)", base_frame_.c_str(), e.what());
+    // Fall through to Nav2 coarse_approach.
+  }
 
   if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
     RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
