@@ -31,6 +31,12 @@ enum class RailState {
   BLOCKED_WAIT,        // collision_monitor halted us; holding cmd=0
   BLOCKED_MISALIGNED,  // Yaw-from-rail too large to safely move
   BLOCKED_LATERAL,     // Lateral drift exceeded lateral_abort_m
+  CANCELED,            // Iter-22: operator canceled via /agv/rail_driver/
+                       // cancel_goal service. Distinct from IDLE so
+                       // downstream (mode_arbiter, harness) can tell
+                       // "never had a goal" from "explicitly canceled".
+                       // Latches for one tick; next compute() call with
+                       // have_goal=false returns IDLE.
 };
 
 inline const char *state_to_str(RailState s) {
@@ -41,6 +47,7 @@ inline const char *state_to_str(RailState s) {
     case RailState::BLOCKED_WAIT:       return "blocked_wait";
     case RailState::BLOCKED_MISALIGNED: return "blocked_misaligned";
     case RailState::BLOCKED_LATERAL:    return "blocked_lateral";
+    case RailState::CANCELED:           return "canceled";
   }
   return "unknown";
 }
