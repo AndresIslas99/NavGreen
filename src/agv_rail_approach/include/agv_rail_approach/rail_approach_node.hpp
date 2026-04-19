@@ -18,6 +18,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "agv_rail_approach/fine_servo_controller.hpp"
+
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -82,6 +84,9 @@ private:
   // includes the age so stale rejects decay without needing a clear.
   std::string last_reject_reason_{"none"};
   rclcpp::Time last_reject_stamp_{0, 0, RCL_ROS_TIME};
+  // Iter-12 / Option C: smooth solvePnP jitter before the controller.
+  int pnp_filter_window_{5};
+  TvecRvecMedianFilter pnp_filter_{5};
   double tag_loss_timeout_;
   double tag_reacquire_timeout_;
   double acquisition_timeout_;
