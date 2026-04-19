@@ -1,0 +1,31 @@
+name: agv_rail_detector
+status: active
+dev_only: false
+description: |
+  ZED-depth → BEV → RANSAC rail tube pair detector. Publishes
+  /agv/rail_detections for rail_driver to correct lateral drift inside a
+  rail aisle using visual feedback, not EKF pose alone. Phase 2 Stage J.
+
+interfaces:
+  publishes:
+    - topic: /agv/rail_detections
+      type: geometry_msgs/PoseArray
+      payload: Two poses per detection; one per rail line, orientation
+               along the rail direction.
+      rate_hz: 5
+    - topic: /agv/rail_detector/state
+      type: std_msgs/String
+      payload: JSON with confidence, inliers_left/right, n_points, has_detection.
+      rate_hz: 5
+  subscribes:
+    - topic: /agv/zed/depth/depth_registered
+      type: sensor_msgs/Image
+    - topic: /agv/zed/left/camera_info
+      type: sensor_msgs/CameraInfo
+
+dependencies:
+  - ZED stereo camera + zed_wrapper (or sim equivalent) publishing depth.
+
+safety:
+  - confidence=0 means "no detection" — consumers must fall back to pose-
+    based alignment, not freeze.
