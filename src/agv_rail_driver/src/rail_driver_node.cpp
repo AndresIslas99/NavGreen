@@ -15,11 +15,13 @@
 
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -39,18 +41,25 @@ class RailDriverNode : public rclcpp::Node {
     declare_parameter<std::string>("collision_topic", "/agv/collision_monitor_state");
     declare_parameter<std::string>("cmd_vel_topic", "/agv/cmd_vel_rail");
     declare_parameter<std::string>("state_topic", "/agv/rail_driver/state");
+    declare_parameter<std::string>("rail_detections_topic", "/agv/rail_detections");
+    declare_parameter<std::string>("rail_detector_state_topic",
+                                   "/agv/rail_detector/state");
     declare_parameter<double>("publish_rate_hz", 20.0);
     declare_parameter<double>("kP", 1.0);
     declare_parameter<double>("speed_max_mps", 1.0);
     declare_parameter<double>("stop_band_m", 0.05);
     declare_parameter<double>("lateral_abort_m", 0.30);
     declare_parameter<double>("yaw_abort_rad", 0.26);
+    declare_parameter<double>("visual_min_conf", 0.7);
+    declare_parameter<double>("visual_max_age_s", 0.5);
 
     params_.kP              = get_parameter("kP").as_double();
     params_.speed_max_mps   = get_parameter("speed_max_mps").as_double();
     params_.stop_band_m     = get_parameter("stop_band_m").as_double();
     params_.lateral_abort_m = get_parameter("lateral_abort_m").as_double();
     params_.yaw_abort_rad   = get_parameter("yaw_abort_rad").as_double();
+    params_.visual_min_conf  = get_parameter("visual_min_conf").as_double();
+    params_.visual_max_age_s = get_parameter("visual_max_age_s").as_double();
 
     const auto odom_topic      = get_parameter("odom_topic").as_string();
     const auto goal_topic      = get_parameter("goal_topic").as_string();
@@ -72,6 +81,14 @@ class RailDriverNode : public rclcpp::Node {
     sub_collision_ = create_subscription<std_msgs::msg::String>(
         collision_topic, rclcpp::QoS{10},
         std::bind(&RailDriverNode::on_collision, this, _1));
+    sub_rail_detections_ = create_subscription<geometry_msgs::msg::PoseArray>(
+        get_parameter("rail_detections_topic").as_string(),
+        rclcpp::QoS{5},
+        std::bind(&RailDriverNode::on_rail_detections, this, _1));
+    sub_rail_detector_state_ = create_subscription<std_msgs::msg::String>(
+        get_parameter("rail_detector_state_topic").as_string(),
+        rclcpp::QoS{5},
+        std::bind(&RailDriverNode::on_rail_detector_state, this, _1));
 
     pub_cmd_ = create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, rclcpp::QoS{10});
     pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, rclcpp::QoS{10});
@@ -131,6 +148,43 @@ class RailDriverNode : public rclcpp::Node {
     last_collision_stop_ = (msg->data.find("stop") != std::string::npos);
   }
 
+  // PoseArray has 2 poses, one per rail, in base_link. Midpoint Y = rail
+  // centerline lateral offset; average yaw = rail axis direction vs body +X.
+  void on_rail_detections(
+      const geometry_msgs::msg::PoseArray::ConstSharedPtr msg) {
+    if (msg->poses.size() != 2) return;
+    const double y0 = msg->poses[0].position.y;
+    const double y1 = msg->poses[1].position.y;
+    visual_lat_offset_ = 0.5 * (y0 + y1);
+    auto yaw_from_q = [](const geometry_msgs::msg::Quaternion &q) {
+      return std::atan2(
+          2.0 * (q.w * q.z + q.x * q.y),
+          1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+    };
+    const double yaw0 = yaw_from_q(msg->poses[0].orientation);
+    const double yaw1 = yaw_from_q(msg->poses[1].orientation);
+    // Rails are parallel by RANSAC construction; straight average is fine so
+    // long as neither has been wrapped across ±π. Both come from the same
+    // direction vector in the detector so they stay on the same branch.
+    visual_yaw_error_ = 0.5 * (yaw0 + yaw1);
+    visual_last_stamp_ = msg->header.stamp;
+    visual_have_stamp_ = true;
+  }
+
+  void on_rail_detector_state(
+      const std_msgs::msg::String::ConstSharedPtr msg) {
+    // Minimal JSON parse — only confidence is consumed here.
+    const std::string &d = msg->data;
+    const std::string needle = "\"confidence\":";
+    const auto pos = d.find(needle);
+    if (pos == std::string::npos) return;
+    try {
+      visual_confidence_ = std::stod(d.substr(pos + needle.size()));
+    } catch (...) {
+      visual_confidence_ = 0.0;
+    }
+  }
+
   void on_tick() {
     if (!last_odom_) return;
 
@@ -152,6 +206,16 @@ class RailDriverNode : public rclcpp::Node {
     in.in_rail_zone = last_in_rail_;
     in.collision_monitor_stop = last_collision_stop_;
     in.have_goal = have_goal_;
+
+    in.visual_lat_offset = visual_lat_offset_;
+    in.visual_yaw_error  = visual_yaw_error_;
+    in.visual_confidence = visual_confidence_;
+    if (visual_have_stamp_) {
+      in.visual_age_s =
+          (get_clock()->now() - rclcpp::Time(visual_last_stamp_)).seconds();
+    } else {
+      in.visual_age_s = std::numeric_limits<double>::infinity();
+    }
 
     const auto out = compute(in, params_);
 
@@ -182,6 +246,8 @@ class RailDriverNode : public rclcpp::Node {
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_zone_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_collision_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_rail_detections_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_rail_detector_state_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_state_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -193,6 +259,12 @@ class RailDriverNode : public rclcpp::Node {
   double last_rail_yaw_error_ = std::nan("");
   bool last_in_rail_ = false;
   bool last_collision_stop_ = false;
+
+  double visual_lat_offset_ = 0.0;
+  double visual_yaw_error_  = 0.0;
+  double visual_confidence_ = 0.0;
+  builtin_interfaces::msg::Time visual_last_stamp_;
+  bool   visual_have_stamp_ = false;
 };
 
 }  // namespace agv_rail_driver
