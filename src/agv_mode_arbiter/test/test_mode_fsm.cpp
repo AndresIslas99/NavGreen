@@ -156,14 +156,30 @@ TEST(ModeFsm, RailExitReleasesToCorridorOnFullClearance) {
   EXPECT_EQ(out.active_source, Source::NAV);
 }
 
-TEST(ModeFsm, RailExitReleasesEvenWhenRailDriverStillDriving) {
-  // Same release conditions, but rail_driver is still "driving" toward the
-  // push target. Once clearance is satisfied we hand cmd_vel back to Nav2;
-  // rail_driver will latch reached on its own shortly.
+TEST(ModeFsm, RailExitHoldsWhileRailDriverStillDriving) {
+  // Iter-2 regression fix: releasing while rail_driver is still "driving"
+  // let the CORRIDOR_NAV shortcut loop straight back into RAIL_DRIVE on
+  // the next tick (rail_driver_state == "driving"), producing a rapid
+  // RAIL_DRIVE ↔ RAIL_EXIT oscillation. Hold RAIL_EXIT until rail_driver
+  // has come to rest (reached / idle / blocked_*).
   auto in = base_inputs();
   in.zone = "gap";
   in.rail_driver_state = "driving";
   in.rail_exit_clearance_m = 1.05;
+  auto out = step(Mode::RAIL_EXIT, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_EXIT);
+  EXPECT_EQ(out.active_source, Source::RAIL);
+}
+
+TEST(ModeFsm, RailExitReleasesOnIdleAfterClearance) {
+  // The original Stage-M gate required "reached" exactly, but that label
+  // only latches for one tick. After rail_driver reports "idle" post-goal,
+  // release must still fire. Once geometry is satisfied, any non-driving
+  // state releases — including "idle".
+  auto in = base_inputs();
+  in.zone = "gap";
+  in.rail_driver_state = "idle";
+  in.rail_exit_clearance_m = 1.25;
   auto out = step(Mode::RAIL_EXIT, in);
   EXPECT_EQ(out.next_mode, Mode::CORRIDOR_NAV);
   EXPECT_EQ(out.active_source, Source::NAV);
