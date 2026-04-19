@@ -90,6 +90,11 @@ private:
   double tag_loss_timeout_;
   double tag_reacquire_timeout_;
   double acquisition_timeout_;
+  // Iter-13 / Option D: max wall-time allowed in FINE_SERVOING.
+  // Zero or negative disables the check (the harness-level deadline
+  // still applies).
+  double max_fine_duration_{120.0};
+  rclcpp::Time fine_servo_start_{0, 0, RCL_ROS_TIME};
   std::string camera_frame_;
   std::string base_frame_;
 
