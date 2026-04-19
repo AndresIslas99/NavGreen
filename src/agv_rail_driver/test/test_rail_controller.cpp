@@ -168,3 +168,70 @@ TEST(RailController, StateToStringCoverage) {
   EXPECT_STREQ(state_to_str(RailState::BLOCKED_MISALIGNED), "blocked_misaligned");
   EXPECT_STREQ(state_to_str(RailState::BLOCKED_LATERAL), "blocked_lateral");
 }
+
+// ── Stage K: visual rail feedback preferred when fresh+confident ──────────
+
+TEST(RailController, VisualPreferredOverPose) {
+  // Pose says we're on the goal centerline (no drift). Visual says otherwise:
+  // the rail midline is 40 cm off in base_link Y, above lateral_abort_m 0.30.
+  // Visual must win → BLOCKED_LATERAL.
+  auto in = base_inputs();
+  in.current_y = 0.0;
+  in.goal_y = 0.0;
+  in.visual_confidence = 0.9;
+  in.visual_age_s = 0.1;
+  in.visual_lat_offset = 0.40;
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::BLOCKED_LATERAL);
+  EXPECT_DOUBLE_EQ(out.linear_x, 0.0);
+}
+
+TEST(RailController, VisualStaleFallsBackToPose) {
+  // Visual says huge drift, but age=2s is older than visual_max_age_s (0.5 s
+  // default). Controller must ignore the stale visual and trust the pose
+  // (which shows no drift) → DRIVING, not BLOCKED_LATERAL.
+  auto in = base_inputs();
+  in.current_y = 0.0;
+  in.goal_y = 0.0;
+  in.visual_confidence = 0.95;
+  in.visual_age_s = 2.0;
+  in.visual_lat_offset = 0.40;
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::DRIVING);
+}
+
+TEST(RailController, VisualLowConfidenceRejected) {
+  // Visual is fresh but confidence 0.3 is below the 0.7 threshold. Must
+  // fall back to pose metrics.
+  auto in = base_inputs();
+  in.current_y = 0.0;
+  in.goal_y = 0.0;
+  in.visual_confidence = 0.3;
+  in.visual_age_s = 0.1;
+  in.visual_lat_offset = 0.40;
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::DRIVING);
+}
+
+TEST(RailController, VisualMissingUsesPose) {
+  // Default: visual never received (age=inf, conf=0). Pose-based check
+  // triggers on current_y drift.
+  auto in = base_inputs();
+  in.current_y = 0.5;  // > lateral_abort_m 0.30
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::BLOCKED_LATERAL);
+}
+
+TEST(RailController, VisualYawAbortInsideRailZone) {
+  // Visual says yaw is 30° off the rail axis (> yaw_abort_rad 0.26 rad). In a
+  // rail aisle with visual trusted, BLOCKED_MISALIGNED must fire from the
+  // visual input even when zone_detector's rail_yaw_error is clean.
+  auto in = base_inputs();
+  in.in_rail_zone = true;
+  in.rail_yaw_error = 0.0;      // pose says we're aligned
+  in.visual_confidence = 0.9;
+  in.visual_age_s = 0.1;
+  in.visual_yaw_error = 0.52;   // ~30°
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::BLOCKED_MISALIGNED);
+}
