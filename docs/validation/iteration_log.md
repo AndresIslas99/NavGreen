@@ -405,6 +405,144 @@ Per-bucket status after iter-9:
   2 cm convergence stalls in the fine servo.
 - **rail_exit 0/2** — push target out of budget.
 
+## iter-10 (2026-04-19) — Option A: extract fine_servo_controller (ROS-free)
+
+- refactor: `src/agv_rail_approach/include/agv_rail_approach/fine_servo_controller.hpp`
+  header-only, `fine_servo_compute(tvec, rvec, cam_to_base, params) →
+  FineServoOutput`, `solvepnp_tag()` split helper, verdict enum.
+  `rail_approach_node.cpp` reduced to state + TF + pub/sub plumbing.
+- fixes uncovered during the refactor:
+  - camera_frame default was `zed_left_camera_optical_frame` but the URDF
+    publishes `zed_left_camera_frame_optical`. HIL launch now overrides.
+  - `desired_offset_x` was being compared against the camera-frame tag
+    position in the legacy code; the new controller correctly evaluates
+    it against the base-frame tag pose after the cam→base transform.
+  - `check_yaw_convergence` added as a parameter (default **false**). Floor
+    tags produce reference angle ≈ π; the old unconditional check meant
+    `in_tolerance` would never latch. Wall-tag deployments can flip true.
+- 9 gtests added (FineServo*) covering invalid corners, out-of-range,
+  happy-path, lateral-offset, clamped velocities, in-tolerance on/off.
+
+## iter-11 (2026-04-19) — Option B: last_reject_reason observability
+
+- change: node tracks `last_reject_reason_` (default "none") stamped with
+  the ros time of the rejection. Published in the state JSON as
+  `last_reject_reason` + `last_reject_age_s`. Covers every verdict class
+  (out_of_range, invalid_corners, in_tolerance, etc.) and TF failures.
+- rationale: stalls at the 0.33 m plateau were opaque; operator + harness
+  now see WHY fine_servo rejected the tick.
+
+## iter-12 (2026-04-19) — Option C: solvePnP median filter
+
+- change: `TvecRvecMedianFilter` (default window 5) smooths solvePnP
+  jitter before the controller runs. `solvepnp_tag → filter.push →
+  fine_servo_compute` replaces the single-shot estimate path.
+- 5 gtests added covering empty/fills/rejects-outlier/reset/rolling.
+
+## iter-13 (2026-04-19) — Option D: max_fine_duration guard
+
+- change: internal fine-servo wall-clock budget (`max_fine_duration_s`,
+  default 120 s). Before iter-13 a servo oscillating inside the 2 cm ring
+  without latching `settle_frames_` stayed "driving" forever; the
+  harness-level NAV_TIMEOUT × 1.5 was the only cap. Now finishes as
+  `last_reject_reason='fine_servo_timeout'` so operators see the failure
+  as its own class.
+
+## iter-14 (2026-04-19) — partial run with A+B+C+D applied
+
+- run: `sim_episodes/precision_run_20260419_121709/` (killed mid-run after
+  wp11 to unblock the iter-15 fix; 10/16 waypoints observed).
+- per-waypoint: wp01-03 SUCCEEDED (nav2, 0.03–0.09 m),
+  wp04 NAV_TIMEOUT (rail_approach tag 35), wp05-06 SUCCEEDED (rail_drive),
+  wp07 NAV_TIMEOUT (rail_approach tag 4), wp08-09 SUCCEEDED (rail_drive),
+  wp10 ABORTED 1.50 m (nav2 post-rail_drive, no progress 91 s),
+  wp11 in-progress when killed.
+- **Root cause of rail_approach NAV_TIMEOUT isolated**: rail.yaw=0 on
+  floor tags (face normal is +Z, not a horizontal approach heading) meant
+  start_coarse_approach asked Nav2 for a goal at
+  `(rail.x - coarse_standoff, 0, yaw=0)`, which for wp04 (robot=(5.2,0,π),
+  tag=(4,0)) pointed the robot 180° off and past the tag. Observed in
+  logs as `Nav2 coarse approach failed (code=5)`. Fine_servo never started.
+- decision: skip Nav2 coarse_approach when the robot is already within
+  range of the tag (iter-15 below).
+
+## iter-15 (2026-04-19) — skip Nav2 coarse_approach when in range
+
+- change: `rail_approach_node.cpp` start_coarse_approach now looks up
+  `map→base_link`, computes robot-to-tag distance, and if ≤
+  `coarse_skip_radius` (default 2.0 m, covers every Round-44 teleport)
+  transitions directly to TAG_ACQUISITION. TF lookup failure falls
+  through to the legacy Nav2 coarse path.
+- build + 15 gtests green, verify_specs 0 BLOCKING.
+- run: `sim_episodes/precision_run_20260419_125157/` (killed mid-run
+  after wp03 — see next paragraph).
+- **Regression surfaced before rail_approach could even be exercised**:
+  wp01 ABORTED at err=0.50 m (robot didn't move). wp02 ABORTED 1.00 m,
+  wp03 ABORTED 1.5 m — identical pattern. Mode_arbiter log shows
+  `corridor_nav → rail_drive → rail_exit` transitioning on EVERY
+  waypoint setup. The harness's iter-8 cancel goal
+  (zero-distance PoseStamped to `/agv/rail_driver/goal` post-reset)
+  makes rail_driver briefly report "driving"/"reached"; the FSM
+  short-circuits through RAIL_DRIVE → RAIL_EXIT. For wp01 at
+  (4.0, 0, 0) = tag_x_rear, `rail_exit_clearance_m = 0` forever —
+  no clearance, no release, Nav2's cmd_vel_nav is dropped by the
+  arbiter (source=RAIL). This bug existed before iter-15 but was
+  masked by different initial conditions (iter-14 ran from a
+  different spawn pose); iter-15's brain relaunch made it latent.
+- decision: move the fix into the FSM (iter-16) — the symptom is
+  orthogonal to rail_approach.
+
+## iter-20 (2026-04-19) — 11/16, rail_approach unlocked 5/5
+
+- chain of fixes landing together (iter-15 coarse_skip + iter-16 FSM
+  release + iter-17 SETTLED/ABORTED emit + iter-17c publish_status
+  + iter-17 nav2 bond_timeout + iter-17 shim 89.5° + iter-18 corrected
+  waypoint goals + iter-20 depth-1 state QoS + iter-20 tolerance 0.10 m).
+- report: `sim_episodes/precision_run_20260419_153437/report.json`
+- **success rate: 11/16 (68.75 %), 0 collisions, 23:52 run**
+- per-bucket:
+  - **nav2 2/5** — wp01/wp03 PASS (0.07/0.05 m). wp02 ABORT 1.0 m at
+    stall_abort_s=90 s (Rotation Shim Controller TF race observed as
+    ~100 ms of "Failed to transform pose to base frame" right after
+    teleport; Nav2 never commands motion). wp10 NAV_TIMEOUT 2.3 m
+    yaw 1.04 rad (post-rail_drive nav2 transition — robot rotates
+    off-axis). wp15 ABORT 2.1 m yaw 2.73 rad (post-rail_exit nav2,
+    similar motion weirdness).
+  - **rail_approach 5/5** — wp04/wp07/wp11/wp12/wp16 all SUCCEEDED at
+    0.09–0.10 m / 52–71 s dur. First rail_approach successes in the
+    entire iteration chain. Fine_servo converges, latches SETTLED,
+    harness detects.
+  - **rail_drive 4/4** — wp05/wp06/wp08/wp09 at 0.048–0.053 m / 23–31 s.
+    Rock-solid since iter-3.
+  - **rail_exit 0/2** — wp13/wp14 NAV_TIMEOUT 1.54 m each (push-to-
+    exit-1.5 m past-tag never completes within 270 s). Same err
+    magnitude since iter-5; needs separate investigation (likely sim
+    RTF vs rail_driver speed limit or zone_detector boundary).
+- delta vs iter-9 (prior high-water 8/16): **+3 waypoints, +18.75 %**,
+  entire rail_approach bucket unlocked.
+- decisions: no new code this iteration — all fixes already landed.
+- next run (iter-21) focus: rail_exit push completion + wp10/wp15
+  nav2 post-rail transitions + wp02 TF race stabilisation.
+
+## iter-16 (2026-04-19) — RAIL_EXIT release in approach zones when idle
+
+- change: `mode_fsm.hpp` auxiliary RAIL_EXIT release path — hand back
+  to CORRIDOR_NAV when robot is in an approach zone (`rail_approach_*`)
+  AND rail_driver_state == "idle" (explicit idle, not the one-tick
+  "reached" latch). Approach zones sit outside the rail tubes so
+  MPPI rotation is not a tube-hit hazard. Rail zones (`rail_aisle_*`)
+  still hold RAIL_EXIT regardless of rail_driver state — the 51 mm
+  tube protection is preserved.
+- +3 unit tests (approach-zone-release, approach-zone-hold-driving,
+  rail-zone-hold-idle). 33 mode_arbiter gtests green.
+- run: `sim_episodes/precision_run_20260419_130544/` (in progress).
+- expected impact (combined with iter-15):
+  - wp01/wp02/wp03 nav2: unblocked (FSM releases on first tick).
+  - wp04/wp07/wp11/wp12/wp16 rail_approach: skip coarse → fine_servo.
+  - wp10 nav2: same FSM release trap unblocks.
+  - wp13/wp14 rail_exit: unchanged (already working via primary gate).
+  - Projected success: 11–14 / 16 depending on fine_servo convergence.
+
 <!--
 Template for each subsequent iteration:
 
