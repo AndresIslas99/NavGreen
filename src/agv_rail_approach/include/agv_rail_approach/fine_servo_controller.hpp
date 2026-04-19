@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,76 @@
 #include <opencv2/core.hpp>
 
 namespace agv_rail_approach {
+
+// ── Median filter for solvePnP output ─────────────────────────────────
+//
+// solvePnP on a floor tag viewed at ~80° of incidence produces cm-level
+// jitter on tvec between successive frames (narrow trapezoidal corner
+// projection amplifies corner-localization noise). The node pushes each
+// fresh {tvec, rvec} pair into this filter; once the rolling window is
+// full the output is the element-wise median across the last N pairs.
+// Median is chosen over mean to reject single-frame outliers (e.g. a
+// corner that clipped the frame edge) without phase lag.
+//
+// The filter is header-only + ROS-free so it is exercised directly by
+// test_fine_servo_controller.cpp (TvecRvecMedianFilter.* cases).
+class TvecRvecMedianFilter {
+ public:
+  explicit TvecRvecMedianFilter(std::size_t window = 5) : window_(window) {
+    if (window_ == 0) window_ = 1;
+  }
+
+  void push(const cv::Vec3d &tvec, const cv::Vec3d &rvec) {
+    tvecs_.push_back(tvec);
+    rvecs_.push_back(rvec);
+    while (tvecs_.size() > window_) tvecs_.pop_front();
+    while (rvecs_.size() > window_) rvecs_.pop_front();
+  }
+
+  void reset() {
+    tvecs_.clear();
+    rvecs_.clear();
+  }
+
+  std::size_t size() const { return tvecs_.size(); }
+  bool filled() const { return tvecs_.size() >= window_; }
+
+  // Median of each component independently. Uses a copy + nth_element
+  // so the filter itself stays O(N log N) per call with N = window ≤ 5.
+  cv::Vec3d tvec_median() const { return axiswise_median(tvecs_); }
+  cv::Vec3d rvec_median() const { return axiswise_median(rvecs_); }
+
+ private:
+  static cv::Vec3d axiswise_median(const std::deque<cv::Vec3d> &d) {
+    cv::Vec3d out(0.0, 0.0, 0.0);
+    if (d.empty()) return out;
+    std::vector<double> xs, ys, zs;
+    xs.reserve(d.size());
+    ys.reserve(d.size());
+    zs.reserve(d.size());
+    for (const auto &v : d) {
+      xs.push_back(v[0]);
+      ys.push_back(v[1]);
+      zs.push_back(v[2]);
+    }
+    auto mid = xs.size() / 2;
+    std::nth_element(xs.begin(), xs.begin() + mid, xs.end());
+    std::nth_element(ys.begin(), ys.begin() + mid, ys.end());
+    std::nth_element(zs.begin(), zs.begin() + mid, zs.end());
+    // nth_element places the mid-th element in position — for a true
+    // median on even-sized windows we'd average with the one below,
+    // but the controller tolerates ≤1 sample bias at window sizes
+    // ≥ 3, so skip the extra sort for speed.
+    out[0] = xs[mid];
+    out[1] = ys[mid];
+    out[2] = zs[mid];
+    return out;
+  }
+
+  std::size_t window_;
+  std::deque<cv::Vec3d> tvecs_;
+  std::deque<cv::Vec3d> rvecs_;
+};
 
 struct FineServoParams {
   // Pinhole intrinsics (from CameraInfo.k).
@@ -100,46 +171,19 @@ struct FineServoOutput {
   bool in_tolerance = false;
 };
 
-// Step the controller once on a fresh detection.
-//
-// `corners` must be exactly 4 pixel points in the tag's CCW order when
-// viewed from the outward face (BL, BR, TR, TL) — matches apriltag_ros.
-//
-// `cam_to_base` is the 4×4 homogeneous transform that maps a point in
-// the camera-optical frame into base_link. Caller builds it from a TF
-// lookup; passing all-zeros is undefined (caller handles TF misses
-// itself — the controller does not attempt a fallback).
-inline FineServoOutput fine_servo_step(
-    const std::vector<cv::Point2d> &corners,
+// Pure-math half of the servo step: given a valid tvec/rvec pair
+// (already produced by solvePnP and optionally smoothed through a
+// median filter), compute the cmd/error fields + convergence flag.
+// Does no solvePnP, no TF, no logging. Callable from unit tests with
+// hand-crafted inputs.
+inline FineServoOutput fine_servo_compute(
+    const cv::Vec3d &tvec,
+    const cv::Vec3d &rvec,
     const cv::Matx44d &cam_to_base,
     const FineServoParams &p) {
   FineServoOutput out;
-
-  if (corners.size() != 4) {
-    out.verdict = FineServoVerdict::INVALID_CORNERS;
-    return out;
-  }
   if (p.fx <= 0.0 || p.fy <= 0.0) {
     out.verdict = FineServoVerdict::INVALID_INTRINSICS;
-    return out;
-  }
-
-  const double half = p.tag_size_m / 2.0;
-  // Tag face is the local Z=0 plane. Corners in the tag's local frame
-  // follow apriltag_ros's CCW-viewed-from-+Z order: BL, BR, TR, TL.
-  const std::vector<cv::Point3d> obj_pts{
-      {-half, -half, 0.0}, { half, -half, 0.0},
-      { half,  half, 0.0}, {-half,  half, 0.0}};
-
-  cv::Mat K = (cv::Mat_<double>(3, 3) <<
-               p.fx, 0.0, p.cx,
-               0.0, p.fy, p.cy,
-               0.0, 0.0, 1.0);
-  cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
-
-  cv::Vec3d rvec, tvec;
-  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec)) {
-    out.verdict = FineServoVerdict::SOLVEPNP_FAIL;
     return out;
   }
   out.range_m = cv::norm(tvec);
@@ -202,6 +246,77 @@ inline FineServoOutput fine_servo_step(
 
   out.verdict = FineServoVerdict::OK;
   return out;
+}
+
+// Convenience wrapper: solvePnP on the 4 tag corners, then forward the
+// tvec/rvec into fine_servo_compute. No median filter — call-sites
+// that want smoothing should use solvepnp_tag() + push into a
+// TvecRvecMedianFilter themselves, then call fine_servo_compute with
+// the filtered tvec/rvec.
+inline FineServoOutput fine_servo_step(
+    const std::vector<cv::Point2d> &corners,
+    const cv::Matx44d &cam_to_base,
+    const FineServoParams &p) {
+  FineServoOutput out;
+  if (corners.size() != 4) {
+    out.verdict = FineServoVerdict::INVALID_CORNERS;
+    return out;
+  }
+  if (p.fx <= 0.0 || p.fy <= 0.0) {
+    out.verdict = FineServoVerdict::INVALID_INTRINSICS;
+    return out;
+  }
+
+  const double half = p.tag_size_m / 2.0;
+  const std::vector<cv::Point3d> obj_pts{
+      {-half, -half, 0.0}, { half, -half, 0.0},
+      { half,  half, 0.0}, {-half,  half, 0.0}};
+  cv::Mat K = (cv::Mat_<double>(3, 3) <<
+               p.fx, 0.0, p.cx,
+               0.0, p.fy, p.cy,
+               0.0, 0.0, 1.0);
+  cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
+  cv::Vec3d rvec, tvec;
+  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec)) {
+    out.verdict = FineServoVerdict::SOLVEPNP_FAIL;
+    return out;
+  }
+  return fine_servo_compute(tvec, rvec, cam_to_base, p);
+}
+
+// Helper for call-sites that want to apply a median filter between
+// solvePnP and the control computation. Returns false on
+// invalid_corners / invalid_intrinsics / solvepnp_fail; sets out_reason
+// to the matching verdict string for the caller's status publisher.
+inline bool solvepnp_tag(
+    const std::vector<cv::Point2d> &corners,
+    const FineServoParams &p,
+    cv::Vec3d &tvec,
+    cv::Vec3d &rvec,
+    FineServoVerdict &out_verdict) {
+  if (corners.size() != 4) {
+    out_verdict = FineServoVerdict::INVALID_CORNERS;
+    return false;
+  }
+  if (p.fx <= 0.0 || p.fy <= 0.0) {
+    out_verdict = FineServoVerdict::INVALID_INTRINSICS;
+    return false;
+  }
+  const double half = p.tag_size_m / 2.0;
+  const std::vector<cv::Point3d> obj_pts{
+      {-half, -half, 0.0}, { half, -half, 0.0},
+      { half,  half, 0.0}, {-half,  half, 0.0}};
+  cv::Mat K = (cv::Mat_<double>(3, 3) <<
+               p.fx, 0.0, p.cx,
+               0.0, p.fy, p.cy,
+               0.0, 0.0, 1.0);
+  cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
+  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec)) {
+    out_verdict = FineServoVerdict::SOLVEPNP_FAIL;
+    return false;
+  }
+  out_verdict = FineServoVerdict::OK;
+  return true;
 }
 
 }  // namespace agv_rail_approach

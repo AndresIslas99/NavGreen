@@ -227,6 +227,55 @@ TEST(FineServo, OutOfToleranceResetsFlag) {
 
 // ── verdict-to-string coverage ─────────────────────────────────────────
 
+// ── TvecRvecMedianFilter (iter-12) ─────────────────────────────────────
+
+TEST(TvecRvecMedianFilter, EmptyFilterReportsUnfilled) {
+  agv_rail_approach::TvecRvecMedianFilter f(5);
+  EXPECT_EQ(f.size(), 0u);
+  EXPECT_FALSE(f.filled());
+}
+
+TEST(TvecRvecMedianFilter, FillsAfterWindowPushes) {
+  agv_rail_approach::TvecRvecMedianFilter f(3);
+  f.push({1, 2, 3}, {0, 0, 0});
+  EXPECT_FALSE(f.filled());
+  f.push({1, 2, 3}, {0, 0, 0});
+  EXPECT_FALSE(f.filled());
+  f.push({1, 2, 3}, {0, 0, 0});
+  EXPECT_TRUE(f.filled());
+}
+
+TEST(TvecRvecMedianFilter, MedianRejectsSingleOutlier) {
+  agv_rail_approach::TvecRvecMedianFilter f(5);
+  // 4 clean samples + 1 outlier; median should pick a clean one on each
+  // component independently.
+  f.push({0.30, 0.00, 1.00}, {0.0, 0.0, 0.0});
+  f.push({0.31, 0.01, 1.01}, {0.0, 0.0, 0.0});
+  f.push({10.0, 5.00, -2.0}, {0.0, 0.0, 0.0});  // outlier
+  f.push({0.29, 0.00, 0.99}, {0.0, 0.0, 0.0});
+  f.push({0.30, 0.01, 1.00}, {0.0, 0.0, 0.0});
+  const auto m = f.tvec_median();
+  EXPECT_NEAR(m[0], 0.30, 0.05);
+  EXPECT_NEAR(m[1], 0.00, 0.05);
+  EXPECT_NEAR(m[2], 1.00, 0.05);
+}
+
+TEST(TvecRvecMedianFilter, ResetEmptiesBuffer) {
+  agv_rail_approach::TvecRvecMedianFilter f(3);
+  for (int i = 0; i < 5; ++i) f.push({double(i), 0, 0}, {0, 0, 0});
+  EXPECT_TRUE(f.filled());
+  f.reset();
+  EXPECT_FALSE(f.filled());
+  EXPECT_EQ(f.size(), 0u);
+}
+
+TEST(TvecRvecMedianFilter, RollingWindowKeepsLatestN) {
+  agv_rail_approach::TvecRvecMedianFilter f(3);
+  for (int i = 0; i < 6; ++i) f.push({double(i), 0, 0}, {0, 0, 0});
+  // After 6 pushes with window=3, buffer holds values 3, 4, 5; median = 4.
+  EXPECT_NEAR(f.tvec_median()[0], 4.0, 1e-9);
+}
+
 TEST(FineServo, VerdictStringsCoverAllCases) {
   using agv_rail_approach::verdict_to_str;
   EXPECT_STREQ(verdict_to_str(FineServoVerdict::OK), "ok");
