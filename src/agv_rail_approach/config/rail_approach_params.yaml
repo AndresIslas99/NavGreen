@@ -31,7 +31,13 @@ rail_approach:
     Kp_yaw: 0.5                 # heading gain (rad/s per rad error)
 
     # Velocity limits during fine servoing
-    max_fine_linear_vel: 0.03   # m/s
+    # Iter-17: bumped from 0.03 to 0.08. Round-44 iter-16 observed wp11
+    # fine-servo creeping at ~0.003 m/s wall speed (0.03 × RTF 0.2); a
+    # 0.9 m approach from the skip-coarse spawn needed ~300 s wall, past
+    # the harness 270 s deadline. 0.08 m/s keeps the cmd well below any
+    # mechanical safe-in-aisle limit while letting the approach finish
+    # in ~60 s wall under HIL RTF.
+    max_fine_linear_vel: 0.08   # m/s
     max_fine_angular_vel: 0.10  # rad/s
 
     # Tag loss handling
