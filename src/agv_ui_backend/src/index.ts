@@ -88,6 +88,20 @@ const state: AppState = {
   liveMapVersion: 0,
   pendingRailApproach: null,
   railApproachState: 'idle',
+  // Iter-37 Phase 2 defaults — updated from /agv/{mode,zone,rail_driver}/state.
+  modeArbiterState: {
+    mode: 'unknown', source: 'NONE', zone: 'unknown',
+    operator_mode: 'nav', transitions: 0, updated: 0,
+  },
+  zoneDetectorState: {
+    zone: 'unknown', section: '', aisle_y_center: null,
+    rail_offset_lat: null, rail_yaw_error: null,
+    approach_tag_id: -1, confidence: 0, source: 'pose', updated: 0,
+  },
+  railDriverState: {
+    state: 'idle', linear_x: 0, remaining_m: 0,
+    in_rail_zone: false, collision_stop: false, updated: 0,
+  },
   // 'IDLE' (gray) at boot before collision_monitor has published any state.
   // The collision_monitor only publishes state_topic when it processes a
   // cmd_vel_smoothed, so a fresh boot with no nav active → no state messages.
@@ -630,6 +644,61 @@ async function main() {
         const parsed = JSON.parse(msg.data);
         state.railApproachState = parsed.state || 'unknown';
       } catch { /* ignore parse errors */ }
+    });
+
+    // ── Iter-37 Phase 2 state — HIL iter-33/34 stack (19/20) ──
+    // Mode arbiter: FSM over {CORRIDOR_NAV, RAIL_APPROACH_*, RAIL_DRIVE,
+    // RAIL_EXIT, BLOCKED_HANDOFF, TELEOP, IDLE}. 20 Hz.
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/mode/state`, (msg: any) => {
+      try {
+        const parsed = JSON.parse(msg.data);
+        state.modeArbiterState = {
+          mode: parsed.mode || 'unknown',
+          source: parsed.source || 'NONE',
+          zone: parsed.zone || 'unknown',
+          operator_mode: parsed.operator_mode || 'nav',
+          transitions: Number(parsed.transitions) || 0,
+          updated: Date.now() / 1000,
+        };
+      } catch { /* parse tolerant */ }
+    });
+
+    // Zone detector: robot position + rail-aisle classification. 10 Hz.
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/zone/state`, (msg: any) => {
+      try {
+        const parsed = JSON.parse(msg.data);
+        const numOrNull = (v: any) =>
+          v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v);
+        state.zoneDetectorState = {
+          zone: parsed.zone || 'unknown',
+          section: parsed.section || '',
+          aisle_y_center: numOrNull(parsed.aisle_y_center),
+          rail_offset_lat: numOrNull(parsed.rail_offset_lat),
+          rail_yaw_error: numOrNull(parsed.rail_yaw_error),
+          approach_tag_id: Number(parsed.approach_tag_id ?? -1),
+          confidence: Number(parsed.confidence) || 0,
+          source: parsed.source || 'pose',
+          updated: Date.now() / 1000,
+        };
+      } catch { /* parse tolerant */ }
+    });
+
+    // Rail driver: longitudinal progress + BLOCKED_* gates. 20 Hz.
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/rail_driver/state`, (msg: any) => {
+      try {
+        const parsed = JSON.parse(msg.data);
+        state.railDriverState = {
+          state: parsed.state || 'idle',
+          linear_x: Number(parsed.linear_x) || 0,
+          remaining_m: Number(parsed.remaining_m) || 0,
+          in_rail_zone: Boolean(parsed.in_rail_zone),
+          collision_stop: Boolean(parsed.collision_stop),
+          updated: Date.now() / 1000,
+        };
+      } catch { /* parse tolerant */ }
     });
 
     // Latched current map name (transient_local) published by map_manager_node
