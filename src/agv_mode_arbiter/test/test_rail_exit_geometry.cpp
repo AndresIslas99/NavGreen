@@ -59,3 +59,27 @@ TEST(RailExitGeometry, AlreadyPastFrontTagSkipsPush) {
   EXPECT_NEAR(g.clearance_m, 1.4, 1e-9);
   EXPECT_TRUE(std::isnan(g.push_goal_x));
 }
+
+TEST(RailExitGeometry, GapCloseToRearTagPushesForward) {
+  // Iter-23 regression: wp13 / wp14 rail_exit got stuck because the
+  // robot arrived at the REAR approach tag from the corridor side
+  // (x ≈ 3.95). compute_rail_exit was forcing skip_push=true in the
+  // gap branch regardless of clearance, so the arbiter never
+  // published the push goal and the FSM's clearance≥1 release gate
+  // was unreachable. Now: clearance=-0.05 < 1 → don't skip; the push
+  // goal should target 1.5 m past the REAR tag (5.5).
+  const auto g = compute_rail_exit(3.95, greenhouse_params());
+  EXPECT_FALSE(g.skip_push);
+  EXPECT_NEAR(g.clearance_m, 3.95 - 4.0, 1e-9);  // -0.05 m
+  EXPECT_NEAR(g.push_goal_x, 4.0 + 1.5, 1e-9);    // 5.5
+}
+
+TEST(RailExitGeometry, GapCloseToFrontTagPushesForward) {
+  // Symmetric case: robot at x=7.05 (just inside gap from FRONT side),
+  // 0.05 m short of the FRONT tag. clearance = -(7.05-7.0) = -0.05 m;
+  // push target = 7.0 - 1.5 = 5.5 m.
+  const auto g = compute_rail_exit(7.05, greenhouse_params());
+  EXPECT_FALSE(g.skip_push);
+  EXPECT_NEAR(g.clearance_m, -(7.05 - 7.0), 1e-9);
+  EXPECT_NEAR(g.push_goal_x, 7.0 - 1.5, 1e-9);    // 5.5
+}
