@@ -153,6 +153,28 @@ public:
         in_rail_aisle_ = zone.rfind("rail_aisle_", 0) == 0;
       });
 
+    // Iter-35 (revised): also watch rail_driver's own state. When it
+    // reports "driving", rail_driver has an active longitudinal goal
+    // and the robot is executing rail-constrained motion. Zone feedback
+    // can lag (iter-33 c5) because marker_correction pollutes the EKF
+    // before zone_detector reclassifies. rail_driver_state is the
+    // authoritative "rail operation in progress" signal and is immune
+    // to EKF drift because rail_driver only transitions in/out of
+    // "driving" on its own goal topic + tick loop.
+    rail_driver_sub_ = create_subscription<std_msgs::msg::String>(
+      "/agv/rail_driver/state", 10,
+      [this](std_msgs::msg::String::SharedPtr msg) {
+        const std::string &d = msg->data;
+        const std::string needle = "\"state\":\"";
+        const auto start = d.find(needle);
+        if (start == std::string::npos) { rail_driver_driving_ = false; return; }
+        const auto q_open = start + needle.size();
+        const auto q_close = d.find('\"', q_open);
+        if (q_close == std::string::npos) { rail_driver_driving_ = false; return; }
+        const std::string st = d.substr(q_open, q_close - q_open);
+        rail_driver_driving_ = (st == "driving");
+      });
+
     // Service client to force-relocalize EKF when drift is catastrophic
     set_pose_client_ = create_client<robot_localization::srv::SetPose>("set_pose");
 
@@ -480,7 +502,8 @@ private:
     // regardless of y-alignment. Geometry bound from the sim USD.
     const bool ekf_in_rail_section = has_ekf_pose_ &&
         (current_ekf_x_ <= 3.5 || current_ekf_x_ >= 7.5);
-    const bool reloc_allowed = !in_rail_aisle_ && !ekf_in_rail_section;
+    const bool reloc_allowed =
+        !in_rail_aisle_ && !ekf_in_rail_section && !rail_driver_driving_;
     if (drift >= reloc_threshold_ && best_decision_margin >= min_confidence_ &&
         reloc_allowed) {
       if (set_pose_client_->service_is_ready()) {
@@ -551,6 +574,13 @@ private:
   // mis-identified tags poison the EKF instead of helping.
   bool in_rail_aisle_{false};
 
+  // Iter-35 revised: latched from rail_driver/state. When rail_driver
+  // is actively driving a longitudinal goal, the robot is executing
+  // rail-constrained motion (wz=0 hard, mechanical lateral bound).
+  // Suppress RELOC regardless of where zone_detector thinks we are —
+  // this signal is immune to EKF drift caused by bad corrections.
+  bool rail_driver_driving_{false};
+
   // TF
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -565,6 +595,7 @@ private:
   rclcpp::Client<robot_localization::srv::SetPose>::SharedPtr set_pose_client_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reload_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr zone_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr rail_driver_sub_;
   rclcpp::TimerBase::SharedPtr caminfo_timeout_timer_;
 };
 
