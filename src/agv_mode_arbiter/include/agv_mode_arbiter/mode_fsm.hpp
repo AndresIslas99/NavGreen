@@ -236,6 +236,19 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       return out;
 
     case Mode::RAIL_DRIVE:
+      // Iter-24: harness can dispatch rail_approach mid-stream (e.g.
+      // chained rail waypoints wp11→wp12). If rail_approach fires up
+      // and reaches fine-servoing while we're still latched in
+      // RAIL_DRIVE from the previous wp (goal=NaN → no publish →
+      // rail_driver stuck idle), swap source to APPROACH so
+      // cmd_vel_approach is relayed. iter-23 wp12 burned 270 s stuck
+      // here because RAIL_DRIVE only transitioned on rail_driver
+      // states, not on external rail_approach re-activation.
+      if (in.rail_approach_state == "driving") {
+        out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
+        out.active_source = Source::APPROACH;
+        return out;
+      }
       // Goal reached → enter RAIL_EXIT. Arbiter publishes an extended goal
       // 1 m past the exit tag so the robot keeps driving with wz=0 until
       // fully clear of the aisle. Never hand directly to Nav2 here: Nav2's
@@ -260,6 +273,15 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
       return out;
 
     case Mode::RAIL_EXIT:
+      // Iter-24: symmetric to the RAIL_DRIVE case above. If the
+      // harness dispatches a new rail_approach while we're still
+      // in RAIL_EXIT from the previous wp, swap source to APPROACH
+      // instead of keeping cmd_vel_rail latched.
+      if (in.rail_approach_state == "driving") {
+        out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
+        out.active_source = Source::APPROACH;
+        return out;
+      }
       // Release to CORRIDOR_NAV, primary gate — three conditions:
       //   1. zone is out of rail/approach
       //   2. clearance ≥ 1 m past the exit tag
