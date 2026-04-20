@@ -141,28 +141,49 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
       in.visual_confidence > p.visual_min_conf &&
       in.visual_age_s < p.visual_max_age_s;
 
-  if (visual_trusted) {
+  // Iter-27 P1 fix: the 51 mm rail tube mechanically constrains lateral
+  // drift to < 5 mm while the robot is inside an aisle — the visual
+  // lateral offset from rail_detector is reliable during the approach
+  // (when the robot has not entered yet and could drift into crop rows)
+  // but becomes noisy and over-sensitive as the robot crosses the
+  // gap/rail boundary (iter-26f c1/c3_drive_in and iter-27 c1_drive_in
+  // all aborted with BLOCKED_LATERAL at x≈3.5, exactly at gap_x_min).
+  // Inside a rail aisle we fall back to POSE-based lateral (odometry
+  // vs goal_y), which is quieter and still catches genuine drift if
+  // the rails ever gave out. Visual yaw-vs-rail-axis check stays
+  // active because a yawed robot inside a rail WILL wedge a wheel.
+  //
+  // Outside rail zone (approach strips / gap transitions): visual
+  // lateral is trusted when fresh/confident, since alignment before
+  // entry is the whole point of the approach phase.
+  if (visual_trusted && !in.in_rail_zone) {
     if (std::abs(in.visual_lat_offset) > p.lateral_abort_m) {
       out.state = RailState::BLOCKED_LATERAL;
       out.linear_x = 0.0;
       return out;
     }
-    if (in.in_rail_zone && !std::isnan(in.visual_yaw_error) &&
+  }
+
+  // Pose-based lateral drift abort — always on. Cheap, quiet, and a
+  // genuine safety net even when visual is disabled in-rail.
+  if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
+    out.state = RailState::BLOCKED_LATERAL;
+    out.linear_x = 0.0;
+    return out;
+  }
+
+  // Yaw abort inside a rail aisle (crop-row risk). Prefer the visual
+  // yaw error (rail-axis vs robot-body) when fresh; fall back to
+  // zone_detector's rail_yaw_error otherwise. Off outside rails since
+  // the approach flow owns alignment.
+  if (in.in_rail_zone) {
+    if (visual_trusted && !std::isnan(in.visual_yaw_error) &&
         std::abs(in.visual_yaw_error) > p.yaw_abort_rad) {
       out.state = RailState::BLOCKED_MISALIGNED;
       out.linear_x = 0.0;
       return out;
     }
-  } else {
-    // Lateral drift abort. Cheap and always-safe to check.
-    if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
-      out.state = RailState::BLOCKED_LATERAL;
-      out.linear_x = 0.0;
-      return out;
-    }
-
-    // Yaw abort — only when operating inside a rail aisle (crop-row risk).
-    if (in.in_rail_zone && !std::isnan(in.rail_yaw_error) &&
+    if (!visual_trusted && !std::isnan(in.rail_yaw_error) &&
         std::abs(in.rail_yaw_error) > p.yaw_abort_rad) {
       out.state = RailState::BLOCKED_MISALIGNED;
       out.linear_x = 0.0;
