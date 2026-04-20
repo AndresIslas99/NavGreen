@@ -141,41 +141,40 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
       in.visual_confidence > p.visual_min_conf &&
       in.visual_age_s < p.visual_max_age_s;
 
-  // Iter-27 P1 fix: the 51 mm rail tube mechanically constrains lateral
-  // drift to < 5 mm while the robot is inside an aisle — the visual
-  // lateral offset from rail_detector is reliable during the approach
-  // (when the robot has not entered yet and could drift into crop rows)
-  // but becomes noisy and over-sensitive as the robot crosses the
-  // gap/rail boundary (iter-26f c1/c3_drive_in and iter-27 c1_drive_in
-  // all aborted with BLOCKED_LATERAL at x≈3.5, exactly at gap_x_min).
-  // Inside a rail aisle we fall back to POSE-based lateral (odometry
-  // vs goal_y), which is quieter and still catches genuine drift if
-  // the rails ever gave out. Visual yaw-vs-rail-axis check stays
-  // active because a yawed robot inside a rail WILL wedge a wheel.
+  // Iter-28 P1 (revised): inside a rail aisle the 51 mm tube physically
+  // bounds lateral drift to < 5 mm, so BOTH visual and pose lateral
+  // abort checks are disabled there. iter-27 c1_drive_in aborted on
+  // visual lat_offset (rail_detector noisy at gap boundary); iter-28
+  // c3_drive_in aborted on pose lat_offset (marker_correction RELOC
+  // poisoned ekf_global y by 2+ m when robot faced west toward REAR
+  // tags and saw phantom detections at grazing incidence). In both
+  // cases the ROBOT WAS FINE — the sensor signals were broken.
   //
-  // Outside rail zone (approach strips / gap transitions): visual
-  // lateral is trusted when fresh/confident, since alignment before
-  // entry is the whole point of the approach phase.
-  if (visual_trusted && !in.in_rail_zone) {
-    if (std::abs(in.visual_lat_offset) > p.lateral_abort_m) {
-      out.state = RailState::BLOCKED_LATERAL;
-      out.linear_x = 0.0;
-      return out;
+  // Trust the mechanical constraint plus the yaw-abort check (a yawed
+  // robot IS a real wedge risk independent of sensor noise). Outside
+  // rail zone (approach strips, gap), both lateral checks stay active
+  // because alignment before entry is what the approach flow is for.
+  if (!in.in_rail_zone) {
+    // Approach / gap: prefer visual when trusted, otherwise pose.
+    if (visual_trusted) {
+      if (std::abs(in.visual_lat_offset) > p.lateral_abort_m) {
+        out.state = RailState::BLOCKED_LATERAL;
+        out.linear_x = 0.0;
+        return out;
+      }
+    } else {
+      if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
+        out.state = RailState::BLOCKED_LATERAL;
+        out.linear_x = 0.0;
+        return out;
+      }
     }
   }
 
-  // Pose-based lateral drift abort — always on. Cheap, quiet, and a
-  // genuine safety net even when visual is disabled in-rail.
-  if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
-    out.state = RailState::BLOCKED_LATERAL;
-    out.linear_x = 0.0;
-    return out;
-  }
-
-  // Yaw abort inside a rail aisle (crop-row risk). Prefer the visual
-  // yaw error (rail-axis vs robot-body) when fresh; fall back to
-  // zone_detector's rail_yaw_error otherwise. Off outside rails since
-  // the approach flow owns alignment.
+  // Yaw abort inside a rail aisle (crop-row wedge risk is real even
+  // when lateral is mechanically bounded). Prefer visual yaw when
+  // fresh; fall back to zone_detector's rail_yaw_error. Off outside
+  // rails since the approach flow owns alignment.
   if (in.in_rail_zone) {
     if (visual_trusted && !std::isnan(in.visual_yaw_error) &&
         std::abs(in.visual_yaw_error) > p.yaw_abort_rad) {
