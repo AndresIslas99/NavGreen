@@ -486,17 +486,86 @@ def generate_launch_description():
                     executable='rail_approach_node',
                     name='rail_approach',
                     namespace=ns,
-                    parameters=[{
-                        'registry_file': os.path.join(
-                            get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
-                        # Runtime registry — operator-defined rail_start tags from dashboard
-                        'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
-                        'tag_size': 0.2,
-                        'camera_info_topic': '/agv/zed/left/camera_info',
-                        'use_sim_time': use_sim_time,
-                    }],
+                    # Iter-37: load rail_approach_params.yaml — same class of
+                    # iter-26d bug the HIL launch had. Without this, all the
+                    # tolerance_xy=0.15 / tolerance_yaw=0.25 / settle_frames=5
+                    # tuning from iter-26c..27 defaults back to the header
+                    # values at runtime on real hardware and rail_approach
+                    # never settles.
+                    parameters=[
+                        os.path.join(
+                            get_package_share_directory('agv_rail_approach'),
+                            'config', 'rail_approach_params.yaml'),
+                        {
+                            'registry_file': os.path.join(
+                                get_package_share_directory('agv_markers'),
+                                'config', 'markers_registry.yaml'),
+                            # Runtime registry — operator-defined rail_start tags from dashboard
+                            'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+                            'tag_size': 0.2,
+                            'camera_info_topic': '/agv/zed/left/camera_info',
+                            'use_sim_time': use_sim_time,
+                        },
+                    ],
                     output='log',
                     condition=IfCondition(enable_markers),
+                ),
+                # ── Phase 2 stack ported from agv_hil_full.launch.py (iter-37) ──
+                # These four nodes exist in HIL but were never added to the
+                # production launch. Without them, the 3-mode cmd_vel arbitration
+                # (Nav2 / rail_approach / rail_driver), the rail-aisle
+                # BLOCKED_LATERAL gate, and the marker_correction RELOC gates
+                # (iter-31/34/36 fixes) have no subscribers on real hardware.
+                Node(
+                    package='agv_zone_detector',
+                    executable='zone_detector_node',
+                    name='zone_detector',
+                    namespace=ns,
+                    parameters=[{'use_sim_time': use_sim_time}],
+                    output='log',
+                    condition=IfCondition(has_map),
+                ),
+                Node(
+                    package='agv_rail_detector',
+                    executable='rail_detector_node',
+                    name='rail_detector',
+                    namespace=ns,
+                    parameters=[
+                        os.path.join(
+                            get_package_share_directory('agv_rail_detector'),
+                            'config', 'rail_detector_params.yaml'),
+                        {'use_sim_time': use_sim_time},
+                    ],
+                    output='log',
+                    condition=IfCondition(has_map),
+                ),
+                Node(
+                    package='agv_mode_arbiter',
+                    executable='mode_arbiter_node',
+                    name='mode_arbiter',
+                    namespace=ns,
+                    parameters=[
+                        os.path.join(
+                            get_package_share_directory('agv_mode_arbiter'),
+                            'config', 'mode_arbiter_params.yaml'),
+                        {'use_sim_time': use_sim_time},
+                    ],
+                    output='screen',
+                    condition=IfCondition(has_map),
+                ),
+                Node(
+                    package='agv_rail_driver',
+                    executable='rail_driver_node',
+                    name='rail_driver',
+                    namespace=ns,
+                    parameters=[
+                        os.path.join(
+                            get_package_share_directory('agv_rail_driver'),
+                            'config', 'rail_driver_params.yaml'),
+                        {'use_sim_time': use_sim_time},
+                    ],
+                    output='log',
+                    condition=IfCondition(has_map),
                 ),
                 # Auto-localization orchestrator: listens for /agv/maps/loaded,
                 # loads the matching cuVSLAM keyframe DB, waits for an AprilTag
