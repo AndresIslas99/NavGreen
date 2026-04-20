@@ -98,6 +98,12 @@ struct RailControllerOutput {
   double angular_z = 0.0;  // rad/s — ALWAYS 0 in this controller
   RailState state = RailState::IDLE;
   double remaining_m = 0.0;
+  // Iter-31 diagnostics: human-readable cause set when state is a
+  // BLOCKED_*. rail_driver_node logs it on every state transition so
+  // we stop guessing which gate fired. Empty when state is not BLOCKED.
+  // Compact tokens: "collision_stop", "visual_lat", "pose_lat",
+  // "visual_yaw", "pose_yaw".
+  const char *block_reason = "";
 };
 
 inline RailControllerOutput compute(const RailControllerInputs &in,
@@ -131,6 +137,7 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
   if (in.collision_monitor_stop) {
     out.state = RailState::BLOCKED_WAIT;
     out.linear_x = 0.0;
+    out.block_reason = "collision_stop";
     return out;
   }
 
@@ -168,12 +175,14 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
       if (std::abs(in.visual_lat_offset) > p.lateral_abort_m) {
         out.state = RailState::BLOCKED_LATERAL;
         out.linear_x = 0.0;
+        out.block_reason = "visual_lat";
         return out;
       }
     } else {
       if (std::abs(in.current_y - in.goal_y) > p.lateral_abort_m) {
         out.state = RailState::BLOCKED_LATERAL;
         out.linear_x = 0.0;
+        out.block_reason = "pose_lat";
         return out;
       }
     }
@@ -190,12 +199,14 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
         std::abs(in.visual_yaw_error) > p.yaw_abort_rad) {
       out.state = RailState::BLOCKED_MISALIGNED;
       out.linear_x = 0.0;
+      out.block_reason = "visual_yaw";
       return out;
     }
     if (!visual_trusted && !std::isnan(in.rail_yaw_error) &&
         std::abs(in.rail_yaw_error) > p.yaw_abort_rad) {
       out.state = RailState::BLOCKED_MISALIGNED;
       out.linear_x = 0.0;
+      out.block_reason = "pose_yaw";
       return out;
     }
   }
