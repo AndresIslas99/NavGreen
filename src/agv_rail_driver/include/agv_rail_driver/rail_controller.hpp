@@ -141,20 +141,28 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
       in.visual_confidence > p.visual_min_conf &&
       in.visual_age_s < p.visual_max_age_s;
 
-  // Iter-28 P1 (revised): inside a rail aisle the 51 mm tube physically
-  // bounds lateral drift to < 5 mm, so BOTH visual and pose lateral
-  // abort checks are disabled there. iter-27 c1_drive_in aborted on
-  // visual lat_offset (rail_detector noisy at gap boundary); iter-28
-  // c3_drive_in aborted on pose lat_offset (marker_correction RELOC
-  // poisoned ekf_global y by 2+ m when robot faced west toward REAR
-  // tags and saw phantom detections at grazing incidence). In both
-  // cases the ROBOT WAS FINE — the sensor signals were broken.
+  // Iter-29 P3: determine "rail operation" from GOAL geometry, not
+  // from zone_detector feedback. iter-29 c3_drive_in aborted because
+  // marker_correction RELOC poisoned ekf_global y to 1.70 (away from
+  // the 2.2 aisle centerline); zone_detector then labelled the zone
+  // as "unknown" (between aisles, not rail_aisle_*); in.in_rail_zone
+  // came through as false; the lateral-abort gate fell through to the
+  // pose check and fired again. The fact is we HAVE a rail goal whose
+  // y matches an aisle centerline — that is authoritative, independent
+  // of whether zone_detector trusts the current EKF pose.
   //
-  // Trust the mechanical constraint plus the yaw-abort check (a yawed
-  // robot IS a real wedge risk independent of sensor noise). Outside
-  // rail zone (approach strips, gap), both lateral checks stay active
-  // because alignment before entry is what the approach flow is for.
-  if (!in.in_rail_zone) {
+  // Any goal_y within 0.35 m of {-4.4, -2.2, 0, +2.2, +4.4} counts as
+  // a "rail operation"; inside that, lateral checks are suppressed and
+  // the 51 mm tube is the sole lateral safeguard.
+  constexpr double AISLE_CENTERS[5] = {-4.4, -2.2, 0.0, 2.2, 4.4};
+  constexpr double AISLE_HALF_WIDTH = 0.35;
+  bool goal_in_aisle = false;
+  for (double c : AISLE_CENTERS) {
+    if (std::abs(in.goal_y - c) <= AISLE_HALF_WIDTH) { goal_in_aisle = true; break; }
+  }
+  const bool rail_operation = in.in_rail_zone || goal_in_aisle;
+
+  if (!rail_operation) {
     // Approach / gap: prefer visual when trusted, otherwise pose.
     if (visual_trusted) {
       if (std::abs(in.visual_lat_offset) > p.lateral_abort_m) {
@@ -174,8 +182,10 @@ inline RailControllerOutput compute(const RailControllerInputs &in,
   // Yaw abort inside a rail aisle (crop-row wedge risk is real even
   // when lateral is mechanically bounded). Prefer visual yaw when
   // fresh; fall back to zone_detector's rail_yaw_error. Off outside
-  // rails since the approach flow owns alignment.
-  if (in.in_rail_zone) {
+  // rails since the approach flow owns alignment. Uses the goal-based
+  // rail_operation flag so it stays active even if zone_detector
+  // loses track (same reason as the lateral gate above).
+  if (rail_operation) {
     if (visual_trusted && !std::isnan(in.visual_yaw_error) &&
         std::abs(in.visual_yaw_error) > p.yaw_abort_rad) {
       out.state = RailState::BLOCKED_MISALIGNED;
