@@ -1,0 +1,155 @@
+# Waypoints — TAGGED v4 (Iter-25: realistic rail-entry/exit contract)
+#
+# Every rail interaction now follows the full physical cycle:
+#
+#   1. nav2_prealign   — teleport to a corridor/gap pose, then Nav2 to a
+#                        pose directly in front of the rail's entry tag
+#                        (same aisle Y, ~1 m west/east of the tag).
+#   2. rail_approach   — /agv/rail_approach/execute on the entry tag.
+#                        Node runs Nav2 coarse_approach unconditionally
+#                        (R3: skip branch removed iter-25), then fine-
+#                        servos to 10 cm (target 2 cm after R3 settles).
+#   3. rail_drive_in   — rail_driver goal deep into the rail section.
+#                        No yaw change (wz ≡ 0 hard-locked).
+#   4. rail_reverse    — rail_driver goal back into the gap. rail_driver
+#                        computes body-frame error → negative linear.x →
+#                        true reverse. Robot exits the same way it came.
+#   5. post_exit_check — a short Nav2 hop to confirm the robot is fully
+#                        clear of the approach strip and oriented for the
+#                        next cycle.
+#
+# No waypoint's `start` ever lands inside a `rail_aisle_*` zone (R1: the
+# harness validator rejects such YAMLs before the first /reset POST).
+#
+# Geometry recap (operator-confirmed 2026-04-18):
+#   REAR rail section:   x ∈ [-16.5, 3.5]  (tag at x=4.0, outward=+1)
+#   GAP (rail-free):     x ∈ ( 3.5,  7.5)
+#   FRONT rail section:  x ∈ [ 7.5, 27.5]  (tag at x=7.0, outward=-1)
+#   Aisles y ∈ {-4.4, -2.2, 0, +2.2, +4.4}, half-width 0.35 m
+#
+# Floor tag IDs (USD 2026-04-18):
+#   REAR   (x=4.0):  33 (y=-4.4)  34 (y=-2.2)  35 (y=0)  36 (y=+2.2)  37 (y=+4.4)
+#   FRONT  (x=7.0):   2 (y=-4.4)   3 (y=-2.2)   4 (y=0)  12 (y=+2.2)  13 (y=+4.4)
+#
+# Expected-modes notation: leading mode is the FSM mode observed at
+# dispatch; trailing modes are transitions during the run. The harness
+# does NOT gate on the full sequence — it is documentation.
+
+waypoints:
+  # ─── Cycle 1: REAR entry, centre aisle (y=0) ──────────────────────────
+  - id: c1_prealign
+    dispatch: nav2
+    start: {x: 6.5, y: 0.0, yaw: 3.14}    # gap, facing REAR (west)
+    goal:  {x: 5.5, y: 0.0, yaw: 3.14}    # 1.5 m west of rear tag
+    expected_modes: [corridor_nav]
+
+  - id: c1_approach
+    dispatch: rail_approach
+    # no `start` — continuous from c1_prealign end pose
+    tag_id: 35                             # REAR aisle 0 (y=0)
+    offset_x: 0.30
+    goal:  {x: 5.0, y: 0.0, yaw: 3.14}    # documentary — fine-servo sets it
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c1_drive_in
+    dispatch: rail_drive
+    goal:  {x: 1.0, y: 0.0}               # deep into REAR rail
+    expected_modes: [rail_drive]
+
+  - id: c1_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: 0.0}               # back into gap (through tag x=4)
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  - id: c1_post
+    dispatch: nav2
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}     # flip to face FRONT for cycle 2
+    expected_modes: [corridor_nav]
+
+  # ─── Cycle 2: FRONT entry, centre aisle (y=0) ─────────────────────────
+  - id: c2_prealign
+    dispatch: nav2
+    # start is c1_post's end; harness teleport is a no-op in practice
+    start: {x: 6.0, y: 0.0, yaw: 0.0}     # safe: gap, facing FRONT (east)
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}     # 1.5 m west of front tag — facing east
+    expected_modes: [corridor_nav]
+
+  - id: c2_approach
+    dispatch: rail_approach
+    tag_id: 4                              # FRONT aisle 0 (y=0)
+    offset_x: 0.30
+    goal:  {x: 6.7, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c2_drive_in
+    dispatch: rail_drive
+    goal:  {x: 10.0, y: 0.0}              # deep into FRONT rail
+    expected_modes: [rail_drive]
+
+  - id: c2_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: 0.0}               # back into gap (through tag x=7)
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  - id: c2_post
+    dispatch: nav2
+    goal:  {x: 5.5, y: 0.8, yaw: 1.57}    # nudge toward aisle +2.2 prealign
+    expected_modes: [corridor_nav]
+
+  # ─── Cycle 3: REAR entry, aisle y=+2.2 ───────────────────────────────
+  - id: c3_prealign
+    dispatch: nav2
+    start: {x: 6.5, y: 2.2, yaw: 3.14}    # gap, aisle +2.2, facing rear
+    goal:  {x: 5.5, y: 2.2, yaw: 3.14}
+    expected_modes: [corridor_nav]
+
+  - id: c3_approach
+    dispatch: rail_approach
+    tag_id: 36                             # REAR aisle +2.2
+    offset_x: 0.30
+    goal:  {x: 5.0, y: 2.2, yaw: 3.14}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c3_drive_in
+    dispatch: rail_drive
+    goal:  {x: 1.0, y: 2.2}
+    expected_modes: [rail_drive]
+
+  - id: c3_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: 2.2}
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  - id: c3_post
+    dispatch: nav2
+    goal:  {x: 6.0, y: 2.2, yaw: 0.0}
+    expected_modes: [corridor_nav]
+
+  # ─── Cycle 4: FRONT entry, aisle y=−2.2 ──────────────────────────────
+  - id: c4_prealign
+    dispatch: nav2
+    start: {x: 5.5, y: -2.2, yaw: 0.0}    # gap, aisle -2.2, facing front
+    goal:  {x: 5.8, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav]
+
+  - id: c4_approach
+    dispatch: rail_approach
+    tag_id: 3                              # FRONT aisle -2.2
+    offset_x: 0.30
+    goal:  {x: 6.7, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c4_drive_in
+    dispatch: rail_drive
+    goal:  {x: 10.0, y: -2.2}
+    expected_modes: [rail_drive]
+
+  - id: c4_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: -2.2}
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  - id: c4_post
+    dispatch: nav2
+    goal:  {x: 5.5, y: -1.5, yaw: 1.57}   # back toward centre aisle
+    expected_modes: [corridor_nav]
