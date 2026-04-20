@@ -1,4 +1,4 @@
-rail_driver:
+/**:
   ros__parameters:
     odom_topic: /agv/odometry/global
     goal_topic: /agv/rail_driver/goal
