@@ -1386,16 +1386,30 @@ def _run_one_waypoint(
         except (urllib.error.URLError, urllib.error.HTTPError, OSError):
             # sim_api unreachable — probably restarting; fall through to wait.
             pass
-        # Prefer the sim's own convergence flags when available. Fall back
-        # to the legacy GT-based wait_for_reset if the response is partial.
+        # Iter-22b: the sim-side enhanced /reset flags are advisory —
+        # iter-22 first run showed the response claiming pose_converged
+        # while GT stayed at the pre-reset pose. Always verify GT
+        # matches the requested start within tolerance before accepting
+        # the reset. If the sim's own flags are all true AND GT
+        # matches, we skip the longer wait_for_reset poll; otherwise we
+        # fall through to the legacy poll.
         if (
             isinstance(reset_response, dict)
             and reset_response.get("pose_converged") is True
             and reset_response.get("velocities_zeroed") is True
             and reset_response.get("encoders_reset") is True
         ):
-            reset_ok = True
-            break
+            # Spin a couple ticks so the latest /agv/sim/ground_truth/pose
+            # callback populates harness.current_gt_xy.
+            for _ in range(5):
+                rclpy.spin_once(harness, timeout_sec=0.05)
+            gt = harness.current_gt_xy()
+            if gt is not None:
+                dx = gt[0] - float(start["x"])
+                dy = gt[1] - float(start["y"])
+                if (dx * dx + dy * dy) ** 0.5 <= 0.15:
+                    reset_ok = True
+                    break
         if harness.wait_for_reset(
             start_x=float(start["x"]),
             start_y=float(start["y"]),
