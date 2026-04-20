@@ -47,6 +47,39 @@ export interface AppState {
   pendingRailApproach: { hardware_id: number; defined_id: number } | null;
   // Latest rail_approach state for waypoint action gating
   railApproachState: string;
+  // Iter-37 Phase 2 state exposure (from HIL iter-33/34 19/20 stack).
+  // These mirror the /agv/{mode,zone,rail_driver}/state topics so the
+  // dashboard can render the arbiter FSM, the zone classifier, and the
+  // rail_driver status without subscribing to every topic from the SPA.
+  // All three are JSON strings published at 10–20 Hz by Phase 2 nodes
+  // (mode_arbiter_node, zone_detector_node, rail_driver_node).
+  modeArbiterState: {
+    mode: string;            // corridor_nav | rail_approach_pend | ... | blocked_handoff
+    source: string;          // NAV | APPROACH | RAIL | NONE
+    zone: string;            // echoed zone label the arbiter is seeing
+    operator_mode: string;   // nav | teleop | idle
+    transitions: number;     // monotonic count since arbiter start
+    updated: number;         // wall-clock seconds of last message
+  };
+  zoneDetectorState: {
+    zone: string;            // rail_aisle_* | rail_approach_* | gap | corridor_* | unknown
+    section: string;         // REAR | GAP | FRONT | OUTSIDE
+    aisle_y_center: number | null;
+    rail_offset_lat: number | null;
+    rail_yaw_error: number | null;
+    approach_tag_id: number; // -1 when not in an approach strip
+    confidence: number;      // 0..1
+    source: string;          // pose (phase 1)
+    updated: number;
+  };
+  railDriverState: {
+    state: string;           // idle | driving | reached | blocked_wait | blocked_misaligned | blocked_lateral | canceled
+    linear_x: number;        // last commanded body-x velocity (m/s)
+    remaining_m: number;     // body-frame distance to goal
+    in_rail_zone: boolean;
+    collision_stop: boolean;
+    updated: number;
+  };
   // Liveness + state of the collision_monitor safety chain. updated is the
   // wall-clock seconds when the last state_topic message was received; if it
   // ages > 2s the chain is considered STALE and nav goals are rejected.

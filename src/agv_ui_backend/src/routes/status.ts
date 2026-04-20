@@ -38,6 +38,22 @@ export function register(app: Express, deps: AppDeps): void {
   app.get('/api/health', (_req, res) => res.json(state.health));
   app.get('/api/mode', (_req, res) => res.json({ mode: state.currentMode }));
 
+  // ── Iter-37 Phase 2 state endpoints — HIL iter-33/34 stack (19/20) ──
+  // Read-only mirrors of /agv/{mode,zone,rail_driver}/state + rail_approach.
+  // The frontend polls these or receives the same snapshot via the 5 Hz
+  // WebSocket broadcast under `type='rail_state'`.
+  app.get('/api/rail/state', (_req, res) => {
+    res.json({
+      mode_arbiter: state.modeArbiterState,
+      zone: state.zoneDetectorState,
+      rail_driver: state.railDriverState,
+      rail_approach: { state: state.railApproachState },
+    });
+  });
+  app.get('/api/zone/state', (_req, res) => res.json(state.zoneDetectorState));
+  app.get('/api/mode/arbiter', (_req, res) => res.json(state.modeArbiterState));
+  app.get('/api/rail_driver/state', (_req, res) => res.json(state.railDriverState));
+
   app.put('/api/mode', async (req, res) => {
     const mode = req.body?.mode;
     if (!['teleop', 'mapping', 'nav'].includes(mode)) {
