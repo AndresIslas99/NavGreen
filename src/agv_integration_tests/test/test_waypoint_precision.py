@@ -1360,6 +1360,15 @@ def _publish_rail_goal(harness: "Harness", goal_x: float, goal_y: float,
     "NAV_TIMEOUT" otherwise.
     """
     pub = harness.ensure_rail_goal_publisher()
+    # Iter-26d Bug B fix (harness side): clear the last_rail_driver_state
+    # attribute BEFORE publishing the new goal so that _wait_for_state_value
+    # cannot latch onto a stale "reached" / "blocked_*" from the preceding
+    # rail_drive waypoint. The rail_driver keeps publishing its current
+    # state every tick (20 Hz) regardless of new goals — so even with a
+    # depth-1 subscription, the buffer can hold a stale state message when
+    # the next waypoint starts polling. Clearing here is the only
+    # race-free way to force a wait for a FRESH state update.
+    harness.last_rail_driver_state = None
     goal = PoseStamped()
     goal.header.stamp = harness.get_clock().now().to_msg()
     goal.header.frame_id = "map"
@@ -1471,7 +1480,14 @@ def _run_one_waypoint(
     report_dir: Optional[Path] = None,
 ) -> WaypointResult:
     wp_id = wp["id"]
-    start = wp["start"]
+    # Iter-25: waypoints in a rail-entry/exit cycle omit `start` to signal
+    # "no teleport — continue from the previous waypoint's end pose". This
+    # is the only way to honour R1 (don't teleport into rails) while still
+    # exercising rail_drive_in waypoints whose end pose sits deep inside a
+    # rail aisle. When `start` is missing we skip /reset, cancel_goal, and
+    # the EKF sync; the robot keeps its current pose and the dispatch fires
+    # directly.
+    start = wp.get("start")
     goal = wp["goal"]
     expected_modes = wp.get("expected_modes")  # may be None for legacy yaml
 
@@ -1485,6 +1501,10 @@ def _run_one_waypoint(
     # 0. Cancel any active Nav2 action from the previous waypoint before
     #    teleporting — otherwise Nav2 keeps driving the robot toward the old
     #    goal during the post-reset settle window (round 18 wp02 symptom).
+    #    For continuous waypoints (no start) we also cancel, because the
+    #    previous wp may have left a Nav2 action in-flight that clashes
+    #    with this wp's dispatch (e.g. nav2 goal still pursuing the old
+    #    goal when we want to publish a rail_drive_goal).
     _cancel_all_nav_goals(harness)
 
     # Iter-22 workflow: reset → validate → motor_prepare → cancel_goal →
@@ -1497,10 +1517,12 @@ def _run_one_waypoint(
     # to freeze the sim clock.
 
     # 1. Teleport. Response carries 5 readiness flags.
+    # Iter-25 continuous-flow: skip this entire block when start is None
+    # (waypoint is a continuation of a rail cycle — robot stays where it is).
     t_reset_issue = time.time()
-    reset_ok = False
+    reset_ok = start is None  # no teleport needed → implicitly "reset OK"
     reset_response: Optional[dict] = None
-    for attempt in range(2):
+    for attempt in range(2 if start is not None else 0):
         try:
             reset_response = _post_sim_api(
                 "/reset",
@@ -1565,63 +1587,72 @@ def _run_one_waypoint(
             dispatch_used=_dispatch_for(wp),
         )
 
-    # 1b. Atomic motor prepare: single REST call replaces the old
-    #     /e_stop + /motor/enable two-step (which had a 50–100 ms window
-    #     where cmd_vel_rail could leak through because motors were
-    #     armed before e_stop was cleared).
-    prepare_resp = _motor_prepare(verbose=False)
-    if not prepare_resp.get("armed", False):
-        print(f"[warn {wp_id}] /motor/prepare did not confirm armed: "
-              f"{prepare_resp}", flush=True)
-
-    # 1c. Iter-22 brain 1.1: synchronously cancel any stale rail_driver
-    #     goal BEFORE physics resumes. This replaces the iter-7/8/9
-    #     "publish zero-distance PoseStamped" hack which had a race
-    #     with the arbiter's auto-EXIT_PUSH. With the new service the
-    #     cancel is atomic: have_goal_ clears in the service callback,
-    #     rail_driver emits one tick of state="canceled", then falls to
-    #     "idle". Safe to call even when there is no pending goal.
-    _rail_driver_cancel_goal(harness, timeout_s=2.0)
-
-    # 2. Settle — still give ekf_local a beat to ingest the first
-    #    post-teleport /agv/joint_states (v≈0, per encoders_reset).
-    time.sleep(POST_RESET_SETTLE_S)
-    rclpy.spin_once(harness, timeout_sec=0.1)
-
-    # 3. Pre-goal sync: force brain EKF to reflect GT pose so Nav2 plans
-    #    from reality, not from the stale cold-start pose. Falls back to
-    #    /agv/localization/reinitialize if SetPose is unavailable.
+    # Iter-25 continuous-flow: if this waypoint has no `start`, skip the
+    # motor/cancel/sync block. The robot is already where it needs to be
+    # (end of the previous rail_drive, typically deep inside a rail) and
+    # a /reset or an EKF re-sync would just trash that state.
     sync_ok = False
     sync_residual = None
-    gt_after_reset = harness.current_gt_xy()
-    if gt_after_reset is not None:
-        sync_ok = _sync_brain_to_gt(
-            harness, gt_after_reset[0], gt_after_reset[1], gt_after_reset[2],
-            verbose=True,
-        )
-        if sync_ok:
-            time.sleep(SYNC_SETTLE_S)
-            rclpy.spin_once(harness, timeout_sec=0.1)
-            brain_after_sync = harness.current_brain_xy()
-            if brain_after_sync is not None:
-                sync_residual = math.hypot(
-                    gt_after_reset[0] - brain_after_sync[0],
-                    gt_after_reset[1] - brain_after_sync[1],
-                )
-                if sync_residual > SYNC_TOLERANCE_M:
-                    # Sync was consumed by wheel_odom or ignored — fallback.
+    if start is not None:
+        # 1b. Atomic motor prepare: single REST call replaces the old
+        #     /e_stop + /motor/enable two-step (which had a 50–100 ms window
+        #     where cmd_vel_rail could leak through because motors were
+        #     armed before e_stop was cleared).
+        prepare_resp = _motor_prepare(verbose=False)
+        if not prepare_resp.get("armed", False):
+            print(f"[warn {wp_id}] /motor/prepare did not confirm armed: "
+                  f"{prepare_resp}", flush=True)
+
+        # 1c. Iter-22 brain 1.1: synchronously cancel any stale rail_driver
+        #     goal BEFORE physics resumes. This replaces the iter-7/8/9
+        #     "publish zero-distance PoseStamped" hack which had a race
+        #     with the arbiter's auto-EXIT_PUSH. With the new service the
+        #     cancel is atomic: have_goal_ clears in the service callback,
+        #     rail_driver emits one tick of state="canceled", then falls to
+        #     "idle". Safe to call even when there is no pending goal.
+        _rail_driver_cancel_goal(harness, timeout_s=2.0)
+
+        # 2. Settle — still give ekf_local a beat to ingest the first
+        #    post-teleport /agv/joint_states (v≈0, per encoders_reset).
+        time.sleep(POST_RESET_SETTLE_S)
+        rclpy.spin_once(harness, timeout_sec=0.1)
+
+        # 3. Pre-goal sync: force brain EKF to reflect GT pose so Nav2 plans
+        #    from reality, not from the stale cold-start pose. Falls back to
+        #    /agv/localization/reinitialize if SetPose is unavailable.
+        gt_after_reset = harness.current_gt_xy()
+        if gt_after_reset is not None:
+            sync_ok = _sync_brain_to_gt(
+                harness, gt_after_reset[0], gt_after_reset[1],
+                gt_after_reset[2], verbose=True,
+            )
+            if sync_ok:
+                time.sleep(SYNC_SETTLE_S)
+                rclpy.spin_once(harness, timeout_sec=0.1)
+                brain_after_sync = harness.current_brain_xy()
+                if brain_after_sync is not None:
+                    sync_residual = math.hypot(
+                        gt_after_reset[0] - brain_after_sync[0],
+                        gt_after_reset[1] - brain_after_sync[1],
+                    )
+                    if sync_residual > SYNC_TOLERANCE_M:
+                        # Sync was consumed by wheel_odom or ignored — fallback.
+                        _reinit_localization(harness)
+                        harness.spin_until(lambda: False, 0.5)
+
+        # 4. Residual check (legacy fallback, when sync unavailable).
+        if not sync_ok:
+            gt = harness.current_gt_xy()
+            brain = harness.current_brain_xy()
+            if gt is not None and brain is not None:
+                residual = math.hypot(gt[0] - brain[0], gt[1] - brain[1])
+                if residual > REINIT_THRESHOLD_M:
                     _reinit_localization(harness)
                     harness.spin_until(lambda: False, 0.5)
-
-    # 4. Residual check (legacy fallback, when sync unavailable).
-    if not sync_ok:
-        gt = harness.current_gt_xy()
-        brain = harness.current_brain_xy()
-        if gt is not None and brain is not None:
-            residual = math.hypot(gt[0] - brain[0], gt[1] - brain[1])
-            if residual > REINIT_THRESHOLD_M:
-                _reinit_localization(harness)
-                harness.spin_until(lambda: False, 0.5)
+    else:
+        # Continuous wp: tiny settle to make sure the callback ring is
+        # drained before the dispatch fires.
+        rclpy.spin_once(harness, timeout_sec=0.1)
 
     # Round 44 Q1: snapshot the markers the robot sees right BEFORE dispatch.
     # This is "at_start" — after teleport + sync, with the camera looking at
