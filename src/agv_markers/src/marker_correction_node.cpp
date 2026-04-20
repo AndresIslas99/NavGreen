@@ -469,7 +469,18 @@ private:
     // and a mistimed RELOC causes the downstream rail_driver to abort on
     // a poisoned EKF pose (c3/c5 iter-28..30). Fall through to the smooth
     // publication instead so the EKF still tracks the soft correction.
-    const bool reloc_allowed = !in_rail_aisle_;
+    //
+    // Iter-33 broadening: iter-33 c5_drive_in showed the zone-based gate
+    // missing its own trigger — marker_correction RELOCed the EKF off the
+    // aisle (y=-2.72 vs aisle -2.2), which made zone_detector label the
+    // zone "unknown", which cleared `in_rail_aisle_`, which allowed the
+    // NEXT RELOC, which poisoned the EKF further. Break the chicken-and-
+    // egg by also gating on the raw EKF x-position: if the ekf says we're
+    // inside a rail *section* (REAR x≤3.5 OR FRONT x≥7.5), suppress RELOC
+    // regardless of y-alignment. Geometry bound from the sim USD.
+    const bool ekf_in_rail_section = has_ekf_pose_ &&
+        (current_ekf_x_ <= 3.5 || current_ekf_x_ >= 7.5);
+    const bool reloc_allowed = !in_rail_aisle_ && !ekf_in_rail_section;
     if (drift >= reloc_threshold_ && best_decision_margin >= min_confidence_ &&
         reloc_allowed) {
       if (set_pose_client_->service_is_ready()) {
