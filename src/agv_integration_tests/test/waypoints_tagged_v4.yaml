@@ -6,9 +6,14 @@
 #                        pose directly in front of the rail's entry tag
 #                        (same aisle Y, ~1 m west/east of the tag).
 #   2. rail_approach   — /agv/rail_approach/execute on the entry tag.
-#                        Node runs Nav2 coarse_approach unconditionally
-#                        (R3: skip branch removed iter-25), then fine-
-#                        servos to 10 cm (target 2 cm after R3 settles).
+#                        Robot is already aligned (by nav2_prealign) so
+#                        the node's coarse_skip_radius branch activates
+#                        and it jumps straight to fine-servoing on the
+#                        entry tag. The WAYPOINT-level prealign replaces
+#                        the intra-node coarse pass — both produce the
+#                        same alignment but the harness version
+#                        reliably handles the initial yaw (forward-only
+#                        MPPI cannot spin 180° to a standoff pose).
 #   3. rail_drive_in   — rail_driver goal deep into the rail section.
 #                        No yaw change (wz ≡ 0 hard-locked).
 #   4. rail_reverse    — rail_driver goal back into the gap. rail_driver
@@ -53,12 +58,12 @@ waypoints:
 
   - id: c1_drive_in
     dispatch: rail_drive
-    goal:  {x: 1.0, y: 0.0}               # deep into REAR rail
+    goal:  {x: 1.0, y: 0.0, yaw: 0.0}               # deep into REAR rail
     expected_modes: [rail_drive]
 
   - id: c1_reverse_exit
     dispatch: rail_drive
-    goal:  {x: 5.5, y: 0.0}               # back into gap (through tag x=4)
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}               # back into gap (through tag x=4)
     expected_modes: [rail_drive, rail_exit, corridor_nav]
 
   - id: c1_post
@@ -78,17 +83,21 @@ waypoints:
     dispatch: rail_approach
     tag_id: 4                              # FRONT aisle 0 (y=0)
     offset_x: 0.30
-    goal:  {x: 6.7, y: 0.0, yaw: 0.0}
+    # Iter-26 Bug C: canonical post-settle pose formula.
+    # robot.x = tag.x - cos(tag_yaw) * (cam_base_offset + offset_x)
+    # For FRONT tag (yaw=0), cam_offset=0.70, offset_x=0.30:
+    # robot.x = 7.0 - 1.0 * 1.0 = 6.0
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c2_drive_in
     dispatch: rail_drive
-    goal:  {x: 10.0, y: 0.0}              # deep into FRONT rail
+    goal:  {x: 10.0, y: 0.0, yaw: 0.0}              # deep into FRONT rail
     expected_modes: [rail_drive]
 
   - id: c2_reverse_exit
     dispatch: rail_drive
-    goal:  {x: 5.5, y: 0.0}               # back into gap (through tag x=7)
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}               # back into gap (through tag x=7)
     expected_modes: [rail_drive, rail_exit, corridor_nav]
 
   - id: c2_post
@@ -112,12 +121,12 @@ waypoints:
 
   - id: c3_drive_in
     dispatch: rail_drive
-    goal:  {x: 1.0, y: 2.2}
+    goal:  {x: 1.0, y: 2.2, yaw: 0.0}
     expected_modes: [rail_drive]
 
   - id: c3_reverse_exit
     dispatch: rail_drive
-    goal:  {x: 5.5, y: 2.2}
+    goal:  {x: 5.5, y: 2.2, yaw: 0.0}
     expected_modes: [rail_drive, rail_exit, corridor_nav]
 
   - id: c3_post
@@ -136,17 +145,18 @@ waypoints:
     dispatch: rail_approach
     tag_id: 3                              # FRONT aisle -2.2
     offset_x: 0.30
-    goal:  {x: 6.7, y: -2.2, yaw: 0.0}
+    # Iter-26 Bug C: same formula as c2_approach.
+    goal:  {x: 6.0, y: -2.2, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c4_drive_in
     dispatch: rail_drive
-    goal:  {x: 10.0, y: -2.2}
+    goal:  {x: 10.0, y: -2.2, yaw: 0.0}
     expected_modes: [rail_drive]
 
   - id: c4_reverse_exit
     dispatch: rail_drive
-    goal:  {x: 5.5, y: -2.2}
+    goal:  {x: 5.5, y: -2.2, yaw: 0.0}
     expected_modes: [rail_drive, rail_exit, corridor_nav]
 
   - id: c4_post
