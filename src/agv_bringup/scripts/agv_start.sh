@@ -197,6 +197,27 @@ fi
 export CYCLONEDDS_URI="file://${CYCLONE_RUNTIME_XML}"
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
+# Iter-37: CAN pre-flight for modes that bring up the real ODrive. If
+# can0 is missing or down, odrive_can_node fails silently (error spam,
+# no motor commands) — surface the root cause here instead. Only fires
+# in real / mapping modes; hil / hil_full skip (no CAN needed).
+if [ "$MODE" = "real" ] || [ "$MODE" = "mapping" ]; then
+    if ! ip link show can0 > /dev/null 2>&1; then
+        echo "ERROR: CAN interface 'can0' not found. Check:"
+        echo "  - SocketCAN kernel module loaded (lsmod | grep can)"
+        echo "  - Pinmux applied (docs/hardware_setup.md)"
+        echo "  - Transceiver powered"
+        exit 1
+    fi
+    CAN_STATE=$(ip -details link show can0 | grep -oE 'state [A-Z]+' | awk '{print $2}')
+    if [ "$CAN_STATE" != "UP" ] && [ "$CAN_STATE" != "UNKNOWN" ]; then
+        echo "ERROR: can0 state=$CAN_STATE (expected UP). Bring up with:"
+        echo "  sudo ip link set can0 up type can bitrate 500000"
+        exit 1
+    fi
+    echo "  can0: $CAN_STATE"
+fi
+
 if [ "$MODE" = "mapping" ]; then
     # Mapping commissioning: teleop + SLAM, no Nav2, no pre-existing map needed.
     # Drive at 0.3-0.5 m/s through greenhouse corridors, save map when done.
