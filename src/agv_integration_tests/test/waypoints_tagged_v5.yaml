@@ -1,0 +1,156 @@
+# Waypoints — TAGGED v5 (Iter-27: 4-step rail cycles, shallow REAR, no 90° posts)
+#
+# iter-26f results drove three changes from v4:
+#
+# 1. REAR drive_in goals shortened from x=1.0 to x=2.5 (1.5 m into rail
+#    instead of 4 m). iter-26f c1/c3_drive_in aborted with BLOCKED_LATERAL
+#    at x≈3.4 — the rail_detector's BEV lost lock on the rail pair at
+#    deep REAR positions. The 2.5 m goal stays in the well-instrumented
+#    shallow half of the rail and matches what a real operator pick-task
+#    would ever need.
+#
+# 2. *_post nav2 waypoints removed. c2_post and c4_post both requested a
+#    90° in-place turn (yaw 0 → 1.57) that forward-only MPPI can't
+#    execute cleanly. Every cycle now ends at `*_reverse_exit` and the
+#    harness teleports to the next cycle's prealign start — no 90°
+#    nav2 hop between cycles.
+#
+# 3. Five cycles now instead of four, to keep the waypoint count at 20
+#    (4 cycles × 4 wp + 4 extra = was 20). c5 adds REAR y=-2.2 for
+#    symmetry coverage.
+#
+# Every rail interaction still follows the physical cycle:
+#   prealign  (nav2)         → teleport + nav2 to gap pose facing entry tag
+#   approach  (rail_approach)→ fine-servo on entry tag
+#   drive_in  (rail_drive)   → straight-line traversal into rail (wz=0)
+#   reverse_exit (rail_drive)→ reverse back to gap through entry tag
+#
+# R1 still holds: every `start` pose is in gap/corridor, never in a
+# rail_aisle_* zone.
+#
+# Floor tag IDs (USD 2026-04-18):
+#   REAR   (x=4.0):  33 (y=-4.4)  34 (y=-2.2)  35 (y=0)  36 (y=+2.2)  37 (y=+4.4)
+#   FRONT  (x=7.0):   2 (y=-4.4)   3 (y=-2.2)   4 (y=0)  12 (y=+2.2)  13 (y=+4.4)
+
+waypoints:
+  # ─── Cycle 1: REAR entry, centre aisle (y=0) ──────────────────────────
+  - id: c1_prealign
+    dispatch: nav2
+    start: {x: 6.5, y: 0.0, yaw: 3.14}    # gap, facing REAR (west)
+    goal:  {x: 5.5, y: 0.0, yaw: 3.14}
+    expected_modes: [corridor_nav]
+
+  - id: c1_approach
+    dispatch: rail_approach
+    tag_id: 35                             # REAR aisle 0 (y=0)
+    offset_x: 0.30
+    # Canonical: robot.x = tag.x - cos(π)*(0.70+0.30) = 4 + 1 = 5.0
+    goal:  {x: 5.0, y: 0.0, yaw: 3.14}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c1_drive_in
+    dispatch: rail_drive
+    goal:  {x: 2.5, y: 0.0, yaw: 3.14}    # 1.5 m into REAR, stays in shallow half
+    expected_modes: [rail_drive]
+
+  - id: c1_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: 0.0, yaw: 3.14}    # reverse back into gap
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  # ─── Cycle 2: FRONT entry, centre aisle (y=0) ─────────────────────────
+  - id: c2_prealign
+    dispatch: nav2
+    start: {x: 5.5, y: 0.0, yaw: 0.0}     # gap, facing FRONT (east)
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}     # no-op (teleport already there)
+    expected_modes: [corridor_nav]
+
+  - id: c2_approach
+    dispatch: rail_approach
+    tag_id: 4                              # FRONT aisle 0 (y=0)
+    offset_x: 0.30
+    # Canonical: robot.x = tag.x - cos(0)*(0.70+0.30) = 7 - 1 = 6.0
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c2_drive_in
+    dispatch: rail_drive
+    goal:  {x: 9.0, y: 0.0, yaw: 0.0}     # 2 m into FRONT, shallow
+    expected_modes: [rail_drive]
+
+  - id: c2_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: 0.0, yaw: 0.0}     # reverse back into gap
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  # ─── Cycle 3: REAR entry, aisle y=+2.2 ───────────────────────────────
+  - id: c3_prealign
+    dispatch: nav2
+    start: {x: 6.5, y: 2.2, yaw: 3.14}    # teleport to new aisle, face REAR
+    goal:  {x: 5.5, y: 2.2, yaw: 3.14}
+    expected_modes: [corridor_nav]
+
+  - id: c3_approach
+    dispatch: rail_approach
+    tag_id: 36                             # REAR aisle +2.2
+    offset_x: 0.30
+    goal:  {x: 5.0, y: 2.2, yaw: 3.14}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c3_drive_in
+    dispatch: rail_drive
+    goal:  {x: 2.5, y: 2.2, yaw: 3.14}
+    expected_modes: [rail_drive]
+
+  - id: c3_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: 2.2, yaw: 3.14}
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  # ─── Cycle 4: FRONT entry, aisle y=−2.2 ──────────────────────────────
+  - id: c4_prealign
+    dispatch: nav2
+    start: {x: 5.5, y: -2.2, yaw: 0.0}    # teleport to new aisle
+    goal:  {x: 5.5, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav]
+
+  - id: c4_approach
+    dispatch: rail_approach
+    tag_id: 3                              # FRONT aisle -2.2
+    offset_x: 0.30
+    goal:  {x: 6.0, y: -2.2, yaw: 0.0}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c4_drive_in
+    dispatch: rail_drive
+    goal:  {x: 9.0, y: -2.2, yaw: 0.0}
+    expected_modes: [rail_drive]
+
+  - id: c4_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: -2.2, yaw: 0.0}
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
+
+  # ─── Cycle 5: REAR entry, aisle y=-2.2 ───────────────────────────────
+  - id: c5_prealign
+    dispatch: nav2
+    start: {x: 6.5, y: -2.2, yaw: 3.14}
+    goal:  {x: 5.5, y: -2.2, yaw: 3.14}
+    expected_modes: [corridor_nav]
+
+  - id: c5_approach
+    dispatch: rail_approach
+    tag_id: 34                             # REAR aisle -2.2
+    offset_x: 0.30
+    goal:  {x: 5.0, y: -2.2, yaw: 3.14}
+    expected_modes: [corridor_nav, rail_approach_active, rail_drive]
+
+  - id: c5_drive_in
+    dispatch: rail_drive
+    goal:  {x: 2.5, y: -2.2, yaw: 3.14}
+    expected_modes: [rail_drive]
+
+  - id: c5_reverse_exit
+    dispatch: rail_drive
+    goal:  {x: 5.5, y: -2.2, yaw: 3.14}
+    expected_modes: [rail_drive, rail_exit, corridor_nav]
