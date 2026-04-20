@@ -304,6 +304,29 @@ class RailDriverNode : public rclcpp::Node {
 
     const auto out = compute(in, params_);
 
+    // Iter-31 diagnostics: log the FIRST tick on which a BLOCKED_* fires,
+    // with the gate reason, pose, visual snapshot, and pose snapshot. The
+    // next iter-31 run then answers the iter-28..30 mystery of *which*
+    // gate is actually tripping on c3/c5 drive_in. Suppressed once state
+    // sticks so we don't spam the log at 20 Hz while held in BLOCKED.
+    const bool is_blocked = (out.state == RailState::BLOCKED_LATERAL ||
+                             out.state == RailState::BLOCKED_MISALIGNED ||
+                             out.state == RailState::BLOCKED_WAIT);
+    if (is_blocked && out.state != last_state_logged_) {
+      RCLCPP_WARN(get_logger(),
+          "BLOCKED %s (reason=%s) at pose=(%.3f, %.3f, yaw=%.3f) "
+          "goal=(%.3f, %.3f) visual={lat=%.3f yaw=%.3f conf=%.2f age=%.2fs} "
+          "pose_lat_err=%.3f rail_yaw_err=%.3f in_rail_zone=%d",
+          state_to_str(out.state), out.block_reason,
+          in.current_x, in.current_y, in.current_yaw,
+          in.goal_x, in.goal_y,
+          in.visual_lat_offset, in.visual_yaw_error,
+          in.visual_confidence, in.visual_age_s,
+          (in.current_y - in.goal_y), in.rail_yaw_error,
+          in.in_rail_zone ? 1 : 0);
+    }
+    last_state_logged_ = out.state;
+
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = out.linear_x;
     cmd.angular.z = 0.0;  // defensive — the controller already enforces this
@@ -341,6 +364,7 @@ class RailDriverNode : public rclcpp::Node {
   nav_msgs::msg::Odometry::ConstSharedPtr last_odom_;
   bool have_goal_ = false;
   bool cancel_requested_ = false;   // Iter-22: set by cancel_goal service.
+  RailState last_state_logged_ = RailState::IDLE;  // Iter-31: edge-trigger WARN
   double goal_x_ = 0.0;
   double goal_y_ = 0.0;
   double last_rail_yaw_error_ = std::nan("");
