@@ -1360,14 +1360,17 @@ def _publish_rail_goal(harness: "Harness", goal_x: float, goal_y: float,
     "NAV_TIMEOUT" otherwise.
     """
     pub = harness.ensure_rail_goal_publisher()
-    # Iter-26d Bug B fix (harness side): clear the last_rail_driver_state
-    # attribute BEFORE publishing the new goal so that _wait_for_state_value
-    # cannot latch onto a stale "reached" / "blocked_*" from the preceding
-    # rail_drive waypoint. The rail_driver keeps publishing its current
-    # state every tick (20 Hz) regardless of new goals — so even with a
-    # depth-1 subscription, the buffer can hold a stale state message when
-    # the next waypoint starts polling. Clearing here is the only
-    # race-free way to force a wait for a FRESH state update.
+    # Iter-26e (harness side): cancel any stale rail_driver goal first.
+    # For continuous-flow waypoints the outer reset block is skipped, so
+    # a BLOCKED_LATERAL state from the previous rail_drive persists into
+    # this one. Physical fact is the robot is stopped; rail_driver will
+    # keep re-emitting BLOCKED_LATERAL every tick until have_goal_ is
+    # cleared. cancel_goal flushes that state cleanly; the next goal
+    # below starts from IDLE.
+    _rail_driver_cancel_goal(harness, timeout_s=1.0)
+    # Clear the local attribute so _wait_for_state_value cannot latch
+    # onto a stale "reached" / "blocked_*" buffered by the depth-1
+    # subscription before the new "driving" state arrives.
     harness.last_rail_driver_state = None
     goal = PoseStamped()
     goal.header.stamp = harness.get_clock().now().to_msg()
