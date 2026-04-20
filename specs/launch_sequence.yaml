@@ -317,7 +317,7 @@ sequence:
 
   - name: "apriltag_node + marker_correction + rail_approach"
     package: "multiple (agv_markers, agv_rail_approach)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:358-410"
+    source: "src/agv_bringup/launch/agv_full.launch.py:441-530"
     start_time_s: 7.0
     condition: "IfCondition(enable_markers), default=true"
     preconditions:
@@ -325,6 +325,25 @@ sequence:
     provides:
       - "topic /agv/marker_pose"
       - "topic /agv/marker_raw_detected"
+
+  # Iter-37: Phase 2 rail stack ported from agv_hil_full.launch.py.
+  # zone_detector / rail_detector / mode_arbiter / rail_driver share the
+  # t=7s slot since they all consume map→base TF + zone/rail topics that
+  # the rest of the stack provides from earlier slots. Gated on has_map
+  # (not enable_markers) because they are independent of AprilTags.
+  - name: "zone_detector + rail_detector + mode_arbiter + rail_driver"
+    package: "multiple (agv_zone_detector, agv_rail_detector, agv_mode_arbiter, agv_rail_driver)"
+    source: "src/agv_bringup/launch/agv_full.launch.py:500-580"
+    start_time_s: 7.0
+    condition: "IfCondition(has_map)"
+    preconditions:
+      - "ekf_global publishing /agv/odometry/global"
+      - "Nav2 controller_server active (/agv/cmd_vel_nav)"
+    provides:
+      - "topic /agv/zone/state"
+      - "topic /agv/rail_detections + /agv/rail_detector/state"
+      - "topic /agv/rail_driver/state + service /agv/rail_driver/cancel_goal"
+      - "topic /agv/mode/state (the arbiter owns /agv/cmd_vel)"
 
   - name: "auto_init_orchestrator"
     package: "agv_localization_init"
