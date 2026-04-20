@@ -359,22 +359,42 @@ def generate_launch_description():
         ),
 
         # ── Phase 2: mode arbiter — owns /agv/cmd_vel in the 3-mode stack ──
+        # Iter-31: also load its YAML for the same reason (iter-22
+        # min_mode_dwell_s / push_published flags were similarly not
+        # applied at runtime).
         Node(
             package='agv_mode_arbiter',
             executable='mode_arbiter_node',
             name='mode_arbiter',
             namespace=ns,
-            parameters=[{'use_sim_time': True}],
+            parameters=[
+                os.path.join(
+                    get_package_share_directory('agv_mode_arbiter'),
+                    'config', 'mode_arbiter_params.yaml'),
+                {'use_sim_time': True},
+            ],
             output='screen',
         ),
 
         # ── Phase 2: rail driver (longitudinal-only inside aisles) ──
+        # Iter-31: CRITICAL FIX — load rail_driver_params.yaml. Prior
+        # to this line the node was running on header defaults
+        # (yaw_abort_rad=0.26, lateral_abort_m=0.30, speed_max_mps=1.0),
+        # silently ignoring every YAML tuning pass since iter-26d. The
+        # iter-26d raise to yaw_abort=0.35 for margin over rail_approach
+        # settle was never applied; iter-31 c5_drive_in aborted with
+        # rail_yaw_err=0.333 > default 0.26 as a direct consequence.
         Node(
             package='agv_rail_driver',
             executable='rail_driver_node',
             name='rail_driver',
             namespace=ns,
-            parameters=[{'use_sim_time': True}],
+            parameters=[
+                os.path.join(
+                    get_package_share_directory('agv_rail_driver'),
+                    'config', 'rail_driver_params.yaml'),
+                {'use_sim_time': True},
+            ],
             output='log',
         ),
 
