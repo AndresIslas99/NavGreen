@@ -209,7 +209,10 @@ if [ "$MODE" = "real" ] || [ "$MODE" = "mapping" ]; then
         echo "  - Transceiver powered"
         exit 1
     fi
-    CAN_STATE=$(ip -details link show can0 | grep -oE 'state [A-Z]+' | awk '{print $2}')
+    # Note: `ip -details link show can0` matches twice for 'state' — once
+    # for the link operstate (UP) and once for the CAN controller state
+    # ("ERROR-ACTIVE" etc). Keep only the first (link-level) match.
+    CAN_STATE=$(ip -details link show can0 | grep -oE 'state [A-Z]+' | head -1 | awk '{print $2}')
     if [ "$CAN_STATE" != "UP" ] && [ "$CAN_STATE" != "UNKNOWN" ]; then
         echo "ERROR: can0 state=$CAN_STATE (expected UP). Bring up with:"
         echo "  sudo ip link set can0 up type can bitrate 500000"
