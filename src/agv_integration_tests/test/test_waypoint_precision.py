@@ -98,6 +98,76 @@ WAYPOINTS_PATH = Path(_WAYPOINTS_FILENAME) if Path(_WAYPOINTS_FILENAME).is_absol
     else Path(__file__).parent / _WAYPOINTS_FILENAME
 MIN_WAYPOINTS = int(os.environ.get("AGV_MIN_WAYPOINTS", "20"))
 
+# ---------------------------------------------------------------------------
+# Iter-25 R1: waypoint YAML validator (rail teleport rejection).
+#
+# A real AGV enters a rail by driving through its entry tag with rail_approach
+# alignment; it cannot be placed arbitrarily inside a rail aisle. The HIL
+# harness uses sim_api /reset to teleport the robot between waypoints, but
+# that teleport must NOT land inside a rail_aisle_* zone — those starts are
+# physically unreachable in production and mask legitimate approach/drive
+# failures. Mirrors the geometry in
+# src/agv_zone_detector/include/agv_zone_detector/zone_classifier.hpp
+# (operator-confirmed 2026-04-18).
+# ---------------------------------------------------------------------------
+
+_REAR_X_START, _REAR_X_END = -16.5, 3.5
+_FRONT_X_START, _FRONT_X_END = 7.5, 27.5
+_AISLE_CENTERS = (-4.4, -2.2, 0.0, 2.2, 4.4)
+_AISLE_HALF_WIDTH = 0.35
+
+
+def _waypoint_start_zone(x: float, y: float) -> str:
+    """Return the zone label of the (x, y) position — a Python port of
+    zone_classifier.classify() just for start-pose validation. Returns
+    one of the rail_aisle_* strings if the position would land in a
+    rail (R1 reject), or another label (corridor/gap/approach/unknown)
+    that is safe to teleport into.
+    """
+    # Find nearest aisle centre.
+    best_idx, best_abs = -1, float("inf")
+    for i, c in enumerate(_AISLE_CENTERS):
+        d = abs(y - c)
+        if d < best_abs:
+            best_abs = d
+            best_idx = i
+    aisle_in_range = best_abs <= _AISLE_HALF_WIDTH
+
+    in_rear = _REAR_X_START <= x <= _REAR_X_END
+    in_front = _FRONT_X_START <= x <= _FRONT_X_END
+
+    # Rail aisles are the teleport-forbidden zones.
+    if (in_rear or in_front) and aisle_in_range:
+        suffixes = ("m44", "m22", "0", "p22", "p44")
+        return f"rail_aisle_{suffixes[best_idx]}"
+    return "safe"  # any non-rail zone is acceptable for teleport
+
+
+def _validate_waypoints(waypoints: list) -> None:
+    """Reject a waypoint YAML at load time if any `start` pose lands in a
+    rail_aisle_* zone. The test should fail with a clear error BEFORE
+    any teleport is attempted — malformed waypoint files are a spec
+    violation, not a per-waypoint soft failure.
+    """
+    violations = []
+    for wp in waypoints:
+        start = wp.get("start")
+        if not isinstance(start, dict):
+            continue  # some waypoints omit start; teleport is a no-op then.
+        sx = float(start.get("x", 0.0))
+        sy = float(start.get("y", 0.0))
+        zone = _waypoint_start_zone(sx, sy)
+        if zone.startswith("rail_aisle_"):
+            violations.append(
+                f"  {wp.get('id', '?'):10s} start=({sx:.2f}, {sy:.2f}) "
+                f"→ {zone}")
+    if violations:
+        raise AssertionError(
+            "R1 violation: waypoint(s) have start poses inside rail aisles. "
+            "Real AGVs cannot teleport into rails; start poses must be in "
+            "corridor/gap/approach zones (every rail entry MUST happen via "
+            "nav2_prealign + rail_approach).\n" + "\n".join(violations))
+
 RESET_TIMEOUT_S = 5.0  # was 3.0 — round 20 had wp03, wp04 RESET_TIMEOUT when
                        # GT didn't arrive within 3 s after the /reset POST.
                        # 5 s covers sim-host teleport latency + DDS hop.
@@ -1827,6 +1897,9 @@ def test_waypoint_precision():
         waypoints = yaml.safe_load(f)["waypoints"]
     assert len(waypoints) >= MIN_WAYPOINTS, \
         f"need at least {MIN_WAYPOINTS} waypoints, got {len(waypoints)}"
+    # Iter-25 R1: reject any waypoint that would teleport the robot into
+    # a rail aisle. Fails fast before the first /reset POST.
+    _validate_waypoints(waypoints[:MIN_WAYPOINTS])
 
     rclpy.init()
     try:
