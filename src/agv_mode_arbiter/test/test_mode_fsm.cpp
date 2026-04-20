@@ -92,6 +92,39 @@ TEST(ModeFsm, ActiveStaysActiveWhileDriving) {
   EXPECT_EQ(out.active_source, Source::APPROACH);
 }
 
+TEST(ModeFsm, RailDriveYieldsToRailApproachWhenExternallyDispatched) {
+  // Iter-24 wp12 regression: wp11 settles → FSM transits RAIL_APPROACH_ACTIVE
+  // → RAIL_DRIVE but the arbiter's request_rail_drive_goal early-returns on
+  // NaN current_x, so rail_driver never receives a goal and sits idle.
+  // The harness then dispatches rail_approach for wp12; fine-servoing
+  // starts and rail_approach_state goes "driving". RAIL_DRIVE must swap
+  // back to RAIL_APPROACH_ACTIVE so cmd_vel_approach is relayed. Previously
+  // RAIL_DRIVE only observed rail_driver_state, so the dispatch orphaned
+  // and the robot sat still for 270 s.
+  auto in = base_inputs();
+  in.zone = "rail_approach_front";
+  in.rail_driver_state = "idle";
+  in.rail_approach_state = "driving";
+  auto out = step(Mode::RAIL_DRIVE, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_ACTIVE);
+  EXPECT_EQ(out.active_source, Source::APPROACH);
+}
+
+TEST(ModeFsm, RailExitYieldsToRailApproachWhenExternallyDispatched) {
+  // Symmetric to the RAIL_DRIVE case above. When the harness dispatches
+  // a new rail_approach while the FSM is still latched in RAIL_EXIT
+  // (e.g. prior wp ended in rail_exit push that never released to
+  // CORRIDOR_NAV), source must swap to APPROACH so cmd_vel_approach is
+  // relayed.
+  auto in = base_inputs();
+  in.zone = "rail_approach_rear";
+  in.rail_driver_state = "idle";
+  in.rail_approach_state = "driving";
+  auto out = step(Mode::RAIL_EXIT, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_ACTIVE);
+  EXPECT_EQ(out.active_source, Source::APPROACH);
+}
+
 TEST(ModeFsm, RailDriveReachedEntersRailExitWithPushRequest) {
   // Stage M: reaching rail_driver's goal does NOT release to Nav2.
   // Arbiter must enter RAIL_EXIT with source=RAIL and ask for an extended
