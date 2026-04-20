@@ -394,30 +394,17 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   // Check distance to the registered tag using the brain's map→base_link
   // TF (ekf_global publishes both legs; available as soon as EKF has a
   // pose estimate, which the harness's _sync_brain_to_gt guarantees).
-  try {
-    const auto map_to_base = tf_buffer_->lookupTransform(
-        "map", base_frame_,
-        rclcpp::Time(0, 0, RCL_ROS_TIME),
-        rclcpp::Duration::from_seconds(0.5));
-    const double rx = map_to_base.transform.translation.x;
-    const double ry = map_to_base.transform.translation.y;
-    const double dist = std::hypot(rail.x - rx, rail.y - ry);
-    if (dist <= coarse_skip_radius_) {
-      RCLCPP_INFO(get_logger(),
-          "Skipping Nav2 coarse_approach: robot at (%.2f, %.2f) is "
-          "%.2f m from tag %d (≤ %.2f m threshold). Jumping straight "
-          "to TAG_ACQUISITION.",
-          rx, ry, dist, rail.id, coarse_skip_radius_);
-      state_ = State::TAG_ACQUISITION;
-      acquisition_start_ = now();
-      return;
-    }
-  } catch (const std::exception& e) {
-    RCLCPP_WARN(get_logger(),
-        "map→%s TF not yet available; falling through to Nav2 coarse "
-        "(%s)", base_frame_.c_str(), e.what());
-    // Fall through to Nav2 coarse_approach.
-  }
+  // Iter-25 R3: the coarse_skip_radius short-circuit is REMOVED. The old
+  // behaviour (skip Nav2 when robot ≤ 2 m from tag) let fine_servoing
+  // start from a yaw/lateral pose that was never corrected, capping
+  // precision at ~10 cm regardless of servo tuning (observed plateau
+  // across iter-17..24). Real AGV workflow also requires a visual
+  // pre-alignment pass before mounting the rail — skipping that step
+  // is a test-only shortcut with no production counterpart.
+  // Nav2 coarse_approach now runs unconditionally. For robots already
+  // within coarse_skip_radius it is near-instant (planner finds a short
+  // path, MPPI executes in <1 s), but the yaw/standoff guarantee at
+  // handoff is what the 2 cm gate needs.
 
   if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
     RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
