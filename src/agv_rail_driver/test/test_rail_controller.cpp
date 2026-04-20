@@ -73,16 +73,25 @@ TEST(RailController, CollisionMonitorHoldsZeroIndefinitely) {
 
 TEST(RailController, LateralDriftAborts) {
   auto in = base_inputs();
-  in.current_y = 0.5;  // default lateral_abort_m = 0.30
+  // Iter-29 P3: the lateral-abort gate is suppressed when the goal sits
+  // on an aisle centerline (rail_operation=true → trust mechanical
+  // constraint). Force goal_y off-aisle to exercise the check.
+  in.goal_y = 1.0;
+  in.current_y = 1.5;  // 0.5 m drift > lateral_abort_m = 0.30
   auto out = compute(in, {});
   EXPECT_EQ(out.state, RailState::BLOCKED_LATERAL);
   EXPECT_DOUBLE_EQ(out.linear_x, 0.0);
 }
 
 TEST(RailController, YawAbortOnlyInsideRailZone) {
+  // Iter-29 P3: rail_operation is now (in_rail_zone OR goal_y on aisle
+  // centerline). Use an off-aisle goal so the first check probes the
+  // "no rail context" → yaw abort suppressed case.
   auto in = base_inputs();
-  in.rail_yaw_error = 0.4;  // > 0.26 rad default
-  // Without rail zone flag, yaw abort does NOT trigger.
+  in.goal_y = 1.0;     // off-aisle: rail_operation false when in_rail_zone=false
+  in.current_y = 1.0;  // no lateral drift, so the lateral gate is quiet
+  in.rail_yaw_error = 0.4;  // > 0.26 rad default yaw_abort threshold
+
   auto out = compute(in, {});
   EXPECT_EQ(out.state, RailState::DRIVING);
 
@@ -174,16 +183,33 @@ TEST(RailController, StateToStringCoverage) {
 TEST(RailController, VisualPreferredOverPose) {
   // Pose says we're on the goal centerline (no drift). Visual says otherwise:
   // the rail midline is 40 cm off in base_link Y, above lateral_abort_m 0.30.
-  // Visual must win → BLOCKED_LATERAL.
+  // Iter-29 P3: the lateral gate only fires when NOT in a rail operation,
+  // so set goal_y=1.0 (off-aisle) to keep the visual-vs-pose tie-break
+  // exercised. Inside an aisle the mechanical tube is the safeguard.
   auto in = base_inputs();
-  in.current_y = 0.0;
-  in.goal_y = 0.0;
+  in.goal_y = 1.0;
+  in.current_y = 1.0;
   in.visual_confidence = 0.9;
   in.visual_age_s = 0.1;
   in.visual_lat_offset = 0.40;
   auto out = compute(in, {});
   EXPECT_EQ(out.state, RailState::BLOCKED_LATERAL);
   EXPECT_DOUBLE_EQ(out.linear_x, 0.0);
+}
+
+TEST(RailController, VisualIgnoredInRailAisle) {
+  // Iter-29 P3: when goal_y is on an aisle (0.0), rail_operation=true and
+  // the lateral check is suppressed — the 51 mm tube is the sole lateral
+  // safeguard. Visual reports big drift → controller stays DRIVING
+  // because we trust the mechanical constraint inside the rail.
+  auto in = base_inputs();
+  in.current_y = 0.0;
+  in.goal_y = 0.0;               // aisle centerline → rail_operation=true
+  in.visual_confidence = 0.9;
+  in.visual_age_s = 0.1;
+  in.visual_lat_offset = 0.40;   // would abort outside aisle
+  auto out = compute(in, {});
+  EXPECT_EQ(out.state, RailState::DRIVING);
 }
 
 TEST(RailController, VisualStaleFallsBackToPose) {
@@ -215,9 +241,11 @@ TEST(RailController, VisualLowConfidenceRejected) {
 
 TEST(RailController, VisualMissingUsesPose) {
   // Default: visual never received (age=inf, conf=0). Pose-based check
-  // triggers on current_y drift.
+  // triggers on current_y drift. Iter-29 P3: goal_y off-aisle so the
+  // gate is active.
   auto in = base_inputs();
-  in.current_y = 0.5;  // > lateral_abort_m 0.30
+  in.goal_y = 1.0;
+  in.current_y = 1.5;  // 0.5 m drift > lateral_abort_m 0.30
   auto out = compute(in, {});
   EXPECT_EQ(out.state, RailState::BLOCKED_LATERAL);
 }
