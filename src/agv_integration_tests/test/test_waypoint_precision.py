@@ -83,6 +83,13 @@ except ImportError:
     _TriggerSrv = None
     _HAS_TRIGGER = False
 
+try:
+    from nav2_msgs.srv import ClearEntireCostmap as _ClearCostmapSrv
+    _HAS_CLEAR_COSTMAP = True
+except ImportError:
+    _ClearCostmapSrv = None
+    _HAS_CLEAR_COSTMAP = False
+
 SIM_API_HOST = os.environ.get("SIM_API_HOST")
 SIM_API_PORT = int(os.environ.get("SIM_API_PORT", "8090"))
 AGV_DATA_DIR = Path(os.environ.get("AGV_DATA_DIR", str(Path.home() / "agv_data")))
@@ -345,6 +352,52 @@ def _wait_for_fresh_tf(
             hits = 0
         rclpy.spin_once(harness, timeout_sec=poll_interval_s)
     return False
+
+
+def _clear_costmaps(harness: Node, timeout_s: float = 2.0) -> bool:
+    """Iter-24 fix 2: clear Nav2 global+local costmaps before a nav2 dispatch.
+
+    iter-23 wp10 and wp15 both failed with the planner rejecting:
+      - wp10: "GridBased: failed to create plan, no valid path found"
+      - wp15: "GridBased: failed to create plan, invalid use: Starting
+               point in lethal space!"
+
+    Root cause: the global_costmap accumulates lethal cells from ZED
+    pointcloud obstacles seen during rail_exit push (the camera sits
+    10 mm off the floor and registers rail tubes at grazing incidence
+    while the robot drives past). Post-teleport, the stale lethals
+    persist and gate the planner off legitimate corridor paths.
+
+    Both /agv/{global,local}_costmap/clear_entirely_*_costmap are
+    nav2_msgs/srv/ClearEntireCostmap. They take no arguments and
+    wipe the costmap layers back to the static baseline. Safe to
+    call just before any nav2 dispatch; the first tick after the
+    call re-populates obstacle layers from fresh sensor data.
+
+    Returns True if both calls succeeded (or service import is
+    unavailable — don't gate the dispatch on a build artefact).
+    """
+    if not _HAS_CLEAR_COSTMAP:
+        return True
+    ok_all = True
+    for srv in (
+        "/agv/global_costmap/clear_entirely_global_costmap",
+        "/agv/local_costmap/clear_entirely_local_costmap",
+    ):
+        client = harness.create_client(_ClearCostmapSrv, srv)
+        try:
+            if not client.wait_for_service(timeout_sec=timeout_s):
+                ok_all = False
+                continue
+            fut = client.call_async(_ClearCostmapSrv.Request())
+            t_end = time.monotonic() + timeout_s
+            while not fut.done() and time.monotonic() < t_end:
+                rclpy.spin_once(harness, timeout_sec=0.05)
+            if not fut.done():
+                ok_all = False
+        finally:
+            harness.destroy_client(client)
+    return ok_all
 
 
 def _post_sim_api_empty(path: str, timeout: float = 5.0) -> bool:
@@ -1544,6 +1597,10 @@ def _run_one_waypoint(
             NAV_TIMEOUT_S * 1.5)
     else:
         # Default: Nav2 via sim_api HTTP /goal.
+        # Iter-24 fix 2: clear costmaps before dispatch. iter-23
+        # wp10 and wp15 both failed because the global_costmap kept
+        # lethal cells from prior rail_exit ZED pointcloud accumulation.
+        _clear_costmaps(harness, timeout_s=2.0)
         # Iter-22 brain 1.3: gate on fresh TF before dispatch so Nav2's
         # rotation_shim doesn't fail lookupTransform and stall.
         if not _wait_for_fresh_tf(harness, timeout_s=3.0):
