@@ -342,6 +342,23 @@ class ModeArbiterNode : public rclcpp::Node {
         // Leave cmd zero-initialised.
         break;
     }
+
+    // Iter-33 diagnostics: RAIL source is wz=0 by contract. If we ever
+    // publish a non-zero angular.z, something upstream is mis-routed
+    // (stale cmd_vel_approach latch, NAV source leaking past FSM, or
+    // the Twist mutated between subscription and relay). iter-32
+    // c5_drive_in had the robot rotate 64° during RAIL source — this
+    // throttled warn will name which source carried the rotation.
+    if (std::abs(cmd.angular.z) > 0.05) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 500,
+          "cmd_vel relay: wz=%.3f under source=%s (RAIL must be 0). "
+          "last_nav wz=%.3f  last_approach wz=%.3f  last_rail wz=%.3f",
+          cmd.angular.z, source_to_str(active_source_),
+          last_nav_ ? last_nav_->angular.z : 0.0,
+          last_approach_ ? last_approach_->angular.z : 0.0,
+          last_rail_ ? last_rail_->angular.z : 0.0);
+    }
+
     pub_cmd_->publish(cmd);
 
     // Publish /agv/mode/state.
