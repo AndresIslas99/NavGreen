@@ -52,8 +52,12 @@ inline RailExitGeometry compute_rail_exit(double current_x,
   } else {
     // Already in gap — pick whichever tag is closer so the clearance
     // metric still makes sense (distance past the nearer tag, outward
-    // from it). This is the case where the robot entered RAIL_EXIT with
-    // a very short rail stretch; no push needed.
+    // from it). Previously this branch forced skip_push=true under the
+    // assumption that "in gap = already exited through the rail", but
+    // that breaks wp13/wp14 where the robot arrives at the approach
+    // tag from the corridor side (x=3.95, clearance=-0.05) and still
+    // needs a push to advance past the tag by push_m.
+    // Iter-23: the single gate for skip is `clearance_m >= 1.0` below.
     if (std::abs(current_x - p.tag_x_rear) <
         std::abs(current_x - p.tag_x_front)) {
       tag_x = p.tag_x_rear;
@@ -62,7 +66,6 @@ inline RailExitGeometry compute_rail_exit(double current_x,
       tag_x = p.tag_x_front;
       outward = -1.0;
     }
-    out.skip_push = true;
   }
   out.clearance_m = outward * (current_x - tag_x);
   if (out.clearance_m >= 1.0) {
