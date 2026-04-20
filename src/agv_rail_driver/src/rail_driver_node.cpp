@@ -92,7 +92,16 @@ class RailDriverNode : public rclcpp::Node {
         std::bind(&RailDriverNode::on_rail_detector_state, this, _1));
 
     pub_cmd_ = create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, rclcpp::QoS{10});
-    pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, rclcpp::QoS{10});
+    // Iter-26 Bug B: state publisher depth=1 with reliable delivery so
+    // subscribers never see a buffered stale "reached"/"driving" from a
+    // previous waypoint. iter-25 c2_reverse_exit / c4_reverse_exit
+    // reported SUCCEEDED in 0.0 s because the harness's first spin_once
+    // after the new goal drained a buffered "reached" from the preceding
+    // drive_in. Mirrors the iter-20 fix applied to rail_approach's
+    // state publisher.
+    rclcpp::QoS state_qos{rclcpp::KeepLast(1)};
+    state_qos.reliable();
+    pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, state_qos);
 
     // Iter-22: cancel_goal service — atomic, synchronous cancel of any
     // active rail goal. Replaces the iter-7/8/9 "publish a zero-distance
@@ -131,6 +140,28 @@ class RailDriverNode : public rclcpp::Node {
     goal_x_ = msg->pose.position.x;
     goal_y_ = msg->pose.position.y;
     RCLCPP_INFO(get_logger(), "new goal: (%.3f, %.3f)", goal_x_, goal_y_);
+    // Iter-26 Bug B: publish an immediate "driving" state tick so the
+    // harness's `_wait_for_state_value` cannot latch onto the last
+    // "reached" from the previous goal. Without this the subscriber's
+    // keep-last-1 buffer may still hold the stale message until the
+    // next on_tick() (up to 50 ms), which is enough for a fast dispatch
+    // on a continuous-flow waypoint to false-positive.
+    double remaining = 0.0;
+    if (last_odom_) {
+      remaining = std::hypot(
+          goal_x_ - last_odom_->pose.pose.position.x,
+          goal_y_ - last_odom_->pose.pose.position.y);
+    }
+    std::ostringstream os;
+    os.precision(4);
+    os << std::fixed << "{\"state\":\"driving\","
+       << "\"linear_x\":0.0000,"
+       << "\"remaining_m\":" << remaining << ","
+       << "\"in_rail_zone\":" << (last_in_rail_ ? "true" : "false") << ","
+       << "\"collision_stop\":" << (last_collision_stop_ ? "true" : "false") << "}";
+    std_msgs::msg::String state_msg;
+    state_msg.data = os.str();
+    pub_state_->publish(state_msg);
   }
 
   void on_zone(const std_msgs::msg::String::ConstSharedPtr msg) {
