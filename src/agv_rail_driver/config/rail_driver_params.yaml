@@ -14,6 +14,10 @@ rail_driver:
     speed_max_mps: 1.0
     stop_band_m: 0.05
     lateral_abort_m: 0.30
-    # 0.26 rad ≈ 15°. Robot geometry tolerates ~36° yaw before a wheel snags
-    # the rail pair, but we stop well short of that to leave recovery room.
-    yaw_abort_rad: 0.26
+    # 0.35 rad ≈ 20°. Iter-26c: raised from 0.26 to leave ~6° margin over
+    # rail_approach's settle gate (tolerance_yaw=0.25). Previously the
+    # two values were almost identical, so a fine_servo that barely
+    # settled at the edge tripped BLOCKED_MISALIGNED on the first
+    # rail_drive tick. Robot geometry still tolerates ~36° before a
+    # wheel snags a rail tube, so 20° stays well under the hard limit.
+    yaw_abort_rad: 0.35
