@@ -7,6 +7,16 @@
 // `current_x` and the greenhouse's two rail sections separated by a
 // 4 m gap — no cached entry pose, no travel-history heuristic.
 //
+// Iter-25 R4 note: "push" here is semantically REVERSE-EXIT already.
+// The target x (tag_x + outward * push_m) sits in the 4 m gap between
+// the rail sections. rail_driver drives to it via body-frame error,
+// which — when the robot is yaw-aligned with the aisle axis — produces
+// negative linear.x (true reverse). wz stays hard-locked at 0, so the
+// 51 mm rail tubes are never approached at an angle. A real AGV never
+// rotates inside a rail; this geometry honours that contract without
+// changing the sign, because rail_controller derives direction from
+// (goal - current) projected onto body-X.
+//
 // Greenhouse topology (params, not constants):
 //   rear  rails: x ≤ gap_x_min  → approach tag at tag_x_rear,   outward = +1
 //   front rails: x ≥ gap_x_max  → approach tag at tag_x_front,  outward = -1
