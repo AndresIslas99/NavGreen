@@ -478,20 +478,9 @@ private:
     // egg by also gating on the raw EKF x-position: if the ekf says we're
     // inside a rail *section* (REAR x≤3.5 OR FRONT x≥7.5), suppress RELOC
     // regardless of y-alignment. Geometry bound from the sim USD.
-    //
-    // Iter-34 further: the first RELOC of a c5_drive_in sequence was
-    // slipping through because the ekf was still in the gap (x≈4.0)
-    // when the correction fired; only subsequent RELOCs with ekf
-    // already inside the rail got caught. Also gate on the TARGET pose
-    // (final_x/final_y): if the RELOC would MOVE the robot into a rail
-    // section, it is by definition a rail-context correction and must
-    // be suppressed. This catches the first jolt too.
     const bool ekf_in_rail_section = has_ekf_pose_ &&
         (current_ekf_x_ <= 3.5 || current_ekf_x_ >= 7.5);
-    const bool target_in_rail_section =
-        (final_x <= 3.5 || final_x >= 7.5);
-    const bool reloc_allowed =
-        !in_rail_aisle_ && !ekf_in_rail_section && !target_in_rail_section;
+    const bool reloc_allowed = !in_rail_aisle_ && !ekf_in_rail_section;
     if (drift >= reloc_threshold_ && best_decision_margin >= min_confidence_ &&
         reloc_allowed) {
       if (set_pose_client_->service_is_ready()) {
