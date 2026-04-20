@@ -54,6 +54,16 @@ function getStatus(deps: AppDeps) {
       map: s.localization.map,
     },
     current_map_name: s.currentMapName,
+    // Iter-37 Phase 2 — mode arbiter FSM / zone / rail driver state,
+    // piggybacked on the 5 Hz status broadcast so every connected client
+    // receives the whole rail pipeline snapshot without an extra frame.
+    // Consumers render RailStatus.tsx + map overlays from this block.
+    rail_state: {
+      mode_arbiter: s.modeArbiterState,
+      zone: s.zoneDetectorState,
+      rail_driver: s.railDriverState,
+      rail_approach_state: s.railApproachState,
+    },
   };
 }
 
