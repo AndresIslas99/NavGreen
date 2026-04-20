@@ -128,6 +128,31 @@ public:
         has_ekf_pose_ = true;
       });
 
+    // Iter-31: subscribe to /agv/zone/state to detect when the robot is
+    // inside a rail aisle. Inside a rail, the 51 mm tube mechanically
+    // constrains lateral drift to < 5 mm, so the EKF pose does NOT need
+    // visual correction — and a mistimed RELOC caused by marker_correction
+    // seeing adjacent-aisle / row-start tags at grazing incidence
+    // poisons the ekf y (iter-28..30 c3 aborted when RELOC jogged y from
+    // 2.20 to 1.90 just as rail_driver started ticking). Suppress the
+    // RELOC path entirely while in_rail_aisle; keep the smooth pose
+    // publication (soft correction through the EKF filter, weighted by
+    // covariance) which does not trigger set_pose.
+    zone_sub_ = create_subscription<std_msgs::msg::String>(
+      "/agv/zone/state", 10,
+      [this](std_msgs::msg::String::SharedPtr msg) {
+        // Extract zone field (JSON payload); match "rail_aisle_*" prefix.
+        const std::string &d = msg->data;
+        const std::string needle = "\"zone\":\"";
+        const auto start = d.find(needle);
+        if (start == std::string::npos) return;
+        const auto q_open = start + needle.size();
+        const auto q_close = d.find('\"', q_open);
+        if (q_close == std::string::npos) return;
+        const std::string zone = d.substr(q_open, q_close - q_open);
+        in_rail_aisle_ = zone.rfind("rail_aisle_", 0) == 0;
+      });
+
     // Service client to force-relocalize EKF when drift is catastrophic
     set_pose_client_ = create_client<robot_localization::srv::SetPose>("set_pose");
 
@@ -439,7 +464,14 @@ private:
         std::pow(final_y - current_ekf_y_, 2));
     }
 
-    if (drift >= reloc_threshold_ && best_decision_margin >= min_confidence_) {
+    // Iter-31 gate: never RELOC while the robot is inside a rail aisle.
+    // The mechanical 51 mm tube is tighter than any marker-based correction
+    // and a mistimed RELOC causes the downstream rail_driver to abort on
+    // a poisoned EKF pose (c3/c5 iter-28..30). Fall through to the smooth
+    // publication instead so the EKF still tracks the soft correction.
+    const bool reloc_allowed = !in_rail_aisle_;
+    if (drift >= reloc_threshold_ && best_decision_margin >= min_confidence_ &&
+        reloc_allowed) {
       if (set_pose_client_->service_is_ready()) {
         auto request = std::make_shared<robot_localization::srv::SetPose::Request>();
         request->pose = correction;
@@ -471,10 +503,16 @@ private:
       pose_pub_->publish(correction);
     }
 
+    // Iter-31: tag the log line with "suppressed_rail_aisle" when the
+    // drift would have triggered a RELOC but we gated it on in_rail_aisle.
+    const char *mode_str = "smooth";
+    if (drift >= reloc_threshold_) {
+      mode_str = reloc_allowed ? "RELOC" : "RELOC_SUPPRESSED_RAIL_AISLE";
+    }
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
       "Correction: %zu tags, best=%d, range_factor=%.1f, pos=(%.2f, %.2f), drift=%.1fm %s",
       candidates.size(), best_tag_id, final_range_factor, final_x, final_y, drift,
-      drift >= reloc_threshold_ ? "RELOC" : "smooth");
+      mode_str);
   }
 
   // Registry
@@ -497,6 +535,11 @@ private:
   bool has_ekf_pose_{false};
   double current_ekf_x_{0}, current_ekf_y_{0};
 
+  // Iter-31: latched from zone_detector. When true, RELOC is suppressed —
+  // the rail tube owns lateral accuracy and visual corrections via
+  // mis-identified tags poison the EKF instead of helping.
+  bool in_rail_aisle_{false};
+
   // TF
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -510,6 +553,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ekf_sub_;
   rclcpp::Client<robot_localization::srv::SetPose>::SharedPtr set_pose_client_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reload_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr zone_sub_;
   rclcpp::TimerBase::SharedPtr caminfo_timeout_timer_;
 };
 
