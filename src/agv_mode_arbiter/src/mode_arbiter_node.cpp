@@ -96,7 +96,15 @@ class ModeArbiterNode : public rclcpp::Node {
     //   - push_sticky: publish the rail_exit push goal ONCE per RAIL_EXIT
     //     entry, not every tick the FSM happens to set
     //     request_rail_exit_push. Resets on leaving RAIL_EXIT.
-    declare_parameter<double>("min_mode_dwell_s", 0.5);
+    // Iter-22b: default 0.0 (disabled) after iter-22 observed wp12
+    // regression (tag lost during fine_servoing) and wp15 regression
+    // (err grew from 2.16 to 3.52 m). The dwell was suppressing
+    // legitimate fast transitions like CORRIDOR_NAV → RAIL_APPROACH_
+    // ACTIVE when rail_approach state went driving in <0.5 s after
+    // a prior mode change. Set to 0.0 so the gate is a no-op; the
+    // sticky push flag below still prevents double-publication of
+    // EXIT_PUSH without blocking any transitions.
+    declare_parameter<double>("min_mode_dwell_s", 0.0);
 
     const auto cmd_out      = get_parameter("cmd_vel_out_topic").as_string();
     const auto cmd_nav      = get_parameter("cmd_vel_nav_topic").as_string();
