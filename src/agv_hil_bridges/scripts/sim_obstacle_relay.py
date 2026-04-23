@@ -135,6 +135,12 @@ class SimObstacleRelay(Node):
         y = msg.pose.position.y
         qz = msg.pose.orientation.z
         qw = msg.pose.orientation.w
+        # Iter-41 guard: drop frames with NaN/inf — sim unstick events and
+        # mid-teleport ticks can emit non-finite components that propagate
+        # into rx_rel/ry_rel and NaN-short-circuit the skip check, falsely
+        # triggering "stop" for tens of seconds.
+        if not all(math.isfinite(v) for v in (x, y, qz, qw)):
+            return
         yaw = 2.0 * math.atan2(qz, qw)
         self._robot = (x, y, yaw)
 
