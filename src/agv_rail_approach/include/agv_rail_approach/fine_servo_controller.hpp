@@ -235,8 +235,23 @@ inline FineServoOutput fine_servo_compute(
 
   out.cmd_linear_mps = std::clamp(
       p.kp_linear * error_x, -p.max_linear_mps, p.max_linear_mps);
+  // Iter-42.1: when check_yaw_convergence is false (floor tag), the yaw
+  // reference of π is a singular point of the atan2-based tag_yaw_in_cam
+  // formula — R[0,0] and R[2,0] are mathematically zero + one but
+  // floating-point noise tilts the wrap one side or the other of −π,
+  // which flips the sign of kp_yaw*error_yaw and makes the angular
+  // command non-deterministic across solvePnP method choice (ITERATIVE
+  // happened to land on the +ε side, SQPNP on the −ε side, failing the
+  // LateralOffsetProducesAngularCmd test). Zero the yaw contribution
+  // for floor tags so lateral correction relies solely on error_y; that
+  // is the semantically correct behaviour since a floor tag's in-plane
+  // yaw is independent of the robot's heading-to-tag line. Wall tags
+  // keep the full coupling (they genuinely rotate the tag's own frame
+  // relative to the camera).
+  const double yaw_contrib =
+      p.check_yaw_convergence ? (p.kp_yaw * error_yaw) : 0.0;
   out.cmd_angular_rps = std::clamp(
-      p.kp_yaw * error_yaw + p.kp_lateral * error_y,
+      yaw_contrib + p.kp_lateral * error_y,
       -p.max_angular_rps, p.max_angular_rps);
 
   out.in_tolerance = std::abs(error_x) < p.tolerance_xy
@@ -277,7 +292,18 @@ inline FineServoOutput fine_servo_step(
                0.0, 0.0, 1.0);
   cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
   cv::Vec3d rvec, tvec;
-  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec)) {
+  // Iter-42 empirical benchmark (tools/solvepnp_noise_benchmark.py,
+  // 1000 Monte-Carlo per method): default SOLVEPNP_ITERATIVE yields a
+  // 0.8 % planar-flip rate in our realistic scenario (cam z=0.21, incidence
+  // 79°) and diverges entirely in grazing (cam z=0.01, σ_z = 23 M meters).
+  // SOLVEPNP_SQPNP (Terzakis & Lourakis ECCV 2020) has 0 % flips in both
+  // scenarios and σ matching ITERATIVE in the good case, while remaining
+  // stable at 26 mm σ even in grazing. SOLVEPNP_IPPE_SQUARE returns 100 %
+  // flipped poses under the simple solvePnP API (it needs
+  // solvePnPGeneric + reprojection disambiguation to be correct). SQPNP
+  // is the drop-in winner.
+  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec,
+                     false, cv::SOLVEPNP_SQPNP)) {
     out.verdict = FineServoVerdict::SOLVEPNP_FAIL;
     return out;
   }
@@ -311,7 +337,11 @@ inline bool solvepnp_tag(
                0.0, p.fy, p.cy,
                0.0, 0.0, 1.0);
   cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
-  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec)) {
+  // Iter-42: SOLVEPNP_SQPNP (see fine_servo_step comment above for the
+  // empirical-benchmark rationale). Zero flips, σ matches the default
+  // iterative solver in the good case and stays stable in grazing.
+  if (!cv::solvePnP(obj_pts, corners, K, dist, rvec, tvec,
+                     false, cv::SOLVEPNP_SQPNP)) {
     out_verdict = FineServoVerdict::SOLVEPNP_FAIL;
     return false;
   }
