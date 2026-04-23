@@ -74,6 +74,16 @@ private:
   double kp_linear_;
   double kp_lateral_;
   double kp_yaw_;
+  // Iter-46 Paso 1.b: PI + stiction feedforward on the forward axis.
+  // See fine_servo_controller.hpp FineServoState / fine_servo_compute
+  // for the control law. ki_linear_ defaults to 0 (pure-P legacy).
+  // stiction_ff_vel_mps_ defaults to 0 (no FF). HIL launch override
+  // sets both; real-robot yaml keeps them zero until ODrive char
+  // confirms the deadband.
+  double ki_linear_{0.0};
+  double stiction_ff_vel_mps_{0.0};
+  FineServoState fine_servo_state_;
+  rclcpp::Time last_fine_servo_tick_{0, 0, RCL_ROS_TIME};
   double max_fine_linear_;
   double max_fine_angular_;
   bool check_yaw_convergence_{false};
@@ -106,6 +116,20 @@ private:
   double coarse_skip_radius_{2.0};
   std::string camera_frame_;
   std::string base_frame_;
+  // Iter-44 Fase 2 Arch A (Registry-aware longitudinal):
+  //   solvePnP on grazing floor tags is weakly conditioned in the forward
+  //   (tvec.z) component — σ≈26 mm raw, 8 mm post-median15, WITH a bias
+  //   that scales with incidence angle. Meanwhile the registry gives the
+  //   tag's map pose to sub-mm, and TF map→cam_optical is precise whenever
+  //   the EKF is synced (gt_to_wheel_odom in HIL, marker_correction RELOC
+  //   in production). When `use_registry_longitudinal` is true, we override
+  //   tvec_used[2] (forward) with the TF+registry estimate while keeping
+  //   PnP for tvec_used[0] (lateral, well-conditioned) and rvec (yaw).
+  //   This cuts the worst-DOF noise without touching the dimensions where
+  //   PnP is already sub-cm. Default false to preserve backwards-compat
+  //   with production launches until A/B validates the HIL gain.
+  bool use_registry_longitudinal_{false};
+  double registry_max_stale_s_{2.0};  // reject registry override if TF older
 
   // ROS interfaces
   rclcpp::Subscription<apriltag_msgs::msg::AprilTagDetectionArray>::SharedPtr detection_sub_;
