@@ -128,12 +128,15 @@ def _build_nav2(context, *args, **kwargs):
             ),
 
             # Behavior server (spin, backup, wait)
+            # Phase-2 arbiter ownership: recoveries (spin/backup) must also
+            # route through mode_arbiter, not publish directly to cmd_vel.
             Node(
                 package='nav2_behaviors',
                 executable='behavior_server',
                 name='behavior_server',
                 parameters=nav2_params_list + [{'use_sim_time': use_sim_time}],
                 output='screen',
+                remappings=[('cmd_vel', controller_cmd_vel_topic)],
             ),
 
             # BT Navigator

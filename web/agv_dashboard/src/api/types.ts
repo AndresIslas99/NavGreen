@@ -13,7 +13,7 @@ export type RobotState =
   | 'e_stop'
   | 'fault'
 
-export type ModeRail = 'operate' | 'map' | 'missions' | 'recovery' | 'analytics' | 'apriltags'
+export type ModeRail = 'operate' | 'map' | 'missions' | 'recovery' | 'analytics' | 'apriltags' | 'waypoint_battery'
 
 // ---------------------------------------------------------------------------
 // Allowed actions (computed by backend)
@@ -112,6 +112,39 @@ export interface RobotStatus {
     action: string
     detail: string
     map: string
+  }
+  // Iter-37 Phase 2 — mode arbiter FSM / zone classifier / rail driver.
+  // Mirrors /agv/{mode,zone,rail_driver}/state + rail_approach/state so
+  // the dashboard can render the full rail pipeline without subscribing.
+  rail_state: {
+    mode_arbiter: {
+      mode: string           // corridor_nav | rail_approach_pend | rail_drive | rail_exit | blocked_handoff | ...
+      source: string         // NAV | APPROACH | RAIL | NONE
+      zone: string           // zone label arbiter is consuming
+      operator_mode: string  // nav | teleop | idle
+      transitions: number
+      updated: number
+    }
+    zone: {
+      zone: string           // rail_aisle_* | rail_approach_* | gap | corridor_* | unknown
+      section: string        // REAR | GAP | FRONT | OUTSIDE
+      aisle_y_center: number | null
+      rail_offset_lat: number | null
+      rail_yaw_error: number | null
+      approach_tag_id: number  // -1 when not in an approach strip
+      confidence: number       // 0..1
+      source: string
+      updated: number
+    }
+    rail_driver: {
+      state: string          // idle | driving | reached | blocked_wait | blocked_misaligned | blocked_lateral | canceled
+      linear_x: number
+      remaining_m: number
+      in_rail_zone: boolean
+      collision_stop: boolean
+      updated: number
+    }
+    rail_approach_state: string
   }
 }
 

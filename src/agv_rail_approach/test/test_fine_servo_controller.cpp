@@ -11,7 +11,9 @@
 #include "agv_rail_approach/fine_servo_controller.hpp"
 
 using agv_rail_approach::FineServoParams;
+using agv_rail_approach::FineServoState;
 using agv_rail_approach::FineServoVerdict;
+using agv_rail_approach::fine_servo_compute;
 using agv_rail_approach::fine_servo_step;
 
 namespace {
@@ -283,4 +285,194 @@ TEST(FineServo, VerdictStringsCoverAllCases) {
   EXPECT_STREQ(verdict_to_str(FineServoVerdict::INVALID_INTRINSICS), "invalid_intrinsics");
   EXPECT_STREQ(verdict_to_str(FineServoVerdict::SOLVEPNP_FAIL), "solvepnp_fail");
   EXPECT_STREQ(verdict_to_str(FineServoVerdict::RANGE_OUT_OF_BOUNDS), "range_out_of_bounds");
+}
+
+
+// ── Iter-46 Paso 1.b: PI + stiction feedforward ───────────────────────
+//
+// The tests below use fine_servo_compute directly with hand-crafted
+// tvec/rvec values so the controller state trajectory is deterministic
+// across ticks. For the forward axis we need:
+//
+//   error_x = tvec.z - desired_offset_x
+//
+// so tvec.z controls error_x directly. A tag at cam_z = 0.30 + E gives
+// error_x = E. All yaw math is bypassed (check_yaw_convergence = false,
+// floor tag), and rvec is set to the identity rotation for the floor
+// tag normal — any R_ct with R[0,0] = 1 makes tag_yaw_in_cam = 0.
+//
+// The rvec below produces a rotation matrix whose (0,0) = 1 and (2,0) =
+// 0, so tag_yaw_in_cam = atan2(1, 0) = π/2, and error_yaw = π/2 − π =
+// -π/2. We keep the yaw check disabled so that does not matter.
+
+namespace {
+// Rotation (in Rodrigues form) corresponding to a floor tag facing up.
+// Any fixed value that produces a valid rotation matrix is fine — we
+// disable yaw-convergence so the rvec choice does not influence the
+// control law beyond guarding against NaN.
+const cv::Vec3d kFloorTagRvec(0.0, 0.0, 0.0);
+
+FineServoParams pi_ff_params() {
+  auto p = default_params();
+  // Match the HIL iter-46 Paso 1.b configuration.
+  p.tolerance_xy = 0.05;
+  p.kp_linear = 0.15;
+  p.ki_linear = 0.05;
+  p.stiction_ff_vel_mps = 0.035;
+  p.max_linear_mps = 0.30;
+  p.check_yaw_convergence = false;
+  return p;
+}
+
+cv::Vec3d tag_tvec(double cam_z, double cam_x = 0.0, double cam_y = 0.21) {
+  return cv::Vec3d(cam_x, cam_y, cam_z);
+}
+}  // namespace
+
+TEST(FineServoPI, PureP_NoIntegration_WhenKiIsZero) {
+  auto p = default_params();
+  p.ki_linear = 0.0;
+  p.stiction_ff_vel_mps = 0.0;
+  FineServoState state;
+  auto out = fine_servo_compute(
+      tag_tvec(kDesiredOffsetX + 0.10), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.2);
+  EXPECT_NEAR(out.cmd_linear_mps, p.kp_linear * 0.10, 1e-9);
+  // State must not be mutated when ki is zero.
+  EXPECT_EQ(state.integral_x, 0.0);
+  EXPECT_FALSE(state.has_last_error);
+}
+
+TEST(FineServoPI, IntegralAccumulatesInPIMode) {
+  auto p = pi_ff_params();
+  // Force PI mode (not FF): pick |error_x| small enough to be in
+  // PI regime but large enough that it does not hit FF (FF triggers
+  // when |pi_cmd| < stiction_ff).
+  // At error_x = 0.40, P alone = 0.15 * 0.40 = 0.06 > 0.035 → FF off.
+  FineServoState state;
+  for (int i = 0; i < 5; ++i) {
+    fine_servo_compute(
+        tag_tvec(kDesiredOffsetX + 0.40), kFloorTagRvec,
+        greenhouse_cam_to_base(), p, state, 0.2);
+  }
+  // After 5 ticks @ 0.2 s with error_x = 0.40: integral = 5 * 0.2 * 0.40 = 0.40 m·s.
+  // Anti-windup clamp: 0.25 * max_linear_mps / ki = 0.25 * 0.30 / 0.05 = 1.5
+  // → 0.40 is below the clamp, so the raw accumulation survives.
+  EXPECT_NEAR(state.integral_x, 0.40, 1e-6);
+}
+
+TEST(FineServoPI, FFActivatesBelowStictionThreshold) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // Pick error_x so PI command < stiction_ff (0.035) and |error_x| > tol.
+  // error_x = 0.10 → P-cmd = 0.015, integral=0 on first tick → pi_cmd = 0.015 < 0.035.
+  // FF should fire with sign(error) = +.
+  auto out = fine_servo_compute(
+      tag_tvec(kDesiredOffsetX + 0.10), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.2);
+  EXPECT_NEAR(out.cmd_linear_mps, +p.stiction_ff_vel_mps, 1e-9);
+  // While FF is active, the integrator must NOT accumulate
+  // (conditional integration).
+  EXPECT_EQ(state.integral_x, 0.0);
+}
+
+TEST(FineServoPI, FFInhibitedInsideTolerance) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // |error_x| = 0.03 < tolerance_xy = 0.05 → FF must NOT fire.
+  auto out = fine_servo_compute(
+      tag_tvec(kDesiredOffsetX + 0.03), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.2);
+  // Cmd = P + I. P-term = 0.15 * 0.03 = 0.0045. Integral accumulated this
+  // tick = 0.03 * 0.2 = 0.006 m·s → I-term = 0.05 * 0.006 = 0.0003.
+  // Total cmd = 0.0048 (well under stiction, robot will not move in HIL).
+  EXPECT_NEAR(out.cmd_linear_mps, 0.0048, 1e-9);
+  EXPECT_NEAR(state.integral_x, 0.006, 1e-9);
+}
+
+TEST(FineServoPI, ZeroCrossResetsIntegral) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // Accumulate positive integral over several ticks at positive error.
+  for (int i = 0; i < 3; ++i) {
+    fine_servo_compute(
+        tag_tvec(kDesiredOffsetX + 0.40), kFloorTagRvec,
+        greenhouse_cam_to_base(), p, state, 0.2);
+  }
+  ASSERT_GT(state.integral_x, 0.0);
+  // Now flip sign: robot crossed goal to the other side.
+  // error_x = -0.40 and |pi_cmd| = |Kp*(-0.40) + Ki*integral| = |-0.06 + +ve| may
+  // still exceed stiction; regardless, the zero-crossing reset fires BEFORE
+  // the integration step, so integral_x is set to 0, then accumulates -0.08.
+  fine_servo_compute(
+      tag_tvec(kDesiredOffsetX - 0.40), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.2);
+  EXPECT_NEAR(state.integral_x, -0.08, 1e-9);
+}
+
+TEST(FineServoPI, AntiWindupClampsIntegral) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // Hold a large positive error for many ticks so the integrator would
+  // grow unbounded without the clamp. Anti-windup cap for this config:
+  //   max = 0.25 * max_linear_mps / ki = 0.25 * 0.30 / 0.05 = 1.5
+  // We accumulate 500 ticks * 0.2 * 0.40 = 40.0 m·s nominal, must clamp to 1.5.
+  for (int i = 0; i < 500; ++i) {
+    fine_servo_compute(
+        tag_tvec(kDesiredOffsetX + 0.40), kFloorTagRvec,
+        greenhouse_cam_to_base(), p, state, 0.2);
+  }
+  EXPECT_NEAR(state.integral_x, 1.5, 1e-6);
+}
+
+TEST(FineServoPI, FFUsesErrorSignForReverse) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // Negative error (robot past the goal) with small magnitude so FF fires.
+  // error_x = -0.10 → P-cmd = -0.015, |pi| < stiction → FF: -0.035.
+  auto out = fine_servo_compute(
+      tag_tvec(kDesiredOffsetX - 0.10), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.2);
+  EXPECT_NEAR(out.cmd_linear_mps, -p.stiction_ff_vel_mps, 1e-9);
+}
+
+TEST(FineServoPI, FirstTickWithZeroDtSkipsIntegration) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // Force PI mode (not FF): error_x = 0.50 → P = 0.075 > stiction.
+  auto out = fine_servo_compute(
+      tag_tvec(kDesiredOffsetX + 0.50), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.0 /* first tick: dt = 0 */);
+  // No integration on dt=0, so cmd = P-only.
+  EXPECT_NEAR(out.cmd_linear_mps, 0.075, 1e-9);
+  EXPECT_EQ(state.integral_x, 0.0);
+  // But last_error_x is still tracked (needed for zero-cross detection
+  // across the first pair of ticks).
+  EXPECT_TRUE(state.has_last_error);
+  EXPECT_NEAR(state.last_error_x, 0.50, 1e-9);
+}
+
+TEST(FineServoPI, ResetClearsEverything) {
+  FineServoState state;
+  state.integral_x = 1.23;
+  state.last_error_x = 0.45;
+  state.has_last_error = true;
+  state.reset();
+  EXPECT_EQ(state.integral_x, 0.0);
+  EXPECT_EQ(state.last_error_x, 0.0);
+  EXPECT_FALSE(state.has_last_error);
+}
+
+TEST(FineServoPI, CmdClampedAtMaxLinearMps) {
+  auto p = pi_ff_params();
+  FineServoState state;
+  // Pick a tag distance that stays inside FineServoParams::range_max_m
+  // (5 m) so the frame isn't rejected as RANGE_OUT_OF_BOUNDS. At cam_z
+  // = 3.0 the error_x = 2.7, P-term alone = 0.15 * 2.7 = 0.405, above
+  // the 0.30 clamp. Verify the output clamps cleanly.
+  auto out = fine_servo_compute(
+      tag_tvec(kDesiredOffsetX + 2.7), kFloorTagRvec,
+      greenhouse_cam_to_base(), p, state, 0.2);
+  ASSERT_EQ(out.verdict, FineServoVerdict::OK);
+  EXPECT_NEAR(out.cmd_linear_mps, p.max_linear_mps, 1e-9);
 }
