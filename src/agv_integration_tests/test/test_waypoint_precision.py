@@ -1723,15 +1723,13 @@ def _run_one_waypoint(
             offset_y = float(wp.get("offset_y", 0.0))
             print(f"    [dispatch] rail_approach tag_id={tag_id} "
                   f"offsets=({offset_x:.2f}, {offset_y:.2f})", flush=True)
-            # Iter-40 F2: fine_servo's own timeout is 120 s (rail_approach
-            # params) — the prior 1.5×NAV_TIMEOUT = 450 s cap let the robot
-            # drift for 7 minutes when solvePnP degenerated, corrupting the
-            # EKF beyond recovery for subsequent waypoints. Cap the harness
-            # wait at 150 s (120 s fine_servo + 30 s service/state overhead)
-            # so a stuck approach aborts cleanly and the next wp's sync can
-            # recover the pose.
+            # Iter-40 F2 + iter-41: fine_servo in HIL has max_fine_duration
+            # raised to 240 s (sim drive 4 % efficiency can't close the last
+            # 20 cm at prod 0.08 m/s clamp). Cap the harness wait at 270 s
+            # (240 + 30 s service/state overhead) so a stuck approach
+            # aborts cleanly and the next wp's sync can recover.
             status = _call_rail_approach(
-                harness, tag_id, offset_x, offset_y, 150.0)
+                harness, tag_id, offset_x, offset_y, 270.0)
     elif dispatch == "rail_drive":
         print(f"    [dispatch] rail_drive goal=({goal['x']:.2f}, "
               f"{goal['y']:.2f})", flush=True)
