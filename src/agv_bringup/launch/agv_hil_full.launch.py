@@ -306,6 +306,29 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration('cuvslam_in_hil')),
         ),
 
+        # ── Iter-39: sim_obstacle_relay (HIL safety substitute) ──
+        # agv_hil_full doesn't run the production safety_supervisor chain;
+        # without it the /agv/collision_monitor_state topic has no String
+        # publisher, so rail_driver + mode_arbiter never see "stop" and
+        # drive straight through crates in the greenhouse USD (observed
+        # iter-38 c5_drive_in hitting Crate1 at (3.5, -2.0)). This relay
+        # reads the sim's ground_truth obstacles oracle and publishes the
+        # expected std_msgs/String (stop|slowdown|clear) at 10 Hz.
+        Node(
+            package='agv_hil_bridges',
+            executable='sim_obstacle_relay.py',
+            name='sim_obstacle_relay',
+            namespace=ns,
+            parameters=[{
+                'stop_distance_m': 0.50,
+                'slowdown_distance_m': 1.00,
+                'robot_half_width_m': 0.42,
+                'publish_rate_hz': 10.0,
+                'use_sim_time': True,
+            }],
+            output='log',
+        ),
+
         # ── Nav2 stack ──
         # Phase 2: controller_server publishes to /agv/cmd_vel_nav instead of
         # /agv/cmd_vel. The mode_arbiter (below) routes one of
@@ -466,6 +489,11 @@ def generate_launch_description():
                 # find its target even though the tag was geometrically
                 # in frame. 89.5° lets grazing views through while still
                 # rejecting views facing the tag's back (incidence > 90°).
+                # Iter-40 F1: shim now composes world→optical from GT
+                # base_link pose + static base→optical TF (bypassing the
+                # 2D EKFs that put base_link at z=0). With the real cam
+                # height (0.21 m) restored, incidence on a 1–2 m floor-
+                # tag view settles ~79–84°, well inside 89.5°.
                 'max_incidence_deg': 89.5,
                 'use_sim_time': True,
             }],
