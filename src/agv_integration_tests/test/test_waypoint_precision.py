@@ -1276,8 +1276,8 @@ _DISPATCH_FROM_LAST_MODE = {
 _VALID_DISPATCH = {"nav2", "rail_approach", "rail_drive", "rail_exit"}
 
 # Floor-tag ID lookup for aisles {-4.4, -2.2, 0, +2.2, +4.4} (idx 0..4).
-# REAR entry at x=4.0 facing +Z: IDs 33..37.
-# FRONT entry at x=7.0 facing +Z: IDs 2, 3, 4, 12, 13.
+# REAR entry at x=3.67 facing +Z: IDs 33..37. (17 cm from tube tip at x=3.50.)
+# FRONT entry at x=7.33 facing +Z: IDs 2, 3, 4, 12, 13. (17 cm from tube tip at x=7.50.)
 _REAR_APPROACH_TAGS  = [33, 34, 35, 36, 37]
 _FRONT_APPROACH_TAGS = [2,  3,  4,  12, 13]
 
@@ -1317,9 +1317,14 @@ def _derive_tag_id(wp: dict) -> Optional[int]:
                     key=lambda i: abs(goal_y - aisle_centers[i]))
     if abs(goal_y - aisle_centers[aisle_idx]) > 0.35:
         return None  # goal not aisle-aligned
-    if 3.9 <= goal_x <= 4.6:
+    # Zone bounds cover tag position and canonical approach goal
+    # (tag.x ± 1.0 m, with ~0.3 m slack). Tags at x=3.67 (REAR) and
+    # x=7.33 (FRONT); approach goals at x=4.67 and x=6.33 respectively.
+    # Upper REAR bound stays below FRONT rail start (x=7.50); lower
+    # FRONT bound stays above REAR rail end (x=3.50).
+    if 3.3 <= goal_x <= 5.0:
         return _REAR_APPROACH_TAGS[aisle_idx]
-    if 6.9 <= goal_x <= 7.6:
+    if 6.0 <= goal_x <= 7.5:
         return _FRONT_APPROACH_TAGS[aisle_idx]
     return None
 
@@ -1457,8 +1462,18 @@ def _wait_for_state_value(harness: "Harness", topic_attr: str,
     `target_values` maps a status label ("SUCCEEDED"/"ABORTED"/...) to a
     list of JSON state strings that should return it. Returns
     "NAV_TIMEOUT" on deadline.
+
+    Iter-40 F4: during the wait, if brain pose drifts from GT beyond
+    DRIFT_SYNC_THRESHOLD_M, re-issue sync_brain_to_gt. The prod
+    pose0_rejection_threshold of 3 m locks out the gt_to_wheel_odom pin
+    once drift exceeds 3 m during long rail_drive dispatches; an
+    explicit SetPose bypasses that lockout. Polled at low frequency
+    (every 5 s) to avoid thrashing the EKF.
     """
     deadline = time.monotonic() + timeout_s
+    last_drift_check = time.monotonic()
+    drift_sync_threshold = 0.5  # m — start resyncing well below the 3 m cap.
+    drift_sync_interval = 5.0   # s — check cadence.
     while time.monotonic() < deadline:
         rclpy.spin_once(harness, timeout_sec=0.1)
         payload = getattr(harness, topic_attr, None)
@@ -1473,6 +1488,22 @@ def _wait_for_state_value(harness: "Harness", topic_attr: str,
                 for status, values in target_values.items():
                     if state in values:
                         return status
+        # Periodic drift-guard sync. Skip for rail_approach (topic_attr
+        # == last_rail_approach_state) — the fine_servo depends on a
+        # stable TF/EKF relative to the tag, and a SetPose mid-servo
+        # resets ekf_local's pose integrator and jitters the cam_to_base
+        # transform the servo relies on.
+        if topic_attr != "last_rail_approach_state" and \
+                time.monotonic() - last_drift_check > drift_sync_interval:
+            last_drift_check = time.monotonic()
+            gt = harness.current_gt_xy()
+            brain = harness.current_brain_xy()
+            if gt is not None and brain is not None:
+                drift = math.hypot(gt[0] - brain[0], gt[1] - brain[1])
+                if drift > drift_sync_threshold:
+                    _sync_brain_to_gt(
+                        harness, gt[0], gt[1], gt[2], verbose=False,
+                        timeout_s=1.0)
     return "NAV_TIMEOUT"
 
 
@@ -1656,6 +1687,21 @@ def _run_one_waypoint(
         # Continuous wp: tiny settle to make sure the callback ring is
         # drained before the dispatch fires.
         rclpy.spin_once(harness, timeout_sec=0.1)
+        # Iter-40 F2: still re-sync EKF to GT even on continuous wps.
+        # Without this, any drift accrued during the prior wp's fine_servo
+        # or long-timeout dispatch cascades — pose0_rejection_threshold=3m
+        # locks out the gt_to_wheel_odom pin once drift exceeds that, and
+        # the EKF walks away unbounded (observed iter-40 c1_drive_in drift
+        # 8.3 m after a 450 s fine_servo timeout on the previous wp).
+        gt_continuous = harness.current_gt_xy()
+        if gt_continuous is not None:
+            sync_ok = _sync_brain_to_gt(
+                harness, gt_continuous[0], gt_continuous[1],
+                gt_continuous[2], verbose=False,
+            )
+            if sync_ok:
+                time.sleep(SYNC_SETTLE_S)
+                rclpy.spin_once(harness, timeout_sec=0.1)
 
     # Round 44 Q1: snapshot the markers the robot sees right BEFORE dispatch.
     # This is "at_start" — after teleport + sync, with the camera looking at
@@ -1677,12 +1723,15 @@ def _run_one_waypoint(
             offset_y = float(wp.get("offset_y", 0.0))
             print(f"    [dispatch] rail_approach tag_id={tag_id} "
                   f"offsets=({offset_x:.2f}, {offset_y:.2f})", flush=True)
-            # rail_approach runs a Nav2 coarse phase followed by a
-            # 20 Hz visual servo to 2 cm. Under sim RTF ~0.20 the full
-            # sequence runs ~4 min wall-clock. 1.5× NAV_TIMEOUT matches
-            # the rail_exit budget and covers the tail.
+            # Iter-40 F2: fine_servo's own timeout is 120 s (rail_approach
+            # params) — the prior 1.5×NAV_TIMEOUT = 450 s cap let the robot
+            # drift for 7 minutes when solvePnP degenerated, corrupting the
+            # EKF beyond recovery for subsequent waypoints. Cap the harness
+            # wait at 150 s (120 s fine_servo + 30 s service/state overhead)
+            # so a stuck approach aborts cleanly and the next wp's sync can
+            # recover the pose.
             status = _call_rail_approach(
-                harness, tag_id, offset_x, offset_y, NAV_TIMEOUT_S * 1.5)
+                harness, tag_id, offset_x, offset_y, 150.0)
     elif dispatch == "rail_drive":
         print(f"    [dispatch] rail_drive goal=({goal['x']:.2f}, "
               f"{goal['y']:.2f})", flush=True)
@@ -1954,6 +2003,30 @@ def test_waypoint_precision():
                 break
         else:
             print("[waypoint_precision] WARNING: GT not received within 15 s — proceeding anyway", flush=True)
+
+        # Iter-38: mode_arbiter (portado a producción en iter-37) gatekeeps
+        # /agv/cmd_vel. At boot the teleop_server seeds operator_mode=teleop,
+        # which makes the arbiter publish zeros on /agv/cmd_vel regardless of
+        # what Nav2, rail_approach, or rail_driver emit. Publish
+        # operator_mode=nav so the arbiter relays the autonomous source
+        # (corridor_nav / rail_approach_active / rail_drive) picked by its FSM.
+        mode_pub = harness.create_publisher(String, "/agv/mode/set", 10)
+        for _ in range(5):
+            mode_pub.publish(String(data="nav"))
+            rclpy.spin_once(harness, timeout_sec=0.05)
+        print("[waypoint_precision] operator_mode=nav published", flush=True)
+
+        # Iter-38: cancel any leftover rail_driver goal from a previous run
+        # that the arbiter might still be latched onto. Without this, a stale
+        # "driving" state keeps the FSM in RAIL_DRIVE and blocks Nav2 goals.
+        from std_srvs.srv import Trigger
+        cancel_cli = harness.create_client(Trigger, "/agv/rail_driver/cancel_goal")
+        if cancel_cli.wait_for_service(timeout_sec=3.0):
+            fut = cancel_cli.call_async(Trigger.Request())
+            rclpy.spin_until_future_complete(harness, fut, timeout_sec=2.0)
+            print("[waypoint_precision] rail_driver goal canceled (cleanup)", flush=True)
+        else:
+            print("[waypoint_precision] rail_driver/cancel_goal unavailable (skip cleanup)", flush=True)
 
         budget = RestartBudget(AUTO_RESTART_MAX, AUTO_RESTART_COOLDOWN_S)
 
