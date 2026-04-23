@@ -8,6 +8,7 @@ install(PROGRAMS
   scripts/vslam_fallback_relay.py
   scripts/gt_to_wheel_odom.py
   scripts/apriltag_sim_shim.py
+  scripts/sim_obstacle_relay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
