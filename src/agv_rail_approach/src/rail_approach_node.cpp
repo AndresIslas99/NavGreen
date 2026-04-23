@@ -32,6 +32,11 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   declare_parameter("Kp_linear", 0.15);
   declare_parameter("Kp_lateral", 0.3);
   declare_parameter("Kp_yaw", 0.5);
+  // Iter-46 Paso 1.b: PI + stiction feedforward on the forward axis.
+  // Both default to 0 (pure-P legacy). HIL launch sets Ki_linear=0.05
+  // and stiction_ff_vel_mps=0.035 based on empirical plant ID.
+  declare_parameter("Ki_linear", 0.0);
+  declare_parameter("stiction_ff_vel_mps", 0.0);
   declare_parameter("max_fine_linear_vel", 0.03);
   declare_parameter("max_fine_angular_vel", 0.10);
   declare_parameter("tag_loss_timeout_s", 0.5);
@@ -56,6 +61,10 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   declare_parameter("base_frame", "base_link");
   declare_parameter("camera_info_topic", "/agv/zed/left/camera_info");
   declare_parameter("detections_topic", "detections");
+  // Iter-44 Fase 2 Arch A: registry-aware longitudinal override.
+  // See rail_approach_node.hpp header for the rationale. Off by default.
+  declare_parameter("use_registry_longitudinal", false);
+  declare_parameter("registry_max_stale_s", 2.0);
 
   registry_file_ = get_parameter("registry_file").as_string();
   runtime_registry_file_ = get_parameter("runtime_registry_file").as_string();
@@ -68,6 +77,8 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   kp_linear_ = get_parameter("Kp_linear").as_double();
   kp_lateral_ = get_parameter("Kp_lateral").as_double();
   kp_yaw_ = get_parameter("Kp_yaw").as_double();
+  ki_linear_ = get_parameter("Ki_linear").as_double();
+  stiction_ff_vel_mps_ = get_parameter("stiction_ff_vel_mps").as_double();
   max_fine_linear_ = get_parameter("max_fine_linear_vel").as_double();
   max_fine_angular_ = get_parameter("max_fine_angular_vel").as_double();
   check_yaw_convergence_ = get_parameter("check_yaw_convergence").as_bool();
@@ -78,6 +89,8 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   coarse_skip_radius_ = get_parameter("coarse_skip_radius").as_double();
   camera_frame_ = get_parameter("camera_frame").as_string();
   base_frame_ = get_parameter("base_frame").as_string();
+  use_registry_longitudinal_ = get_parameter("use_registry_longitudinal").as_bool();
+  registry_max_stale_s_ = get_parameter("registry_max_stale_s").as_double();
 
   auto cam_info_topic = get_parameter("camera_info_topic").as_string();
   auto detections_topic = get_parameter("detections_topic").as_string();
@@ -367,6 +380,11 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   // reject reason so the state topic reflects this run only.
   last_reject_reason_ = "none";
   last_reject_stamp_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+  // Iter-46 Paso 1.b: also clear PI state here so a repeated service
+  // call doesn't inherit integral from a prior attempt. FINE_SERVOING
+  // entry resets again as defence-in-depth.
+  fine_servo_state_.reset();
+  last_fine_servo_tick_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
   // Iter-12 / Option C: drop any prior-approach solvePnP samples so
   // the median filter doesn't bias the first fine_servoing ticks.
   pnp_filter_.reset();
@@ -394,17 +412,39 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   // Check distance to the registered tag using the brain's map→base_link
   // TF (ekf_global publishes both legs; available as soon as EKF has a
   // pose estimate, which the harness's _sync_brain_to_gt guarantees).
-  // Iter-25 R3: the coarse_skip_radius short-circuit is REMOVED. The old
-  // behaviour (skip Nav2 when robot ≤ 2 m from tag) let fine_servoing
-  // start from a yaw/lateral pose that was never corrected, capping
-  // precision at ~10 cm regardless of servo tuning (observed plateau
-  // across iter-17..24). Real AGV workflow also requires a visual
-  // pre-alignment pass before mounting the rail — skipping that step
-  // is a test-only shortcut with no production counterpart.
-  // Nav2 coarse_approach now runs unconditionally. For robots already
-  // within coarse_skip_radius it is near-instant (planner finds a short
-  // path, MPPI executes in <1 s), but the yaw/standoff guarantee at
-  // handoff is what the 2 cm gate needs.
+  // Iter-25 R3 (revised): the pre-alignment contract is satisfied at the
+  // WAYPOINT level — every rail_approach waypoint is preceded by an
+  // explicit nav2_prealign waypoint (see waypoints_tagged_v4.yaml).
+  // Requiring coarse_approach INSIDE rail_approach_node also rotates the
+  // robot to a standoff pose whose yaw comes from the tag registry
+  // (rail.yaw, baked for the sim's +Z-normal floor tags = 0), which
+  // clashes with the harness-chosen prealign yaw (π for REAR entries).
+  // Forward-only MPPI cannot resolve a 180° spin cleanly, so a blind
+  // coarse phase stalls. Restore the skip when the robot is close.
+  try {
+    const auto map_to_base = tf_buffer_->lookupTransform(
+        "map", base_frame_,
+        rclcpp::Time(0, 0, RCL_ROS_TIME),
+        rclcpp::Duration::from_seconds(0.5));
+    const double rx = map_to_base.transform.translation.x;
+    const double ry = map_to_base.transform.translation.y;
+    const double dist = std::hypot(rail.x - rx, rail.y - ry);
+    if (dist <= coarse_skip_radius_) {
+      RCLCPP_INFO(get_logger(),
+          "Skipping Nav2 coarse_approach: robot at (%.2f, %.2f) is "
+          "%.2f m from tag %d (≤ %.2f m threshold). Jumping straight "
+          "to TAG_ACQUISITION.",
+          rx, ry, dist, rail.id, coarse_skip_radius_);
+      state_ = State::TAG_ACQUISITION;
+      acquisition_start_ = now();
+      return;
+    }
+  } catch (const std::exception& e) {
+    RCLCPP_WARN(get_logger(),
+        "map→%s TF not yet available; falling through to Nav2 coarse "
+        "(%s)", base_frame_.c_str(), e.what());
+    // Fall through to Nav2 coarse_approach.
+  }
 
   if (!nav_client_->wait_for_action_server(std::chrono::seconds(5))) {
     RCLCPP_ERROR(get_logger(), "Nav2 action server not available");
@@ -476,6 +516,11 @@ void RailApproachNode::on_detection(
       tag_last_seen_ = now();
       // Iter-13 / Option D: stamp the fine-servo budget start.
       fine_servo_start_ = now();
+      // Iter-46 Paso 1.b: fresh PI state for each approach. Stale integral
+      // from a prior wp (or a reject-then-reacquire cycle) would push the
+      // robot in the wrong direction at first contact.
+      fine_servo_state_.reset();
+      last_fine_servo_tick_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
     }
 
     process_fine_servoing(det.id, corners, tag_size);
@@ -571,6 +616,8 @@ void RailApproachNode::process_fine_servoing(
   params.kp_linear = kp_linear_;
   params.kp_lateral = kp_lateral_;
   params.kp_yaw = kp_yaw_;
+  params.ki_linear = ki_linear_;
+  params.stiction_ff_vel_mps = stiction_ff_vel_mps_;
   params.max_linear_mps = max_fine_linear_;
   params.max_angular_rps = max_fine_angular_;
   params.check_yaw_convergence = check_yaw_convergence_;
@@ -588,12 +635,84 @@ void RailApproachNode::process_fine_servoing(
     return;
   }
   pnp_filter_.push(tvec, rvec);
-  const cv::Vec3d tvec_used = pnp_filter_.filled()
+  cv::Vec3d tvec_used = pnp_filter_.filled()
       ? pnp_filter_.tvec_median() : tvec;
   const cv::Vec3d rvec_used = pnp_filter_.filled()
       ? pnp_filter_.rvec_median() : rvec;
 
-  const auto out = fine_servo_compute(tvec_used, rvec_used, cam_to_base, params);
+  // Iter-44 Fase 2 Arch A: override forward component (tvec.z in cam-
+  // optical) with a TF+registry estimate when enabled. Lateral (tvec.x)
+  // and rvec stay from PnP (well-conditioned even in grazing). The
+  // TF lookup is map→camera_frame; the tag world pose comes from the
+  // registry entry for the target tag. We only override when the lookup
+  // succeeds within registry_max_stale_s (defensive: EKF may be stale
+  // in the middle of a set_pose hand-off).
+  if (use_registry_longitudinal_ && state_ == State::FINE_SERVOING) {
+    auto rit = rail_starts_.find(target_tag_id_);
+    if (rit != rail_starts_.end()) {
+      const auto& rail = rit->second;
+      try {
+        const auto map_to_cam = tf_buffer_->lookupTransform(
+            camera_frame_, "map",
+            rclcpp::Time(0, 0, RCL_ROS_TIME),
+            rclcpp::Duration::from_seconds(0.2));
+        const double age = (now() - rclcpp::Time(map_to_cam.header.stamp)).seconds();
+        if (age <= registry_max_stale_s_) {
+          // Build tag in cam-optical frame: p_cam = R_cam_from_map * p_map + t.
+          const tf2::Quaternion q(
+              map_to_cam.transform.rotation.x,
+              map_to_cam.transform.rotation.y,
+              map_to_cam.transform.rotation.z,
+              map_to_cam.transform.rotation.w);
+          const tf2::Matrix3x3 R(q);
+          const double tx = map_to_cam.transform.translation.x;
+          const double ty = map_to_cam.transform.translation.y;
+          const double tz = map_to_cam.transform.translation.z;
+          // Floor tag z=0.002 m (from markers_registry.yaml). Wall tag
+          // z=0.145 m. RailStart only carries x/y/yaw so we infer z from
+          // the tag_size convention: rail_approach targets are floor tags.
+          const double tag_z_world = 0.002;
+          const double cam_x =
+              R[0][0]*rail.x + R[0][1]*rail.y + R[0][2]*tag_z_world + tx;
+          // const double cam_y =  // computed but unused; keep for clarity
+          //     R[1][0]*rail.x + R[1][1]*rail.y + R[1][2]*tag_z_world + ty;
+          (void)ty;
+          const double cam_z =
+              R[2][0]*rail.x + R[2][1]*rail.y + R[2][2]*tag_z_world + tz;
+          // cam_z is the forward distance from camera to tag in optical
+          // frame — exactly the quantity solvePnP puts in tvec[2]. We
+          // swap it in, keeping tvec[0] (lateral) and rvec (yaw) from PnP
+          // where they are well-conditioned.
+          if (cam_z > 0.05 && cam_z < 5.0) {
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                "registry_longitudinal: pnp_z=%.3f → registry_z=%.3f (Δ=%+.3f m, cam_x=%.3f)",
+                tvec_used[2], cam_z, cam_z - tvec_used[2], cam_x);
+            tvec_used[2] = cam_z;
+          }
+        }
+      } catch (const std::exception& e) {
+        // Fall through; keep PnP tvec. Not an error — TF may not yet be
+        // ready in the first ~1 s after state machine enters FINE_SERVOING.
+      }
+    }
+  }
+
+  // Iter-46 Paso 1.b: compute dt since last fine-servo tick for the
+  // integral term. First tick of a new FINE_SERVOING episode has
+  // last_fine_servo_tick_ as zero — fine_servo_compute skips
+  // integration when dt_s <= 0, so that case is safe.
+  const rclcpp::Time now_ts = now();
+  double dt_s = 0.0;
+  if (last_fine_servo_tick_.nanoseconds() > 0) {
+    dt_s = (now_ts - last_fine_servo_tick_).seconds();
+    // Guard against clock resets / huge gaps: cap dt at 1 s so a stall
+    // doesn't dump an enormous integral contribution on the next tick.
+    if (dt_s > 1.0 || dt_s < 0.0) dt_s = 0.0;
+  }
+  last_fine_servo_tick_ = now_ts;
+  const auto out = fine_servo_compute(
+      tvec_used, rvec_used, cam_to_base, params,
+      fine_servo_state_, dt_s);
   if (out.verdict != FineServoVerdict::OK) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
         "fine_servo reject: %s (range=%.3f m)",

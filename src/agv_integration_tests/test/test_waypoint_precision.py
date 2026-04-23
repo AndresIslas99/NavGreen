@@ -35,7 +35,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 # The mode_transitions_oracle helper sits next to this file in the test
 # directory; make it importable whether pytest runs from the workspace
@@ -60,7 +60,7 @@ try:
         QoSProfile,
         ReliabilityPolicy,
     )
-    from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+    from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
     from nav_msgs.msg import Odometry
     from std_msgs.msg import Bool, String
     from nav2_msgs.action import NavigateToPose
@@ -178,6 +178,20 @@ REINIT_THRESHOLD_M = 0.30
 # 2026-04-17, so tolerate up to 5 min per waypoint for the 4 m-scale goals in
 # waypoints_20.yaml. Override with AGV_NAV_TIMEOUT_S for faster iteration.
 NAV_TIMEOUT_S = float(os.environ.get("AGV_NAV_TIMEOUT_S", "300.0"))
+# Iter-46 Paso 1.d: stuck detector. When the robot is in mid-dispatch but
+# its GT pose has not changed by more than STUCK_EPSILON_M for STUCK_S
+# seconds, abort the current goal early and proceed to the next waypoint.
+# This caps the wall-time wasted on permanently-blocked situations (the
+# Crate1 obstacle on c5_drive_in is the canonical case — pre iter-46 it
+# burned the full 300 s NAV_TIMEOUT × 2 = 10 min before the next wp).
+STUCK_THRESHOLD_S = float(os.environ.get("AGV_STUCK_THRESHOLD_S", "60.0"))
+STUCK_EPSILON_M = float(os.environ.get("AGV_STUCK_EPSILON_M", "0.03"))
+# Brief reverse pulse fired right before returning ABORTED to release any
+# pin between the robot and the obstacle. Bypasses the controller chain
+# (publishes to the sim's drive input directly) so the FSM state of
+# rail_driver / rail_approach is not contaminated.
+STUCK_RECOVERY_REVERSE_VX = -0.05
+STUCK_RECOVERY_REVERSE_S = 1.5
 # After agv_hil_full.launch.py remap (2026-04-17), ekf_local and ekf_global
 # each expose their own set_pose service. Both must be called: ekf_local
 # resets the odom→base_link state so wheel_odom deltas stop pushing stale
@@ -374,6 +388,80 @@ def _rail_driver_cancel_goal(harness: Node, timeout_s: float = 2.0) -> bool:
         return False
     finally:
         harness.destroy_client(client)
+
+
+# ── Iter-46 Paso 1.d: stuck detection helper ──────────────────────────────
+class StuckDetector:
+    """Track GT motion and signal `stuck` after `threshold_s` without
+    movement > `epsilon_m`. Caller updates each loop iteration with the
+    current GT (x, y); returns True once the no-motion window exceeds
+    `threshold_s`. Reset between waypoints so each dispatch starts fresh.
+
+    Why: rail_drive against a permanent obstacle (e.g. Crate1 at (3.5, -2.0)
+    on c5_drive_in) consumes the full NAV_TIMEOUT (300 s) without any
+    chance of progress. Detecting the stuck condition early lets the
+    harness skip ahead, saving up to ~5 min per blocked wp. The
+    `stuck_incident` payload below is recorded into per-wp report so the
+    operator sees WHY the wp aborted (vs a generic NAV_TIMEOUT).
+    """
+
+    def __init__(self,
+                 threshold_s: float = STUCK_THRESHOLD_S,
+                 epsilon_m: float = STUCK_EPSILON_M):
+        self.threshold_s = threshold_s
+        self.epsilon_m = epsilon_m
+        self.last_motion_t: float = 0.0
+        self.anchor_pose: Optional[Tuple[float, float]] = None
+
+    def reset(self, gt_xy: Optional[Tuple[float, float]] = None) -> None:
+        self.last_motion_t = time.monotonic()
+        self.anchor_pose = gt_xy
+
+    def update(self, gt_xy: Tuple[float, float]) -> bool:
+        now = time.monotonic()
+        if self.anchor_pose is None:
+            self.anchor_pose = gt_xy
+            self.last_motion_t = now
+            return False
+        dx = gt_xy[0] - self.anchor_pose[0]
+        dy = gt_xy[1] - self.anchor_pose[1]
+        if math.hypot(dx, dy) > self.epsilon_m:
+            # Re-anchor: window slides whenever we see real motion.
+            self.anchor_pose = gt_xy
+            self.last_motion_t = now
+            return False
+        return (now - self.last_motion_t) > self.threshold_s
+
+    def seconds_since_motion(self) -> float:
+        return time.monotonic() - self.last_motion_t
+
+
+def _stuck_recovery_reverse(harness: Node) -> None:
+    """Brief reverse pulse on /agv/cmd_vel_armed (bypasses arbiter +
+    velocity_smoother) to release any pin between the robot and the
+    obstacle before the next wp's teleport. Vx + duration are the module
+    constants STUCK_RECOVERY_REVERSE_VX / STUCK_RECOVERY_REVERSE_S.
+    Fail-soft: if the publisher cannot be created, just log and return —
+    the next wp's teleport will reset pose anyway.
+    """
+    try:
+        rel_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
+        pub = harness.create_publisher(Twist, "/agv/cmd_vel_armed", rel_qos)
+        cmd = Twist()
+        cmd.linear.x = STUCK_RECOVERY_REVERSE_VX
+        end = time.monotonic() + STUCK_RECOVERY_REVERSE_S
+        while time.monotonic() < end:
+            pub.publish(cmd)
+            rclpy.spin_once(harness, timeout_sec=0.05)
+        cmd.linear.x = 0.0
+        pub.publish(cmd)
+        harness.destroy_publisher(pub)
+    except Exception:
+        pass
 
 
 def _wait_for_fresh_tf(
@@ -1012,7 +1100,14 @@ class Harness(Node):
         # Round 5 (stall=60, no retry) gave 25% / p95 0.077. Round 6 (stall=120, retry)
         # dropped to 20% / p95 0.143 — retries confused MPPI's planner when it had
         # already stopped commanding. Revert to round 5's setup.
-        stall_abort_s = 90.0  # middle of 60/120 — room to creep but no runaway
+        # Iter-46 Paso 1.d: kept at 90 s for nav2 specifically. Lowering
+        # this to 60 s in alignment with the rail_drive STUCK detector
+        # caused c5_prealign to ABORT — Nav2 MPPI's slow rotation/replan
+        # at small remaining distances + sim drive jitter occasionally
+        # triggers a >60 s window with d_xy delta < 0.02 m even when the
+        # robot is making real (but tangential) progress. The rail_drive
+        # STUCK detector measures REAL GT motion, so it can stay tighter.
+        stall_abort_s = 90.0
         # Iter-43 Bug 1 fix: conditional drift-guard during Nav2 nav. The
         # Round 11f concern ("mid-flight SetPose triggers premature SUCCEEDED
         # at 0.32 m from goal") was tied to done_xy_tol=0.05 + Nav2-declared
@@ -1395,13 +1490,20 @@ def _publish_rail_goal(harness: "Harness", goal_x: float, goal_y: float,
     goal.pose.position.y = float(goal_y)
     goal.pose.orientation.w = 1.0
     pub.publish(goal)
+    # Iter-46 Paso 1.d: enable stuck detector for rail_drive. A permanent
+    # obstacle in the rail (Crate1 on c5_drive_in is the textbook case)
+    # leaves rail_driver in `driving` state with cmd_vel saturated but
+    # actual_speed=0 for the full timeout — pre-detector this burned
+    # 5 minutes per blocked wp.
     return _wait_for_state_value(
         harness, topic_attr="last_rail_driver_state",
         target_values={
             "SUCCEEDED": ["reached"],
             "ABORTED": ["blocked_lateral", "blocked_misaligned"],
         },
-        timeout_s=timeout_s)
+        timeout_s=timeout_s,
+        stuck_detector=StuckDetector(),
+        stuck_cancel_fn=lambda h: _rail_driver_cancel_goal(h, timeout_s=1.0))
 
 
 def _publish_rail_exit_and_await_corridor(
@@ -1467,7 +1569,9 @@ def _publish_rail_exit_and_await_corridor(
 
 
 def _wait_for_state_value(harness: "Harness", topic_attr: str,
-                           target_values: dict, timeout_s: float) -> str:
+                           target_values: dict, timeout_s: float,
+                           stuck_detector: Optional[StuckDetector] = None,
+                           stuck_cancel_fn: Optional[callable] = None) -> str:
     """Poll a harness attribute (JSON string) for a top-level "state" match.
 
     `target_values` maps a status label ("SUCCEEDED"/"ABORTED"/...) to a
@@ -1480,11 +1584,21 @@ def _wait_for_state_value(harness: "Harness", topic_attr: str,
     once drift exceeds 3 m during long rail_drive dispatches; an
     explicit SetPose bypasses that lockout. Polled at low frequency
     (every 5 s) to avoid thrashing the EKF.
+
+    Iter-46 Paso 1.d: optional `stuck_detector` early-aborts when GT
+    has not moved by >epsilon_m for >threshold_s. Saves time on
+    permanently-blocked dispatches (canonical: c5_drive_in vs Crate1).
+    On stuck: invoke stuck_cancel_fn to release the upstream goal,
+    fire a brief reverse pulse, and return "STUCK_ABORT" so the
+    harness records the cause distinctly from a NAV_TIMEOUT.
     """
     deadline = time.monotonic() + timeout_s
     last_drift_check = time.monotonic()
     drift_sync_threshold = 0.5  # m — start resyncing well below the 3 m cap.
     drift_sync_interval = 5.0   # s — check cadence.
+    if stuck_detector is not None:
+        gt0 = harness.current_gt_xy()
+        stuck_detector.reset((gt0[0], gt0[1]) if gt0 is not None else None)
     while time.monotonic() < deadline:
         rclpy.spin_once(harness, timeout_sec=0.1)
         payload = getattr(harness, topic_attr, None)
@@ -1515,6 +1629,17 @@ def _wait_for_state_value(harness: "Harness", topic_attr: str,
                     _sync_brain_to_gt(
                         harness, gt[0], gt[1], gt[2], verbose=False,
                         timeout_s=1.0)
+        # Stuck detector (only if enabled by caller).
+        if stuck_detector is not None:
+            gt = harness.current_gt_xy()
+            if gt is not None and stuck_detector.update((gt[0], gt[1])):
+                if stuck_cancel_fn is not None:
+                    try:
+                        stuck_cancel_fn(harness)
+                    except Exception:
+                        pass
+                _stuck_recovery_reverse(harness)
+                return "STUCK_ABORT"
     return "NAV_TIMEOUT"
 
 

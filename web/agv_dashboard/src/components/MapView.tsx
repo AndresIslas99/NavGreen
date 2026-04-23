@@ -8,8 +8,19 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapUpdate, PathPoint } from '../api/types'
+import type { MapUpdate, PathPoint, DefinedTag } from '../api/types'
 import type { FleetRobot } from '../hooks/useFleetSocket'
+
+// Greenhouse rail aisle geometry. y-centers measured in world frame
+// (meters), aisle half-width ≈ 0.35m (matches zone_detector params).
+// X spans two segments: rear (x < GAP_MIN) and front (x > GAP_MAX);
+// the gap between GAP_MIN..GAP_MAX is rail-free corridor.
+const RAIL_AISLE_Y = [-4.4, -2.2, 0, 2.2, 4.4] as const
+const RAIL_HALF_W = 0.35
+const RAIL_X_MIN = -2
+const RAIL_X_MAX = 13
+const GAP_MIN = 3.5
+const GAP_MAX = 7.5
 
 interface Props {
   mapData: MapUpdate | null
@@ -67,6 +78,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   // scanLayerRef unused — scan points managed via scanGroupRef
   const scanGroupRef = useRef<L.LayerGroup | null>(null)
   const waypointLayerRef = useRef<L.LayerGroup | null>(null)
+  const railLayerRef = useRef<L.LayerGroup | null>(null)
+  const tagLayerRef = useRef<L.LayerGroup | null>(null)
 
   // Trail accumulator
   const trailRef = useRef<L.LatLng[]>([])
@@ -102,6 +115,29 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const waypointGroup = L.layerGroup().addTo(map)
     waypointLayerRef.current = waypointGroup
 
+    // Rail aisle geometry: two rectangles per aisle centerline (rear + front),
+    // skipping the gap. Drawn once on init — geometry is static.
+    const railGroup = L.layerGroup().addTo(map)
+    railLayerRef.current = railGroup
+    for (const yc of RAIL_AISLE_Y) {
+      const yLo = yc - RAIL_HALF_W
+      const yHi = yc + RAIL_HALF_W
+      // Rear segment (LatLngBoundsLiteral: [[lat,lng],[lat,lng]] where lat=y, lng=x)
+      L.rectangle(
+        [[yLo, RAIL_X_MIN], [yHi, GAP_MIN]],
+        { color: '#4fc3f7', weight: 1, fillColor: '#4fc3f7', fillOpacity: 0.08, dashArray: '4,4', interactive: false },
+      ).addTo(railGroup)
+      // Front segment
+      L.rectangle(
+        [[yLo, GAP_MAX], [yHi, RAIL_X_MAX]],
+        { color: '#4fc3f7', weight: 1, fillColor: '#4fc3f7', fillOpacity: 0.08, dashArray: '4,4', interactive: false },
+      ).addTo(railGroup)
+    }
+
+    // AprilTag markers (rail_start). Tags loaded once via fetch below.
+    const tagGroup = L.layerGroup().addTo(map)
+    tagLayerRef.current = tagGroup
+
     // Track user interaction
     map.on('dragstart', () => {
       userPannedRef.current = true
@@ -122,6 +158,44 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       mapRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Fetch defined AprilTags and render them on the rail overlay. Polled
+  // at a low rate (every 30s) so newly defined tags appear without reload.
+  useEffect(() => {
+    const group = tagLayerRef.current
+    if (!group) return
+
+    const render = (tags: DefinedTag[]) => {
+      group.clearLayers()
+      for (const t of tags) {
+        const color = t.type === 'rail_start' ? '#ffd54f' : '#90a4ae'
+        const fill = t.type === 'rail_start' ? '#ffb300' : '#607d8b'
+        const marker = L.circleMarker(worldToLatLng(t.x, t.y), {
+          radius: 5,
+          color,
+          fillColor: fill,
+          fillOpacity: 0.9,
+          weight: 2,
+        }).addTo(group)
+        marker.bindTooltip(`#${t.id} · ${t.label}${t.type === 'rail_start' ? ' (rail)' : ''}`, {
+          direction: 'top',
+          offset: [0, -4],
+          className: 'apriltag-tooltip',
+        })
+      }
+    }
+
+    let canceled = false
+    const fetchTags = () => {
+      fetch('/api/apriltags')
+        .then(r => r.json())
+        .then(s => { if (!canceled) render(s.defined_tags || []) })
+        .catch(() => {})
+    }
+    fetchTags()
+    const iv = setInterval(fetchTags, 30000)
+    return () => { canceled = true; clearInterval(iv) }
   }, [])
 
   // Update click handler when mode/callback changes
