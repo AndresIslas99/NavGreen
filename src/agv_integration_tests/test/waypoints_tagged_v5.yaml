@@ -28,9 +28,9 @@
 # R1 still holds: every `start` pose is in gap/corridor, never in a
 # rail_aisle_* zone.
 #
-# Floor tag IDs (USD 2026-04-18):
-#   REAR   (x=4.0):  33 (y=-4.4)  34 (y=-2.2)  35 (y=0)  36 (y=+2.2)  37 (y=+4.4)
-#   FRONT  (x=7.0):   2 (y=-4.4)   3 (y=-2.2)   4 (y=0)  12 (y=+2.2)  13 (y=+4.4)
+# Floor tag IDs (USD 2026-04-21, tags at 17 cm from rail tube tip toward gap):
+#   REAR   (x=3.67):  33 (y=-4.4)  34 (y=-2.2)  35 (y=0)  36 (y=+2.2)  37 (y=+4.4)
+#   FRONT  (x=7.33):   2 (y=-4.4)   3 (y=-2.2)   4 (y=0)  12 (y=+2.2)  13 (y=+4.4)
 
 waypoints:
   # ─── Cycle 1: REAR entry, centre aisle (y=0) ──────────────────────────
@@ -44,8 +44,8 @@ waypoints:
     dispatch: rail_approach
     tag_id: 35                             # REAR aisle 0 (y=0)
     offset_x: 0.30
-    # Canonical: robot.x = tag.x - cos(π)*(0.70+0.30) = 4 + 1 = 5.0
-    goal:  {x: 5.0, y: 0.0, yaw: 3.14}
+    # Canonical: robot.x = tag.x - cos(π)*(0.70+0.30) = 3.67 + 1 = 4.67
+    goal:  {x: 4.67, y: 0.0, yaw: 3.14}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c1_drive_in
@@ -69,8 +69,8 @@ waypoints:
     dispatch: rail_approach
     tag_id: 4                              # FRONT aisle 0 (y=0)
     offset_x: 0.30
-    # Canonical: robot.x = tag.x - cos(0)*(0.70+0.30) = 7 - 1 = 6.0
-    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
+    # Canonical: robot.x = tag.x - cos(0)*(0.70+0.30) = 7.33 - 1 = 6.33
+    goal:  {x: 6.33, y: 0.0, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c2_drive_in
@@ -94,7 +94,7 @@ waypoints:
     dispatch: rail_approach
     tag_id: 36                             # REAR aisle +2.2
     offset_x: 0.30
-    goal:  {x: 5.0, y: 2.2, yaw: 3.14}
+    goal:  {x: 4.67, y: 2.2, yaw: 3.14}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c3_drive_in
@@ -118,7 +118,7 @@ waypoints:
     dispatch: rail_approach
     tag_id: 3                              # FRONT aisle -2.2
     offset_x: 0.30
-    goal:  {x: 6.0, y: -2.2, yaw: 0.0}
+    goal:  {x: 6.33, y: -2.2, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c4_drive_in
@@ -142,7 +142,7 @@ waypoints:
     dispatch: rail_approach
     tag_id: 34                             # REAR aisle -2.2
     offset_x: 0.30
-    goal:  {x: 5.0, y: -2.2, yaw: 3.14}
+    goal:  {x: 4.67, y: -2.2, yaw: 3.14}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c5_drive_in

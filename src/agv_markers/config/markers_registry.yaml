@@ -8,9 +8,10 @@
 #   - wall (z=0.145m): drift-correction via agv_markers (global EKF hint)
 #   - row_start (z=0.145m): vertical tags at x=7.40 (FRONT) and x=3.60 (REAR)
 #     marking the start of each crop row — consumed by agv_markers.
-#   - floor_rail_entry (z=0.002m): face-up tags at x=7.00 (FRONT entry) and
-#     x=4.00 (REAR entry) used by agv_rail_approach for 2 cm alignment
-#     before the robot enters a rail aisle.
+#   - floor_rail_entry (z=0.002m): face-up tags at x=7.33 (FRONT entry) and
+#     x=3.67 (REAR entry) used by agv_rail_approach for 2 cm alignment
+#     before the robot enters a rail aisle. Installed 17 cm from the rail
+#     tube tip toward the gap (FRONT tube at x=7.50, REAR tube at x=3.50).
 # The type field is optional — defaults to wall/row_start/floor_rail_entry
 # based on z-height and x-coordinate.
 
@@ -160,63 +161,63 @@ markers:
     z: 0.145
     yaw: 0.0
 
-  # Suelo pasillos (frente, x=7.00)
+  # Suelo pasillos (frente, x=7.33 — 17 cm del inicio del tubo hacia el gap)
   - id: 2
-    x: 7.00
+    x: 7.33
     y: -4.40
     z: 0.002
     yaw: 0.0
   - id: 3
-    x: 7.00
+    x: 7.33
     y: -2.20
     z: 0.002
     yaw: 0.0
   - id: 4
-    x: 7.00
+    x: 7.33
     y: 0.00
     z: 0.002
     yaw: 0.0
   - id: 12
-    x: 7.00
+    x: 7.33
     y: 2.20
     z: 0.002
     yaw: 0.0
   - id: 13
-    x: 7.00
+    x: 7.33
     y: 4.40
     z: 0.002
     yaw: 0.0
 
-  # Suelo pasillos (atrás, x=4.00)
+  # Suelo pasillos (atrás, x=3.67 — 17 cm del inicio del tubo hacia el gap)
   - id: 33
-    x: 4.00
+    x: 3.67
     y: -4.40
     z: 0.002
     yaw: 0.0
   - id: 34
-    x: 4.00
+    x: 3.67
     y: -2.20
     z: 0.002
     yaw: 0.0
   - id: 35
-    x: 4.00
+    x: 3.67
     y: 0.00
     z: 0.002
     yaw: 0.0
   - id: 36
-    x: 4.00
+    x: 3.67
     y: 2.20
     z: 0.002
     yaw: 0.0
   - id: 37
-    x: 4.00
+    x: 3.67
     y: 4.40
     z: 0.002
     yaw: 0.0
 
   # ── Rail entry floor tags (used by agv_rail_approach) ──
-  # The 10 floor tags above (IDs 2,3,4,12,13 FRONT x=7.00; IDs 33,34,35,36,37
-  # REAR x=4.00) are the approach targets for the RAIL_APPROACH mode. Robot
+  # The 10 floor tags above (IDs 2,3,4,12,13 FRONT x=7.33; IDs 33,34,35,36,37
+  # REAR x=3.67) are the approach targets for the RAIL_APPROACH mode. Robot
   # detects them at ~1.0–2.5 m range with the ZED mounted at z=0.21 m, drives
   # the final metre with the agv_rail_approach P-controller, settles, and
   # hands off to agv_rail_driver for the longitudinal traversal.

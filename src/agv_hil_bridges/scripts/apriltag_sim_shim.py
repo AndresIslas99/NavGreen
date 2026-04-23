@@ -102,6 +102,25 @@ def _transform_to_matrix(ts) -> np.ndarray:
     return M
 
 
+def _pose_to_matrix(pose) -> np.ndarray:
+    q = pose.orientation
+    M = np.eye(4)
+    M[:3, :3] = _quat_to_matrix(q.x, q.y, q.z, q.w)
+    M[0, 3] = pose.position.x
+    M[1, 3] = pose.position.y
+    M[2, 3] = pose.position.z
+    return M
+
+
+def _invert_se3(M: np.ndarray) -> np.ndarray:
+    Mi = np.eye(4)
+    R = M[:3, :3]
+    t = M[:3, 3]
+    Mi[:3, :3] = R.T
+    Mi[:3, 3] = -R.T @ t
+    return Mi
+
+
 class TagGeometry:
     """Precomputed world-frame corner + normal for one registered tag."""
 
@@ -195,6 +214,25 @@ class AprilTagSimShim(Node):
         self.declare_parameter("image_margin_frac", 0.02)
         self.declare_parameter("tf_lookup_timeout_s", 0.2)
         self.declare_parameter("family", "tag36h11")
+        # Iter-40 F1: compose world→optical from sim ground-truth base_link
+        # pose + static base_link→optical TF, instead of letting the TF tree
+        # do the full map→odom→base_link chain. The brain's EKFs are 2D and
+        # publish base_link at z=0, which pushes the optical frame to z=0.010
+        # world. Floor tags then project from a near-ground camera — pixel
+        # span shrinks to a thin line, solvePnP degrades to tvec ≈ 3 cm,
+        # and both fine_servo (range_out_of_bounds) + marker_correction (bad
+        # marker_pose) collapse. GT pose has the real z=0.2 base height, so
+        # this bypass restores correct incidence and stable solvePnP.
+        self.declare_parameter("use_ground_truth_pose", True)
+        self.declare_parameter("gt_pose_topic", "/agv/sim/ground_truth/pose")
+        self.declare_parameter("base_frame", "base_link")
+        # Gaussian corner noise (px, sigma) — the geometric projector is
+        # otherwise pixel-perfect, which lets solvePnP downstream converge
+        # with unrealistic precision. Real apriltag_ros corner estimates
+        # on a 20 cm tag at 1-2 m range sit around ±1 px (subpixel refine
+        # on) to ±2 px (refine off, hardware motion blur). 1.0 keeps tests
+        # stable; raise toward 2.0 to stress the fine_servo median filter.
+        self.declare_parameter("corner_noise_px", 1.0)
 
         self._image_frame = self.get_parameter("image_frame").value
         self._world_frame = self.get_parameter("world_frame").value
@@ -207,6 +245,17 @@ class AprilTagSimShim(Node):
         self._tf_timeout = Duration(
             seconds=float(self.get_parameter("tf_lookup_timeout_s").value))
         self._family = str(self.get_parameter("family").value)
+        self._corner_noise_px = float(
+            self.get_parameter("corner_noise_px").value)
+        self._rng = np.random.default_rng()
+        self._use_gt = bool(self.get_parameter("use_ground_truth_pose").value)
+        self._base_frame = str(self.get_parameter("base_frame").value)
+        self._gt_base_pose: Optional[object] = None
+        # Iter-39 diagnostics: count per-tag rejections per reason, dump
+        # every 5 s so we can see why floor tags never emit.
+        self._reject_counts: dict[int, dict[str, int]] = {}
+        self._emit_counts: dict[int, int] = {}
+        self._diag_tick = 0
 
         registry_path_s = str(self.get_parameter("registry_file").value)
         if not registry_path_s:
@@ -243,6 +292,13 @@ class AprilTagSimShim(Node):
             self.get_parameter("camera_info_topic").value,
             self._on_cam_info, rel,
         )
+        if self._use_gt:
+            from geometry_msgs.msg import PoseStamped
+            self.create_subscription(
+                PoseStamped,
+                self.get_parameter("gt_pose_topic").value,
+                self._on_gt_pose, rel,
+            )
         self._pub = self.create_publisher(
             AprilTagDetectionArray,
             self.get_parameter("detections_topic").value, rel,
@@ -264,7 +320,23 @@ class AprilTagSimShim(Node):
                 f"cx={msg.k[2]:.1f} cy={msg.k[5]:.1f} "
                 f"size={msg.width}x{msg.height}")
 
+    def _on_gt_pose(self, msg) -> None:
+        self._gt_base_pose = msg.pose
+
     def _lookup_world_to_cam(self) -> Optional[np.ndarray]:
+        # Iter-40 F1: prefer GT-derived composition when available.
+        if self._use_gt and self._gt_base_pose is not None:
+            try:
+                ts_static = self._tf_buf.lookup_transform(
+                    self._image_frame, self._base_frame,
+                    rclpy.time.Time(), self._tf_timeout)
+            except tf2_ros.TransformException:
+                ts_static = None
+            if ts_static is not None:
+                T_base_to_optical = _transform_to_matrix(ts_static)
+                T_world_to_base = _invert_se3(_pose_to_matrix(self._gt_base_pose))
+                return T_base_to_optical @ T_world_to_base
+        # Fallback: brain TF chain (breaks in HIL because EKFs are 2D).
         try:
             ts = self._tf_buf.lookup_transform(
                 self._image_frame, self._world_frame,
@@ -305,32 +377,39 @@ class AprilTagSimShim(Node):
             view = cam_pos_world - tag_centre
             view_n = np.linalg.norm(view)
             if view_n < 1e-6:
+                self._bump_reject(tg.id, "zero_dist")
                 continue
             view /= view_n
             cos_incidence = float(np.dot(tg.normal_world, view))
             if cos_incidence < self._max_cos_offaxis:
                 # Camera is too oblique to the tag, or looking at the back.
+                self._bump_reject(tg.id, "incidence")
                 continue
 
             cam_corners = M_world_to_cam @ tg.corners_world  # 4x4
 
             pixels = []
             in_frame = True
+            reject = None
             for i in range(4):
                 Xc, Yc, Zc = cam_corners[0, i], cam_corners[1, i], cam_corners[2, i]
                 if Zc <= 0.01:
                     in_frame = False
+                    reject = "behind_plane"
                     break
                 u = fx * Xc / Zc + cx
                 v = fy * Yc / Zc + cy
                 if u < -m_w or u > w_px + m_w:
                     in_frame = False
+                    reject = "u_oob"
                     break
                 if v < -m_h or v > h_px + m_h:
                     in_frame = False
+                    reject = "v_oob"
                     break
                 pixels.append((u, v))
             if not in_frame or len(pixels) != 4:
+                self._bump_reject(tg.id, reject or "unknown")
                 continue
 
             det = AprilTagDetection()
@@ -339,6 +418,14 @@ class AprilTagSimShim(Node):
             det.hamming = 0
             det.goodness = 1.0
             det.decision_margin = 100.0
+            if self._corner_noise_px > 0.0:
+                jitter = self._rng.normal(
+                    0.0, self._corner_noise_px, size=(4, 2))
+                pixels = [
+                    (pixels[i][0] + jitter[i, 0],
+                     pixels[i][1] + jitter[i, 1])
+                    for i in range(4)
+                ]
             det.centre.x = sum(p[0] for p in pixels) / 4.0
             det.centre.y = sum(p[1] for p in pixels) / 4.0
             for i, (u, v) in enumerate(pixels):
@@ -348,6 +435,28 @@ class AprilTagSimShim(Node):
 
         if out.detections:
             self._pub.publish(out)
+            for d in out.detections:
+                self._emit_counts[d.id] = self._emit_counts.get(d.id, 0) + 1
+        # Every 25 ticks (5s at 5Hz) dump why each tag got rejected. Floor
+        # tags 2,3,4,12,13,33-37 are of particular interest in HIL.
+        self._diag_tick += 1
+        if self._diag_tick >= 25:
+            self._diag_tick = 0
+            floor_ids = [2, 3, 4, 12, 13, 33, 34, 35, 36, 37]
+            parts = []
+            for tid in floor_ids:
+                emit = self._emit_counts.get(tid, 0)
+                rej = self._reject_counts.get(tid, {})
+                if emit or rej:
+                    tag_stats = f"emit={emit} " + " ".join(
+                        f"{k}={v}" for k, v in rej.items())
+                    parts.append(f"tag{tid}[{tag_stats}]")
+            if parts:
+                self.get_logger().info("[diag] " + " | ".join(parts))
+
+    def _bump_reject(self, tag_id: int, reason: str) -> None:
+        d = self._reject_counts.setdefault(tag_id, {})
+        d[reason] = d.get(reason, 0) + 1
 
 
 def main() -> None:

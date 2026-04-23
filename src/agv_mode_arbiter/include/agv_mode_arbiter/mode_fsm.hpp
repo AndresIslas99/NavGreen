@@ -269,6 +269,19 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
         out.active_source = Source::RAIL;
         return out;
       }
+      // Iter-38: rail_driver lost authority without passing through "reached"
+      // (operator canceled via /rail_driver/cancel_goal, or test harness reset
+      // between waypoints). If we are physically OUTSIDE a rail aisle (gap or
+      // corridor), release back to CORRIDOR_NAV so subsequent Nav2 goals can
+      // drive. Inside a rail aisle we refuse this exit because Nav2 rotating
+      // would clip the tubes — operator must reverse out via rail_driver first.
+      if ((in.rail_driver_state == "idle" ||
+           in.rail_driver_state == "canceled") &&
+          !is_rail_zone(in.zone)) {
+        out.next_mode = Mode::CORRIDOR_NAV;
+        out.active_source = Source::NAV;
+        return out;
+      }
       out.active_source = Source::RAIL;
       return out;
 
