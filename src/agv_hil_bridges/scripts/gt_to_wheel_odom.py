@@ -100,11 +100,19 @@ class GtToWheelOdom(Node):
         )
 
     def _on_gt(self, msg: PoseStamped) -> None:
-        # Compute twist on each *new* GT message (not on publish timer — the
-        # timer fires at 50 Hz but GT arrives at ~10 Hz, so 4 out of 5 timer
-        # ticks would finite-difference identical poses and report vx=0.
-        # That drives ekf_local's velocity estimate toward zero while pose
-        # is still advancing → cumulative pose lag (round 19 wp05: 0.13 m).
+        # Iter-42: NaN/inf guard. Sim unstick events can emit poses with
+        # non-finite components for 1–2 ticks. If those propagate to
+        # /agv/wheel_odom (EKF odom0) or /agv/marker_pose (ekf_global
+        # pose0), the Kalman update diverges and the filter output is
+        # NaN forever after, breaking every downstream node (Nav2,
+        # rail_approach, rail_driver). Drop the tick silently — the next
+        # clean GT overwrites last_gt and the EKF recovers within a
+        # publish period.
+        p = msg.pose.position
+        o = msg.pose.orientation
+        if not all(math.isfinite(v) for v in (p.x, p.y, p.z,
+                                               o.x, o.y, o.z, o.w)):
+            return
         now = self.get_clock().now()
         vx = 0.0
         vyaw = 0.0
