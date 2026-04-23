@@ -16,6 +16,7 @@ import { MissionsPanel } from './components/panels/MissionsPanel'
 import { RecoveryPanel } from './components/panels/RecoveryPanel'
 import { AnalyticsPanel } from './components/panels/AnalyticsPanel'
 import { AprilTagsPanel } from './components/panels/AprilTagsPanel'
+import { WaypointBatteryPanel } from './components/panels/WaypointBatteryPanel'
 import { AprilTagAssignmentModal } from './components/AprilTagAssignmentModal'
 import { ReplaySlider } from './components/ReplaySlider'
 import { FleetOverlay } from './components/FleetOverlay'
@@ -168,6 +169,14 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         return <AnalyticsPanel />
       case 'apriltags':
         return <AprilTagsPanel />
+      case 'waypoint_battery':
+        return (
+          <WaypointBatteryPanel
+            status={status}
+            onSendGoal={(x, y, theta) => send({ type: 'nav_goal', x, y, theta })}
+            onCancel={handleNavCancel}
+          />
+        )
     }
   }
 

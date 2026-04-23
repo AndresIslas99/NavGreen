@@ -1,4 +1,5 @@
 import type { RobotStatus, RobotState } from '../api/types'
+import { RailStatus } from './RailStatus'
 
 interface Props {
   status: RobotStatus | null
@@ -213,6 +214,7 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
                 {localizationLabel(s.localization)}
               </span>
             </span>
+            <RailStatus rail={s.rail_state} />
           </div>
         )}
 

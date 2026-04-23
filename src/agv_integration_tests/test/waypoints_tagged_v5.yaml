@@ -43,9 +43,17 @@ waypoints:
   - id: c1_approach
     dispatch: rail_approach
     tag_id: 35                             # REAR aisle 0 (y=0)
-    offset_x: 0.30
-    # Canonical: robot.x = tag.x - cos(π)*(0.70+0.30) = 3.67 + 1 = 4.67
-    goal:  {x: 4.67, y: 0.0, yaw: 3.14}
+    # Iter-46 Paso 1.c: bumped from 0.30 → 0.40 m. The HIL camera
+    # geometry (672×376, fy=235, height 0.21 m, floor tag) loses the
+    # tag's near corners below image_v_max once cam_z drops below
+    # ~0.349 m. The 0.30 m target sat below this floor, so any time
+    # rail_approach got close enough to settle inside tolerance_xy
+    # the tag would project out-of-frame, the apriltag_sim_shim
+    # rejected it (`v_oob`), and tag_reacquire_timeout fired. 0.40 m
+    # gives 5 cm margin over the floor while still being a tight
+    # approach. Goal x = tag.x - cos(π)*(0.70+0.40) = 3.67 + 1.10 = 4.77.
+    offset_x: 0.40
+    goal:  {x: 4.77, y: 0.0, yaw: 3.14}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c1_drive_in
@@ -68,9 +76,10 @@ waypoints:
   - id: c2_approach
     dispatch: rail_approach
     tag_id: 4                              # FRONT aisle 0 (y=0)
-    offset_x: 0.30
-    # Canonical: robot.x = tag.x - cos(0)*(0.70+0.30) = 7.33 - 1 = 6.33
-    goal:  {x: 6.33, y: 0.0, yaw: 0.0}
+    # Iter-46 Paso 1.c (see c1_approach for full rationale). FRONT
+    # facing east (yaw=0): goal x = tag.x - (0.70+0.40) = 7.33 - 1.10 = 6.23.
+    offset_x: 0.40
+    goal:  {x: 6.23, y: 0.0, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c2_drive_in
@@ -93,8 +102,9 @@ waypoints:
   - id: c3_approach
     dispatch: rail_approach
     tag_id: 36                             # REAR aisle +2.2
-    offset_x: 0.30
-    goal:  {x: 4.67, y: 2.2, yaw: 3.14}
+    # Iter-46 Paso 1.c: see c1_approach. REAR @ y=+2.2. goal.x = 3.67 + 1.10 = 4.77.
+    offset_x: 0.40
+    goal:  {x: 4.77, y: 2.2, yaw: 3.14}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c3_drive_in
@@ -117,8 +127,9 @@ waypoints:
   - id: c4_approach
     dispatch: rail_approach
     tag_id: 3                              # FRONT aisle -2.2
-    offset_x: 0.30
-    goal:  {x: 6.33, y: -2.2, yaw: 0.0}
+    # Iter-46 Paso 1.c: see c1_approach. FRONT @ y=-2.2. goal.x = 7.33 - 1.10 = 6.23.
+    offset_x: 0.40
+    goal:  {x: 6.23, y: -2.2, yaw: 0.0}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c4_drive_in
@@ -141,8 +152,9 @@ waypoints:
   - id: c5_approach
     dispatch: rail_approach
     tag_id: 34                             # REAR aisle -2.2
-    offset_x: 0.30
-    goal:  {x: 4.67, y: -2.2, yaw: 3.14}
+    # Iter-46 Paso 1.c: see c1_approach. REAR @ y=-2.2. goal.x = 3.67 + 1.10 = 4.77.
+    offset_x: 0.40
+    goal:  {x: 4.77, y: -2.2, yaw: 3.14}
     expected_modes: [corridor_nav, rail_approach_active, rail_drive]
 
   - id: c5_drive_in

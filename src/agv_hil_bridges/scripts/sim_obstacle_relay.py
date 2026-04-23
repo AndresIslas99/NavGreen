@@ -155,32 +155,44 @@ class SimObstacleRelay(Node):
         cos_y = math.cos(ryaw)
         sin_y = math.sin(ryaw)
         nearest_forward = float("inf")
+        # Project world-frame AABB corners into the robot frame and build the
+        # robot-frame AABB from them. The earlier implementation used the
+        # world-frame half-extents (sx, sy) as if they were robot-frame
+        # half-extents, which is wrong whenever the robot is not axis-aligned
+        # with the world. For an elongated obstacle (e.g. the 45 m × 0.2 m
+        # perimeter walls), any robot yaw that put the wall in the lateral
+        # corridor erroneously also inflated the forward range by the wall's
+        # world-X extent (22.5 m half-size), so `rx_rel - sxe` was negative
+        # and the relay latched "stop" indefinitely.
         for (ox, oy, sx, sy) in self._obstacles:
-            # Expand AABB by robot half-width so the check is corner-
-            # inclusive.
-            sxe = sx + self._half_w
-            sye = sy + self._half_w
-            # Translate into robot frame.
-            dx = ox - rx
-            dy = oy - ry
-            rx_rel = dx * cos_y + dy * sin_y
-            ry_rel = -dx * sin_y + dy * cos_y
-            # Only care about obstacles ahead (rx_rel > 0) and within
-            # the lateral corridor.
-            if abs(ry_rel) > sye:
+            rx_rels = []
+            ry_rels = []
+            for cx_off in (-sx, +sx):
+                for cy_off in (-sy, +sy):
+                    dx = (ox + cx_off) - rx
+                    dy = (oy + cy_off) - ry
+                    rx_rels.append(dx * cos_y + dy * sin_y)
+                    ry_rels.append(-dx * sin_y + dy * cos_y)
+            min_rx = min(rx_rels)
+            max_rx = max(rx_rels)
+            min_ry = min(ry_rels)
+            max_ry = max(ry_rels)
+            # Lateral corridor of the robot footprint is [-half_w, +half_w].
+            # The obstacle-in-robot AABB must overlap that strip to matter.
+            if max_ry < -self._half_w or min_ry > self._half_w:
                 continue
-            # Obstacle x-range in robot frame: [rx_rel-sxe, rx_rel+sxe].
-            # Three cases:
-            #   fully behind (rx_rel + sxe <= 0): skip — can't collide going forward.
-            #   overlapping origin (rx_rel - sxe <= 0 < rx_rel + sxe): robot inside
-            #     expanded AABB → stop now.
-            #   fully ahead (rx_rel - sxe > 0): distance = rx_rel - sxe.
-            if rx_rel + sxe <= 0.0:
+            # Fully behind the robot along forward axis: cannot collide going
+            # forward. (Robot-frame x_rel > 0 is ahead.)
+            if max_rx < 0.0:
                 continue
-            if rx_rel - sxe <= 0.0:
+            # Robot origin inside the obstacle's robot-frame AABB: stop now.
+            if min_rx <= 0.0:
                 nearest_forward = 0.0
                 break
-            forward_edge = rx_rel - sxe
+            # Shrink forward edge by robot half-width for a corner-inclusive
+            # bump margin (reproduces prior behaviour of expanding AABB by
+            # half_w before the forward check).
+            forward_edge = min_rx - self._half_w
             if forward_edge < nearest_forward:
                 nearest_forward = forward_edge
         if nearest_forward <= self._stop_d:
