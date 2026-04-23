@@ -555,7 +555,90 @@ def generate_launch_description():
                     # servo can latch. Raise linear clamp + duration in
                     # HIL only; prod keeps the tight YAML defaults.
                     'max_fine_linear_vel': 0.30,
-                    'max_fine_duration_s': 240.0,
+                    # max_fine_duration_s set below at iter-46 (was 240).
+                    # Iter-44 Fase 2 Arch A: swap PnP tvec.z for a
+                    # TF+registry estimate on the forward axis.
+                    # DISABLED after iter-44 HIL validation: 3/3
+                    # rail_approach wps regressed from ~10 cm (iter-43
+                    # baseline) to 18-22 cm, all NAV_TIMEOUT at 270 s
+                    # (fine_servo never settled). Most likely a
+                    # coordinate/frame convention bug in the cam_z
+                    # derivation from map→cam_optical. Needs unit-test
+                    # evidence + re-derivation before re-enabling.
+                    'use_registry_longitudinal': False,
+                    'registry_max_stale_s': 2.0,
+                    # Iter-46 Paso 1: tighten fine_servo settle tolerance for
+                    # HIL precision diagnosis. The default yaml carries
+                    # tolerance_xy=0.15 (raised by iter-26c on the assumption
+                    # of σ_PnP ≈ ±2 cm at grazing — pre-SQPNP). The post-
+                    # iter-42 stack (SQPNP + median-15 + GT-pose shim) has a
+                    # measured noise floor of σ_z ≈ 0.5 mm at the c1_approach
+                    # settle geometry (Monte-Carlo N=2000, see
+                    # tools/pnp_bias_sweep.py). The 12.7 cm rail_approach
+                    # plateau observed in iter-43/45 traces to this
+                    # tolerance gate, NOT to PnP precision. 0.05 m gives
+                    # 3× headroom over 3σ noise + ~17 mm safety vs the
+                    # 250 ms settle drift at HIL drive efficiency 4 %.
+                    # Predicted iter-46 rail_approach mean err_xy: 3-5 cm.
+                    'tolerance_xy': 0.05,
+                    # Iter-46 Paso 1.c: tag-visibility floor. The HIL sim
+                    # camera intrinsics (fy=235, image height=376, 2 %
+                    # margin) and physical geometry (cam height 0.21 m
+                    # above floor tags z=0.002 m) impose a geometric
+                    # minimum cam-to-tag forward distance of ~0.349 m
+                    # before the tag's near corners (cam_z = center -
+                    # 0.10 m) project below the image bottom. apriltag_
+                    # sim_shim correctly rejects out-of-frame tags
+                    # (`v_oob` counters in /agv/apriltag_sim_shim diag),
+                    # rail_approach then loses the tag, tag_reacquire_
+                    # timeout (3 s) fires, and the approach aborts.
+                    # iter-45 (tolerance_xy=0.15) escaped this trap by
+                    # latching SETTLED at the loose 13 cm err — robot
+                    # never reached the visibility floor. iter-46 Paso
+                    # 1.b (tolerance 0.05, no offset bump) hit the wall
+                    # in 5/5 c*_approach wps.
+                    # Raise the controller's desired offset to 0.40 m
+                    # (5 cm margin over the visibility floor); the
+                    # waypoint goals in waypoints_tagged_v5.yaml are
+                    # adjusted to match so err_xy continues to measure
+                    # actual standoff vs target standoff. The 2 cm
+                    # Phase-2 target requires a taller camera mount or
+                    # wall tags with vertical normal — tracked as
+                    # Phase 3 (factor graph + hybrid 2.5-D).
+                    'default_offset_x': 0.40,
+                    # Iter-46 Paso 1.b: PI + stiction FF on the forward axis.
+                    # Rationale (full derivation in iter-46 analysis):
+                    #
+                    # (1) Plant ID via /tmp/plant_id.py step-response sweep:
+                    #     - V_stiction breakaway: cmd ≈ 0.020 m/s
+                    #     - Reliable motion: cmd ≥ 0.025 m/s → 1-3 mm/s real
+                    #     - Linear efficiency: ~4-8 % in cmd ∈ [0.035, 0.200]
+                    #     - Plant gain K ≈ 0.05 (5 %)
+                    # (2) Loop delay budget:
+                    #     - Sample rate: apriltag_sim_shim @ 5 Hz = 200 ms
+                    #     - Median filter (window=15): group delay ≈ 1.5 s
+                    #     - Total dead time L ≈ 1.7 s
+                    # (3) Control law layered:
+                    #     a. P (Kp_linear yaml default 0.15) — dominant at
+                    #        err > 0.25 m (cmd > stiction by factor of 2)
+                    #     b. Stiction FF (stiction_ff_vel_mps=0.035) —
+                    #        deterministic break-through when PI cmd
+                    #        falls below the deadband. Inhibited inside
+                    #        tolerance so the robot stops in band.
+                    #     c. I (Ki_linear=0.05) — conservative to stay
+                    #        stable with 1.7 s dead time. Lambda-tuning:
+                    #        Ti ≥ L → Ki ≤ Kp/Ti = 0.15/1.7 ≈ 0.09;
+                    #        0.05 leaves margin for sim jitter.
+                    # (4) Anti-windup: conditional integration (integrator
+                    #     frozen while FF active) + hard clamp at ±25 %
+                    #     of max_linear_mps contribution (0.075 m/s).
+                    # (5) Zero-cross reset on error sign change kills
+                    #     the classic PI overshoot.
+                    # Unit tests: see test_fine_servo_controller.cpp
+                    # "FineServoPI" suite (10 cases, all green).
+                    'Ki_linear': 0.05,
+                    'stiction_ff_vel_mps': 0.035,
+                    'max_fine_duration_s': 360.0,
                     'use_sim_time': True,
                 },
             ],

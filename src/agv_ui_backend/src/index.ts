@@ -182,6 +182,10 @@ async function main() {
   const eStopPub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/e_stop`);
   const motorEnablePub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/motor_enable`);
   const modePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode`);
+  // Phase-2 mode_arbiter consumes this to pick its operator_mode (nav|teleop|idle).
+  // Without it the arbiter stays in its default 'nav' and stomps the cmd_vel topic
+  // at 20 Hz with zero-Twist while teleop_server also publishes joystick commands.
+  const operatorModePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode/set`);
   // AprilTag registry reload trigger (transient_local so marker_correction picks it up after restart)
   const markerReloadPub = node.createPublisher('std_msgs/msg/Empty',
     `/${NAMESPACE}/markers/registry_reload`,
@@ -935,6 +939,12 @@ async function main() {
       const modeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
       modeMsg.data = mode;
       modePub.publish(modeMsg);
+      // Phase-2 operator_mode for mode_arbiter. Arbiter accepts nav|teleop|idle.
+      // Mapping uses the operator joystick end-to-end → arbiter must treat it
+      // as teleop so Nav2 is never selected as the cmd_vel source.
+      const operatorModeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+      operatorModeMsg.data = (mode === 'mapping') ? 'teleop' : mode;
+      operatorModePub.publish(operatorModeMsg);
       updateState();
       return {ok: true};
     },
@@ -987,6 +997,14 @@ async function main() {
       eventLog.emit('info', 'MAPPING',
         `Boot map detected: '${bootMapName}' — will auto-localize in 10s`);
     }
+    // Seed mode_arbiter with the default operator_mode at boot. Defaults
+    // to 'teleop' (state.currentMode) so the arbiter does not spend the
+    // first minute in 'nav' and fight the backend for /agv/cmd_vel.
+    setTimeout(() => {
+      const bootModeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+      bootModeMsg.data = (state.currentMode === 'mapping') ? 'teleop' : state.currentMode;
+      operatorModePub.publish(bootModeMsg);
+    }, 2000);
   });
 }
 

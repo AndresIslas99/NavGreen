@@ -359,7 +359,17 @@ class ModeArbiterNode : public rclcpp::Node {
           last_rail_ ? last_rail_->angular.z : 0.0);
     }
 
-    pub_cmd_->publish(cmd);
+    // Phase-2 teleop bypass: when the operator owns the joystick, teleop_server
+    // publishes to /agv/cmd_vel directly. If the arbiter also publishes a zero
+    // Twist at 20 Hz, the two streams alternate on the topic, the velocity
+    // smoother averages them toward zero, and the deadband (0.01 m/s) collapses
+    // the output — the robot sits still even with the stick pinned. Keep the
+    // /agv/mode/state broadcast below so dashboards still see the current mode.
+    const bool teleop_owned = (latest_inputs_.operator_mode == "teleop" &&
+                               active_source_ == Source::NONE);
+    if (!teleop_owned) {
+      pub_cmd_->publish(cmd);
+    }
 
     // Publish /agv/mode/state.
     std::ostringstream os;
