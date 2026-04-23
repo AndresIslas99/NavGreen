@@ -85,8 +85,12 @@ private:
   std::string last_reject_reason_{"none"};
   rclcpp::Time last_reject_stamp_{0, 0, RCL_ROS_TIME};
   // Iter-12 / Option C: smooth solvePnP jitter before the controller.
-  int pnp_filter_window_{5};
-  TvecRvecMedianFilter pnp_filter_{5};
+  // Iter-42: window 5 → 15. tools/solvepnp_noise_benchmark.py (1000
+  // Monte-Carlo with ±1 px corner noise, ZED 2i VGA NATIVE, tag at 1.77 m)
+  // shows σ(tvec.z) drops 26 mm (raw) → 14 mm (median5) → 8 mm (median15).
+  // Lag cost 0.75 s at 20 Hz is well inside max_fine_duration_s=240 s.
+  int pnp_filter_window_{15};
+  TvecRvecMedianFilter pnp_filter_{15};
   double tag_loss_timeout_;
   double tag_reacquire_timeout_;
   double acquisition_timeout_;
