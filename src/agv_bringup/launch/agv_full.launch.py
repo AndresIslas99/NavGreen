@@ -408,6 +408,9 @@ def generate_launch_description():
                         'use_sim_time': use_sim_time,
                         'map': map_yaml,
                         'hil_mode': hil_mode,
+                        # Phase-2 arbiter ownership: controller_server publishes
+                        # to cmd_vel_nav, mode_arbiter relays to cmd_vel.
+                        'controller_cmd_vel_topic': 'cmd_vel_nav',
                     }.items(),
                     condition=IfCondition(has_map),
                 ),
@@ -452,7 +455,15 @@ def generate_launch_description():
                         'size': 0.2,
                         'max_hamming': 0,
                         'detector.threads': 2,
-                        'detector.quad_decimate': 2.0,
+                        # quad_decimate=2.0 made apriltag_node process
+                        # 336×188 out of the 672×376 VGA NATIVE stream → a
+                        # 20 cm tag at 2 m fell to ~13 px, below the
+                        # tag36h11 decode floor. Field observation at the
+                        # iter-37 visit: tag visible in the image but
+                        # never decoded at rail_approach trigger distance.
+                        # 1.0 = no decimation; CPU cost is marginal at
+                        # VGA and we recover detection out to ~3 m.
+                        'detector.quad_decimate': 1.0,
                         'use_sim_time': use_sim_time,
                     }],
                     remappings=[
@@ -508,6 +519,12 @@ def generate_launch_description():
                         },
                     ],
                     output='log',
+                    # Phase-2 arbiter ownership: rail_approach must publish to
+                    # cmd_vel_approach, not directly to cmd_vel. Without this
+                    # remap rail_approach competes with mode_arbiter + teleop_server
+                    # for the final /agv/cmd_vel topic and the safety-chain smoother
+                    # deadband collapses the pulsed output.
+                    remappings=[('cmd_vel', 'cmd_vel_approach')],
                     condition=IfCondition(enable_markers),
                 ),
                 # ── Phase 2 stack ported from agv_hil_full.launch.py (iter-37) ──
