@@ -114,6 +114,23 @@ struct FineServoParams {
   double kp_linear = 0.15;
   double kp_lateral = 0.3;
   double kp_yaw = 0.5;
+  // Iter-46 Paso 1.b: integral gain on the forward axis. P-only leaves a
+  // steady-state error whenever the plant has stiction (sim drive at HIL,
+  // ODrive cogging on the real robot at very low cmd). Default 0.0 keeps
+  // pure-P behaviour for backwards compatibility — set non-zero in HIL or
+  // production overrides to enable the integral term.
+  double ki_linear = 0.0;
+  // Iter-46 Paso 1.b: stiction break-through feedforward (HIL: empirically
+  // ~0.020 m/s minimum for motion, 0.035 m/s for reliable 1-3 mm/s real
+  // velocity). When the robot needs to move (|error_x| > tolerance_xy) but
+  // the PI command falls below this threshold, the cmd is forced to
+  // ±stiction_ff_vel_mps with the sign of error_x. This deterministic
+  // "knock" breaks the drive deadband without relying on the integral
+  // to ramp up (which at 5 Hz + median-15 delay is both slow and
+  // risks overshoot). The FF is inhibited when |error_x| ≤ tolerance
+  // so the robot naturally stops inside the settle band. Default 0.0
+  // disables the FF (pure P or PI behaviour).
+  double stiction_ff_vel_mps = 0.0;
   // Velocity clamps (cmd_vel output).
   double max_linear_mps = 0.03;
   double max_angular_rps = 0.10;
@@ -130,6 +147,38 @@ struct FineServoParams {
   // command from the same formula, but settlement is judged on the
   // x/y errors alone.
   bool check_yaw_convergence = true;
+};
+
+// Iter-46 Paso 1.b: state carrier for the (forward) integral term. The
+// controller stays pure-math; the wrapper (rail_approach_node) owns one
+// instance per active fine_servo episode, resets it on each entry into
+// FINE_SERVOING, and threads it through every fine_servo_compute call.
+//
+// Why a struct (not a static): unit tests must reproduce the exact
+// integration trajectory across a sequence of synthetic frames; that
+// requires explicit state ownership, not a hidden global.
+//
+// Anti-windup discipline (enforced inside fine_servo_compute):
+//   1. integral_x is clamped so that ki_linear * integral_x stays in
+//      [-anti_windup_limit, +anti_windup_limit] (default = max_linear_mps/2).
+//      The proportional term gets the other half of the cmd budget.
+//   2. On a sign change of error_x (zero-crossing), integral_x is reset
+//      to zero. This kills the residual "push-past-zero" the integral
+//      would otherwise apply once the robot crosses the goal — a
+//      classic source of overshoot oscillation.
+//   3. The caller MUST call reset() on every new approach (state machine
+//      transition into FINE_SERVOING) to clear stale accumulation from
+//      a previous waypoint or aborted attempt.
+struct FineServoState {
+  double integral_x = 0.0;       // ∫error_x dt, m·s
+  double last_error_x = 0.0;     // for zero-crossing detection
+  bool   has_last_error = false; // first-tick guard
+
+  void reset() {
+    integral_x = 0.0;
+    last_error_x = 0.0;
+    has_last_error = false;
+  }
 };
 
 enum class FineServoVerdict {
@@ -176,11 +225,20 @@ struct FineServoOutput {
 // median filter), compute the cmd/error fields + convergence flag.
 // Does no solvePnP, no TF, no logging. Callable from unit tests with
 // hand-crafted inputs.
+//
+// Iter-46 Paso 1.b: PI on the forward axis. `state` is in/out — the
+// integral accumulator lives on the caller side so multiple controller
+// instances or unit tests can share or isolate state explicitly. Pass
+// `dt_s` = time since the previous tick (the apriltag callback period,
+// ~50 ms at 20 Hz). `dt_s <= 0` skips integration this tick (safe for
+// the very first call and for clock-jump recovery).
 inline FineServoOutput fine_servo_compute(
     const cv::Vec3d &tvec,
     const cv::Vec3d &rvec,
     const cv::Matx44d &cam_to_base,
-    const FineServoParams &p) {
+    const FineServoParams &p,
+    FineServoState &state,
+    double dt_s) {
   FineServoOutput out;
   if (p.fx <= 0.0 || p.fy <= 0.0) {
     out.verdict = FineServoVerdict::INVALID_INTRINSICS;
@@ -233,8 +291,83 @@ inline FineServoOutput fine_servo_compute(
   out.error_y = error_y;
   out.error_yaw = error_yaw;
 
+  // ── Forward axis: P + conditional I + stiction feedforward ──
+  //
+  // Layered control law designed for a plant with a deadband/stiction
+  // zone (sim drive_shaping in HIL, ODrive cogging on the real robot at
+  // mm/s commands). See tools/pnp_bias_sweep.py + /tmp/plant_id.py for
+  // the empirical plant characterization that set these parameters.
+  //
+  //   (1) Proportional:  p_term  = kp_linear · error_x
+  //   (2) Integral:      i_term  = ki_linear · integral_x  (with anti-windup)
+  //   (3) Feedforward:   if |error_x| > tolerance_xy AND the current
+  //                      PI command is below the stiction threshold,
+  //                      override with ±stiction_ff_vel_mps · sign(err).
+  //
+  // Anti-windup uses *conditional integration*: we only accumulate the
+  // integral when the FF is NOT active. Rationale — while FF commands
+  // the stiction threshold, the real control authority over the plant
+  // sits with the FF, not the PI term. Integrating during FF periods
+  // would build up unused integrator state that then dominates (and
+  // overshoots) the moment the robot enters the tolerance band and FF
+  // shuts off. Conditional integration keeps the integrator dormant
+  // until PI is back in charge.
+  //
+  // Additional windup guards:
+  //   - Zero-crossing reset: if error_x changes sign across consecutive
+  //     ticks, the integrator is reset. A stale accumulation in the old
+  //     sign would push the robot *past* the goal after a zero-crossing,
+  //     which is a classic source of PI oscillation.
+  //   - Hard clamp: integral_x is clamped so that ki_linear · integral_x
+  //     cannot exceed max_linear_mps/4 (25 % of the cmd budget reserved
+  //     for the integral, leaves headroom for P-term and FF). Effective
+  //     integrator max: 0.25 · max_linear_mps / ki_linear.
+  const double p_term = p.kp_linear * error_x;
+  double i_term = 0.0;
+  if (p.ki_linear > 0.0) {
+    // Zero-cross reset (cheap, no dt dependency).
+    if (state.has_last_error
+        && (state.last_error_x * error_x < 0.0)) {
+      state.integral_x = 0.0;
+    }
+    i_term = p.ki_linear * state.integral_x;
+  }
+
+  // FF check: does PI alone fall below the stiction threshold while we
+  // still want the robot to move?
+  const double pi_cmd = p_term + i_term;
+  const bool ff_enabled = (p.stiction_ff_vel_mps > 0.0);
+  const bool want_motion = (std::abs(error_x) > p.tolerance_xy);
+  const bool below_stiction =
+      (std::abs(pi_cmd) < p.stiction_ff_vel_mps);
+  const bool ff_active = ff_enabled && want_motion && below_stiction;
+
+  double raw_cmd;
+  if (ff_active) {
+    // FF mode: determinate stiction-break command. Freeze the integrator.
+    raw_cmd = std::copysign(p.stiction_ff_vel_mps, error_x);
+  } else {
+    // PI mode: integrate (conditional integration prevents FF-period windup).
+    if (p.ki_linear > 0.0 && dt_s > 0.0) {
+      state.integral_x += error_x * dt_s;
+      const double anti_windup_limit = 0.25 * p.max_linear_mps;
+      const double max_integral = anti_windup_limit / p.ki_linear;
+      state.integral_x = std::clamp(
+          state.integral_x, -max_integral, max_integral);
+      i_term = p.ki_linear * state.integral_x;
+    }
+    raw_cmd = p_term + i_term;
+  }
+  // Track the last error for zero-crossing detection on the next tick.
+  // Only when the integral term is enabled — otherwise the state stays
+  // dormant so pure-P callers observe a stateless controller.
+  if (p.ki_linear > 0.0) {
+    state.last_error_x = error_x;
+    state.has_last_error = true;
+  }
+
   out.cmd_linear_mps = std::clamp(
-      p.kp_linear * error_x, -p.max_linear_mps, p.max_linear_mps);
+      raw_cmd, -p.max_linear_mps, p.max_linear_mps);
   // Iter-42.1: when check_yaw_convergence is false (floor tag), the yaw
   // reference of π is a singular point of the atan2-based tag_yaw_in_cam
   // formula — R[0,0] and R[2,0] are mathematically zero + one but
@@ -307,7 +440,13 @@ inline FineServoOutput fine_servo_step(
     out.verdict = FineServoVerdict::SOLVEPNP_FAIL;
     return out;
   }
-  return fine_servo_compute(tvec, rvec, cam_to_base, p);
+  // Backwards-compatible wrapper: passes a fresh state and dt_s=0, so the
+  // I-term does not accumulate between invocations. This matches the
+  // pre-iter-46 pure-P semantics tests relied on. Production code in
+  // rail_approach_node.cpp calls fine_servo_compute directly with a
+  // persistent FineServoState to enable PI + FF.
+  FineServoState transient_state;
+  return fine_servo_compute(tvec, rvec, cam_to_base, p, transient_state, 0.0);
 }
 
 // Helper for call-sites that want to apply a median filter between

@@ -645,32 +645,154 @@ input.full-width {
 .dim { color: var(--text-secondary); font-size: 13px; }
 
 /* =========================================================================
-   Mobile / narrow tablet
+   Responsive breakpoints
+
+   Samsung Galaxy Tab A11+ (target device) renders at ~1280×800 CSS px in
+   landscape and ~800×1280 in portrait. The desktop baseline (rail 72 +
+   panel 300 + log 140) leaves too little room on the tablet, and the
+   buttons/metrics are sized for mouse, not fingers.
+
+   Breakpoints below, from widest to narrowest:
+     ≥1367px  — desktop baseline (no overrides)
+     ≤1366px  — tablet landscape: compact topbar, tighter rail/panel
+     ≤1100px  — tight tablet (landscape inner or split-screen): hide
+                low-priority metrics, panel reduced, log minimal
+     ≤ 900px  — tablet portrait: right-panel docks to bottom sheet
+     ≤ 600px  — phone: single-column, panel as drawer
    ========================================================================= */
 
-@media (max-width: 768px) {
+/* Tablet landscape (10–11") — Samsung Tab A11+ lands here in landscape */
+@media (max-width: 1366px) {
   :root {
-    --rail-w: 48px;
-    --panel-w: 220px;
+    --rail-w: 60px;
+    --panel-w: 260px;
+    --topbar-h: 56px;
+    --log-h: 100px;
+  }
+  .brand { font-size: 15px; }
+  .top-bar { gap: 10px; padding: 0 12px; }
+  .top-metrics { gap: 10px; }
+  .metric-value { font-size: 13px; }
+  .metric-label { font-size: 10px; }
+  .rail-icon { font-size: 22px; }
+  .rail-label { font-size: 10px; }
+  .estop-top {
+    min-width: 110px;
+    min-height: 48px;
+    padding: 10px 18px;
+    font-size: 14px;
+  }
+  /* Bigger joystick for finger control */
+  .joystick-container { height: 180px; }
+}
+
+/* Tight tablet or split-screen — drop low-priority pills */
+@media (max-width: 1100px) {
+  :root {
+    --rail-w: 56px;
+    --panel-w: 240px;
     --log-h: 80px;
   }
-  .top-metrics { display: none; }
+  /* Hide the metrics that are least critical for teleop/navigation.
+     Keep SLAM, SAFETY, LOC + the rail pills (ARB/ZONE/RAIL). */
+  .top-metrics .metric:nth-child(1),  /* linear velocity */
+  .top-metrics .metric:nth-child(3),  /* odom Hz */
+  .top-metrics .metric:nth-child(7),  /* battery */
+  .top-metrics .metric:nth-child(9)   /* pose (x,y) */
+  { display: none; }
+  .top-metrics .metric-sep { display: none; }
+  .map-header-pill { padding: 3px 8px; font-size: 12px; }
+}
+
+/* Tablet portrait / small landscape — dock right panel to bottom sheet */
+@media (max-width: 900px) {
+  :root {
+    --rail-w: 52px;
+    --panel-w: 0px;
+    --topbar-h: 52px;
+    --log-h: 72px;
+  }
+  .body {
+    grid-template-columns: var(--rail-w) 1fr;
+  }
+  /* Right panel becomes a bottom drawer, 40% of viewport, map stays on top */
+  .right-panel {
+    position: fixed;
+    left: var(--rail-w);
+    right: 0;
+    bottom: var(--log-h);
+    top: auto;
+    height: 42vh;
+    border-left: none;
+    border-top: 2px solid var(--blue);
+    z-index: 20;
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.5);
+    background: var(--surface);
+  }
   .rail-label { display: none; }
-  .brand { font-size: 12px; }
+  .brand { font-size: 13px; letter-spacing: 0.3px; }
+  /* Slim the mission bar on narrow screens */
+  .mission-bar { height: 24px; }
+  .mission-bar-text { font-size: 11px; }
+  /* The topbar can no longer fit everything — pills that remain collapse */
+  .metric-label { display: none; }
+  .state-badge { padding: 6px 10px; font-size: 12px; }
+  .top-actions { gap: 6px; }
+  .conn-dot { font-size: 10px; }
+  .user-badge { font-size: 10px; }
+  /* Joystick takes more of the panel height on small screens */
+  .joystick-container { height: 200px; }
+  .panel-section { padding: 8px 10px; }
+  /* Bigger buttons — finger-friendly */
+  button { min-height: 48px; font-size: 15px; }
+  button.small { min-height: 40px; font-size: 13px; }
+  .mode-toggle { min-height: 48px; }
 }
 
 @media (max-width: 600px) {
+  :root {
+    --rail-w: 48px;
+  }
+  .top-metrics { display: none; }
+  .right-panel { height: 48vh; }
+  .brand { display: none; }
+}
+
+/* Portrait-specific (height > width) — whether tablet or phone */
+@media (orientation: portrait) and (max-width: 1100px) {
+  /* In portrait, the map gets more horizontal room; panel as bottom sheet */
   .body {
     grid-template-columns: var(--rail-w) 1fr;
   }
   .right-panel {
     position: fixed;
+    left: var(--rail-w);
     right: 0;
-    top: var(--topbar-h);
     bottom: var(--log-h);
-    width: 260px;
-    z-index: 10;
-    box-shadow: -4px 0 12px rgba(0,0,0,0.4);
+    top: auto;
+    height: 45vh;
+    border-left: none;
+    border-top: 2px solid var(--blue);
+    z-index: 20;
+  }
+}
+
+/* Touch-device tweaks — apply regardless of size when input is coarse */
+@media (pointer: coarse) {
+  /* Ensure min touch targets (Apple HIG 44, Material 48) */
+  button, .rail-btn, .map-btn, .log-expand, .log-clear {
+    min-height: 44px;
+  }
+  .map-btn { width: 44px; height: 44px; font-size: 20px; }
+  /* Disable hover-based state changes that stick on touch */
+  button:hover:not(:disabled) { background: var(--surface-2); }
+  .rail-btn:hover { background: transparent; }
+  .rail-btn.active { background: var(--surface-2); }
+  /* Prevent iOS/Android long-press callout & text selection on controls */
+  button, .rail-btn, .joystick-zone, .mode-toggle {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 }
 
