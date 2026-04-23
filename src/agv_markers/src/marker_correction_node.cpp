@@ -301,7 +301,15 @@ private:
       cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, CV_64F);
 
       cv::Vec3d rvec, tvec;
-      if (!cv::solvePnP(obj_pts, img_pts, camera_matrix, dist_coeffs, rvec, tvec)) {
+      // Iter-42 empirical benchmark: SOLVEPNP_SQPNP is the robust drop-in
+      // for planar-square fiducials at grazing incidence — see
+      // tools/solvepnp_noise_benchmark.py. Default SOLVEPNP_ITERATIVE
+      // diverges when the TF tree reports the cam almost coplanar with
+      // the tag plane (HIL bug surfaced in iter-38: 2D EKFs publish
+      // base_link z=0 → cam z=0.01 → 23 M m σ on tvec.z). Same fix
+      // applied in fine_servo_controller.hpp for rail_approach.
+      if (!cv::solvePnP(obj_pts, img_pts, camera_matrix, dist_coeffs,
+                         rvec, tvec, false, cv::SOLVEPNP_SQPNP)) {
         continue;
       }
 
