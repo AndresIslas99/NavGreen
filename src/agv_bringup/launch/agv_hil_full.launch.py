@@ -522,6 +522,10 @@ def generate_launch_description():
         # ── Phase 2: rail approach (AprilTag-guided 2 cm alignment) ──
         # cmd_vel remapped to cmd_vel_approach so mode_arbiter can select
         # between Nav2, rail_approach, and rail_driver.
+        # Iter-41: HIL overrides for fine_servo — sim drive chain runs at
+        # ~4 % efficiency, so the prod max_fine_linear_vel (0.08 m/s) cannot
+        # close the last 20–30 cm within max_fine_duration_s (120 s). Raise
+        # both; the real robot still uses the prod defaults via the YAML.
         Node(
             package='agv_rail_approach',
             executable='rail_approach_node',
@@ -544,6 +548,14 @@ def generate_launch_description():
                     # robot stalled at the coarse_standoff pose
                     # (explains err≈0.33 m plateau in iter-7..9).
                     'camera_frame': 'zed_left_camera_frame_optical',
+                    # Iter-41: fine_servo HIL tuning. Sim drive ~4 %
+                    # efficient, so commanded 0.08 m/s → ~3 mm/s real.
+                    # At that rate closing 20 cm takes 67 s and the
+                    # 120 s default max_fine_duration aborts before the
+                    # servo can latch. Raise linear clamp + duration in
+                    # HIL only; prod keeps the tight YAML defaults.
+                    'max_fine_linear_vel': 0.30,
+                    'max_fine_duration_s': 240.0,
                     'use_sim_time': True,
                 },
             ],
