@@ -1013,16 +1013,21 @@ class Harness(Node):
         # dropped to 20% / p95 0.143 — retries confused MPPI's planner when it had
         # already stopped commanding. Revert to round 5's setup.
         stall_abort_s = 90.0  # middle of 60/120 — room to creep but no runaway
-        # No periodic sync during nav. Periodic SetPose mid-flight causes
-        # Nav2's MPPI to see sudden "teleports" of its own est_pose, which
-        # destabilizes the controller and may trigger premature SUCCEEDED
-        # (when the snap lands est inside the goal tolerance even though
-        # GT is still far away). Round 11f showed this: Nav2 declared
-        # success while GT was 0.32 m from goal. We rely on the single
-        # pre-nav sync instead; any drift is a real measurement of the
-        # brain's ability to navigate under sim drive inefficiency.
-        # Set to 0 to disable; or a large value to effectively disable.
-        sync_interval_s = 1e9
+        # Iter-43 Bug 1 fix: conditional drift-guard during Nav2 nav. The
+        # Round 11f concern ("mid-flight SetPose triggers premature SUCCEEDED
+        # at 0.32 m from goal") was tied to done_xy_tol=0.05 + Nav2-declared
+        # success. Current harness uses done_xy_tol=0.10 AND measures
+        # convergence by GT vs goal, not by Nav2's status — the premature-
+        # success failure mode cannot trigger here. Meanwhile iter-42 showed
+        # c3/c5 REAR prealigns fail because: MPPI angular sampling rotates
+        # the robot into a crop row at y=±2.2, sim unstick teleports GT, and
+        # with zero mid-flight sync the brain EKF cascades to 1.6 m drift,
+        # at which point Nav2 commands based on brain land far from GT goal
+        # and the wp times out. Enabling drift-guard at a generous threshold
+        # (1.0 m — 2× the rail_drive threshold) and low frequency (30 s)
+        # recovers the cascade without thrashing MPPI.
+        sync_interval_s = 30.0
+        sync_drift_threshold_m = 1.0
 
         try:
             _post_sim_api("/goal", {"x": float(gx), "y": float(gy), "yaw": float(gyaw)}, timeout=5.0)
@@ -1049,7 +1054,13 @@ class Harness(Node):
             else:
                 consecutive_hits = 0
             if time.monotonic() - last_sync_mono > sync_interval_s:
-                _sync_brain_to_gt(self, gt[0], gt[1], gt[2], timeout_s=1.5)
+                # Only fire SetPose when drift actually exceeds the threshold.
+                # In nominal runs drift stays in mm range and no sync fires,
+                # preserving MPPI's expectation of a continuous est_pose.
+                brain = self.current_brain_xy()
+                drift = math.hypot(gt[0] - brain[0], gt[1] - brain[1]) if brain is not None else 0.0
+                if drift > sync_drift_threshold_m:
+                    _sync_brain_to_gt(self, gt[0], gt[1], gt[2], timeout_s=1.5)
                 last_sync_mono = time.monotonic()
             if last_d is not None and abs(last_d - d_xy) < 0.02:
                 if time.monotonic() - last_progress_mono > stall_abort_s:
