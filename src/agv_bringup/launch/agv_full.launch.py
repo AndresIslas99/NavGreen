@@ -548,6 +548,15 @@ def generate_launch_description():
                         'tag_size': 0.2,
                         'covariance_xy': 0.01,
                         'covariance_yaw': 0.03,
+                        # The default in marker_correction_node.cpp is
+                        # `/zed/zed_node/left/camera_info` (no namespace) — the
+                        # actual topic from the ZED node here is namespaced.
+                        # Without this override marker_correction times out
+                        # waiting for camera_info, has_caminfo_ stays false,
+                        # and AprilTag detections are silently ignored — which
+                        # also breaks /agv/marker_raw_detected and the HMI's
+                        # "Align with tag" pre-flight (POST /api/apriltags/:hw_id/align).
+                        'camera_info_topic': '/agv/zed/left/camera_info',
                         'use_sim_time': use_sim_time,
                     }],
                     output='log',
