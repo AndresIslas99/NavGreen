@@ -145,6 +145,20 @@ inline FsmOutputs step(Mode current, const FsmInputs &in) {
     return out;
   }
   if (in.operator_mode == "teleop") {
+    // Pure-alignment carve-out (2026-04-25): if rail_approach is in
+    // FINE_SERVOING (rail_approach_state == "driving") or just got
+    // fired (TAG_ACQUISITION → "tag_acquisition"), let the arbiter
+    // relay cmd_vel_approach even though the operator is nominally in
+    // teleop. This supports the workflow "I have a tag in front of me,
+    // align to it" which is independent of map/Nav2 state. Without
+    // this branch teleop_server stamps zero on /agv/cmd_vel and the
+    // alignment never reaches the motors.
+    if (in.rail_approach_state == "driving" ||
+        in.rail_approach_state == "tag_acquisition") {
+      out.next_mode = Mode::RAIL_APPROACH_ACTIVE;
+      out.active_source = Source::APPROACH;
+      return out;
+    }
     out.next_mode = Mode::TELEOP;
     out.active_source = Source::NONE;  // teleop_server owns /agv/cmd_vel directly
     return out;

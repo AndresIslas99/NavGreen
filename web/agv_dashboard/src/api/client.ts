@@ -1,7 +1,41 @@
 import type { MapInfo, Mission, AuthStatus, AuthSession, TrafficZone, ZoneOccupancy, MissionRun } from './types'
 
-const BASE = ''  // same origin in production, proxied in dev
-const FLEET_BASE = () => `${location.protocol}//${location.hostname}:8091`
+// Sprint 1 Fase 1a: host-agnostic base URLs.
+// VITE_API_BASE empty (default) preserves same-origin behavior — works when
+// the backend serves the dashboard at /dashboard. When the dashboard runs on
+// a different host (laptop x86 via nginx/caddy → Jetson backend), set
+// VITE_API_BASE=http://<jetson-ip>:8090 and VITE_FLEET_BASE accordingly.
+const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '')
+const FLEET_BASE_ENV = (import.meta.env.VITE_FLEET_BASE || '').replace(/\/+$/, '')
+
+/** Prepend the API base to a path. Pass-through if base is empty. */
+export function apiUrl(path: string): string {
+  if (!path.startsWith('/')) path = '/' + path
+  return API_BASE ? API_BASE + path : path
+}
+
+/** Compute a WebSocket URL for a given path, honoring VITE_API_BASE. */
+export function wsUrl(path: string): string {
+  if (!path.startsWith('/')) path = '/' + path
+  if (API_BASE) {
+    // http(s)://host:port → ws(s)://host:port
+    return API_BASE.replace(/^http/, 'ws') + path
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${proto}://${location.host}${path}`
+}
+
+/** Image/fleet manager origin (agv_image_server on :8091 by default). */
+export function fleetBase(): string {
+  if (FLEET_BASE_ENV) return FLEET_BASE_ENV
+  if (API_BASE) {
+    try {
+      const u = new URL(API_BASE)
+      return `${u.protocol}//${u.hostname}:8091`
+    } catch { /* fall through */ }
+  }
+  return `${location.protocol}//${location.hostname}:8091`
+}
 
 // Auth token management
 let authToken: string | null = localStorage.getItem('agv_token')
@@ -21,7 +55,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + url, {
+  const res = await fetch(apiUrl(url), {
     ...init,
     headers: { ...authHeaders(), ...(init?.headers || {}) },
   })
@@ -60,7 +94,7 @@ export const setMode = (mode: string) => put('/api/mode', { mode })
 export const listMaps = () => json<MapInfo[]>('/api/maps')
 export const saveMap = (name: string) => post('/api/maps/save', { name })
 export const loadMap = (name: string) => post('/api/maps/load', { name })
-export const mapImageUrl = (name: string) => `${BASE}/api/maps/${name}/image`
+export const mapImageUrl = (name: string) => apiUrl(`/api/maps/${name}/image`)
 
 // Missions
 export const listMissions = () => json<Mission[]>('/api/missions')
@@ -91,7 +125,7 @@ export const getMissionRuns = (from?: number, to?: number) => {
 
 // Traffic zones (fleet manager on port 8091)
 async function fleetJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(FLEET_BASE() + url, init)
+  const res = await fetch(fleetBase() + url, init)
   return res.json()
 }
 

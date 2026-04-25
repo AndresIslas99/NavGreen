@@ -1,6 +1,13 @@
 int32 tag_id              # Which rail-start tag to approach
 float64 offset_x          # Desired camera-to-tag forward distance (m), 0 = use default
 float64 offset_y          # Desired camera-to-tag lateral offset (m), 0 = centered
+# Bypass Nav2 coarse approach and go straight to fine-servoing.
+# Use when the tag is already physically in front of the robot and you
+# only need precision alignment, NOT navigation. Skips the map→base_link
+# distance check, so it works with localization=DEGRADED or no map at
+# all. Fails fast if the tag is not detectable (acquisition_timeout_s).
+# Default false preserves backward compatibility.
+bool skip_coarse_approach
 ---
 bool success
 string message

@@ -55,6 +55,39 @@ publishes velocity commands on `/agv/cmd_vel` during the approach phase.
   Sharing `/agv/cmd_vel` with teleop is a latent race hazard; should be
   resolved by routing through the dashboard state machine.
 
+## Service contract — skip_coarse_approach (2026-04-25)
+
+`agv_interfaces/srv/RailApproach` carries a boolean flag
+`skip_coarse_approach`. Default `false` preserves the original two-phase
+flow:
+
+1. **COARSE_APPROACH**: rail_approach asks Nav2 to drive the robot to a
+   standoff `coarse_standoff_distance` meters before the tag (in map
+   frame). Requires `localization.action == 'LOCALIZED'`; the node
+   rejects the service call otherwise.
+2. **TAG_ACQUISITION**: wait for the camera to detect the target tag.
+3. **FINE_SERVOING**: PI+FF iter-46 controller drives the robot to the
+   commanded `(offset_x, offset_y)` of the tag in the camera frame.
+
+When `skip_coarse_approach=true`, the node bypasses (1) entirely and
+jumps straight to TAG_ACQUISITION. This is the correct path when:
+
+- The robot is already physically in front of the tag (camera detection
+  is fresh) AND
+- Localization in the map frame is unreliable or unavailable (DEGRADED,
+  FAILED, or no map loaded).
+
+The mode_arbiter has a carve-out (2026-04-25) that activates
+`Source::APPROACH` even when `operator_mode == "teleop"` while
+rail_approach is in TAG_ACQUISITION or FINE_SERVOING. That makes the
+skip-coarse path usable without first switching the operator mode pill
+to nav.
+
+Backend bridge: `POST /api/apriltags/:hw_id/align` is the operator-facing
+endpoint that always sets `skip_coarse_approach=true`. The traditional
+`POST /api/apriltags/:id/navigate` keeps the default false and goes
+through Nav2.
+
 ## Relación con otros specs
 
 - [specs/interfaces.yaml](../../specs/interfaces.yaml) — topics listed under

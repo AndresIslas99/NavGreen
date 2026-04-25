@@ -45,9 +45,15 @@
     </Discovery>
 
     <Internal>
-      <SocketReceiveBufferSize min="26MB" />
+      <!-- Sprint 1 Fase A2 (2026-04-24): SocketReceiveBufferSize 26MB→64MB
+           and WhcHigh 500kB→4MB. ZED RGB HD frames are ~900 KB each; ZED +
+           cuVSLAM + nvblox + image_server publishing simultaneously was
+           overflowing the 500 kB writer history cache and causing silent
+           drops. Keep this template in sync with the generator block in
+           src/agv_bringup/scripts/agv_start.sh. -->
+      <SocketReceiveBufferSize min="64MB" />
       <Watermarks>
-        <WhcHigh>500kB</WhcHigh>
+        <WhcHigh>4MB</WhcHigh>
       </Watermarks>
     </Internal>
 

@@ -22,11 +22,12 @@ read these files in order, top to bottom:
 5. **[persistence.yaml](persistence.yaml)** — inventory of persistent artifacts (who writes, who reads)
 6. **[interfaces.yaml](interfaces.yaml)** — topic/service/action contracts (type, QoS, namespace, rate)
 7. **[acceptance.yaml](acceptance.yaml)** — quality gates and task completion criteria. ⚠️ Currently `status: pending_revision_post_audit` — scheduled for rewrite after Fase 6 closes. Do not treat as authoritative until the status flag is removed.
-8. **[/policies/engineering_rules.md](../policies/engineering_rules.md)** — enforceable rules (Rules 0–9)
-9. **[/agents/registry.yaml](../agents/registry.yaml)** — agent roles and coordination rules
-10. **[/AGENT_INSTRUCTIONS.md](../AGENT_INSTRUCTIONS.md)** — what an AI agent must do before proposing changes
-11. **Relevant package `CLAUDE.md`** — package-specific invariants and ownership
-12. **Code**
+8. **[hmi_api.yaml](hmi_api.yaml)** — operator HMI ↔ `agv_ui_backend` contract: REST endpoints, WebSocket protocol (`/ws/control`, `/ws/teleop`), action gates that protect dispatch (nav goals, mode transitions, motor enable). Authoritative once a frontend depends on it.
+9. **[/policies/engineering_rules.md](../policies/engineering_rules.md)** — enforceable rules (Rules 0–9)
+10. **[/agents/registry.yaml](../agents/registry.yaml)** — agent roles and coordination rules
+11. **[/AGENT_INSTRUCTIONS.md](../AGENT_INSTRUCTIONS.md)** — what an AI agent must do before proposing changes
+12. **Relevant package `CLAUDE.md`** — package-specific invariants and ownership
+13. **Code**
 
 ## Update rule
 
@@ -64,6 +65,7 @@ verified_by: "tools/verify_specs/verify_<name>.py"
 | `persistence.yaml` | Filesystem artifacts (maps, state, logs, configs), writers, readers, lifecycle | Platform lead |
 | `interfaces.yaml` | ROS topics, services, actions, QoS, namespace, rates | Each package owner for its own interfaces |
 | `acceptance.yaml` | Quality gates, acceptance tests, task completion criteria | QA lead |
+| `hmi_api.yaml` | REST + WebSocket contract between operator HMI and agv_ui_backend, with action gates | UI/HMI owner (`agv_ui_backend`) |
 
 ## Do NOT
 

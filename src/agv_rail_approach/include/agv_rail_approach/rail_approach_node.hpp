@@ -141,7 +141,14 @@ private:
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr abort_srv_;
   rclcpp::Service<agv_interfaces::srv::ListRailStarts>::SharedPtr list_srv_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr reload_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr loc_state_sub_;
   rclcpp::TimerBase::SharedPtr status_timer_;
+  // Localization state cached for the gate in on_execute. The gate is
+  // active only when skip_coarse_approach=false: coarse_approach uses
+  // map→base_link TF and Nav2, both unsafe without a verified anchor.
+  // Skip-coarse paths use direct AprilTag detection and don't need
+  // map; we accept any localization state.
+  std::string last_localization_action_{"UNKNOWN"};
 
   using NavAction = nav2_msgs::action::NavigateToPose;
   using NavGoalHandle = rclcpp_action::ClientGoalHandle<NavAction>;

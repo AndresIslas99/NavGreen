@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DefinedTag } from '../api/types'
+import { apiUrl } from '../api/client'
 
 interface Props {
   hardwareId: number
@@ -13,7 +14,7 @@ export function AprilTagAssignmentModal({ hardwareId, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/apriltags')
+    fetch(apiUrl('/api/apriltags'))
       .then(r => r.json())
       .then(s => setDefinedTags(s.defined_tags || []))
       .catch(() => setError('Failed to load defined tags'))
@@ -26,7 +27,7 @@ export function AprilTagAssignmentModal({ hardwareId, onClose }: Props) {
     }
     setSubmitting(true)
     try {
-      const r = await fetch('/api/apriltags/assign', {
+      const r = await fetch(apiUrl('/api/apriltags/assign'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hardware_id: hardwareId, defined_id: selectedId }),
@@ -47,7 +48,7 @@ export function AprilTagAssignmentModal({ hardwareId, onClose }: Props) {
   const handleDismiss = async () => {
     setSubmitting(true)
     try {
-      await fetch(`/api/apriltags/dismiss/${hardwareId}`, { method: 'POST' })
+      await fetch(apiUrl(`/api/apriltags/dismiss/${hardwareId}`), { method: 'POST' })
       onClose()
     } catch { /* ignore */ } finally {
       setSubmitting(false)
