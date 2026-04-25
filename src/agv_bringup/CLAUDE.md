@@ -66,6 +66,7 @@ authoritative DAG with preconditions and failure modes. Summary:
 | `enable_behaviors` | `false` | agv_full |
 | `enable_slam_localization` | `true` | agv_full |
 | `hil_mode` | `false` | agv_full (skips ZED+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan; drops collision_monitor pointcloud_source) |
+| `enable_foxglove_bridge` | `false` | agv_full (Sprint 1 Fase A4 — diagnostic ws on :8765; intentionally distinct from agv_slam's `enable_foxglove` to avoid scope mutation by IncludeLaunchDescription in Humble) |
 
 ## TF Ownership (Critical)
 

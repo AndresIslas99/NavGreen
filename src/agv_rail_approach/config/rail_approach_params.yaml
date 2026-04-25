@@ -9,6 +9,16 @@
     # Coarse approach: Nav2 stops this far before the tag (m)
     coarse_standoff_distance: 0.5
 
+    # Auto-skip threshold for the coarse_approach. If the EKF reports
+    # the robot within this radius of the target tag in map frame, the
+    # node bypasses Nav2 and jumps straight to TAG_ACQUISITION. Default
+    # 2.0 m matches the historical Round-44 spawn. NOTE: this value is
+    # only consulted when the service caller leaves
+    # skip_coarse_approach=false (the default). Callers that already
+    # know the tag is in front of the robot should pass
+    # skip_coarse_approach=true (added 2026-04-25), which bypasses
+    # this check entirely and is robust to localization=DEGRADED.
+
     # Fine servoing: desired camera-to-tag offsets (m)
     default_offset_x: 0.3       # forward distance from camera to tag
     default_offset_y: 0.0       # lateral offset (0 = centered)

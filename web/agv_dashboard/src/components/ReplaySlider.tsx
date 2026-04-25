@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { apiUrl } from '../api/client'
 
 interface ReplaySample {
   timestamp: number
@@ -63,8 +64,8 @@ export function ReplaySlider({ visible, onGhostPose, onReplayEvents }: Props) {
     const from = now - rangeHours * 3600
     try {
       const [samplesRes, eventsRes] = await Promise.all([
-        fetch(`/api/replay/samples?from=${from}&to=${now}`),
-        fetch(`/api/replay/events?from=${from}&to=${now}&limit=500`),
+        fetch(apiUrl(`/api/replay/samples?from=${from}&to=${now}`)),
+        fetch(apiUrl(`/api/replay/events?from=${from}&to=${now}&limit=500`)),
       ])
       const s = await samplesRes.json()
       const e = await eventsRes.json()
