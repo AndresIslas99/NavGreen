@@ -59,31 +59,46 @@ network_ready() {
     return 1
 }
 
-echo "Waiting for a usable network interface (eno1 or wlP1p1s0), up to 90 s..."
-for i in $(seq 1 90); do
-    if network_ready; then
-        echo "  network ready on attempt $i"
-        break
+if [ "${AGV_SKIP_NETWORK_WAIT:-0}" = "1" ]; then
+    echo "Skipping network wait (AGV_SKIP_NETWORK_WAIT=1) — DDS will use whatever is up."
+elif network_ready; then
+    echo "  network already ready"
+else
+    echo "Waiting for a usable network interface (eno1 or wlP1p1s0), up to 90 s..."
+    for i in $(seq 1 90); do
+        if network_ready; then
+            echo "  network ready on attempt $i"
+            break
+        fi
+        sleep 1
+    done
+    if ! network_ready; then
+        echo "  WARNING: no eno1/wlP1p1s0 IPv4 after 90 s — continuing anyway."
+        echo "           DDS will still try to bind; healthcheck will surface any fault."
     fi
     sleep 1
-done
-if ! network_ready; then
-    echo "  WARNING: no eno1/wlP1p1s0 IPv4 after 90 s — continuing anyway."
-    echo "           DDS will still try to bind; healthcheck will surface any fault."
 fi
-sleep 1
 
 # ── Generate runtime cyclonedds XML ────────────────────────────────────────
-# Enumerate whitelisted interfaces currently in operstate=up. Never include
+# Enumerate whitelisted interfaces currently in operstate=up AND with a
+# carrier (link-up at L2). operstate alone is insufficient: a wifi card
+# with NO-CARRIER reports operstate=up, but Cyclone treats it as missing
+# and SIGABRTs every node it tries to bind. Never include
 # l4tbr0/usb*/docker*/can* — those are dev artifacts or non-IP transports.
+# Sprint 1 (2026-04-25): carrier check added after observing nodes failing
+# to spawn when WiFi went idle between agv_start.sh detect and node init.
 CYCLONE_CANDIDATES="eno1 wlP1p1s0"
 CYCLONE_RUNTIME_XML="/tmp/agv_cyclonedds_runtime.xml"
 CYCLONE_DETECTED=""
 for iface in $CYCLONE_CANDIDATES; do
-    if [ -f "/sys/class/net/${iface}/operstate" ] && \
-       [ "$(cat /sys/class/net/${iface}/operstate 2>/dev/null)" = "up" ]; then
-        CYCLONE_DETECTED="${CYCLONE_DETECTED}${iface} "
-    fi
+    operstate_file="/sys/class/net/${iface}/operstate"
+    carrier_file="/sys/class/net/${iface}/carrier"
+    [ -f "$operstate_file" ] || continue
+    [ "$(cat "$operstate_file" 2>/dev/null)" = "up" ] || continue
+    # carrier=1 means L2 link is good. Missing/0 means cable unplugged or
+    # WiFi unassociated — Cyclone will reject this interface at node init.
+    [ "$(cat "$carrier_file" 2>/dev/null || echo 0)" = "1" ] || continue
+    CYCLONE_DETECTED="${CYCLONE_DETECTED}${iface} "
 done
 CYCLONE_DETECTED="${CYCLONE_DETECTED% }"
 
@@ -119,9 +134,16 @@ CYCLONE_DETECTED="${CYCLONE_DETECTED% }"
     echo '      </Peers>'
     echo '    </Discovery>'
     echo '    <Internal>'
-    echo '      <SocketReceiveBufferSize min="26MB" />'
+    # Sprint 1 Fase A2 (2026-04-24): SocketReceiveBufferSize 26MB→64MB and
+    # WhcHigh 500kB→4MB. ZED RGB HD frames are ~900 KB each; ZED + cuVSLAM
+    # + nvblox + image_server publishing simultaneously was overflowing the
+    # 500 kB writer history cache and causing silent message drops. The new
+    # values match the worst-case burst payload of the AGV stack with
+    # headroom for image_server MJPEG re-encode latency. Revert by editing
+    # this block; runtime regenerated next agv_start.sh boot.
+    echo '      <SocketReceiveBufferSize min="64MB" />'
     echo '      <Watermarks>'
-    echo '        <WhcHigh>500kB</WhcHigh>'
+    echo '        <WhcHigh>4MB</WhcHigh>'
     echo '      </Watermarks>'
     echo '    </Internal>'
     echo '    <Tracing>'
@@ -221,18 +243,31 @@ if [ "$MODE" = "real" ] || [ "$MODE" = "mapping" ]; then
     echo "  can0: $CAN_STATE"
 fi
 
+# Sprint 1 Fase A4 (2026-04-24): optional foxglove_bridge for engineer-side
+# diagnostics. Off by default in production; enable per-session by exporting
+# AGV_ENABLE_FOXGLOVE=true before agv_start.sh, or via `systemctl edit
+# --runtime agv.service` adding `Environment=AGV_ENABLE_FOXGLOVE=true`.
+EXTRA_LAUNCH_ARGS=""
+if [ "${AGV_ENABLE_FOXGLOVE:-false}" = "true" ]; then
+    # Note: launch arg is `enable_foxglove_bridge`, distinct from the
+    # `enable_foxglove` arg passed to agv_slam.launch.py. See comment in
+    # agv_full.launch.py — same name would be overwritten by the include.
+    EXTRA_LAUNCH_ARGS="$EXTRA_LAUNCH_ARGS enable_foxglove_bridge:=true"
+    echo "  foxglove_bridge enabled on :8765 (diagnostic only)"
+fi
+
 if [ "$MODE" = "mapping" ]; then
     # Mapping commissioning: teleop + SLAM, no Nav2, no pre-existing map needed.
     # Drive at 0.3-0.5 m/s through greenhouse corridors, save map when done.
-    exec ros2 launch agv_bringup agv_mapping.launch.py
+    exec ros2 launch agv_bringup agv_mapping.launch.py $EXTRA_LAUNCH_ARGS
 
 elif [ "$MODE" = "real" ]; then
     if [ -n "$MAP" ]; then
         echo "  map=$MAP"
-        exec ros2 launch agv_bringup agv_full.launch.py "map:=$MAP"
+        exec ros2 launch agv_bringup agv_full.launch.py "map:=$MAP" $EXTRA_LAUNCH_ARGS
     else
         echo "  No map — start in mapping-first mode (Nav2 disabled until map loaded)"
-        exec ros2 launch agv_bringup agv_full.launch.py
+        exec ros2 launch agv_bringup agv_full.launch.py $EXTRA_LAUNCH_ARGS
     fi
 
 elif [ "$MODE" = "hil" ]; then
@@ -240,7 +275,7 @@ elif [ "$MODE" = "hil" ]; then
         echo "ERROR: AGV_MAP not set. Set it in agv.service or override."
         exit 1
     fi
-    exec ros2 launch agv_bringup agv_hil_full.launch.py "map:=$MAP"
+    exec ros2 launch agv_bringup agv_hil_full.launch.py "map:=$MAP" $EXTRA_LAUNCH_ARGS
 
 elif [ "$MODE" = "hil_full" ]; then
     # Same brain as production (agv_full.launch.py) but with hil_mode:=true
@@ -253,7 +288,7 @@ elif [ "$MODE" = "hil_full" ]; then
         echo "ERROR: AGV_MAP not set. hil_full requires a map. Set it in agv.service or override."
         exit 1
     fi
-    exec ros2 launch agv_bringup agv_full.launch.py "map:=$MAP" hil_mode:=true
+    exec ros2 launch agv_bringup agv_full.launch.py "map:=$MAP" hil_mode:=true $EXTRA_LAUNCH_ARGS
 
 else
     echo "ERROR: Unknown AGV_MODE=$MODE (expected: mapping, real, hil, hil_full)"

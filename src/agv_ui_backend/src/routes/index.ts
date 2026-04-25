@@ -9,6 +9,7 @@ import * as statusRoutes from './status';
 import * as authRoutes from './auth';
 import * as eventsRoutes from './events';
 import * as recordingRoutes from './recording';
+import * as recoveryRoutes from './recovery';
 import * as mapsRoutes from './maps';
 import * as missionsRoutes from './missions';
 import * as navRoutes from './nav';
@@ -20,6 +21,7 @@ export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): v
   authRoutes.register(app, deps);
   eventsRoutes.register(app, deps);
   recordingRoutes.register(app, deps);
+  recoveryRoutes.register(app, deps);
   mapsRoutes.register(app, deps);
   missionsRoutes.register(app, deps);
   navRoutes.register(app, deps);

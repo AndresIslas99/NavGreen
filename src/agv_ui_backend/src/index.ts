@@ -227,6 +227,18 @@ async function main() {
     'std_srvs/srv/Trigger',
     `/${NAMESPACE}/lifecycle_manager_navigation/is_active`);
 
+  // rail_approach service client. Used by /api/apriltags/:hw/align (the
+  // pure fine-servoing path that skips Nav2) and by the post-Nav2
+  // pendingRailApproach trigger. Replaces the previous execFile path
+  // so we can pass skip_coarse_approach and read the response cleanly.
+  // Cast to `any` because rclnodejs's TypeScript declaration map is
+  // generated from a static catalogue that doesn't yet include
+  // agv_interfaces/srv/RailApproach. The runtime resolution is dynamic
+  // and works fine.
+  const railApproachClient = (node as any).createClient(
+    'agv_interfaces/srv/RailApproach',
+    `/${NAMESPACE}/rail_approach/execute`);
+
   // --- ROS Bridge (passed to route modules via AppDeps) ---
   const ros: RosBridge = {
     sendCmdVel(linear: number, angular: number) {
@@ -325,16 +337,21 @@ async function main() {
             state.pendingRailApproach = null;
             eventLog.emit('info', 'NAV',
               `Nav2 reached rail_start vicinity, triggering precision approach for tag ${hardware_id}`);
-            const { execFile } = require('child_process');
-            execFile('ros2', ['service', 'call',
-              `/${NAMESPACE}/rail_approach/execute`,
-              'agv_interfaces/srv/RailApproach',
-              `{tag_id: ${hardware_id}, offset_x: 0.3, offset_y: 0.0}`],
-              { env: process.env, timeout: 10000 }, (err: any) => {
-                if (err) {
-                  eventLog.emit('warn', 'NAV', `rail_approach service call failed: ${err.message}`);
-                }
-              });
+            // Use the rclnodejs client (replaces the previous execFile path).
+            // skip_coarse_approach=false because Nav2 just delivered us to
+            // the standoff — coarse and fine want to compose normally here.
+            ros.callRailApproach({
+              tag_id: hardware_id, offset_x: 0.3, offset_y: 0.0,
+              skip_coarse_approach: false,
+            }).then((r) => {
+              if (!r.success) {
+                eventLog.emit('warn', 'NAV',
+                  `rail_approach service call failed: ${r.message}`);
+              }
+            }).catch((e: any) => {
+              eventLog.emit('warn', 'NAV',
+                `rail_approach service call threw: ${e?.message || e}`);
+            });
             void defined_id;  // available for future logging
           }
         }).catch(() => { state.navState = { active: false, distance_remaining: 0, status: 'aborted' }; navGoalHandle = null; state.pendingRailApproach = null; updateState(); });
@@ -386,6 +403,35 @@ async function main() {
         const r = await client.sendRequestAsync({}, { timeout: 5000 });
         return { success: r.success, message: r.message || '' };
       } catch (e: any) { return { success: false, message: e?.message || 'failed' }; }
+    },
+
+    /**
+     * Call /agv/rail_approach/execute with the new skip_coarse_approach
+     * field. Returns the response message; throws on transport failure.
+     * Used by /api/apriltags/:hw/align (skip=true, pure fine-servoing)
+     * and by the post-Nav2 pendingRailApproach trigger (skip=false,
+     * traditional coarse+fine flow). The earlier execFile-based call
+     * was replaced with this client because it gives us access to the
+     * response and lets us pass the new boolean field.
+     */
+    async callRailApproach(req: {
+      tag_id: number; offset_x: number; offset_y: number;
+      skip_coarse_approach: boolean;
+    }): Promise<{ success: boolean; message: string }> {
+      if (!railApproachClient.isServiceServerAvailable()) {
+        return { success: false, message: 'rail_approach service not available' };
+      }
+      try {
+        const r: any = await railApproachClient.sendRequestAsync({
+          tag_id: req.tag_id,
+          offset_x: req.offset_x,
+          offset_y: req.offset_y,
+          skip_coarse_approach: req.skip_coarse_approach,
+        }, { timeout: 10000 });
+        return { success: !!r.success, message: r.message || '' };
+      } catch (e: any) {
+        return { success: false, message: e?.message || 'rail_approach call failed' };
+      }
     },
 
     publishMapLoaded(name: string) {
@@ -516,9 +562,24 @@ async function main() {
       };
     });
 
-    // motor_state is handled by the subprocess bridge (see below)
-    // because rclnodejs DDS discovery is unreliable for this topic.
-    // The rclnodejs subscriber is kept as fallback but the bridge is primary.
+    // motor_state: native rclnodejs subscription. ODrive publishes at 10 Hz
+    // (odrive_can_node.cpp:135 — 100 ms wall timer), so the old "low-frequency
+    // publisher discovery bug" workaround (ros2 topic echo subprocess) no longer
+    // applies. The subprocess approach was masking arm/disarm transitions
+    // because stdout buffering delayed the first messages by several seconds,
+    // so the UI required a page reload to see armed=true.
+    node.createSubscription('std_msgs/msg/String', `/${NAMESPACE}/motor_state`, (msg: any) => {
+      try {
+        const parsed = JSON.parse(String(msg.data).replace(/\bnan\b/g, 'null'));
+        if (parsed._keepalive) return;
+        const prev = state.motorState.armed;
+        state.motorState = parsed;
+        if (prev !== state.motorState.armed) {
+          eventLog.emit('info', 'DRIVE', state.motorState.armed ? 'Armed' : 'Disarmed');
+          updateState();
+        }
+      } catch { /* ignore parse errors */ }
+    });
 
     node.createSubscription('nav_msgs/msg/Odometry', `/${NAMESPACE}/odometry/global`, (msg: any) => {
       const p = msg.pose.pose;
@@ -598,7 +659,23 @@ async function main() {
         }
       });
 
+    // Sprint 1 Fase A3 (2026-04-24): throttle /scan callback to 5 Hz.
+    // The publisher (pointcloud_to_laserscan) ships at ~30 Hz; each callback
+    // does an O(n) trig loop over ranges to project points into world frame.
+    // The WS broadcast is already 5 Hz, so processing 6× more frames per
+    // second is wasted CPU on the Node event loop. Under simultaneous load
+    // (Nav2 + perception + multiple WS clients), this saturation showed up
+    // as WS jitter and delayed status broadcasts. /wheel_odom is NOT
+    // throttled here: its callback is trivial (timestamp push + two
+    // roundings) and the wheel_odom_hz reported to the dashboard would
+    // misrepresent the underlying publisher rate.
+    let lastScanProcessed = 0;
+    const SCAN_THROTTLE_MS = 200;
     node.createSubscription('sensor_msgs/msg/LaserScan', `/${NAMESPACE}/scan`, (msg: any) => {
+      const now = Date.now();
+      if (now - lastScanProcessed < SCAN_THROTTLE_MS) return;
+      lastScanProcessed = now;
+
       // Extract scan points for real-time visualization (red dots on map)
       const points: Array<{x: number; y: number}> = [];
       const cosT = Math.cos(state.robotPose.theta);
@@ -803,51 +880,6 @@ async function main() {
       }).catch(() => { liveMapCompressing = false; });
   });
 
-  // --- motor_state bridge via subprocess ---
-  // rclnodejs has a DDS discovery bug where its subscriber fails to
-  // connect to existing C++ publishers on low-frequency topics.
-  // Workaround: use `ros2 topic echo` as a subprocess and parse stdout.
-  // This is reliable because the ros2 CLI creates its own DDS participant
-  // that properly discovers all publishers.
-  const { spawn } = require('child_process');
-  function startMotorStateBridge() {
-    const proc = spawn('ros2', ['topic', 'echo', '--no-arr', '--full-length', `/${NAMESPACE}/motor_state`, 'std_msgs/msg/String'], {
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let buf = '';
-    proc.stdout.on('data', (chunk: Buffer) => {
-      buf += chunk.toString();
-      // Each message ends with "---\n"
-      const parts = buf.split('---\n');
-      buf = parts.pop() || '';
-      for (const part of parts) {
-        const match = part.match(/data:\s*'(.+)'/s);
-        if (!match) continue;
-        try {
-          const parsed = JSON.parse(match[1].replace(/\\n/g, '').replace(/\bnan\b/g, 'null'));
-          if (parsed._keepalive) continue;
-          const prev = state.motorState.armed;
-          state.motorState = parsed;
-          if (prev !== state.motorState.armed) {
-            console.log(`[motor_state bridge] armed=${parsed.armed}`);
-            eventLog.emit('info', 'DRIVE', state.motorState.armed ? 'Armed' : 'Disarmed');
-            updateState();
-          }
-        } catch { /* ignore parse errors */ }
-      }
-    });
-    proc.stderr.on('data', (chunk: Buffer) => {
-      const line = chunk.toString().trim();
-      if (line && !line.includes('selected interface')) console.warn('[motor_state bridge stderr]', line);
-    });
-    proc.on('exit', (code: number) => {
-      console.warn(`[motor_state bridge] Exited code=${code}, restarting in 2s...`);
-      setTimeout(startMotorStateBridge, 2000);
-    });
-  }
-  setTimeout(startMotorStateBridge, 3000); // start after DDS discovery settles
-
   // --- Timers ---
   setInterval(() => { // Health 1Hz
     const now = Date.now() / 1000, hz = calcHz(state.odomTimes);
@@ -954,6 +986,35 @@ async function main() {
   // --- Express + Routes ---
   const app = express();
   app.use(express.json());
+
+  // CORS for externally-hosted frontend (Sprint 1 Fase 1a). When the dashboard
+  // runs on a different origin than this backend (laptop x86 serving the
+  // build, dev box on a different host:port), the browser blocks fetch/WS
+  // unless we explicitly allow that origin. Default empty = same-origin only.
+  // Set AGV_UI_ALLOWED_ORIGINS to a comma-separated list of origins (each
+  // origin is scheme://host[:port], e.g. http://laptop.lan:5173).
+  const allowedOriginsRaw = process.env.AGV_UI_ALLOWED_ORIGINS || '';
+  const allowedOrigins = new Set(
+    allowedOriginsRaw.split(',').map(s => s.trim()).filter(Boolean)
+  );
+  if (allowedOrigins.size > 0) {
+    app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (origin && allowedOrigins.has(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      }
+      if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
+      }
+      next();
+    });
+    console.log(`[cors] Allowed origins: ${[...allowedOrigins].join(', ')}`);
+  }
 
   const dashboardDir = path.resolve(__dirname, '../../../web/agv_dashboard/dist');
   if (fs.existsSync(dashboardDir)) app.use('/dashboard', express.static(dashboardDir));

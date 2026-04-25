@@ -308,6 +308,44 @@ TEST(ModeFsm, OperatorTeleopOverrides) {
   EXPECT_EQ(out.active_source, Source::NONE);
 }
 
+TEST(ModeFsm, TeleopWithRailApproachActiveYieldsApproachSource) {
+  // 2026-04-25 carve-out: when the operator is in teleop mode but the
+  // rail_approach service was fired (skip_coarse_approach=true path),
+  // the FSM must yield Source::APPROACH so cmd_vel_approach reaches
+  // the motors. Without this, teleop_server stamps zero on cmd_vel and
+  // the alignment loop never moves the robot.
+  auto in = base_inputs();
+  in.operator_mode = "teleop";
+  in.rail_approach_state = "driving";    // FINE_SERVOING
+  auto out = step(Mode::TELEOP, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_ACTIVE);
+  EXPECT_EQ(out.active_source, Source::APPROACH);
+}
+
+TEST(ModeFsm, TeleopWithRailApproachAcquiringYieldsApproachSource) {
+  // Same carve-out for the brief TAG_ACQUISITION window between the
+  // skip-coarse entry and the first detection. Otherwise there's a race
+  // where the arbiter publishes zero for ~50 ms while rail_approach is
+  // looking for the tag.
+  auto in = base_inputs();
+  in.operator_mode = "teleop";
+  in.rail_approach_state = "tag_acquisition";
+  auto out = step(Mode::TELEOP, in);
+  EXPECT_EQ(out.next_mode, Mode::RAIL_APPROACH_ACTIVE);
+  EXPECT_EQ(out.active_source, Source::APPROACH);
+}
+
+TEST(ModeFsm, TeleopWithRailApproachIdleStillTeleop) {
+  // Sanity check the carve-out doesn't fire spuriously when
+  // rail_approach is idle/settled/aborted.
+  auto in = base_inputs();
+  in.operator_mode = "teleop";
+  in.rail_approach_state = "idle";
+  auto out = step(Mode::TELEOP, in);
+  EXPECT_EQ(out.next_mode, Mode::TELEOP);
+  EXPECT_EQ(out.active_source, Source::NONE);
+}
+
 TEST(ModeFsm, ApproachOnFrontAisleAlsoTriggersEntry) {
   auto in = base_inputs();
   in.zone = "rail_approach_front";

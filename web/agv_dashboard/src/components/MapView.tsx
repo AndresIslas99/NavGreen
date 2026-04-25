@@ -9,6 +9,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { MapUpdate, PathPoint, DefinedTag } from '../api/types'
+import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
 
 // Greenhouse rail aisle geometry. y-centers measured in world frame
@@ -188,7 +189,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
     let canceled = false
     const fetchTags = () => {
-      fetch('/api/apriltags')
+      fetch(apiUrl('/api/apriltags'))
         .then(r => r.json())
         .then(s => { if (!canceled) render(s.defined_tags || []) })
         .catch(() => {})
