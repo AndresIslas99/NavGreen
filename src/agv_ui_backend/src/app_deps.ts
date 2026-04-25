@@ -114,6 +114,14 @@ export interface RosBridge {
   sendEStop(active: boolean): void;
   sendMotorEnable(active: boolean): void;
   callTriggerService(client: any, name: string): Promise<{ success: boolean; message: string }>;
+  // Calls /agv/rail_approach/execute with the skip_coarse_approach flag.
+  // skip_coarse_approach=true bypasses Nav2 entirely and goes directly
+  // to fine-servoing — used for the /api/apriltags/:hw/align endpoint
+  // when the operator only needs precision alignment with a visible tag.
+  callRailApproach(req: {
+    tag_id: number; offset_x: number; offset_y: number;
+    skip_coarse_approach: boolean;
+  }): Promise<{ success: boolean; message: string }>;
   // Fires the /agv/maps/loaded event so auto_init_orchestrator starts its
   // relocalization sequence. Must be called after any successful Nav2
   // load_map. The name is the map stem (without path or .yaml extension).

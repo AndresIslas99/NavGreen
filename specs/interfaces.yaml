@@ -15,6 +15,8 @@ verified_by: "tools/verify_specs/verify_interfaces.py"
 # - Topics that are emitted and consumed within a single package
 # - Topics from external packages (nav2_msgs, isaac_ros_*) that the AGV
 #   does not redefine
+# - HMI ↔ backend REST/WebSocket contract: see specs/hmi_api.yaml
+#   (agv_ui_backend translates between this DDS layer and the HMI layer)
 #
 # Namespace convention:
 # - All AGV topics are namespaced under `/agv/` (default robot_namespace)
@@ -161,7 +163,10 @@ topics:
     qos: {reliability: "best_effort", history: "keep_last", depth: 10}
     rate_hz: {min: 40, target: 50, max: 55}
     subscribers:
-      - {pkg: "robot_localization", node: "ekf_local", role: "odom0 for dual EKF"}
+      - {pkg: "agv_sensor_fusion", node: "wheel_slip_detector",
+         role: "input for slip detection; republished as /agv/wheel_odom_validated"}
+      - {pkg: "agv_ui_backend", node: "teleop_server",
+         role: "dashboard velocity + Hz tracking"}
     hil_override:
       owner_pkg: "agv_hil_bridges"
       owner_node: "joint_states_to_wheel_odom"
@@ -173,6 +178,62 @@ topics:
         /agv/joint_states (sim encoder emulation) using the SAME
         wheel_radius / track_width as odrive_params.yaml, so ekf_local
         sees the same robot kinematically in HIL and prod.
+
+  - name: "/agv/wheel_odom_validated"
+    type: "nav_msgs/msg/Odometry"
+    owner_pkg: "agv_sensor_fusion"
+    owner_node: "wheel_slip_detector"
+    code_ref: "src/agv_sensor_fusion/src/wheel_slip_detector_node.cpp"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 50}  # republishes 1:1 with /agv/wheel_odom
+    subscribers:
+      - {pkg: "robot_localization", node: "ekf_local",
+         role: "odom0 for dual EKF (replaces /agv/wheel_odom direct)"}
+    notes: |
+      Phase 2 of the diff-drive calibration plan (2026-04-25). Same
+      payload as /agv/wheel_odom but with twist.covariance[0]
+      (vx) and twist.covariance[35] (wz) set to a sentinel value
+      (1e6) when the slip detector flags caster slip — IMU yaw rate
+      vs wheel-derived yaw rate residual exceeds threshold.
+      robot_localization treats covariance ≥1e3 as effectively
+      ignored for that update. This replaces the previous
+      caster_covariance_multiplier=10 hack in odrive_can_node, which
+      went against the robot_localization documentation.
+
+  - name: "/agv/wheel_slip/state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_sensor_fusion"
+    owner_node: "wheel_slip_detector"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 50}
+    subscribers: []
+    notes: |
+      JSON diagnostic stream:
+      {"state":"INACTIVE|ACTIVE|SETTLING","residual_wz":<rad/s>,
+       "residual_vx":<m/s|null>,"inflated":<bool>,"reason":"<text>"}
+      Used for tuning the slip detector parameters; not consumed by
+      runtime logic. See docs/calibration/slip_detector_tuning.md.
+
+  - name: "/agv/caster/dwell_state"
+    type: "std_msgs/msg/String"
+    owner_pkg: "agv_sensor_fusion"
+    owner_node: "caster_dwell_advisor"
+    qos: {reliability: "reliable", history: "keep_last", depth: 10}
+    rate_hz: {target: 20}
+    subscribers: []
+    notes: |
+      JSON advisory stream (Phase 4 of the diff-drive calibration plan,
+      advisory variant — Arrizabalaga et al. 2021 reference):
+      {"state":"IDLE|DWELLING","last_sign":<-1|0|+1>,
+       "seconds_remaining":<float>}
+      DWELLING is asserted for `dwell_s` seconds (default 0.5) after a
+      direction reversal in /agv/cmd_vel is detected. Future controllers
+      should consume this and pause before sending the reversed command,
+      to allow passive caster wheels to physically realign and avoid
+      the bore-torque-induced lateral arc that biases wheel_odom.
+      Currently NO node consumes this — closing the loop is post-example
+      work (Nav2 MPPI custom critic or velocity_smoother extension).
+      See docs/calibration/caster_dwell_advisor.md for tuning.
 
   - name: "/agv/odometry/local"
     type: "nav_msgs/msg/Odometry"

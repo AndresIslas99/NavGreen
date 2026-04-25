@@ -37,12 +37,12 @@ export function MissionsPanel({
 
   // Fetch defined AprilTags so waypoints can snap to them
   useEffect(() => {
-    fetch('/api/apriltags')
+    fetch(api.apiUrl('/api/apriltags'))
       .then(r => r.json())
       .then(s => setDefinedTags(s.defined_tags || []))
       .catch(() => {})
     const id = setInterval(() => {
-      fetch('/api/apriltags').then(r => r.json()).then(s => setDefinedTags(s.defined_tags || [])).catch(() => {})
+      fetch(api.apiUrl('/api/apriltags')).then(r => r.json()).then(s => setDefinedTags(s.defined_tags || [])).catch(() => {})
     }, 5000)
     return () => clearInterval(id)
   }, [])

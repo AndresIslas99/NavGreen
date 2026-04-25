@@ -19,6 +19,7 @@
 
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <vector>
 #include <set>
 #include <cstring>
@@ -36,10 +37,18 @@ public:
     declare_parameter("depth_topic", "/zed/zed_node/depth/depth_registered");
     declare_parameter("jpeg_quality", 70);
     declare_parameter("max_width", 640);
+    // Sprint 1 Fase A1: cap simultaneous MJPEG streams. Each stream blocks a
+    // dedicated thread for the duration of the client connection. Without a
+    // cap, a misbehaving frontend (open + reload + retry) can spawn unbounded
+    // threads competing JPEG-encode CPU with cuVSLAM. Excess clients receive
+    // HTTP 503; the browser typically retries, which lets the cap recover
+    // gracefully when an existing stream closes.
+    declare_parameter("max_concurrent_streams", 4);
 
     port_ = get_parameter("port").as_int();
     jpeg_quality_ = get_parameter("jpeg_quality").as_int();
     max_width_ = get_parameter("max_width").as_int();
+    max_concurrent_streams_ = get_parameter("max_concurrent_streams").as_int();
 
     auto cam_topic = get_parameter("camera_topic").as_string();
     auto depth_topic = get_parameter("depth_topic").as_string();
@@ -176,11 +185,11 @@ private:
       }
 
       if (path == "/camera/stream") {
-        std::thread([this, client_fd]() { serve_mjpeg(client_fd, cam_jpeg_, cam_mutex_, 100); }).detach();
+        spawn_stream(client_fd, cam_jpeg_, cam_mutex_, 100);
       } else if (path == "/camera/snapshot") {
         serve_snapshot(client_fd, cam_jpeg_, cam_mutex_);
       } else if (path == "/depth/stream") {
-        std::thread([this, client_fd]() { serve_mjpeg(client_fd, depth_jpeg_, depth_mutex_, 200); }).detach();
+        spawn_stream(client_fd, depth_jpeg_, depth_mutex_, 200);
       } else if (path == "/depth/snapshot") {
         serve_snapshot(client_fd, depth_jpeg_, depth_mutex_);
       } else {
@@ -189,6 +198,35 @@ private:
         close(client_fd);
       }
     }
+  }
+
+  // Spawn a streaming worker if the active-stream cap allows it. Excess
+  // clients are rejected with HTTP 503 so the front-end can decide to back
+  // off or retry. The worker is detached but tracked by active_streams_ so
+  // the cap is respected; the destructor blocks until streams drain via
+  // running_=false (each stream's inner loop checks running_ before each
+  // frame and exits within delay_ms).
+  void spawn_stream(int client_fd, std::vector<uchar>& jpeg_ref,
+                    std::mutex& mtx, int delay_ms)
+  {
+    int current = active_streams_.fetch_add(1, std::memory_order_relaxed);
+    if (current >= max_concurrent_streams_) {
+      active_streams_.fetch_sub(1, std::memory_order_relaxed);
+      const char* resp = "HTTP/1.1 503 Service Unavailable\r\n"
+        "Retry-After: 2\r\n"
+        "Content-Length: 27\r\n\r\n"
+        "Stream cap reached, retry.\n";
+      send(client_fd, resp, strlen(resp), MSG_NOSIGNAL);
+      close(client_fd);
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+        "Image stream rejected: %d concurrent clients (cap=%d)",
+        current, max_concurrent_streams_);
+      return;
+    }
+    std::thread([this, client_fd, &jpeg_ref, &mtx, delay_ms]() {
+      serve_mjpeg(client_fd, jpeg_ref, mtx, delay_ms);
+      active_streams_.fetch_sub(1, std::memory_order_relaxed);
+    }).detach();
   }
 
   void serve_mjpeg(int fd, std::vector<uchar>& jpeg_ref, std::mutex& mtx, int delay_ms)
@@ -255,8 +293,10 @@ private:
   int port_;
   int jpeg_quality_;
   int max_width_;
+  int max_concurrent_streams_;
+  std::atomic<int> active_streams_{0};
   int server_fd_{-1};
-  bool running_{true};
+  std::atomic<bool> running_{true};
   std::thread server_thread_;
 };
 

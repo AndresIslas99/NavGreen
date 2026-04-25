@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { DefinedTag, AprilTagState, TagType } from '../../api/types'
+import { apiUrl } from '../../api/client'
 
 export function AprilTagsPanel() {
   const [state, setState] = useState<AprilTagState | null>(null)
@@ -9,7 +10,7 @@ export function AprilTagsPanel() {
 
   const fetchState = useCallback(async () => {
     try {
-      const r = await fetch('/api/apriltags')
+      const r = await fetch(apiUrl('/api/apriltags'))
       if (r.ok) setState(await r.json())
     } catch { /* ignore */ }
   }, [])
@@ -35,13 +36,13 @@ export function AprilTagsPanel() {
     const body = { ...form, yaw: yawRad }
     try {
       if (editingId !== null) {
-        await fetch(`/api/apriltags/defined/${editingId}`, {
+        await fetch(apiUrl(`/api/apriltags/defined/${editingId}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
       } else {
-        await fetch('/api/apriltags/defined', {
+        await fetch(apiUrl('/api/apriltags/defined'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -67,7 +68,7 @@ export function AprilTagsPanel() {
 
   const handleNavigate = async (tag: DefinedTag) => {
     try {
-      const r = await fetch(`/api/apriltags/${tag.id}/navigate`, { method: 'POST' })
+      const r = await fetch(apiUrl(`/api/apriltags/${tag.id}/navigate`), { method: 'POST' })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
         alert(`Failed to send goal: ${err.error || 'unknown'}`)
@@ -77,14 +78,38 @@ export function AprilTagsPanel() {
     }
   }
 
+  /**
+   * Pure-alignment path: skips Nav2 entirely and goes directly to
+   * fine-servoing with the AprilTag detection. Use when the tag is
+   * already physically in front of the robot. Works with localization
+   * in any state (DEGRADED, FAILED, no map loaded).
+   */
+  const handleAlign = async (tag: DefinedTag) => {
+    const hwId = getHardwareForDefined(tag.id)
+    if (hwId === null) {
+      alert(`"${tag.label}" doesn't have a hardware ID assigned. ` +
+            `Assign one from the Pending Detections panel first.`)
+      return
+    }
+    try {
+      const r = await fetch(apiUrl(`/api/apriltags/${hwId}/align`), { method: 'POST' })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        alert(`Align failed: ${err.error || 'unknown'}`)
+      }
+    } catch (e: any) {
+      alert(`Network error: ${e?.message}`)
+    }
+  }
+
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this tag? Hardware assignment (if any) will also be removed.')) return
-    await fetch(`/api/apriltags/defined/${id}`, { method: 'DELETE' })
+    await fetch(apiUrl(`/api/apriltags/defined/${id}`), { method: 'DELETE' })
     fetchState()
   }
 
   const handleUnassign = async (hardware_id: number) => {
-    await fetch(`/api/apriltags/assignment/${hardware_id}`, { method: 'DELETE' })
+    await fetch(apiUrl(`/api/apriltags/assignment/${hardware_id}`), { method: 'DELETE' })
     fetchState()
   }
 
@@ -159,8 +184,16 @@ export function AprilTagsPanel() {
               <div className="apriltag-header">
                 <strong>{typeIcon} #{tag.id} {tag.label}</strong>
                 <div className="apriltag-actions">
-                  <button className="btn-small" onClick={() => handleNavigate(tag)} title="Send AGV to this tag">
+                  <button className="btn-small" onClick={() => handleNavigate(tag)} title="Send AGV via Nav2 (requires map + LOCALIZED)">
                     Send AGV
+                  </button>
+                  <button
+                    className="btn-small"
+                    onClick={() => handleAlign(tag)}
+                    title="Align with this tag using fine-servoing only — skips Nav2. Tag must be visible and a hardware ID assigned."
+                    disabled={hwId === null}
+                  >
+                    Align
                   </button>
                   <button className="btn-small" onClick={() => handleEdit(tag)}>Edit</button>
                   <button className="btn-small btn-danger" onClick={() => handleDelete(tag.id)}>Delete</button>

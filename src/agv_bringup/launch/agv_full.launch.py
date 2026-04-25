@@ -118,6 +118,27 @@ def generate_launch_description():
                 'map_manager) stays active. Default false = production with real '
                 'hardware.'),
         ),
+        # Sprint 1 Fase A4 (2026-04-24): top-level foxglove_bridge for engineer
+        # diagnostics (TF tree, costmaps, lifecycle status). NOT a substitute
+        # for the operator dashboard — Foxglove Studio went closed-source in
+        # 2024, so production HMI flows MUST stay on agv_ui_backend. Off by
+        # default to avoid burning ports/CPU when no engineer is connected.
+        #
+        # NAMING NOTE: this arg is intentionally `enable_foxglove_bridge`,
+        # NOT `enable_foxglove`. Reason: agv_slam.launch.py is included with
+        # `launch_arguments={'enable_foxglove': 'false', ...}` at t=3s, and
+        # IncludeLaunchDescription in ROS 2 Humble MUTATES the parent
+        # context's launch_configurations — so a same-named top-level arg
+        # gets silently overwritten to 'false' by the time TimerActions
+        # later in the launch evaluate `LaunchConfiguration('enable_foxglove')`.
+        # Using a distinct name avoids the collision entirely.
+        DeclareLaunchArgument(
+            'enable_foxglove_bridge', default_value='false',
+            description=(
+                'Start foxglove_bridge on ws://<host>:8765 for engineer '
+                'diagnostic clients. Off by default; turn on per-session '
+                'with enable_foxglove_bridge:=true.'),
+        ),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -296,6 +317,38 @@ def generate_launch_description():
             condition=UnlessCondition(hil_mode),
         ),
 
+        # ── Wheel slip detector (t=3.8s — between IMU filter and EKF) ──
+        # Phase 2 of the diff-drive calibration plan. Listens to wheel
+        # odom + filtered IMU + cuVSLAM odometry; republishes wheel
+        # odom with covariance inflated when caster slip is detected.
+        # ekf_local consumes wheel_odom_validated (NOT /agv/wheel_odom).
+        # See docs/calibration/slip_detector_tuning.md for thresholds.
+        TimerAction(
+            period=3.8,
+            actions=[
+                Node(
+                    package='agv_sensor_fusion',
+                    executable='wheel_slip_detector_node',
+                    name='wheel_slip_detector',
+                    namespace=ns,
+                    output='log',
+                ),
+                # Caster-aware dwell advisor (Phase 4, advisory variant).
+                # Watches /agv/cmd_vel for direction reversals and
+                # publishes /agv/caster/dwell_state. Passive observer;
+                # does NOT mutate cmd_vel. Used by future controller
+                # extensions (Nav2 MPPI custom critic or velocity_smoother
+                # mod) to insert a 0.5 s pause before reversing.
+                Node(
+                    package='agv_sensor_fusion',
+                    executable='caster_dwell_advisor_node',
+                    name='caster_dwell_advisor',
+                    namespace=ns,
+                    output='log',
+                ),
+            ],
+        ),
+
         # ── Dual EKF sensor fusion (t=4s) ──
         TimerAction(
             period=4.0,
@@ -455,7 +508,7 @@ def generate_launch_description():
                         'size': 0.2,
                         'max_hamming': 0,
                         'detector.threads': 2,
-                        # quad_decimate=2.0 made apriltag_node process
+                        # decimate=2.0 made apriltag_node process
                         # 336×188 out of the 672×376 VGA NATIVE stream → a
                         # 20 cm tag at 2 m fell to ~13 px, below the
                         # tag36h11 decode floor. Field observation at the
@@ -463,7 +516,15 @@ def generate_launch_description():
                         # never decoded at rail_approach trigger distance.
                         # 1.0 = no decimation; CPU cost is marginal at
                         # VGA and we recover detection out to ~3 m.
-                        'detector.quad_decimate': 1.0,
+                        # NOTE 2026-04-25: parameter is `detector.decimate`,
+                        # NOT `detector.quad_decimate` — the older name was
+                        # silently ignored, so this override never actually
+                        # applied. That left runtime decimate=2.0 (the
+                        # apriltag_ros default) and explained the iter-37
+                        # "tag visible but undecoded" symptom in full.
+                        # Verified by reading the live param after fix:
+                        # `ros2 param get /agv/apriltag_node detector.decimate`.
+                        'detector.decimate': 1.0,
                         'use_sim_time': use_sim_time,
                     }],
                     remappings=[
@@ -515,6 +576,26 @@ def generate_launch_description():
                             'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
                             'tag_size': 0.2,
                             'camera_info_topic': '/agv/zed/left/camera_info',
+                            # Iter-46 transfer: tighten settle gate. The 12.7 cm plateau
+                            # observed in HIL iter-43/45 traced to the tolerance gate, not
+                            # PnP precision (Monte-Carlo σ_z ≈ 0.5 mm at settle geometry,
+                            # tools/pnp_bias_sweep.py). Real ZED 2i at 1280×720 has
+                            # equivalent or better PnP, so the same 0.05 m gate applies.
+                            'tolerance_xy': 0.05,
+                            # Iter-46 transfer: longer fine-servo budget. Pure-P at the
+                            # tighter 0.05 m gate may take longer to settle on the real
+                            # plant; 360 s leaves margin without changing failure semantics.
+                            'max_fine_duration_s': 360.0,
+                            # NOTE: PI+FF gains (Ki_linear, stiction_ff_vel_mps) deliberately
+                            # NOT copied from agv_hil_full.launch.py. Those were tuned via
+                            # tools/plant_id.py against the HIL drive chain (4-8 % efficiency,
+                            # deadband ≈ 0.020 m/s — sim-specific). Real ODrive plant ID must
+                            # be run before enabling them; controller defaults to pure-P
+                            # when Ki_linear == 0 by design (see iter-46 commit a8e9867).
+                            # default_offset_x = 0.30 (yaml default) preserved: the 0.40 m
+                            # bump in HIL was driven by sim camera fy = 235 at 672×376;
+                            # real ZED at 1280×720 (fy ≈ 530) sees the floor tag well below
+                            # the 0.349 m visibility floor that drove the HIL change.
                             'use_sim_time': use_sim_time,
                         },
                     ],
@@ -632,6 +713,33 @@ def generate_launch_description():
                     }],
                     output='log',
                     condition=IfCondition(enable_behaviors),
+                ),
+            ],
+        ),
+
+        # ── foxglove_bridge (optional, Sprint 1 Fase A4) ─────────────────
+        # Diagnostic-only WebSocket bridge for Foxglove Studio. Lives at port
+        # 8765, separate from the operator dashboard (8090). Started after
+        # most of the stack so its topic discovery is complete by first
+        # client connect.
+        TimerAction(
+            period=7.5,
+            actions=[
+                Node(
+                    package='foxglove_bridge',
+                    executable='foxglove_bridge',
+                    name='foxglove_bridge',
+                    parameters=[{
+                        'port': 8765,
+                        'address': '0.0.0.0',
+                        'tls': False,
+                        # Send compressed PNG/JPEG over the wire when topics
+                        # are large (default true is fine; documented for
+                        # discoverability).
+                        'send_buffer_limit': 10000000,
+                    }],
+                    output='log',
+                    condition=IfCondition(LaunchConfiguration('enable_foxglove_bridge')),
                 ),
             ],
         ),

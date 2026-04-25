@@ -42,6 +42,9 @@ export interface PendingDetection {
 export class AprilTagManager {
   private state: AprilTagState;
   private pendingDetections: Map<number, PendingDetection>;
+  // Last-seen timestamp per hardware ID (assigned or not). Updated on
+  // every detection. Used by hasRecentDetection() for the /align gate.
+  private lastSeenByHwId: Map<number, number> = new Map();
   private nextDefinedId: number;
   private statePath: string;
   private registryYamlPath: string;
@@ -187,6 +190,9 @@ export class AprilTagManager {
   // ── Pending detections ──
 
   recordPendingDetection(hardware_id: number): void {
+    // Always update last-seen timestamp, even when the tag is assigned.
+    // Used by hasRecentDetection() for the /align endpoint pre-flight.
+    this.lastSeenByHwId.set(hardware_id, Date.now() / 1000);
     if (this.isAssigned(hardware_id)) return;
     if (this.pendingDetections.has(hardware_id)) return;  // Already pending
     const detection: PendingDetection = {
@@ -203,6 +209,18 @@ export class AprilTagManager {
 
   getPendingDetections(): PendingDetection[] {
     return Array.from(this.pendingDetections.values()).sort((a, b) => a.first_seen - b.first_seen);
+  }
+
+  /**
+   * True if hardware tag was seen within `max_age_s` seconds.
+   * Used by /api/apriltags/:hw/align to fail fast when the tag is not
+   * currently visible. Tracks all detections (assigned or not), so it
+   * works for tags the operator already mapped.
+   */
+  hasRecentDetection(hardware_id: number, max_age_s: number): boolean {
+    const t = this.lastSeenByHwId.get(hardware_id);
+    if (t === undefined) return false;
+    return (Date.now() / 1000 - t) <= max_age_s;
   }
 
   // ── Public state accessors ──

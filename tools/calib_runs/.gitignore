@@ -1,0 +1,4 @@
+# Captured calibration session data — not source.
+*.csv
+bag_*/
+!.gitkeep
