@@ -1,0 +1,725 @@
+spec_version: "1.0"
+last_updated: "2026-04-24"
+generated_from: "src/agv_ui_backend/src/{routes,ws,state_machine}.ts"
+verified_by: "TODO — tools/verify_specs/verify_hmi_api.py (post-Sprint-1)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGV HMI API Contract
+#
+# This file is the binding contract between the operator HMI (web dashboard,
+# foxglove panels, future tablet apps) and the agv_ui_backend (TypeScript +
+# rclnodejs server on port 8090). It exists so that:
+#
+#   1. A frontend developer can build a new client without reading TS source.
+#   2. Backend changes that break the contract are visible to reviewers.
+#   3. The set of safety gates protecting actions is explicit, not implicit
+#      in code comments.
+#
+# The HMI talks to the backend over HTTP/REST + WebSocket. It does NOT speak
+# DDS — the backend translates between HMI calls and ROS2 topics/services/
+# actions. This is a deliberate separation: the backend owns the action
+# gates that prevent unsafe operations (see `action_gates` below).
+#
+# NOT in scope for this spec:
+# - DDS-level contracts (those live in specs/interfaces.yaml)
+# - Internal backend module APIs (those are TS code)
+# - Camera/depth MJPEG streams (separate package: agv_image_server, port 8091)
+# - Frontend rendering details
+#
+# Cross-references:
+# - DDS interfaces consumed by the backend: see specs/interfaces.yaml
+# - Operation modes referenced by gates: see specs/state_machine.yaml
+# - Persistent artifacts written by routes: see specs/persistence.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+server:
+  package: "agv_ui_backend"
+  process: "teleop_server"
+  language: "TypeScript (Node.js >=20)"
+  ros_bridge: "rclnodejs (native DDS, NOT rosbridge)"
+  default_port: 8090
+  bind: "0.0.0.0"
+  env_vars:
+    - name: "AGV_PORT"
+      default: "8090"
+      purpose: "HTTP/WS listen port"
+    - name: "AGV_NAMESPACE"
+      default: "agv"
+      purpose: "ROS2 robot_namespace prefix for all topic/service paths"
+    - name: "AGV_DATA_DIR"
+      default: "/home/orza/agv_data"
+      purpose: "Root for maps/, missions.json, events.jsonl, telemetry.db"
+    - name: "AGV_BOOT_MAP_NAME"
+      default: ""
+      purpose: "Name of map_yaml basename loaded at boot (sets /agv/maps/loaded latch)"
+    - name: "AGV_RETENTION_DAYS"
+      default: "30"
+      purpose: "Rolling retention window for events.jsonl + telemetry.db"
+    - name: "AGV_UI_ALLOWED_ORIGINS"
+      default: "" # empty = same-origin only
+      purpose: "Comma-separated CORS allowlist (e.g. http://laptop.lan:5173). Required when frontend runs on a different host than the backend."
+      added_in: "Sprint 1 — Fase 1a"
+
+auth:
+  manager: "src/agv_ui_backend/src/auth.ts"
+  scheme: "JWT (HS256)"
+  header: "Authorization: Bearer <jwt>"
+  ws_query_param: "token"
+  optional: true
+  disabled_when: "auth/users.json is missing or empty"
+  roles:
+    - viewer    # read-only; WS receives status, REST GET only
+    - operator  # full operational control; WS commands + REST CRUD
+    - engineer  # operator + user management + dev endpoints
+  enable_check: "GET /api/auth/status returns {enabled: bool}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REST Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+# Each entry: method, path, role required, request schema, response schema,
+# action_gate (if any). Schemas use a compact informal notation; treat it as
+# JSON Schema-like, not strict. The source of truth for the wire format is
+# the TypeScript route handler.
+
+rest_endpoints:
+
+  # ── Status & mode ──────────────────────────────────────────────────────
+  - path: "/api/status"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/status.ts"
+    response:
+      robot_state: "RobotState (see action_gates.robot_state_enum)"
+      allowed_actions: "AllowedActions (object of canX booleans)"
+      wheel_odom_hz: "number"
+      velocity: "{linear: number, angular: number}"
+      e_stop: "boolean"
+      motors_armed: "boolean"
+      left_state: "number"
+      right_state: "number"
+      motor_errors: "boolean (left||right errors != 0)"
+      drive_online: "boolean (motors_armed || left_state>0)"
+      slam_tracking: "{confidence: number, mode: string} | null"
+      recording: "boolean"
+      clients: "number (active WS clients)"
+      mode: "'teleop'|'mapping'|'nav'"
+      pose: "{x: number, y: number, theta: number} | null"
+      nav_state: "{active: boolean, distance_remaining: number, status: string}"
+      health: "Record<string, SubsystemHealth>"
+      mission_progress: "MissionProgress | null"
+
+  - path: "/api/health"
+    method: "GET"
+    role: "viewer"
+    response: "Record<string, {status, detail, updated, action?}>"
+
+  - path: "/api/mode"
+    method: "GET"
+    role: "viewer"
+    response: "{mode: 'teleop'|'mapping'|'nav'}"
+
+  - path: "/api/mode"
+    method: "PUT"
+    role: "operator"
+    request: "{mode: 'teleop'|'mapping'|'nav'}"
+    response_200: "{success: true, mode: string}"
+    response_400: "{success: false, message: 'Invalid mode'}"
+    response_409: "{success: false, mode: <unchanged>, message: <reason>}"
+    action_gate: "mode_transition"
+
+  - path: "/api/rail/state"
+    method: "GET"
+    role: "viewer"
+    response: "{mode_arbiter, zone, rail_driver, rail_approach: {state}}"
+    note: "Phase-2 mode arbiter / zone / rail driver / rail approach states. Read-only mirror."
+
+  - path: "/api/zone/state"
+    method: "GET"
+    role: "viewer"
+    response: "ZoneDetectorState (JSON from /agv/zone/state topic)"
+
+  - path: "/api/mode/arbiter"
+    method: "GET"
+    role: "viewer"
+    response: "ModeArbiterState (JSON from /agv/mode/state topic)"
+
+  - path: "/api/rail_driver/state"
+    method: "GET"
+    role: "viewer"
+    response: "RailDriverState (JSON from /agv/rail_driver/state topic)"
+
+  # ── Maps ───────────────────────────────────────────────────────────────
+  - path: "/api/maps"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/maps.ts"
+    response: "Array<{name: string, modified: number}>"
+    note: "Lists *.yaml files in AGV_DATA_DIR/maps/, sorted by mtime desc."
+
+  - path: "/api/maps/:name/image"
+    method: "GET"
+    role: "viewer"
+    response_200: "image/png (PGM converted on the fly)"
+    response_404: "{error: 'Map not found' | 'PGM not found'}"
+
+  - path: "/api/maps/save"
+    method: "POST"
+    role: "operator"
+    request: "{name: string}"
+    response: "{success: bool, message: string, ...}"
+    action_gate: "save_map"
+    note: |
+      Orchestrates: agv_map_manager/save_map → /agv/zed/save_area_memory →
+      /visual_slam/save_map → copy landing pad → /agv/localization/
+      save_last_known_pose. See docs/audit/2026-04-13-full-audit.md bug #2.
+
+  - path: "/api/maps/load"
+    method: "POST"
+    role: "operator"
+    request: "{name: string}"
+    response_200: "{success: bool, message: string}"
+    response_404: "{error: 'Map not found'}"
+    response_503: "{success: false, message: 'map_server not available'}"
+    action_gate: "load_map"
+    note: |
+      Calls nav2_msgs/srv/LoadMap on /agv/map_server/load_map, then publishes
+      /agv/maps/loaded latch so auto_init_orchestrator runs the localization
+      cascade.
+
+  - path: "/api/acc_map/image"
+    method: "GET"
+    role: "viewer"
+    response_200: "image/png (live scan_grid_mapper occupancy as PNG)"
+    response_404: "{error: 'No accumulated map'}"
+
+  - path: "/api/acc_map"
+    method: "DELETE"
+    role: "operator"
+    response: "{success: true}"
+    note: "Publishes /agv/clear_map (Bool true) to scan_grid_mapper."
+
+  # ── Missions ───────────────────────────────────────────────────────────
+  - path: "/api/missions"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/missions.ts"
+    response: "Array<Mission>"
+    persistence: "AGV_DATA_DIR/missions.json"
+
+  - path: "/api/missions"
+    method: "POST"
+    role: "operator"
+    request: "{id?, name?, nodes?, edges?, repeat?, waypoints?}"
+    response: "Mission"
+    note: "If only `waypoints` is provided, backend normalizes into `nodes`."
+
+  - path: "/api/missions/:id"
+    method: "DELETE"
+    role: "operator"
+    response: "{success: true}"
+
+  - path: "/api/missions/:id/execute"
+    method: "POST"
+    role: "operator"
+    response_200: "{success: true, ...}"
+    response_400: "{success: false, message: <reason>}"
+    action_gate: "execute_mission"
+    known_gap: |
+      agv_waypoint_manager (mission executor) currently bypasses sendNavGoal
+      gates. Tracked for Sprint 2 (Fase: migrate state machine to C++).
+      See specs/state_machine.yaml#nav_goal_requires_localization.
+
+  - path: "/api/missions/pause"
+    method: "POST"
+    role: "operator"
+    response: "{success: true}"
+    action_gate: "pause_mission"
+
+  - path: "/api/missions/resume"
+    method: "POST"
+    role: "operator"
+    response: "{success: true}"
+
+  # ── Navigation ─────────────────────────────────────────────────────────
+  - path: "/api/nav/goal"
+    method: "POST"
+    role: "operator"
+    source: "src/agv_ui_backend/src/routes/nav.ts"
+    request: "{x: number, y: number, theta?: number}"
+    response: "{success: bool, message: string}"
+    action_gate: "nav_goal"
+
+  - path: "/api/nav/cancel"
+    method: "POST"
+    role: "operator"
+    response: "{success: true}"
+    action_gate: "cancel_nav"
+
+  # ── Events log ─────────────────────────────────────────────────────────
+  - path: "/api/events"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/events.ts"
+    query: "?limit=100&offset=0"
+    response: "Array<{ts, level, source, msg}>"
+    persistence: "AGV_DATA_DIR/events.jsonl (rolling AGV_RETENTION_DAYS days)"
+
+  - path: "/api/events"
+    method: "DELETE"
+    role: "engineer"
+    response: "{success: true}"
+
+  # ── Recording ──────────────────────────────────────────────────────────
+  - path: "/api/recording/start"
+    method: "POST"
+    role: "operator"
+    source: "src/agv_ui_backend/src/routes/recording.ts"
+    response: "{success: bool, message: string}"
+    note: "Calls /session/start_recording (std_srvs/Trigger)."
+
+  - path: "/api/recording/stop"
+    method: "POST"
+    role: "operator"
+    response: "{success: bool, message: string}"
+    note: "Calls /session/stop_recording (std_srvs/Trigger)."
+
+  # ── Recovery (operator unblock) ────────────────────────────────────────
+  - path: "/api/recovery/clear_estop"
+    method: "POST"
+    role: "operator"
+    source: "src/agv_ui_backend/src/routes/recovery.ts"
+    response: "{success: true, message: 'E-stop cleared'}"
+    note: |
+      Clears state.eStopActive in the backend AND publishes /agv/e_stop=false.
+      Idempotent. Required because publishing /agv/e_stop directly from the
+      CLI does NOT update the backend's internal state, so the dashboard
+      keeps showing robot_state="e_stop" until this endpoint runs.
+
+  - path: "/api/recovery/trigger_estop"
+    method: "POST"
+    role: "operator"
+    response: "{success: true, message: 'E-stop activated'}"
+    note: "CLI/automation mirror of the dashboard E-Stop button."
+
+  # ── Auth ───────────────────────────────────────────────────────────────
+  - path: "/api/auth/status"
+    method: "GET"
+    role: "anonymous"
+    source: "src/agv_ui_backend/src/routes/auth.ts"
+    response: "{enabled: boolean}"
+
+  - path: "/api/auth/login"
+    method: "POST"
+    role: "anonymous"
+    request: "{username: string, password: string}"
+    response_200: "{token: string, user: {username, role}}"
+    response_401: "{error: 'Invalid credentials'}"
+
+  - path: "/api/auth/me"
+    method: "GET"
+    role: "any-authenticated"
+    response: "{username, role}"
+
+  - path: "/api/auth/users"
+    method: "GET"
+    role: "engineer"
+    response: "Array<{username, role}>"
+
+  - path: "/api/auth/users"
+    method: "POST"
+    role: "engineer"
+    request: "{username, password, role}"
+    response_200: "{success: true}"
+    response_409: "{error: 'User already exists'}"
+
+  - path: "/api/auth/users/:username"
+    method: "DELETE"
+    role: "engineer"
+    response_200: "{success: true}"
+    response_404: "{error: 'User not found'}"
+
+  # ── Analytics & replay ─────────────────────────────────────────────────
+  - path: "/api/analytics/summary"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/analytics.ts"
+    query: "?period=24h|7d|60m"
+    response: "{distance_total, mission_count, ...}"
+    persistence: "AGV_DATA_DIR/telemetry.db (rolling AGV_RETENTION_DAYS days)"
+
+  - path: "/api/analytics/timeseries"
+    method: "GET"
+    role: "viewer"
+    query: "?metric=odom_hz|linear_vel|pose_x|pose_y|slam_confidence&from=<unix>&to=<unix>&resolution=<sec>"
+    response: "Array<{t: number, v: number}>"
+    response_400: "{error: 'Invalid metric'}"
+
+  - path: "/api/analytics/missions"
+    method: "GET"
+    role: "viewer"
+    query: "?from=<unix>&to=<unix>"
+    response: "Array<MissionRun>"
+
+  - path: "/api/replay/samples"
+    method: "GET"
+    role: "viewer"
+    query: "?from=<unix>&to=<unix>"
+    response: "Array<TelemetrySample>"
+
+  - path: "/api/replay/events"
+    method: "GET"
+    role: "viewer"
+    query: "?from=<unix>&to=<unix>&limit=500"
+    response: "Array<EventEntry>"
+
+  # ── AprilTags ──────────────────────────────────────────────────────────
+  - path: "/api/apriltags"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/apriltags.ts"
+    response: "{defined_tags, hardware_assignments, pending_detections}"
+
+  - path: "/api/apriltags/defined"
+    method: "POST"
+    role: "operator"
+    request: "{label: string, description?: string, x: number, y: number, yaw: number, z?: number, type?: 'wall'|'rail_start'}"
+    response: "Tag"
+
+  - path: "/api/apriltags/defined/:id"
+    method: "PUT"
+    role: "operator"
+    request: "Partial<{label, description, x, y, z, yaw}>"
+    response_200: "{success: true}"
+    response_404: "{error: 'tag not found'}"
+
+  - path: "/api/apriltags/defined/:id"
+    method: "DELETE"
+    role: "operator"
+    response_200: "{success: true}"
+    response_404: "{error: 'tag not found'}"
+
+  - path: "/api/apriltags/assign"
+    method: "POST"
+    role: "operator"
+    request: "{hardware_id: number, defined_id: number}"
+    response_200: "{success: true}"
+    response_404: "{error: 'defined_id not found'}"
+
+  - path: "/api/apriltags/assignment/:hardware_id"
+    method: "DELETE"
+    role: "operator"
+    response_200: "{success: true}"
+    response_404: "{error: 'assignment not found'}"
+
+  - path: "/api/apriltags/dismiss/:hardware_id"
+    method: "POST"
+    role: "operator"
+    response: "{success: true}"
+
+  - path: "/api/apriltags/:id/navigate"
+    method: "POST"
+    role: "operator"
+    response_200: "{success: bool, message: string}"
+    response_409: "{error: 'Switch to nav mode first'}"
+    action_gate: "nav_goal"
+    note: |
+      Computes goal from defined tag pose with standoff (rail_start: 0.5m,
+      wall: 1.0m). For rail_start tags, sets pendingRailApproach so the
+      backend auto-triggers rail_approach service after Nav2 succeeds.
+
+  - path: "/api/apriltags/:hw_id/align"
+    method: "POST"
+    role: "operator"
+    request: "{offset_x?: number, offset_y?: number}"
+    response_200: "{success: true, message: string}"
+    response_409: "{error: 'Tag not detected | Motors not armed | E-stop active'}"
+    response_500: "{error: <rail_approach failure>}"
+    action_gate: "align_with_tag"
+    note: |
+      Pure fine-servoing alignment. Skips Nav2 entirely; calls
+      /agv/rail_approach/execute with skip_coarse_approach=true. Robust to
+      localization=DEGRADED or no map loaded. Pre-flight: tag must have a
+      hardware_id assigned, must be detected within last 2s, motors armed,
+      no e-stop. The mode_arbiter has a carve-out (2026-04-25) that lets
+      the resulting cmd_vel_approach reach the motors even when
+      operator_mode=teleop. Use case: "robot está enfrente del tag, alinéate
+      a él" without requiring a mapping/localization workflow first.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WebSocket Protocol
+# ─────────────────────────────────────────────────────────────────────────────
+
+websocket_endpoints:
+
+  - path: "/ws/control"
+    source: "src/agv_ui_backend/src/ws/control.ts"
+    auth:
+      query_param: "token"
+      reject_code: 4401
+      role_required: "viewer (read-only) | operator | engineer"
+    permessage_deflate: false
+    on_connect:
+      sends_immediately:
+        - "map_update (if mapPng cached)"
+        - "acc_map (if liveMapPng cached)"
+        - "path (if navPathPoints non-empty)"
+    server_to_client:
+
+      - type: "status"
+        rate: "5 Hz (200 ms interval)"
+        purpose: "Primary telemetry broadcast — same shape as GET /api/status, plus rail_state block."
+        payload: "{type: 'status', robot_state, allowed_actions, wheel_odom_hz, velocity, e_stop, motors_armed, left_state, right_state, motor_errors, drive_online, slam_tracking, recording, clients, mode, pose, nav_state, health, battery_pct, mission_progress, mapping_coverage, collision_monitor, localization, current_map_name, rail_state}"
+
+      - type: "scan"
+        rate: "5 Hz (when scanPoints non-empty)"
+        purpose: "LiDAR points for live visualization"
+        payload: "{type: 'scan', points: Array<{x: number, y: number}>}"
+
+      - type: "path"
+        rate: "on change (per-client snapshot diff)"
+        purpose: "Active navigation path"
+        payload: "{type: 'path', points: Array<{x, y}>}"
+
+      - type: "map_update"
+        rate: "on change (per-client mapVersion tracking)"
+        purpose: "Static navigation map"
+        payload: "{type: 'map_update', png_base64: string, ...mapMeta}"
+
+      - type: "acc_map"
+        rate: "on change (per-client liveMapVersion tracking)"
+        purpose: "Live scan_grid_mapper occupancy"
+        payload: "{type: 'acc_map', png_base64: string, ...liveMapMeta}"
+
+      - type: "apriltag_pending"
+        rate: "on first sighting per client"
+        purpose: "Notify operator of new unassigned hardware AprilTag"
+        payload: "{type: 'apriltag_pending', hardware_id: number, first_seen: number}"
+
+      - type: "event"
+        rate: "as events occur (eventLog.popPending)"
+        purpose: "Push log entries (info/warn/crit) to UI in real time"
+        payload: "{type: 'event', ts, level, source, msg}"
+
+      - type: "recording_result"
+        rate: "on recording start/stop request"
+        purpose: "Result of WS-initiated recording action"
+        payload: "{type: 'recording_result', success, message}"
+
+      - type: "error"
+        rate: "on permission denied"
+        purpose: "Generic per-message error (e.g. viewer attempted command)"
+        payload: "{type: 'error', message: string}"
+
+    client_to_server:
+
+      - type: "cmd_vel"
+        role_required: "operator|engineer"
+        payload: "{type: 'cmd_vel', linear?: number, angular?: number}"
+        action_gate: "cmd_vel"
+
+      - type: "e_stop"
+        role_required: "operator|engineer"
+        payload: "{type: 'e_stop', active: boolean}"
+
+      - type: "motor_enable"
+        role_required: "operator|engineer"
+        payload: "{type: 'motor_enable', active: boolean}"
+        action_gate: "motor_enable"
+
+      - type: "mode"
+        role_required: "operator|engineer"
+        payload: "{type: 'mode', mode: 'teleop'|'mapping'|'nav'}"
+        action_gate: "mode_transition"
+        note: "Async; result reflected in next status tick (or rejected silently into eventLog)."
+
+      - type: "nav_goal"
+        role_required: "operator|engineer"
+        payload: "{type: 'nav_goal', x: number, y: number, theta?: number}"
+        action_gate: "nav_goal"
+        note: "Pre-filtered: only forwarded if currentMode === 'nav'."
+
+      - type: "nav_cancel"
+        role_required: "operator|engineer"
+        payload: "{type: 'nav_cancel'}"
+        action_gate: "cancel_nav"
+
+      - type: "recording"
+        role_required: "operator|engineer"
+        payload: "{type: 'recording', action: 'start'|'stop'}"
+
+    on_close:
+      side_effects:
+        - "decrement state.activeClients"
+        - "send cmd_vel (0,0) — defensive zero on disconnect"
+
+  - path: "/ws/teleop"
+    purpose: "High-rate teleop subset (joystick). Subset of /ws/control commands; no telemetry broadcast."
+    auth:
+      query_param: "token"
+      reject_codes: [4401, 4403]
+      viewer_rejected: true
+    accepts_only: ["cmd_vel", "e_stop"]
+    on_close:
+      side_effects: ["send cmd_vel (0,0)"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Action Gates
+#
+# Each action below lists the preconditions that the backend enforces before
+# forwarding the request to ROS2. Frontend MUST treat these as authoritative:
+# it can pre-filter UI affordances (gray out buttons), but the backend has the
+# last word and may reject. Rejections surface via eventLog (WS type=event)
+# or HTTP 4xx/5xx response.
+#
+# These gates are the contract that prevents safety regressions. Do NOT
+# bypass them in a custom client. Source of truth: src/agv_ui_backend/
+# src/{index.ts,state_machine.ts}.
+# ─────────────────────────────────────────────────────────────────────────────
+
+action_gates:
+
+  robot_state_enum:
+    - offline           # backend not connected to ROS yet
+    - idle              # no odom, motors not armed
+    - ready             # motors armed, system idle
+    - mapping           # mode=mapping
+    - navigating        # nav goal active
+    - executing_mission # waypoint manager running
+    - blocked           # operator-imposed pause
+    - e_stop            # E-stop sticky active
+    - fault             # motor errors !=0
+
+  derive_state_priority:
+    source: "src/agv_ui_backend/src/state_machine.ts::deriveState"
+    order: "e_stop > fault > idle (no odom + not armed) > mapping > executing_mission > navigating > ready > idle"
+
+  cmd_vel:
+    description: "Joystick teleop"
+    enforced_by: "src/agv_ui_backend/src/index.ts::sendCmdVel"
+    preconditions:
+      - "NOT state.eStopActive"
+      - "currentMode in ('teleop','mapping')"
+    speed_limits:
+      teleop:
+        max_linear_m_s: 0.5
+        max_angular_rad_s: 0.5
+      mapping:
+        max_linear_m_s: 0.4
+        max_angular_rad_s: 0.2
+    note: "Mapping limits are tighter to keep cuVSLAM tracking stable."
+
+  motor_enable:
+    description: "Arm/disarm ODrive motors"
+    derived_from: "state_machine.ts::allowedActions::canMotorEnable"
+    allowed_states: ["idle", "ready", "e_stop"]
+
+  mode_transition:
+    description: "Switch operational mode (teleop/mapping/nav)"
+    enforced_by: "src/agv_ui_backend/src/index.ts::setMode"
+    preconditions_for_nav:
+      - "Nav2 lifecycle_manager_navigation/is_active returns success=true"
+    rejection_response: "HTTP 409 (REST) or eventLog crit/warn entry (WS)"
+    cross_ref: "specs/state_machine.yaml#mode_coherence"
+
+  nav_goal:
+    description: "Dispatch /navigate_to_pose action"
+    enforced_by: "src/agv_ui_backend/src/index.ts::sendNavGoal (lines ~246-292)"
+    preconditions:
+      - "currentMode === 'nav'"
+      - "state.motorState.armed === true"
+      - "state.localization.action !== 'FAILED'"
+      - "collision_monitor fresh: cm.updated == 0 (cold boot OK) OR (cm.action !in ['STALE','OFFLINE'] AND age < 2.0s)"
+      - "navActionClient.isActionServerAvailable() === true"
+    rejection_messages:
+      not_in_nav: "Not in nav mode"
+      not_armed: "Motors not armed. Arm motors before navigating."
+      localization_failed: "Localization failed. Reinitialize with AprilTag before navigating."
+      safety_chain_offline: "Safety chain offline (collision_monitor not publishing). Restart nav stack."
+      no_action_server: "Nav2 action server not available"
+    cross_ref: "specs/state_machine.yaml#nav_goal_requires_localization"
+    known_gap: "agv_waypoint_manager bypasses this gate — Sprint 2 follow-up."
+
+  cancel_nav:
+    description: "Cancel active navigation goal"
+    derived_from: "state_machine.ts::allowedActions::canCancelNav"
+    allowed_states: ["navigating", "executing_mission"]
+    side_effects:
+      - "Inject (0,0) cmd_vel into safety chain (velocity_smoother handles graceful decel)"
+      - "Set state.missionCancel=true if mission active"
+
+  save_map:
+    description: "Persist current SLAM map + landing pad + last-known pose"
+    derived_from: "state_machine.ts::allowedActions::canSaveMap"
+    allowed_states: "any except offline, fault"
+    orchestration:
+      - "agv_map_manager/save_map"
+      - "/agv/zed/save_area_memory (ZED Area Memory)"
+      - "/visual_slam/save_map (cuVSLAM keyframe DB)"
+      - "Copy landing pad to <map>_meta.json"
+      - "/agv/localization/save_last_known_pose"
+
+  load_map:
+    description: "Load map + trigger localization cascade"
+    derived_from: "state_machine.ts::allowedActions::canLoadMap"
+    allowed_states: ["idle", "ready"]
+    side_effects:
+      - "Publish /agv/maps/loaded latch (transient_local) — auto_init_orchestrator triggers cascade"
+
+  execute_mission:
+    description: "Start a saved mission"
+    derived_from: "state_machine.ts::allowedActions::canExecuteMission"
+    allowed_states: ["ready"]
+
+  pause_mission:
+    description: "Pause running mission"
+    derived_from: "state_machine.ts::allowedActions::canPauseMission"
+    allowed_states: ["executing_mission"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Static asset serving (legacy + transitional)
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 1 (Fase 1) decouples the dashboard frontend from the backend host.
+# During the transition, the backend may continue to serve the React build at
+# /dashboard for backward compat, but new clients should consume the API
+# from a separately-hosted frontend (Vite dev, nginx, caddy on a different
+# host or port).
+#
+# The frontend reads VITE_API_BASE at build time / runtime to find the
+# backend; default empty preserves same-origin behavior.
+# ─────────────────────────────────────────────────────────────────────────────
+
+static_assets:
+  legacy_path: "/dashboard"
+  legacy_source: "web/agv_dashboard/dist/"
+  status: "transitional — kept as fallback during Sprint 1; remove post-validation"
+  external_frontend:
+    config_var: "VITE_API_BASE"
+    default: "" # same-origin
+    example: "http://jetson-prod.lan:8090"
+    cors_required: true
+    cors_env: "AGV_UI_ALLOWED_ORIGINS"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Out of scope (where to look)
+# ─────────────────────────────────────────────────────────────────────────────
+
+out_of_scope:
+  - topic: "Camera/depth MJPEG streams"
+    server: "agv_image_server (C++17)"
+    port: 8091
+    paths: ["/camera/stream", "/camera/snapshot", "/depth/stream", "/depth/snapshot"]
+    spec: "src/agv_image_server/CLAUDE.md"
+
+  - topic: "ROS2 DDS topic/service contracts"
+    spec: "specs/interfaces.yaml"
+
+  - topic: "Operation modes referenced by gates"
+    spec: "specs/state_machine.yaml"
+
+  - topic: "Persistent artifacts written by routes"
+    spec: "specs/persistence.yaml"
+
+  - topic: "foxglove_bridge (diagnostic only, off by default)"
+    port: 8765
+    flag: "enable_foxglove_bridge:=true (agv_full.launch.py); top-level arg name distinct from agv_slam's enable_foxglove to avoid Humble's IncludeLaunchDescription scope-mutation."
+    note: "Engineering diagnostic surface; NOT a substitute for this HMI API. Foxglove Studio client closed-source since 2024 — never make operational flows depend on it."

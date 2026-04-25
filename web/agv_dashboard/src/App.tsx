@@ -237,7 +237,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         </div>
       </div>
 
-      <EventLog entries={events} onClear={() => fetch('/api/events', { method: 'DELETE' })} />
+      <EventLog entries={events} onClear={() => fetch(api.apiUrl('/api/events'), { method: 'DELETE' })} />
 
       {pendingApriltag !== null && (
         <AprilTagAssignmentModal

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import type { WsMessage, RobotStatus, PathPoint, MapUpdate, LogEntry } from '../api/types'
+import { apiUrl, wsUrl, getToken } from '../api/client'
 
 const RECONNECT_BASE = 500
 const RECONNECT_MAX = 5000
@@ -48,8 +49,13 @@ export function useWebSocket() {
 
     function connect() {
       if (!alive) return
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const ws = new WebSocket(`${proto}://${location.host}/ws/control`)
+      // wsUrl honors VITE_API_BASE so the dashboard can run off-host while
+      // the backend stays on the Jetson. Append ?token=<jwt> when auth is
+      // enabled (backend rejects unauth'd connections with code 4401).
+      const token = getToken()
+      const base = wsUrl('/ws/control')
+      const url = token ? `${base}?token=${encodeURIComponent(token)}` : base
+      const ws = new WebSocket(url)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -58,7 +64,9 @@ export function useWebSocket() {
         // Load event history on first connect
         if (!historyLoaded.current) {
           historyLoaded.current = true
-          fetch('/api/events?limit=200')
+          const headers: Record<string, string> = {}
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          fetch(apiUrl('/api/events?limit=200'), { headers })
             .then(r => r.json())
             .then((evts: LogEntry[]) => setEvents(evts))
             .catch(() => {})
