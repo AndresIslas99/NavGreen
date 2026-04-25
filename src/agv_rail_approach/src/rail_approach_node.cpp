@@ -154,6 +154,23 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
       reload_all_registries();
     });
 
+  // Localization state cache. We extract the "action" string from the
+  // JSON payload published by auto_init_orchestrator. Used by the gate
+  // in on_execute to reject coarse_approach paths when the EKF anchor
+  // is not LOCALIZED.
+  loc_state_sub_ = create_subscription<std_msgs::msg::String>(
+    "localization/state", rclcpp::QoS(1).reliable(),
+    [this](std_msgs::msg::String::SharedPtr msg) {
+      const std::string& d = msg->data;
+      const std::string key = "\"action\":\"";
+      auto p = d.find(key);
+      if (p == std::string::npos) return;
+      p += key.size();
+      auto e = d.find('"', p);
+      if (e == std::string::npos) return;
+      last_localization_action_ = d.substr(p, e - p);
+    });
+
   reload_all_registries();
 
   RCLCPP_INFO(get_logger(), "Rail approach node ready, %zu rail starts loaded", rail_starts_.size());
@@ -310,15 +327,45 @@ void RailApproachNode::on_execute(
     return;
   }
 
+  // Localization gate. Coarse approach delegates to Nav2, which uses
+  // map→base_link TF; if localization is not verified, that TF is
+  // stale or biased and the robot drives to a phantom pose (the bug
+  // observed 2026-04-25). When skip_coarse_approach=true the path
+  // uses direct AprilTag detection only; map state is irrelevant.
+  if (!req->skip_coarse_approach && last_localization_action_ != "LOCALIZED") {
+    resp->success = false;
+    resp->message = "Localization is " + last_localization_action_ +
+        "; pass skip_coarse_approach=true for direct fine-servoing, "
+        "or reinitialize localization first.";
+    return;
+  }
+
   target_tag_id_ = req->tag_id;
   desired_offset_x_ = (req->offset_x > 0.01) ? req->offset_x : default_offset_x_;
   desired_offset_y_ = req->offset_y;
   settle_count_ = 0;
 
-  RCLCPP_INFO(get_logger(), "Starting rail approach to tag %d (offset: %.3f, %.3f)",
-              target_tag_id_, desired_offset_x_, desired_offset_y_);
+  RCLCPP_INFO(get_logger(),
+              "Starting rail approach to tag %d (offset: %.3f, %.3f, skip_coarse=%s)",
+              target_tag_id_, desired_offset_x_, desired_offset_y_,
+              req->skip_coarse_approach ? "true" : "false");
 
-  start_coarse_approach(it->second);
+  if (req->skip_coarse_approach) {
+    // Skip Nav2; jump straight to TAG_ACQUISITION. Resets the same
+    // PI/median-filter state that start_coarse_approach would clear.
+    fine_servo_state_.reset();
+    last_fine_servo_tick_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+    pnp_filter_ = TvecRvecMedianFilter(pnp_filter_window_);
+    fine_servo_start_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+    last_reject_reason_ = "none";
+    last_reject_stamp_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+    state_ = State::TAG_ACQUISITION;
+    acquisition_start_ = now();
+    RCLCPP_INFO(get_logger(),
+                "skip_coarse_approach=true → entering TAG_ACQUISITION directly");
+  } else {
+    start_coarse_approach(it->second);
+  }
 
   // Iter-17c: publish status IMMEDIATELY so the harness's
   // _wait_for_state_value doesn't latch onto the stale "aborted" /

@@ -248,24 +248,31 @@ private:
   {
     if (!has_caminfo_) return;
 
+    // Publish raw tag IDs FIRST — before any cooldown gate or pose
+    // estimation. The ui_backend AprilTagManager and rail_approach
+    // service rely on this stream to know when a tag is currently
+    // visible. Skipping it during relocalization cooldown silently
+    // breaks the /api/apriltags/:hw/align pre-flight check (which
+    // queries hasRecentDetection). 2026-04-25: fix from observed bug
+    // where post-set_pose cooldown left the backend "blind" to tags
+    // for 500 ms+ at a time.
+    for (const auto& det : msg->detections) {
+      std_msgs::msg::String raw_msg;
+      raw_msg.data = "tag_" + std::to_string(det.id);
+      raw_tag_pub_->publish(raw_msg);
+    }
+
     // After set_pose, pause corrections for N EKF cycles to let the reset settle.
     // Without this, odom/cuVSLAM updates between the async call and EKF processing
     // can immediately "correct" the reset back to the drifted position.
     if (relocalization_pending_) {
       auto elapsed = (now() - reloc_request_time_).nanoseconds() / 1000000;
       if (elapsed < reloc_cooldown_ms_) {
-        return;  // still in cooldown — skip all corrections
+        return;  // still in cooldown — skip pose corrections only
       }
       // Cooldown expired, resume normal operation
       relocalization_pending_ = false;
       RCLCPP_INFO(get_logger(), "Relocalization cooldown expired, resuming corrections");
-    }
-
-    // Publish raw tag IDs (whether assigned or not) for ui_backend AprilTagManager
-    for (const auto& det : msg->detections) {
-      std_msgs::msg::String raw_msg;
-      raw_msg.data = "tag_" + std::to_string(det.id);
-      raw_tag_pub_->publish(raw_msg);
     }
 
     // Candidate pose from each detected tag (for multi-tag voting)
