@@ -22,8 +22,17 @@
     base_link_frame: base_link
     world_frame: odom               # local filter operates in odom frame
 
-    # ── Wheel odometry (from agv_odrive or sim bridge) ──
-    odom0: wheel_odom
+    # ── Wheel odometry (validated by wheel_slip_detector) ──
+    # Phase 2 of the diff-drive calibration plan: instead of consuming
+    # /agv/wheel_odom directly, we consume /agv/wheel_odom_validated
+    # which is the same content with covariance dynamically inflated to
+    # 1e6 by `wheel_slip_detector_node` whenever the gyro yaw rate
+    # disagrees with the wheel-derived yaw rate (caster slip signature).
+    # robot_localization treats covariance ≥1e3 as effectively ignored
+    # for that update. This replaces the previous practice of keeping a
+    # caster_covariance_multiplier=10 in odrive_can_node, which the
+    # robot_localization documentation explicitly discourages.
+    odom0: wheel_odom_validated
     odom0_config: [true,  true,  false,    # x, y, z
                    false, false, true,     # roll, pitch, yaw
                    true,  false, false,    # vx, vy, vz
@@ -32,10 +41,6 @@
     odom0_differential: false
     odom0_relative: false
     odom0_queue_size: 10
-
-    # Covariance: use the dynamic values published by odrive_can_node
-    # (scales with angular velocity). The covariance_override_node handles
-    # the sim-only zero-covariance problem separately.
 
     # ── ZED 2i IMU (filtered — vibration noise removed) ──
     # Raw: /agv/zed/imu/data at 200Hz → imu_filter_node → /agv/imu/filtered

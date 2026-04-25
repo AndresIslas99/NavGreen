@@ -141,4 +141,52 @@ export function register(app: Express, deps: AppDeps): void {
     }
     res.json(result);
   });
+
+  // POST /api/apriltags/:hw_id/align — pure fine-servoing alignment.
+  //
+  // Bypasses Nav2 entirely. The robot must already be physically close
+  // enough to the tag for the camera to detect it (validated below by
+  // hasRecentDetection). The rail_approach service is invoked with
+  // skip_coarse_approach=true, so localization=DEGRADED is fine.
+  //
+  // The mode_arbiter has a carve-out (2026-04-25) that allows
+  // Source::APPROACH even when operator_mode=teleop, so this endpoint
+  // works without first switching the dashboard mode pill to 'nav'.
+  app.post('/api/apriltags/:hw_id/align', async (req, res) => {
+    const hw_id = parseInt(req.params.hw_id, 10);
+    if (isNaN(hw_id)) return res.status(400).json({ error: 'invalid hw_id' });
+
+    if (!apriltagManager.hasRecentDetection(hw_id, 2.0)) {
+      return res.status(409).json({
+        error: `Tag ${hw_id} not detected in the last 2 seconds. ` +
+               `Move the robot until the tag is visible to the camera.`,
+      });
+    }
+    if (!state.motorState.armed) {
+      return res.status(409).json({ error: 'Motors not armed; arm via Recovery first' });
+    }
+    if (state.eStopActive) {
+      return res.status(409).json({
+        error: 'E-stop is active; clear via Recovery → Clear E-Stop first',
+      });
+    }
+
+    const offset_x = parseFloat(req.body?.offset_x ?? '0.30');
+    const offset_y = parseFloat(req.body?.offset_y ?? '0.0');
+
+    eventLog.emit('info', 'NAV',
+      `Aligning to tag ${hw_id} (skip_coarse, offset_x=${offset_x.toFixed(2)})`);
+
+    try {
+      const r = await ros.callRailApproach({
+        tag_id: hw_id, offset_x, offset_y, skip_coarse_approach: true,
+      });
+      if (!r.success) {
+        return res.status(500).json({ error: r.message || 'rail_approach rejected the call' });
+      }
+      res.json({ success: true, message: r.message });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'rail_approach call failed' });
+    }
+  });
 }

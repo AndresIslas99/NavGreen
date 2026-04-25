@@ -4,13 +4,51 @@ TypeScript ROS2 bridge server using Express + rclnodejs. Provides WebSocket real
 telemetry and REST API for the operator dashboard. Includes state machine for robot
 mode management and action guards.
 
+## ⚠️ rclnodejs cache invalidation after agv_interfaces changes
+
+`rclnodejs` caches its IDL bindings in
+`src/agv_ui_backend/node_modules/rclnodejs/generated/` on first init.
+**The cache is NOT invalidated automatically** when `agv_interfaces/srv/*.srv`
+or `agv_interfaces/msg/*.msg` are edited or new fields added.
+
+If you change a custom interface, the backend will crash on startup with
+errors like:
+
+```
+NotFoundError: Cannot find ROS message: ...
+  packageName: 'agv_interfaces',
+  type: 'srv',
+  messageName: 'RailApproach',
+  searchPath: 'node_modules/rclnodejs/generated/'
+```
+
+**Fix:** clear the cache and restart the service:
+
+```bash
+rm -rf src/agv_ui_backend/node_modules/rclnodejs/generated/*
+sudo systemctl restart agv.service
+```
+
+The first boot after the clear takes 2-3 min extra to regenerate
+bindings for every interface package on the workspace. Subsequent
+boots are normal speed because the cache persists.
+
 ## Architecture
 
 - **Express HTTP server** (:8090) — REST endpoints for maps, missions, status
 - **WebSocket** (5Hz broadcast) — Real-time telemetry, scan points, live map, control commands
 - **rclnodejs** — ROS2 bridge (publishers, subscribers, action clients)
 - **State machine** — Derives robot state from sensor data and controls allowed actions
-- **Dashboard** — Served as static files from `web/agv_dashboard/dist/` at `/dashboard`
+- **Dashboard** — Served as static files from `web/agv_dashboard/dist/` at `/dashboard` (legacy/fallback). Sprint 1 Fase 1a decoupled the dashboard so it can be hosted from a different origin (laptop nginx/caddy). The frontend reads `VITE_API_BASE` to find this backend; default empty preserves same-origin.
+
+## CORS for externally-hosted frontend (Sprint 1 Fase 1a)
+
+When the dashboard is served from a host other than this backend, set
+`AGV_UI_ALLOWED_ORIGINS` to a comma-separated list of allowed origins
+(e.g., `http://laptop.lan:5173,http://192.168.1.42:5173`). Empty (default)
+keeps same-origin-only behavior. The middleware lives in `index.ts` after
+`express.json()` and handles preflight OPTIONS automatically. The contract
+between HMI and this backend is documented in `specs/hmi_api.yaml`.
 
 ## Live Map Pipeline
 
@@ -28,16 +66,14 @@ No Python subprocess, no file-based bridge, no ScanAccumulator. Single source of
 
 - `/{ns}/wheel_odom` (Odometry) — Velocity extraction, odom rate tracking
 - `/{ns}/odometry/global` (Odometry) — Robot pose for dashboard (from ekf_global)
-- `/{ns}/scan` (LaserScan) — Scan points for real-time visualization (red dots)
+- `/{ns}/scan` (LaserScan) — Scan points for real-time visualization (red dots). **Throttled to 5 Hz** in the callback (Sprint 1 Fase A3): publisher is ~30 Hz but the WS broadcast is 5 Hz, so processing every frame burned CPU for nothing. `/wheel_odom` is intentionally NOT throttled — its callback is trivial and reporting Hz must reflect the publisher.
 - `/{ns}/plan` (Path) — Navigation path display
 - `/{ns}/map` (OccupancyGrid, transient_local) — Static navigation map
 - `/{ns}/live_map` (OccupancyGrid, transient_local) — Live mapping grid
 - `/{ns}/battery` (BatteryState) — Battery percentage
 - `/{ns}/zed/imu/data` (Imu) — IMU heartbeat tracking
 - `/slam/quality` (String/JSON) — SLAM tracking confidence
-
-**Subprocess workaround (rclnodejs DDS discovery bug):**
-- `/{ns}/motor_state` (String/JSON, 2 Hz) — Motor arm state, errors, temps. Uses `ros2 topic echo` subprocess because rclnodejs fails to discover low-frequency C++ publishers.
+- `/{ns}/motor_state` (String/JSON, 10 Hz) — Motor arm state, errors, temps. Native rclnodejs subscription; the previous `ros2 topic echo` subprocess workaround was removed because it caused arm/disarm transitions to only reach the UI after a page reload (stdout buffering delayed the first messages by seconds).
 
 ## ROS2 Publishers
 
@@ -101,4 +137,3 @@ No Python subprocess, no file-based bridge, no ScanAccumulator. Single source of
 - Remove Python legacy modules (py_*.py files still in package, superseded by TypeScript)
 - Add rate limiting on REST endpoints
 - Add TypeScript unit tests for state machine logic
-- Consider replacing motor_state subprocess with rclnodejs fix or rosbridge

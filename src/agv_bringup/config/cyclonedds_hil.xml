@@ -29,7 +29,13 @@
       </Peers>
     </Discovery>
     <Internal>
-      <SocketReceiveBufferSize min="26MB"/>
+      <!-- Sprint 1 Fase A2 (2026-04-24): synced with production template;
+           HIL exercises the same payload sizes as real and benefits from the
+           same headroom. See src/agv_bringup/scripts/agv_start.sh comments. -->
+      <SocketReceiveBufferSize min="64MB"/>
+      <Watermarks>
+        <WhcHigh>4MB</WhcHigh>
+      </Watermarks>
     </Internal>
   </Domain>
 </CycloneDDS>
