@@ -21,16 +21,36 @@ base_link (center of robot, 200mm above ground)
 **Note**: Camera TF (zed_camera_center) is NOT in the URDF. It is published by a
 separate static_transform_publisher in agv_bringup/agv_slam launch files.
 
-## Physical Parameters (from robot_params.yaml)
+## Physical Parameters
 
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| `wheel_radius` | `0.0625` m | 125mm diameter wheels |
-| `track_width` | `0.735` m | Center-to-center wheel distance |
-| `base_link_height` | `0.200` m | Base link above ground |
-| `left_wheel_xyz` | `[0.0, 0.3675, -0.1375]` | Left wheel position |
-| `right_wheel_xyz` | `[0.0, -0.3675, -0.1375]` | Right wheel position |
-| `zed_camera_xyz` | `[0.700, 0.0, +0.010]` | Camera mount offset (210mm above ground; re-measured 2026-04-18) |
+Two YAMLs in `config/`:
+
+- **`config/robot_geometry.yaml`** — runtime SSOT (loaded by
+  `launch/description.launch.py` and passed to xacro as args; also
+  loaded by `agv_odrive/launch/odrive.launch.py`). Single source of
+  truth declared in
+  `specs/persistence.yaml#config_artifacts.robot_geometry`. Sprint A of
+  the 2026-05-13 audit (CRITICAL-02-02) currently parks runtime values
+  here as `wheel_radius=0.0781`, `track_width=0.960`, `gear_ratio=10.0`
+  — the bug-compensation factors carried until the ODrive NVRAM dump.
+- **`config/robot_params.yaml`** — human-friendly documentary YAML with
+  the geometric truth (radius 0.0625 m, track 0.735 m, base_link
+  height, sensor mounts) and an ASCII-art layout diagram. NOT loaded
+  at runtime; reference only. After CRITICAL-02-02 step 5 the values
+  here will match `robot_geometry.yaml` exactly.
+
+| Parameter | Geometric truth | Runtime (SSOT) | Purpose |
+|-----------|-----------------|----------------|---------|
+| `wheel_radius` | `0.0625` m | `0.0781` m (scaffold) | 125 mm diameter wheels (caliper-measured 2026-05-13) |
+| `track_width` | `0.735` m | `0.960` m (scaffold) | Center-to-center wheel distance |
+| `base_link_height` | `0.200` m | (same) | Base link above ground |
+| `left_wheel_xyz` | `[0.0, 0.3675, -0.1375]` | `[0.0, 0.480, -0.1375]` (scaffold) | Left wheel position (y derived from track_width / 2) |
+| `right_wheel_xyz` | `[0.0, -0.3675, -0.1375]` | `[0.0, -0.480, -0.1375]` (scaffold) | Right wheel position |
+| `zed_camera_xyz` | `[0.700, 0.0, +0.010]` | (same — not in SSOT yet) | Camera mount offset (210 mm above ground; re-measured 2026-04-18). Pending HIGH-01-02 in audit. |
+
+`verify_geometry_ssot.py` enforces SSOT structurally and emits `WARN`
+lines on the numerical divergence above; both WARN lines clear when
+CRITICAL-02-02 step 5 lands.
 
 ## URDF Files
 

@@ -277,3 +277,56 @@ should target:
 
 This audit's role at that point becomes monitoring — each phase file
 gains a "Field results" section appended as the experiments run.
+
+## Sprint A non-hardware closure (2026-05-13)
+
+6 atomic commits landed on `claude/amr-security-audit-gPtCd` closing
+the no-hardware portion of Sprint A. The numerical fix of
+CRITICAL-02-02 (replacing the SSOT's 0.0781 wheel_radius with the
+geometric 0.0625 m after the ODrive NVRAM root cause is corrected)
+remains as a follow-up — procedure documented at
+`docs/calibration/odrive_nvram_dump_procedure.md`, executable in
+30 minutes when hardware is next available.
+
+| Commit | Subject | Findings |
+|---|---|---|
+| `61a973c` | specs: declare robot_geometry.yaml SSOT + NVRAM dump procedure | C1 — spec-first per AGENT_INSTRUCTIONS |
+| `2d21d6f` | geometry: scaffold robot_geometry.yaml SSOT, reroute launches | CRITICAL-02-02 scaffolded |
+| `200516b` | verify: enforce geometry SSOT structurally; WARN on numerical drift | new `verify_geometry_ssot.py` |
+| `fead755` | bringup: replace 4 hardcoded /home/orza paths | CR-00-03 closed |
+| `6d2ea72` | build: add agv_greenhouse.repos + NVRAM info log on odrive boot | CR-00-01 closed + MEDIUM-02-07 closed |
+| (this) | docs: bookkeeping (CLAUDE.md tables + this closure section) | — |
+
+### Findings status
+
+| ID | Status | Commit |
+|---|---|---|
+| CR-00-01 | CLOSED — `.repos` file exists with 11 declared repositories; 2 marked `# TODO verify SHA` for next hardware contact (agv_slam, zed-ros2-wrapper) | `6d2ea72` |
+| CR-00-03 | CLOSED — 4 path hardcodes replaced; env-var fallback remains as backstop | `fead755` |
+| CRITICAL-02-02 | **SCAFFOLDED** — structural SSOT in place; numerical drift visible as WARN on every commit; the one-line fix waits on NVRAM dump | `61a973c` + `2d21d6f` + `200516b` |
+| MEDIUM-02-07 | CLOSED — boot-time RCLCPP_INFO log + NVRAM procedure doc | `6d2ea72` |
+
+### Verifier baseline now
+
+- `bash tools/verify_specs/all.sh`
+- 10 scripts (was 9 — `verify_geometry_ssot.py` added)
+- 0 blocking failures
+- 2 warnings: pre-existing `zed-ros2-wrapper` not vendored,
+  `verify_geometry_ssot` numerical drift WARN (expected; clears post
+  CRITICAL-02-02 step 5)
+
+### Next hardware session — 30-minute action
+
+Execute `docs/calibration/odrive_nvram_dump_procedure.md`:
+1. Capture ODrive S1 NVRAM with `odrivetool`.
+2. Confirm which firmware parameter (`encoder.config.cpr` or
+   `motor.config.pole_pairs`) carries the 1.25× factor.
+3. Correct it in NVRAM.
+4. Edit `src/agv_description/config/robot_geometry.yaml` —
+   `wheel_radius: 0.0625`, `track_width: 0.735`, `gear_ratio: 1.0`,
+   `left_wheel_y: 0.3675`, `right_wheel_y: -0.3675`.
+5. Re-run UMBmark, confirm residual error in 1–5 % range.
+6. `bash tools/verify_specs/all.sh` — `verify_geometry_ssot.py`
+   should drop from RESULT: WARNING to RESULT: OK.
+
+One PR. One commit. CRITICAL-02-02 closes.
