@@ -67,55 +67,39 @@ operations will close the verdict to `CLOSED-VERIFIED-HW`.
 
 ---
 
-## Captured during Sub-fase 1.1.b
+## Captured during Sub-fase 1.1.b.full
 
-### Server-first bootstrap (deferred from spec §3.2)
+### Production-equivalent lifecycle test rig
 
-The Sub-fase 1.1.b prompt specifies that the HTTP/WS server must
-start BEFORE any rclnodejs init, so the dashboard remains accessible
-when ROS is down. The current implementation ships only:
-- `RosBridgeProxy` class wired as `deps.ros` (stable reference for
-  the process lifetime).
-- `/api/system/ros_status` endpoint reading from the proxy.
-- `rosProxy.setImpl(realRos)` called once realRos finishes building.
+The 4 tests in spec §3.4 (cold-boot without ROS, ROS comes up
+after, ROS dies mid-op, ROS reconnects) require a way to bring up
+JUST the backend (not the whole `agv.service` graph) and
+independently start/stop ROS components. The production launch
+couples backend lifecycle to `ros2 launch`, so tests 2-4 weren't
+run end-to-end. The HTTP-first behaviour (test 1) was verified
+manually with `node dist/index.js` from a temp `AGV_DATA_DIR` on
+port 8091.
 
-The `server.listen(...)` call still runs AFTER `rclnodejs.init()`
-because the existing `main()` has ~870 lines of intertwined publisher
-/ subscriber / state setup that need careful extraction into a
-`buildRosImpl(node, deps)` function. That refactor is bounded but
-substantial (~1 day of focused work) and was deferred to keep
-forward progress on the Sub-fase 1.1.c panel UI.
+Action: add a `make backend-only` target or a systemd unit
+`agv-backend.service` that runs the backend independently. Then
+the 4 tests are scriptable and repeatable. Small follow-up; not
+blocking 1.1.c.
 
-What it means in practice:
-- If `rclnodejs.init()` throws (DDS daemon unreachable, etc.) the
-  HTTP server never listens — the operator still hits the original
-  trauma scenario.
-- The proxy + endpoint contract IS in place, so the System Health
-  Panel can be built against it. Once the full lifecycle lands, no
-  panel changes are needed.
+### `/api/system/ros_status` reports DDS lifecycle, not AGV-stack lifecycle
 
-Action: focused follow-up commit that extracts `buildRosImpl` and
-reorders main(). Tests required:
-1. `sudo systemctl stop agv.service`, start backend manually with
-   `node dist/index.js` → dashboard loads, shows ROS offline.
-2. `start agv.service` → ROS transitions to online in < 30 s without
-   refresh.
-3. ROS goes down mid-operation → status flips to offline in < 10 s.
-4. ROS reconnects → automatic.
+`rclnodejs.init()` creates a DDS participant; it succeeds even
+when no other AGV node is running. So the proxy can report
+`online` while the AGV stack is silent. This is consistent with
+"HTTP server is independent of ROS" but somewhat misleading as a
+binary status. The 1.1.c System Health Panel resolves this by
+showing per-topic liveness (the operator sees which AGV topics
+are publishing); the binary status is a coarse summary.
 
-### setMode and executeMission close over realRos
-
-The functions `deps.setMode` and `deps.executeMission` (defined in
-`index.ts` near lines 957 and 469) close over the local `realRos`
-const inside `main()`. When the server-first refactor lands, these
-will need to either:
-- Use `deps.ros` (the proxy) so calls dispatch through the proxy.
-- OR be extracted alongside `buildRosImpl` so they're rebuilt on
-  every successful ROS connect.
-
-The second option is cleaner because publishers like `modePub` and
-`operatorModePub` (used in `setMode`) are local to the closure that
-builds them.
+If a more semantically-correct binary status is desired, the
+health watcher could require seeing at least one EXPECTED AGV
+topic (e.g., `/agv/odometry/local`) before flipping to `online`.
+Trivial change; defer until panel UI shows whether the coarse
+flag is misleading in practice.
 
 ## Capture rules
 
