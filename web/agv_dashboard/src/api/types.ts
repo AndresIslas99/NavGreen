@@ -272,6 +272,10 @@ export interface AuthSession {
   token: string
   username: string
   role: 'viewer' | 'operator' | 'engineer'
+  // Sprint A.5 backend (CRITICAL-11-C-01) sets this true on the
+  // auto-generated admin user. Sprint E frontend renders a forced
+  // password-change modal before granting dashboard access.
+  must_change_password?: boolean
 }
 
 // ---------------------------------------------------------------------------

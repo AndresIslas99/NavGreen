@@ -82,6 +82,19 @@ function del(url: string) {
 export const getAuthStatus = () => json<AuthStatus>('/api/auth/status')
 export const login = (username: string, password: string) =>
   json<AuthSession>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+// Sprint E (HIGH-04-04 frontend companion to CRITICAL-11-C-01).
+// Posts old + new password; backend verifies old, replaces hash,
+// clears must_change_password. No auth header — caller proves
+// identity by supplying the old password.
+export const changePassword = (username: string, oldPassword: string, newPassword: string) =>
+  json<{ success: boolean }>('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      username,
+      old_password: oldPassword,
+      new_password: newPassword,
+    }),
+  })
 
 // Status
 export const getStatus = () => json('/api/status')
