@@ -27,12 +27,33 @@ import { setupControlWs, setupTeleopWs } from './ws/control';
 import type { AppDeps, AppState, RosBridge } from './app_deps';
 import { RosBridgeProxy } from './ros_lifecycle';
 
-// Sub-fase 1.1.b — RosBridgeProxy at module level so the lifetime of the
-// reference exactly matches the process. `deps.ros` points at this proxy
-// throughout; the inner impl is swapped on connect (and on disconnect when
-// the health-check / lifecycle manager is added in a follow-up). The
+// Sub-fase 1.1.b.full — RosBridgeProxy at module level so the lifetime of
+// the reference exactly matches the process. `deps.ros` points at this
+// proxy throughout; the inner impl is swapped on connect/disconnect. The
 // /api/system/ros_status route reads from this same proxy.
 const rosProxy = new RosBridgeProxy();
+
+// Stub implementations of setMode and executeMission used while the ROS
+// bridge is offline. Routes call `deps.setMode(...)` and
+// `deps.executeMission(...)`; while ROS is down these return a structured
+// "offline" error rather than throwing. The lifecycle loop swaps these
+// with real impls once rclnodejs is up.
+async function stubSetMode(): Promise<{ ok: false; reason: string }> {
+  return {
+    ok: false,
+    reason: `ROS bridge ${rosProxy.status}: ${rosProxy.detail}`,
+  };
+}
+async function stubExecuteMission(): Promise<{ success: false; message: string }> {
+  return {
+    success: false,
+    message: `ROS bridge ${rosProxy.status}: ${rosProxy.detail}`,
+  };
+}
+
+// (`deps` and `bootstrapServer` moved further down — after state/eventLog/
+//  updateState are declared. They reference those module-level variables
+//  by name; declaration order matters in TypeScript.)
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -169,6 +190,98 @@ function normalizeMission(m: any): any {
     m.edges = [];
   }
   return m;
+}
+
+// ---------------------------------------------------------------------------
+// AppDeps + bootstrapServer (Sub-fase 1.1.b.full)
+//
+// Built at module level with stubs for setMode/executeMission. Routes
+// register against this stable reference BEFORE rclnodejs.init() so the
+// HTTP server can come up even if the ROS bridge never connects. The
+// rclnodejs lifecycle loop mutates `deps.setMode` and `deps.executeMission`
+// with real impls on each successful connect; on disconnect they revert
+// to stubs.
+// ---------------------------------------------------------------------------
+const deps: AppDeps = {
+  state,
+  ros: rosProxy,
+  eventLog,
+  telemetryStore,
+  authManager,
+  apriltagManager,
+  config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
+  updateState,
+  setMode: stubSetMode as any,
+  executeMission: stubExecuteMission as any,
+};
+
+/**
+ * Bootstrap the HTTP server, WebSocket handlers, and routes against the
+ * stable module-level `deps`. Runs synchronously up to `server.listen()`
+ * which schedules the listen callback on the event loop. Returns
+ * immediately — does NOT await rclnodejs. By the time `main()` reaches
+ * `rclnodejs.init()`, the HTTP server is already listening.
+ *
+ * This is the load-bearing fix for the operator's trauma scenario:
+ *   "no se levantaba todo el sistema apenas se encendía el robot y ya no
+ *    sabía ni cómo acceder a la UI porque tampoco se había levantado el
+ *    servicio".
+ */
+function bootstrapServer(): http.Server {
+  const app = express();
+  app.use(express.json());
+
+  // CORS for externally-hosted frontend (Sprint 1 Fase 1a).
+  const allowedOriginsRaw = process.env.AGV_UI_ALLOWED_ORIGINS || '';
+  const allowedOrigins = new Set(
+    allowedOriginsRaw.split(',').map(s => s.trim()).filter(Boolean)
+  );
+  if (allowedOrigins.size > 0) {
+    app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (origin && allowedOrigins.has(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      }
+      if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
+      }
+      next();
+    });
+    console.log(`[cors] Allowed origins: ${[...allowedOrigins].join(', ')}`);
+  }
+
+  // Dashboard static serving (built React bundle).
+  const dashboardDir = path.resolve(__dirname, '../../../web/agv_dashboard/dist');
+  if (fs.existsSync(dashboardDir)) app.use('/dashboard', express.static(dashboardDir));
+  app.get('/', (_req, res) => {
+    if (fs.existsSync(dashboardDir)) res.redirect('/dashboard');
+    else res.status(404).send('Dashboard not built');
+  });
+
+  // Register all routes against `deps` (proxy as ros, stub setMode/executeMission).
+  // Routes that touch deps.ros catch RosOfflineError from the proxy and
+  // return 503. Routes that call deps.setMode/executeMission get the stub
+  // (offline error) until the rclnodejs loop mutates those fields.
+  registerAllRoutes(app, deps, null);
+
+  // HTTP + WebSocket. Both touch `deps`, so the stable reference works
+  // when the ROS bridge is offline — endpoints that don't need ROS keep
+  // serving (auth, /api/system/ros_status, /api/health/*, etc.).
+  const server = http.createServer(app);
+  setupControlWs(server, deps);
+  setupTeleopWs(server, deps);
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`AGV Backend (TS) HTTP listening on http://0.0.0.0:${PORT} — ROS bridge: ${rosProxy.status}`);
+    eventLog.emit('info', 'SYSTEM', 'Backend HTTP started (pre-ROS bootstrap)');
+  });
+
+  return server;
 }
 
 // ---------------------------------------------------------------------------
@@ -944,124 +1057,63 @@ async function main() {
     }
   }, 500);
 
-  // --- Build AppDeps ---
-  const deps: AppDeps = {
-    // Sub-fase 1.1.b: deps.ros points at the proxy (module-level rosProxy).
-    // Routes call deps.ros.X() which dispatches to the proxy, which in turn
-    // delegates to realRos or throws RosOfflineError. The proxy's setImpl is
-    // called at the bottom of main() once realRos and all subs/pubs are built.
-    state, ros: rosProxy, eventLog, telemetryStore, authManager, apriltagManager,
-    config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
-    updateState,
-    async setMode(mode: string): Promise<{ok: boolean; reason?: string}> {
-      if (mode === state.currentMode) return {ok: true};
-      // Transition-into-nav precondition: Nav2 lifecycle must be active.
-      // Without this check the dashboard can claim 'nav' while Nav2 has
-      // crashed or never reached active, and goal dispatch fails silently.
-      // See docs/audit/2026-04-13-full-audit.md bug #3 and
-      // specs/state_machine.yaml invariant mode_coherence.
-      if (mode === 'nav') {
-        try {
-          if (!nav2IsActiveClient.isServiceServerAvailable()) {
-            const reason = 'Nav2 lifecycle service not available — stack likely in mapping-first mode or still booting';
-            eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
-            return {ok: false, reason};
-          }
-          const r = await nav2IsActiveClient.sendRequestAsync({}, {timeout: 1500});
-          if (!r || r.success !== true) {
-            const reason = (r && r.message) ? r.message : 'lifecycle_manager returned not-active';
-            eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
-            return {ok: false, reason};
-          }
-        } catch (e: any) {
-          const reason = `lifecycle_manager check failed: ${e?.message || e}`;
+  // --- Real setMode (closes over publishers + realRos local to this scope) ---
+  const realSetMode = async (mode: string): Promise<{ok: boolean; reason?: string}> => {
+    if (mode === state.currentMode) return {ok: true};
+    if (mode === 'nav') {
+      try {
+        if (!nav2IsActiveClient.isServiceServerAvailable()) {
+          const reason = 'Nav2 lifecycle service not available — stack likely in mapping-first mode or still booting';
           eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
           return {ok: false, reason};
         }
+        const r = await nav2IsActiveClient.sendRequestAsync({}, {timeout: 1500});
+        if (!r || r.success !== true) {
+          const reason = (r && r.message) ? r.message : 'lifecycle_manager returned not-active';
+          eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
+          return {ok: false, reason};
+        }
+      } catch (e: any) {
+        const reason = `lifecycle_manager check failed: ${e?.message || e}`;
+        eventLog.emit('warn', 'NAV', `Mode transition to nav rejected: ${reason}`);
+        return {ok: false, reason};
       }
-      if (mode !== 'nav' && state.navState.active) realRos.cancelNavGoal();
-      eventLog.emit('info', 'SYSTEM', `Mode: ${state.currentMode} → ${mode}`);
-      state.currentMode = mode;
-      // Publish mode to ROS2 topic (interfaces.yaml compliance)
-      const modeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
-      modeMsg.data = mode;
-      modePub.publish(modeMsg);
-      // Phase-2 operator_mode for mode_arbiter. Arbiter accepts nav|teleop|idle.
-      // Mapping uses the operator joystick end-to-end → arbiter must treat it
-      // as teleop so Nav2 is never selected as the cmd_vel source.
-      const operatorModeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
-      operatorModeMsg.data = (mode === 'mapping') ? 'teleop' : mode;
-      operatorModePub.publish(operatorModeMsg);
-      updateState();
-      return {ok: true};
-    },
-    executeMission,
+    }
+    if (mode !== 'nav' && state.navState.active) realRos.cancelNavGoal();
+    eventLog.emit('info', 'SYSTEM', `Mode: ${state.currentMode} → ${mode}`);
+    state.currentMode = mode;
+    const modeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+    modeMsg.data = mode;
+    modePub.publish(modeMsg);
+    const operatorModeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+    operatorModeMsg.data = (mode === 'mapping') ? 'teleop' : mode;
+    operatorModePub.publish(operatorModeMsg);
+    updateState();
+    return {ok: true};
   };
 
-  // --- Express + Routes ---
-  const app = express();
-  app.use(express.json());
-
-  // CORS for externally-hosted frontend (Sprint 1 Fase 1a). When the dashboard
-  // runs on a different origin than this backend (laptop x86 serving the
-  // build, dev box on a different host:port), the browser blocks fetch/WS
-  // unless we explicitly allow that origin. Default empty = same-origin only.
-  // Set AGV_UI_ALLOWED_ORIGINS to a comma-separated list of origins (each
-  // origin is scheme://host[:port], e.g. http://laptop.lan:5173).
-  const allowedOriginsRaw = process.env.AGV_UI_ALLOWED_ORIGINS || '';
-  const allowedOrigins = new Set(
-    allowedOriginsRaw.split(',').map(s => s.trim()).filter(Boolean)
-  );
-  if (allowedOrigins.size > 0) {
-    app.use((req, res, next) => {
-      const origin = req.headers.origin;
-      if (origin && allowedOrigins.has(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Vary', 'Origin');
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      }
-      if (req.method === 'OPTIONS') {
-        res.status(204).end();
-        return;
-      }
-      next();
-    });
-    console.log(`[cors] Allowed origins: ${[...allowedOrigins].join(', ')}`);
-  }
-
-  const dashboardDir = path.resolve(__dirname, '../../../web/agv_dashboard/dist');
-  if (fs.existsSync(dashboardDir)) app.use('/dashboard', express.static(dashboardDir));
-  app.get('/', (_req, res) => {
-    if (fs.existsSync(dashboardDir)) res.redirect('/dashboard');
-    else res.status(404).send('Dashboard not built');
-  });
-
-  registerAllRoutes(app, deps, node);
-
-  // --- WebSocket + Server ---
-  const server = http.createServer(app);
-  setupControlWs(server, deps);
-  setupTeleopWs(server, deps);
-
-  // Start DDS spin BEFORE server listen so the event loop processes
-  // participant discovery for publishers that already exist.
+  // ──────────────────────────────────────────────────────────────────────
+  // ROS bridge online: start DDS spin, wire real impls into the module-
+  // level deps, fire boot hooks, and (Sub-fase 1.1.b.full) enter the
+  // health-watch loop. Routes captured `deps` by reference, so mutating
+  // its fields propagates instantly to every dispatch.
+  // ──────────────────────────────────────────────────────────────────────
   rclnodejs.spin(node);
-
-  // Sub-fase 1.1.b — wire the real ROS impl into the module-level proxy.
-  // From this point on, deps.ros (which is rosProxy) delegates every call
-  // to realRos. Status flips to 'online'; the /api/system/ros_status
-  // endpoint and the System Health Panel can now observe the live state.
+  deps.setMode = realSetMode;
+  deps.executeMission = executeMission;
   rosProxy.setImpl(realRos);
+  eventLog.emit('info', 'SYSTEM', 'ROS bridge online');
 
-  // Boot-time maps/loaded: if the launch file provided AGV_BOOT_MAP_NAME (the
-  // basename of the map arg), publish it to /agv/maps/loaded after a short
-  // delay so the auto_init_orchestrator (which starts at t=7s per the launch)
-  // is definitely up and subscribed before we publish. Without this, the
-  // boot-time load via Nav2 map_server bypasses the orchestrator entirely.
+  // Boot-time maps/loaded: if the launch file provided AGV_BOOT_MAP_NAME
+  // (the basename of the map arg), publish it to /agv/maps/loaded after a
+  // short delay so the auto_init_orchestrator (which starts at t=7s per
+  // the launch) is definitely up and subscribed before we publish.
+  // Without this, the boot-time load via Nav2 map_server bypasses the
+  // orchestrator entirely.
   const bootMapName = process.env.AGV_BOOT_MAP_NAME || '';
   if (bootMapName) {
+    eventLog.emit('info', 'MAPPING',
+      `Boot map detected: '${bootMapName}' — will auto-localize in 10s`);
     setTimeout(() => {
       try {
         realRos.publishMapLoaded(bootMapName);
@@ -1071,23 +1123,99 @@ async function main() {
       }
     }, 10000);
   }
+  // Seed mode_arbiter with the default operator_mode at boot. Defaults to
+  // 'teleop' (state.currentMode) so the arbiter does not spend the first
+  // minute in 'nav' and fight the backend for /agv/cmd_vel.
+  setTimeout(() => {
+    const bootModeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
+    bootModeMsg.data = (state.currentMode === 'mapping') ? 'teleop' : state.currentMode;
+    operatorModePub.publish(bootModeMsg);
+  }, 2000);
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`AGV Backend (TS) on http://0.0.0.0:${PORT}`);
-    eventLog.emit('info', 'SYSTEM', 'Backend started');
-    if (bootMapName) {
-      eventLog.emit('info', 'MAPPING',
-        `Boot map detected: '${bootMapName}' — will auto-localize in 10s`);
-    }
-    // Seed mode_arbiter with the default operator_mode at boot. Defaults
-    // to 'teleop' (state.currentMode) so the arbiter does not spend the
-    // first minute in 'nav' and fight the backend for /agv/cmd_vel.
-    setTimeout(() => {
-      const bootModeMsg = rclnodejs.createMessageObject('std_msgs/msg/String') as any;
-      bootModeMsg.data = (state.currentMode === 'mapping') ? 'teleop' : state.currentMode;
-      operatorModePub.publish(bootModeMsg);
-    }, 2000);
+  // Health-watch loop (Sub-fase 1.1.b.full): periodically ping the node
+  // graph; if it returns 0 topics for `failuresBeforeOffline` consecutive
+  // ticks, mark ROS offline and let `runRosLifecycle()` reconnect on the
+  // next iteration.
+  await waitForRosFailure(node);
+
+  // ROS bridge lost — tear down before the lifecycle loop tries again.
+  console.warn('[main] ROS health check tripped — tearing down node');
+  eventLog.emit('warn', 'SYSTEM', 'ROS bridge lost — reconnecting');
+  deps.setMode = stubSetMode as any;
+  deps.executeMission = stubExecuteMission as any;
+  rosProxy.clearImpl('Health check detected ROS down — reconnecting');
+  try { node.destroy(); } catch { /* ignore */ }
+  try { await rclnodejs.shutdown(); } catch { /* ignore */ }
+}
+
+/**
+ * Health-watch helper. Polls `node.getTopicNamesAndTypes()` once per
+ * `intervalMs`. If 0 topics come back for `failuresBeforeOffline`
+ * consecutive ticks, resolves. The resolution is the signal to the
+ * lifecycle loop to tear down and reconnect.
+ *
+ * The cheapest reliable liveness signal in rclnodejs is "can I still
+ * see the node graph". When the ROS daemon goes away, this returns 0.
+ */
+function waitForRosFailure(
+  node: rclnodejs.Node,
+  intervalMs = 3000,
+  failuresBeforeOffline = 3,
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let failures = 0;
+    const timer = setInterval(() => {
+      let topicCount = 0;
+      try {
+        const names = (node as any).getTopicNamesAndTypes?.() ?? [];
+        topicCount = Array.isArray(names) ? names.length : 0;
+      } catch {
+        topicCount = 0;
+      }
+      if (topicCount === 0) {
+        failures += 1;
+        if (failures >= failuresBeforeOffline) {
+          clearInterval(timer);
+          resolve();
+        }
+      } else {
+        failures = 0;
+      }
+    }, intervalMs);
   });
 }
 
-main().catch(console.error);
+/**
+ * Outer lifecycle loop. Runs forever, alternating between trying to
+ * connect (calling `main()`, which builds + spins the node + waits for
+ * health failure) and backing off on failure. Exponential backoff
+ * starts at 1 s, caps at 30 s.
+ */
+async function runRosLifecycle(): Promise<void> {
+  let backoff = 1000;
+  while (true) {
+    try {
+      await main();
+      // main() returned because health-watch tripped. Reset backoff for
+      // the immediate reconnect attempt (the loop will retry once a
+      // small grace delay elapses).
+      backoff = 1000;
+    } catch (e: any) {
+      console.warn(`[lifecycle] connect failed: ${e?.message ?? String(e)}`);
+      rosProxy.setStatus('offline', `Init failed: ${e?.message ?? String(e)}`);
+      try { await rclnodejs.shutdown(); } catch { /* ignore */ }
+    }
+    await new Promise(r => setTimeout(r, backoff));
+    backoff = Math.min(backoff * 2, 30000);
+  }
+}
+
+// ── Top-level bootstrap (Sub-fase 1.1.b.full) ──
+// 1. Start the HTTP/WS server immediately (does not depend on ROS).
+// 2. Hand off to the ROS lifecycle loop in the background.
+// 3. The process stays alive via the listening HTTP server even if every
+//    `await rclnodejs.init()` in the loop fails.
+bootstrapServer();
+runRosLifecycle().catch(e => {
+  console.error('[lifecycle] fatal — should be unreachable:', e);
+});
