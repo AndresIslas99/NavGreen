@@ -25,6 +25,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "nav2_msgs/msg/collision_monitor_state.hpp"
 #include "std_msgs/msg/string.hpp"
 
 #include "agv_interfaces/srv/rail_approach.hpp"
@@ -168,10 +169,19 @@ class ModeArbiterNode : public rclcpp::Node {
     sub_driver_state_ = create_subscription<std_msgs::msg::String>(
         driver_state_topic, rclcpp::QoS{10},
         std::bind(&ModeArbiterNode::on_driver_state, this, _1));
-    sub_collision_ = create_subscription<std_msgs::msg::String>(
+    // Sprint A.5 / CRITICAL-11-A-01 (2026-05-13 audit). Previous subscriber
+    // declared std_msgs/msg/String here; Nav2's collision_monitor publisher
+    // is nav2_msgs/msg/CollisionMonitorState. DDS rejects the type
+    // mismatch silently, so safety_stop never flipped and BLOCKED_HANDOFF
+    // was unreachable. Same root-cause class as the 2026-04-13 audit bug
+    // #1 that hit safety_supervisor; fix did not propagate here. Compare
+    // action_type to the STOP constant from the message itself — no more
+    // substring heuristic (closes MEDIUM-11-A-04).
+    sub_collision_ = create_subscription<nav2_msgs::msg::CollisionMonitorState>(
         collision_topic, rclcpp::QoS{10},
-        [this](std_msgs::msg::String::ConstSharedPtr msg) {
-          latest_inputs_.safety_stop = (msg->data.find("stop") != std::string::npos);
+        [this](nav2_msgs::msg::CollisionMonitorState::ConstSharedPtr msg) {
+          latest_inputs_.safety_stop =
+              (msg->action_type == nav2_msgs::msg::CollisionMonitorState::STOP);
         });
     sub_operator_ = create_subscription<std_msgs::msg::String>(
         operator_topic, rclcpp::QoS{10},
@@ -482,7 +492,7 @@ class ModeArbiterNode : public rclcpp::Node {
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_zone_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_approach_state_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_driver_state_;
-  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_collision_;
+  rclcpp::Subscription<nav2_msgs::msg::CollisionMonitorState>::SharedPtr sub_collision_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_operator_;
   rclcpp::TimerBase::SharedPtr                               timer_;
 

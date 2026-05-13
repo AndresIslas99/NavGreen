@@ -16,6 +16,12 @@
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
+  <!-- nav2_msgs added 2026-05-13 (Sprint A.5, CRITICAL-11-A-01) for
+       nav2_msgs/msg/CollisionMonitorState. Previously the arbiter
+       subscribed to /agv/collision_monitor_state as std_msgs/String,
+       which is a type mismatch against Nav2's actual publisher and
+       caused safety_stop to never fire. -->
+  <depend>nav2_msgs</depend>
   <depend>std_msgs</depend>
   <depend>agv_interfaces</depend>
 
