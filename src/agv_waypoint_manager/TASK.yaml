@@ -1,7 +1,20 @@
-task_version: "1.1"
+task_version: "1.2"
 package: "agv_waypoint_manager"
 owner_role: "architect_agent"
 language: "C++17"
+
+# Sprint B (2026-05-13 audit, HIGH-11-B-01): this package is NO LONGER
+# launched by agv_full.launch.py. The dashboard executes missions in
+# agv_ui_backend/src/index.ts::executeMission, which routes every
+# waypoint through ros.sendNavGoal (and therefore the localization /
+# motors-armed / collision-monitor gates). This package's
+# /agv/waypoint_manager/execute service still exists for CLI / test
+# callers, but production never starts the node. Do NOT add this
+# package back to agv_full.launch.py without refactoring its
+# execute path to route through the backend's gates.
+production_status: "removed_from_production_launch"
+production_status_since: "2026-05-13"
+production_status_reason: "HIGH-11-B-01 / Sprint B — dashboard uses its own gated executor"
 
 objective: "Store, list, and dispatch waypoints and missions based on operator-defined map clicks and mission composition."
 

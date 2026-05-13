@@ -225,8 +225,11 @@ rest_endpoints:
     response_400: "{success: false, message: <reason>}"
     action_gate: "execute_mission"
     known_gap: |
-      agv_waypoint_manager (mission executor) currently bypasses sendNavGoal
-      gates. Tracked for Sprint 2 (Fase: migrate state machine to C++).
+      RESOLVED for the dashboard flow (Sprint B, HIGH-11-B-01,
+      2026-05-13): agv_waypoint_manager removed from production launch.
+      Backend's executeMission loops through ros.sendNavGoal which DOES
+      enforce all gates. Latent risk remains if anyone invokes
+      /agv/waypoint_manager/execute from CLI — package is still buildable.
       See specs/state_machine.yaml#nav_goal_requires_localization.
 
   - path: "/api/missions/pause"
@@ -637,7 +640,7 @@ action_gates:
       safety_chain_offline: "Safety chain offline (collision_monitor not publishing). Restart nav stack."
       no_action_server: "Nav2 action server not available"
     cross_ref: "specs/state_machine.yaml#nav_goal_requires_localization"
-    known_gap: "agv_waypoint_manager bypasses this gate — Sprint 2 follow-up."
+    known_gap: "RESOLVED for the dashboard flow (Sprint B, HIGH-11-B-01, 2026-05-13): waypoint_manager removed from production launch; backend executor enforces the gate. Latent risk if /agv/waypoint_manager/execute is called from CLI."
 
   cancel_nav:
     description: "Cancel active navigation goal"

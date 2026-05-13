@@ -10,7 +10,8 @@ Launches the complete autonomy stack:
   t=0s  operator backend (dashboard on :8090)
   t=2s  agv_slam (cuVSLAM, TF DISABLED)
   t=4s  dual EKF (local: odom→base_link, global: map→odom)
-  t=5s  map_manager + waypoint_manager
+  t=5s  map_manager (waypoint_manager removed Sprint B / HIGH-11-B-01 —
+        dashboard runs its own mission executor in agv_ui_backend)
   t=6s  Nav2 stack
   t=7s  marker_correction + rail_approach (optional)
   t=7s  behavior_executor (optional)
@@ -434,18 +435,18 @@ def generate_launch_description():
                     }],
                     output='log',
                 ),
-                Node(
-                    package='agv_waypoint_manager',
-                    executable='waypoint_manager_node',
-                    name='waypoint_manager',
-                    namespace=ns,
-                    parameters=[{
-                        'missions_file': missions_file,
-                        'default_speed': 0.3,
-                        'use_sim_time': use_sim_time,
-                    }],
-                    output='log',
-                ),
+                # agv_waypoint_manager removed from production launch in
+                # Sprint B (HIGH-11-B-01, 2026-05-13 audit). The dashboard's
+                # mission execution path lives in agv_ui_backend/src/index.ts
+                # ::executeMission and goes through ros.sendNavGoal — which
+                # enforces the localization / motors-armed / collision-monitor
+                # gates. agv_waypoint_manager_node had its OWN execution loop
+                # (rclcpp::spin_until_future_complete in a worker thread on a
+                # single-threaded executor — HIGH-11-B-02 deadlock risk) and
+                # its OWN missions file in the install share (drift inevitable).
+                # Nothing in production called its execute service.
+                # The package still builds and its services exist for CLI/test
+                # use cases; production launch simply does not start the node.
             ],
         ),
 
