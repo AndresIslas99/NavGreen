@@ -96,11 +96,13 @@ sequence:
     start_time_s: 0.0
     preconditions:
       - "URDF file exists at agv_description/urdf/agv.urdf.xacro"
+      - "Geometry SSOT exists at src/agv_description/config/robot_geometry.yaml (loaded by description.launch.py and passed to xacro as args)"
+    parameters_file: "src/agv_description/config/robot_geometry.yaml"
     provides:
       - "robot_state_publisher node publishing TF base_link → wheel frames (static)"
       - "topic /robot_description"
     failure_impact: "No TF from base_link outward. Nav2 costmaps fail to compute footprint in world frame."
-    note: "agv_full.launch.py calls IncludeLaunchDescription(description.launch.py); the robot_state_publisher Node is instantiated inside that include, not directly in agv_full.launch.py."
+    note: "agv_full.launch.py calls IncludeLaunchDescription(description.launch.py); the robot_state_publisher Node is instantiated inside that include, not directly in agv_full.launch.py. Geometry SSOT contract documented in specs/persistence.yaml#config_artifacts.robot_geometry."
 
   - name: "agv_odrive_node"
     package: "agv_odrive"
@@ -114,6 +116,10 @@ sequence:
     preconditions:
       - "CAN bus can0 UP (setup by can-setup.service)"
       - "ODrive S1 firmware answering on CAN node IDs 0 and 1"
+      - "Geometry SSOT loaded before odrive_params.yaml so wheel_radius/track_width/gear_ratio come from robot_geometry.yaml"
+    parameters_files:
+      - "src/agv_description/config/robot_geometry.yaml  # SSOT for wheel_radius, track_width, gear_ratio"
+      - "src/agv_odrive/config/odrive_params.yaml         # motor tuning only (geometry keys deleted Sprint A)"
     provides:
       - "topic /agv/wheel_odom (50 Hz)"
       - "topic /agv/motor_state"

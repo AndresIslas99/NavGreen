@@ -236,6 +236,45 @@ global_artifacts:
     required: false
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Config artifacts (versioned in repo, loaded by multiple consumers)
+# ─────────────────────────────────────────────────────────────────────────────
+# Build-time config that lives in source control AND is loaded at runtime by
+# more than one node. The SSOT discipline: one writer (the repo file), many
+# readers; verify_*.py enforces consumers do not re-declare the same values.
+
+config_artifacts:
+
+  robot_geometry:
+    path: "src/agv_description/config/robot_geometry.yaml"
+    format: "flat ROS 2 `/**:` parameter YAML"
+    writer:
+      package: "agv_description"
+      code_ref: "src/agv_description/config/robot_geometry.yaml"
+      mechanism: "hand-edited, versioned"
+    readers:
+      - package: "agv_description"
+        code_ref: "src/agv_description/launch/description.launch.py"
+        role: "passes wheel_radius / left_wheel_y / right_wheel_y / wheel_z / wheel_width as xacro args to robot_state_publisher"
+      - package: "agv_odrive"
+        code_ref: "src/agv_odrive/launch/odrive.launch.py"
+        role: "chained before odrive_params.yaml so geometry SSOT wins; consumed by odrive_can_node"
+    lifecycle: "persistent"
+    required: true
+    note: |
+      Single source of truth for kinematic geometry — wheel_radius,
+      track_width, gear_ratio, and the URDF wheel-mount offsets derived
+      from them. Created in Sprint A of the 2026-05-13 audit to close
+      CRITICAL-02-02 (six conflicting sources of wheel_radius across
+      URDF, odrive_params.yaml, robot_params.yaml, C++ defaults, nav2
+      footprint, and HIL bridge). At commit time the file holds the
+      current runtime values (0.0781 / 0.960 / 10.0) — the
+      compensation that masks an ODrive NVRAM bug. Step 0 of
+      CRITICAL-02-02 (NVRAM dump via odrivetool, procedure documented
+      in docs/calibration/odrive_nvram_dump_procedure.md) will identify
+      whether encoder.cpr or motor.config.pole_pairs explains the 1.25×
+      factor; step 2 restores the geometric values 0.0625 / 0.735 / 1.0.
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HIL validation artifacts (not iterated by verify_persistence.py)
 # ─────────────────────────────────────────────────────────────────────────────
 # Separate top-level section because these artifacts are either (a) written
@@ -377,3 +416,22 @@ known_issues:
   - issue: "_meta.json asymmetry: written on shutdown only"
     status: "FIXED 2026-04-13 Fase 6 bug #2"
     fix: "Added /agv/localization/save_last_known_pose service in agv_localization_init; called synchronously from agv_map_manager::on_save_map after Area Memory flush."
+
+  - issue: "Geometry SSOT scaffolded with NVRAM-bug compensation values (CRITICAL-02-02)"
+    status: "SCAFFOLDED 2026-05-13 audit Sprint A — numerical fix pending ODrive NVRAM dump"
+    location: "src/agv_description/config/robot_geometry.yaml"
+    detail: |
+      File holds wheel_radius=0.0781, track_width=0.960, gear_ratio=10.0
+      which is the field-validated current behavior, NOT the geometric
+      truth (caliper measurement 2026-05-13 confirms wheel_radius=0.0625).
+      The 1.25× factor (= 5/4) is suspected encoder.config.cpr or
+      motor.config.pole_pairs in ODrive NVRAM. Step 0 of CRITICAL-02-02 is
+      to dump the NVRAM with odrivetool — procedure documented in
+      docs/calibration/odrive_nvram_dump_procedure.md.
+    fix: |
+      After NVRAM dump:
+      1) correct the firmware parameter at the source;
+      2) restore wheel_radius=0.0625, track_width=0.735, gear_ratio=1.0
+         in robot_geometry.yaml (1-line edit each);
+      3) verify_geometry_ssot.py numerical WARN → OK on next commit.
+    verified_by: "tools/verify_specs/verify_geometry_ssot.py (structural BLOCKING + numerical WARN)"
