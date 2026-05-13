@@ -98,6 +98,23 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
     throw std::runtime_error("Invalid caster_covariance_multiplier");
   }
 
+  // -- NVRAM-audit diagnostic (CRITICAL-02-02 / MEDIUM-02-07) --
+  // The SSOT at src/agv_description/config/robot_geometry.yaml currently
+  // carries field-validated compensation values (wheel_radius 0.0781,
+  // track_width 0.960, gear_ratio 10.0) rather than the geometric truth
+  // (caliper measurement confirms wheel_radius = 0.0625 m). The 1.25×
+  // factor is suspected to live in ODrive S1 NVRAM — typically
+  // encoder.config.cpr or motor.config.pole_pairs. Log the live
+  // kinematics at every boot so the operator can cross-check against
+  // `odrivetool` (procedure: docs/calibration/odrive_nvram_dump_procedure.md).
+  // If ROS gear_ratio != 1.0 AND ODrive NVRAM also has a non-unity
+  // gear_ratio, motors are double-counted — verify before deployment.
+  RCLCPP_INFO(get_logger(),
+              "Kinematics SSOT: wheel_radius=%.4fm, track_width=%.4fm, gear_ratio=%.2f. "
+              "Verify against ODrive NVRAM (encoder.cpr, motor.config.pole_pairs, "
+              "motor.config.gear_ratio) per docs/calibration/odrive_nvram_dump_procedure.md.",
+              wheel_radius_, track_width_, gear_ratio_);
+
   // -- Publishers --
   pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>("wheel_odom", 10);
   pub_joint_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);

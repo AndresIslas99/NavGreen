@@ -1,0 +1,100 @@
+# agv_greenhouse.repos
+#
+# vcstool manifest of every external dependency the AGV greenhouse
+# workspace needs to build and run. Pinning strategy: prefer a SHA so
+# rebuilds are byte-identical; fall back to a branch with a date
+# comment when no SHA is documented yet.
+#
+# Usage from a fresh clone of this repository:
+#
+#   cd <workspace_root>
+#   vcs import src < agv_greenhouse.repos
+#   colcon build --symlink-install --cmake-args -DCMAKE_CXX_FLAGS="-Werror"
+#
+# This file closes CR-00-01 of the 2026-05-13 field-readiness audit
+# (`docs/audit/2026-05-13-greenhouse-hardening/00_inventory.md`). The
+# production stack today is built from /home/orza/ros2_ws/install/
+# which is assembled by hand on the dev Jetson; that's a single point
+# of failure for any fresh-Jetson recovery. With this file in place a
+# new flash is a clone + vcs + colcon away.
+#
+# TODO items:
+# - For every entry marked `# TODO verify SHA`, the next hardware
+#   contact must capture the SHA of the package as actually built into
+#   /home/orza/ros2_ws/install/ and pin it here.
+# - `agv_slam` is referenced by every production launch file in this
+#   repo (agv_full, agv_mapping, agv_hil_full) but no repository
+#   containing it has been located. Sprint A documents this gap; a
+#   subsequent session must either locate the upstream repo and pin it
+#   here, or vendor agv_slam into src/ of this workspace.
+
+repositories:
+
+  # ── AGV-internal external (NOT in src/ but referenced by launches) ──
+  agv_slam:
+    type: git
+    url: ""  # TODO locate origin repo (referenced in agv_full.launch.py:279,
+             #      agv_mapping.launch.py:116, agv_hil_full.launch.py:298;
+             #      installed at /home/orza/ros2_ws/install/agv_slam on dev).
+    version: ""  # TODO verify SHA on next hardware contact
+    # blocked_by: locate the upstream repo URL
+
+  # ── NVIDIA Isaac ROS (cuVSLAM, AprilTag, NITROS) ──
+  isaac_ros_common:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git
+    version: main  # TODO verify SHA on next hardware contact
+  isaac_ros_visual_slam:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_visual_slam.git
+    version: main  # TODO verify SHA on next hardware contact
+  isaac_ros_apriltag:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_apriltag.git
+    version: main  # TODO verify SHA on next hardware contact
+
+  # ── ZED 2i wrapper (PATCHED — see specs/persistence.yaml note on
+  # area_memory_db_path live re-read; this fork carries the patch.) ──
+  zed-ros2-wrapper:
+    type: git
+    url: ""  # TODO replace with the team's patched fork URL
+    version: ""  # TODO pin SHA of the patch including the re-read fix
+    # blocked_by: locate the fork (referenced at
+    #             src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp::startPosTracking
+    #             but the directory is missing from this clone — see Phase 0 CR-00-01).
+
+  # ── Nav2 (SmacPlanner2D + MPPI + collision_monitor + bt_navigator) ──
+  navigation2:
+    type: git
+    url: https://github.com/ros-navigation/navigation2.git
+    version: humble  # TODO verify SHA matches Jetson production build
+
+  # ── SLAM toolbox (mapping mode + serialize_map service) ──
+  slam_toolbox:
+    type: git
+    url: https://github.com/SteveMacenski/slam_toolbox.git
+    version: humble  # TODO verify SHA
+
+  # ── AprilTag detection (community fork maintained by Christian Rauch) ──
+  apriltag_ros:
+    type: git
+    url: https://github.com/christianrauch/apriltag_ros.git
+    version: humble  # TODO verify SHA
+
+  # ── pointcloud_to_laserscan (depth → 2D scan for collision_monitor) ──
+  pointcloud_to_laserscan:
+    type: git
+    url: https://github.com/ros-perception/pointcloud_to_laserscan.git
+    version: humble  # TODO verify SHA
+
+  # ── robot_localization (dual EKF nodes) ──
+  robot_localization:
+    type: git
+    url: https://github.com/cra-ros-pkg/robot_localization.git
+    version: humble  # TODO verify SHA
+
+  # ── Foxglove bridge (diagnostic WebSocket on :8765) ──
+  foxglove_bridge:
+    type: git
+    url: https://github.com/foxglove/ros-foxglove-bridge.git
+    version: main  # TODO verify SHA
