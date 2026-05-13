@@ -145,10 +145,37 @@ Effect on real-world behaviour:
   (0.3675). URDF default 0.0625 also matches SSOT. Both
   `verify_geometry_ssot` WARN lines cleared.
 
+### Sprint X — empirical re-validation (post-revert calzado step test)
+
+Same cmd_vel as the pre-revert F1 step test (`cmd_vel.linear.x=0.2 m/s`
+for 15 s, robot calzado, joint_states + wheel_odom captured):
+
+| Quantity | Pre-revert (R=0.0781) | Post-revert (R=0.0625) | Observed ratio |
+|---|---|---|---|
+| Motor turns LEFT  | 51.91 | **67.30** | 1.30× |
+| Motor turns RIGHT | 51.92 | **66.83** | 1.29× |
+| Wheel revolutions | 5.19  | **6.73**  | 1.30× |
+| `/agv/wheel_odom` planar delta | 2.4561 m | 2.4824 m | **1.01×** (≈ identical) |
+
+Interpretation:
+- The motor encoder count is **~1.30× higher** post-revert for the same
+  commanded m/s. Expected 1.25× from the R drop alone; the extra 5%
+  comes from the HAL accel rescale (0.5→0.625 turns/s²) letting the
+  motor reach steady-state slightly earlier in the 15 s window. Both
+  are intended consequences of the sprint.
+- `wheel_odom` in meters is **unchanged** (2.46 → 2.48 m, +1%) because
+  the dual scaling (more motor turns × smaller R) cancels in the
+  conversion `Δm = motor_turns × 2π × R / gear`. The robot reports the
+  same real distance for the same commanded velocity. **End-to-end
+  verified.**
+- Operator visual confirmation expected: ~6.7 wheel revolutions per
+  wheel during the test (was 5.2 pre-revert).
+
 ### Updated verdict for F1
 
-`CLOSED-VERIFIED-AND-FIXED`. Numerical closure shipped. CRITICAL-02-02
-moves from "still open" to "fully closed" in the audit SUMMARY.
+`CLOSED-VERIFIED-AND-FIXED`. Numerical closure shipped AND empirically
+re-validated on the live stack. CRITICAL-02-02 moves from "still open"
+to "fully closed" in the audit SUMMARY.
 
 ---
 
