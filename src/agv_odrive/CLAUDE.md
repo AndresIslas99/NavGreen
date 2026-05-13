@@ -35,9 +35,9 @@ Publishes differential-drive wheel odometry at 50 Hz and converts `cmd_vel` to m
 | `can_interface` | `"can0"` | SocketCAN interface |
 | `left_axis_id` | `0` | CAN node ID left motor |
 | `right_axis_id` | `1` | CAN node ID right motor |
-| `wheel_radius` | `0.0781` | Wheel radius (m) — calibrated 2026-04-08 |
-| `track_width` | `0.960` | Effective wheel-to-wheel distance (m) — calibrated |
-| `gear_ratio` | `10.0` | Motor turns / wheel turns (10:1 planetary) |
+| `wheel_radius` | **from SSOT** | Wheel radius (m) — loaded from `src/agv_description/config/robot_geometry.yaml` (specs/persistence.yaml#config_artifacts.robot_geometry). C++ default `0.0625` is a backstop only; runtime value comes from the SSOT YAML. Current scaffold value is `0.0781` (compensation; see CRITICAL-02-02). |
+| `track_width` | **from SSOT** | Effective wheel-to-wheel distance (m) — same SSOT as wheel_radius. Current scaffold value is `0.960`. |
+| `gear_ratio` | **from SSOT** | Motor turns / wheel turns — same SSOT. Current scaffold value is `10.0`. After NVRAM dump (CRITICAL-02-02 step 0) this may revert to `1.0` if the firmware does the gearing. |
 | `publish_rate_hz` | `50` | Main loop frequency |
 | `cmd_vel_timeout_ms` | `200` | Stop motors if no cmd_vel (was 500) |
 | `invert_left` | `true` | Negate left motor direction |
