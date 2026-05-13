@@ -845,34 +845,24 @@ def generate_launch_description():
             ],
         ),
 
-        # ── Operator backend (TypeScript, t=8s — after all ROS nodes for DDS discovery) ──
-        TimerAction(
-            period=8.0,
-            actions=[
-                Node(
-                    package='agv_ui_backend',
-                    executable='teleop_backend',
-                    name='teleop_server',
-                    namespace=ns,
-                    additional_env={
-                        'AGV_PORT': '8090',
-                        'AGV_NAMESPACE': 'agv',
-                        'AGV_DATA_DIR': data_dir,
-                        # Pass the map basename (without extension) so the backend
-                        # knows which map was loaded by Nav2's map_server at boot.
-                        # The backend publishes this to /agv/maps/loaded ~10s after
-                        # its own start to trigger the auto_init_orchestrator.
-                        # If map arg is empty, this resolves to an empty string and
-                        # the backend skips the boot-time publish.
-                        'AGV_BOOT_MAP_NAME': PythonExpression([
-                            "__import__('os').path.splitext("
-                            "__import__('os').path.basename('",
-                            map_yaml,
-                            "'))[0]"
-                        ]),
-                    },
-                    output='log',
-                ),
-            ],
-        ),
+        # ── Operator backend MOVED to its own systemd unit ──
+        # Sub-fase 1.1 follow-up (2026-05-13). Previously the backend
+        # (`teleop_backend` / `agv_ui_backend`) was a Node action in this
+        # launch, which made it a child of `ros2 launch` and therefore of
+        # `agv.service`. `systemctl stop agv.service` killed the backend
+        # with the rest of the stack — the operator's trauma scenario.
+        #
+        # The backend is now managed by `agv-dashboard.service`, an
+        # independent systemd unit. It uses rclnodejs as a CLIENT of the
+        # ROS stack (RosBridgeProxy + lifecycle loop in
+        # `src/agv_ui_backend/src/index.ts`), so it can survive arbitrary
+        # ROS-stack lifecycle changes and surface the state to the UI
+        # via /api/system/ros_status + /api/health/*.
+        #
+        # The AGV_BOOT_MAP_NAME boot-time map hint (previously set here
+        # from the `map:` launch arg) is no longer wired. The
+        # auto_init_orchestrator still receives load events later from
+        # map_manager when the map is loaded — only the 10s-after-boot
+        # nudge is skipped. Documented in
+        # docs/operations/systemd_services.md.
     ])

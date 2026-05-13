@@ -43,9 +43,11 @@ WHITELIST=(
   'src/agv_bringup/scripts/agv_start.sh|/home/orza/'
   'src/agv_bringup/scripts/agv_healthcheck.sh|/home/orza/'
   'src/agv_bringup/scripts/agv_watchdog.sh|/home/orza/'
-  # systemd units
+  # systemd units (by definition site-specific absolute paths)
   'src/agv_bringup/systemd/|/home/orza/'
   'src/agv_bringup/systemd/|HOME=/home/orza'
+  'src/agv_ui_backend/systemd/|/home/orza/'
+  'src/agv_ui_backend/systemd/|HOME=/home/orza'
   # Per-site configs (parametrization by site)
   'src/agv_bringup/config/sites/|/home/orza/'
   # Launch files pass AGV_DATA_DIR as env var — target code reads via env

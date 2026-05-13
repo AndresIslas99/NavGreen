@@ -140,6 +140,10 @@ const state: AppState = {
   currentMapName: null,
   lastScanTime: 0,
   lastGlobalOdomTime: 0,
+  lastLocalOdomTime: 0,
+  lastVslamTime: 0,
+  lastMarkerPoseTime: 0,
+  lastSafetyStatusTime: 0,
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -923,6 +927,33 @@ async function main() {
       `/${NAMESPACE}/current_map`, { qos: tlQosCurrentMap }, (msg: any) => {
       const name = typeof msg.data === 'string' ? msg.data.trim() : '';
       state.currentMapName = name.length > 0 ? name : null;
+    });
+
+    // ── Sub-fase 1.1 follow-up — health-panel-only subscribers ──
+    // The backend already pulls /agv/odometry/global (global pose) and
+    // /agv/imu/filtered (imu freshness). These extra subscribers exist
+    // SOLELY to feed the System Health Panel's topic_alive checks. The
+    // callbacks do nothing but stamp the corresponding state field. We
+    // intentionally do NOT decode the messages — the cost is one event-
+    // loop tick per message and a single Date.now() call.
+    node.createSubscription('nav_msgs/msg/Odometry', `/${NAMESPACE}/odometry/local`, () => {
+      state.lastLocalOdomTime = Date.now() / 1000;
+    });
+    node.createSubscription('nav_msgs/msg/Odometry', '/visual_slam/tracking/odometry', () => {
+      state.lastVslamTime = Date.now() / 1000;
+    });
+    node.createSubscription('geometry_msgs/msg/PoseWithCovarianceStamped',
+      `/${NAMESPACE}/marker_pose`, () => {
+      state.lastMarkerPoseTime = Date.now() / 1000;
+    });
+    // /agv/safety/status uses agv_interfaces/msg/SafetyStatus. The IDL
+    // is registered by the rclnodejs generator at init time but isn't in
+    // its TypeScript MessagesMap — cast to `any` like the other custom-
+    // IDL call sites elsewhere in this file (railApproachClient @ :365).
+    // The panel only needs the timestamp, so no decode here either.
+    (node as any).createSubscription('agv_interfaces/msg/SafetyStatus',
+      `/${NAMESPACE}/safety/status`, () => {
+      state.lastSafetyStatusTime = Date.now() / 1000;
     });
 
     console.log('[ROS] All subscriptions created');
