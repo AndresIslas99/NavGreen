@@ -1,0 +1,48 @@
+# Robot kinematic geometry — SSOT
+#
+# This is the SINGLE source of truth for wheel_radius, track_width,
+# gear_ratio, and the URDF wheel-mount offsets derived from them. Loaded
+# by:
+#   - src/agv_description/launch/description.launch.py
+#       → passed to xacro as args (`wheel_radius:=`, `left_wheel_y:=`, ...)
+#   - src/agv_odrive/launch/odrive.launch.py
+#       → chained before odrive_params.yaml so geometry SSOT wins; consumed
+#         by odrive_can_node
+#
+# Contract declared in specs/persistence.yaml#config_artifacts.robot_geometry
+# and specs/launch_sequence.yaml (robot_description_launch + agv_odrive_node
+# parameters_files).
+#
+# ─────────────────────────────────────────────────────────────────────────
+# CRITICAL-02-02 status — values currently encode an ODrive NVRAM bug
+# ─────────────────────────────────────────────────────────────────────────
+# wheel_radius 0.0781 m and track_width 0.960 m are NOT the geometric truth.
+# Caliper measurement 2026-05-13 confirms wheel_radius = 0.0625 m. The 1.25×
+# ratio (= 5/4) is suspected to be a firmware-side mis-configuration
+# (encoder.config.cpr or motor.config.pole_pairs in ODrive S1 NVRAM).
+#
+# DO NOT change these values to 0.0625 / 0.735 / 1.0 until:
+#   (1) NVRAM dump via odrivetool identifies the firmware-side culprit
+#       — see docs/calibration/odrive_nvram_dump_procedure.md
+#   (2) the firmware parameter is corrected at its source
+#   (3) UMBmark re-run confirms residual error is in the 1–5 % range,
+#       not the current 25 %.
+#
+# Touching wheel_radius without doing (1)+(2)+(3) breaks the field robot.
+# See docs/audit/2026-05-13-greenhouse-hardening/SUMMARY.md §CRITICAL-02-02.
+# ─────────────────────────────────────────────────────────────────────────
+
+/**:
+  ros__parameters:
+    # ── Wheel kinematics (consumed by agv_odrive odrive_can_node) ──
+    wheel_radius: 0.0781        # m — TODO restore 0.0625 after NVRAM fix
+    track_width:  0.960          # m — TODO restore 0.735 after NVRAM fix
+    gear_ratio:   10.0           # motor turns / wheel turn — TODO restore 1.0 if firmware does the gearing post-fix
+
+    # ── URDF wheel-mount offsets (consumed by description.launch.py as
+    # xacro args; values derived from track_width above; wheel_z is the
+    # physical axle drop from base_link, independent of CRITICAL-02-02) ──
+    left_wheel_y:   0.480        # = +track_width / 2
+    right_wheel_y: -0.480        # = -track_width / 2
+    wheel_z:       -0.1375       # axle below base_link plane (200 mm above ground - 62.5 mm radius geometric)
+    wheel_width:    0.05         # cosmetic; affects visual + collision cylinder length

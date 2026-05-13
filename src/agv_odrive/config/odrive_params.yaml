@@ -3,10 +3,14 @@
     can_interface: "can0"
     left_axis_id: 0
     right_axis_id: 1
-    # Measured 2026-03-18 on production chassis
-    wheel_radius: 0.0781       # meters — calibrated 2026-04-08 (ratio 2.66/2.13 from 3-trial test)
-    track_width: 0.960         # meters — calibrated 2026-04-08 (effective, from 2 spin trials)
-    gear_ratio: 10.0           # 10:1 planetary gearbox (motor turns per wheel turn)
+    # ─────────────────────────────────────────────────────────────────────
+    # wheel_radius / track_width / gear_ratio MOVED to the geometry SSOT:
+    #   src/agv_description/config/robot_geometry.yaml
+    # Loaded by src/agv_odrive/launch/odrive.launch.py BEFORE this file so
+    # the SSOT wins. Do NOT add the geometry keys back here — verify_geometry_ssot.py
+    # blocks commits that re-introduce them. See CRITICAL-02-02 and
+    # specs/persistence.yaml#config_artifacts.robot_geometry.
+    # ─────────────────────────────────────────────────────────────────────
     odom_frame_id: "odom"
     base_frame_id: "base_link"
     publish_rate_hz: 50
