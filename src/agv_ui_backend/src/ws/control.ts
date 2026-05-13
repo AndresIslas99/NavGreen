@@ -107,6 +107,29 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
     deps.state.activeClients++;
     console.log(`Dashboard client connected (${deps.state.activeClients})`);
 
+    // Sprint B / MEDIUM-11-C-06 (2026-05-13 audit). Heartbeat protocol:
+    // server pings every 2 s; if the client misses two consecutive
+    // pongs (~5 s) we treat the connection as dead and terminate it.
+    // Browsers respond to ping frames with pong automatically at the
+    // WebSocket wire level, so the frontend does not need an explicit
+    // pong handler. Without this, a TCP half-open connection (WiFi
+    // drops on the dashboard side) goes undetected until the next
+    // write attempt — by which time the 5 Hz status loop may have
+    // queued seconds of pending messages.
+    let isAlive = true;
+    ws.on('pong', () => { isAlive = true; });
+    const HEARTBEAT_INTERVAL_MS = 2000;
+    const heartbeatInterval = setInterval(() => {
+      if (!isAlive) {
+        // Missed the previous heartbeat's pong. Drop the connection;
+        // the close handler runs the deadman logic.
+        try { ws.terminate(); } catch { /* ignore */ }
+        return;
+      }
+      isAlive = false;
+      try { ws.ping(); } catch { /* ignore */ }
+    }, HEARTBEAT_INTERVAL_MS);
+
     let lastPathSnapshot = '';
     let clientMapVersion = deps.state.mapVersion;  // start at current so we don't re-send on connect
     let clientLiveMapVersion = deps.state.liveMapVersion;
@@ -273,8 +296,29 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
     ws.on('close', () => {
       clearInterval(statusInterval);
+      clearInterval(heartbeatInterval);
       deps.state.activeClients = Math.max(0, deps.state.activeClients - 1);
       deps.ros.sendCmdVel(0, 0);
+
+      // Sprint B / MEDIUM-11-C-06 + HAZOP H-07 deadman. If this was
+      // the last operator AND a mission is running, pause the mission
+      // and emit a crit event. The mission executor in index.ts loops
+      // on state.missionPause and waits 500 ms between checks, so the
+      // pause takes effect within ~1 s of the disconnect. Resume
+      // requires a new client connect AND an explicit operator click
+      // (POST /api/missions/resume). The robot does NOT abort the
+      // mission — pause preserves position so the operator can resume
+      // when the WiFi recovers.
+      const noClients = deps.state.activeClients === 0;
+      const missionRunning =
+        deps.state.missionProgress != null &&
+        deps.state.missionProgress.status === 'running';
+      if (noClients && missionRunning && !deps.state.missionPause) {
+        deps.state.missionPause = true;
+        deps.eventLog.emit('crit', 'MISSION',
+          'Mission paused: last operator disconnected. ' +
+          'Resume from the dashboard after reconnecting.');
+      }
     });
   });
 }
