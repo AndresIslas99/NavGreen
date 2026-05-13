@@ -167,21 +167,72 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const group = tagLayerRef.current
     if (!group) return
 
+    // Sub-fase 1.2.4 — Tag visualization with role-based color + orientation.
+    //
+    // The legacy DefinedTag schema only carries a binary `type` field
+    // (wall|rail_start), so this function infers richer roles from the
+    // label string emitted by the Tag Layout Loader's bulkImport:
+    //   "rail_entry_*"            → blue (rail_entry)
+    //   "charging*"               → amber (charging)
+    //   "central_aisle_beacon*"   → green (beacon)
+    //   "handoff*"                → purple (handoff)
+    //   anything else / type=wall → gray (other)
+    //
+    // Orientation: a short line segment from the tag centre along the
+    // (yaw) direction, helping the operator confirm tag rotation
+    // matches the physical install. yaw is in radians on the
+    // DefinedTag.
+    const inferRole = (t: DefinedTag): string => {
+      const lbl = (t.label || '').toLowerCase()
+      if (t.type === 'rail_start' || lbl.startsWith('rail_entry')) return 'rail_entry'
+      if (lbl.startsWith('charging')) return 'charging'
+      if (lbl.startsWith('central_aisle_beacon')) return 'beacon'
+      if (lbl.startsWith('handoff')) return 'handoff'
+      return 'other'
+    }
+    const roleColor = (role: string): { stroke: string; fill: string } => {
+      switch (role) {
+        case 'rail_entry':   return { stroke: '#4fc3f7', fill: '#0277bd' }
+        case 'charging':     return { stroke: '#ffd54f', fill: '#ffa000' }
+        case 'beacon':       return { stroke: '#81c784', fill: '#388e3c' }
+        case 'handoff':      return { stroke: '#ba68c8', fill: '#7b1fa2' }
+        default:             return { stroke: '#b0bec5', fill: '#607d8b' }
+      }
+    }
+
     const render = (tags: DefinedTag[]) => {
       group.clearLayers()
       for (const t of tags) {
-        const color = t.type === 'rail_start' ? '#ffd54f' : '#90a4ae'
-        const fill = t.type === 'rail_start' ? '#ffb300' : '#607d8b'
-        const marker = L.circleMarker(worldToLatLng(t.x, t.y), {
-          radius: 5,
-          color,
+        const role = inferRole(t)
+        const { stroke, fill } = roleColor(role)
+        const center = worldToLatLng(t.x, t.y)
+
+        // Tag circle marker.
+        const marker = L.circleMarker(center, {
+          radius: 6,
+          color: stroke,
           fillColor: fill,
           fillOpacity: 0.9,
           weight: 2,
         }).addTo(group)
-        marker.bindTooltip(`#${t.id} · ${t.label}${t.type === 'rail_start' ? ' (rail)' : ''}`, {
+
+        // Orientation indicator: short line from centre along yaw.
+        // Length in world units is small (~30 cm) to stay visually
+        // local to the marker without overlapping neighbours.
+        const len = 0.30
+        const tipX = t.x + len * Math.cos(t.yaw)
+        const tipY = t.y + len * Math.sin(t.yaw)
+        L.polyline([center, worldToLatLng(tipX, tipY)], {
+          color: stroke,
+          weight: 2,
+          opacity: 0.9,
+          interactive: false,
+        }).addTo(group)
+
+        const yawDeg = (t.yaw * 180 / Math.PI).toFixed(0)
+        marker.bindTooltip(`#${t.id} · ${t.label} (${role})  yaw=${yawDeg}°`, {
           direction: 'top',
-          offset: [0, -4],
+          offset: [0, -6],
           className: 'apriltag-tooltip',
         })
       }
