@@ -619,3 +619,87 @@ Sprint B (architectural cleanup + WiFi deadman + hardware E-stop doc).
 The two remaining CRITICALs are hardware-gated and have explicit
 procedures ready (NVRAM dump + .repos verification). Everything that
 can be closed at the desk in this audit cycle is closed.
+
+## Sprint E.lite closure (2026-05-12)
+
+Sprint E proper (calibration wizards XL) is still gated by the field
+NVRAM dump, but four desk-actionable items from the Sprint E backlog
+were resolved in this pass — three perception/auth hardening and one
+HMI UX patch. Tag: "Sprint E.lite" to distinguish from the calibration
+wizard work still pending.
+
+### Findings closed in Sprint E.lite
+
+- **HIGH-04-02 — AprilTag incidence-angle filter in marker_correction.**
+  `marker_correction_node.cpp` now extracts the tag-normal incidence
+  angle from the OpenCV pose rotation matrix (`cv::Rodrigues` →
+  `R_ct(2,2)`) and discards detections beyond a configurable threshold.
+  Previously a tag observed near-edge-on could publish a pose whose
+  yaw was dominated by lateral noise, and the EKF would happily fuse
+  it. Field finding from iter-37 showed this was a real failure mode
+  in greenhouse corridors. Commit 831f56d.
+
+- **HIGH-04-04 — yaml-cpp parser for marker registry.** The hand-rolled
+  string matcher was replaced with a proper yaml-cpp loader supporting
+  per-tag size override, duplicate-id detection, and structured error
+  reporting. Reduces the chance of a silently malformed registry
+  passing as "no tags found". Commit 9c90a36.
+
+- **CRITICAL-11-C-01 frontend companion.** `LoginPage.tsx` now handles
+  the `must_change_password` flag set by the backend on the
+  auto-generated admin user. On first login the dashboard refuses to
+  call `onLogin()` until the user has set a new password through the
+  in-place change-password form (the new token is held in component
+  state, not committed to localStorage until the change succeeds, so a
+  reload cannot bypass the prompt). Pairs with the Sprint A.5 backend
+  change. Commit b7db334.
+
+- **MEDIUM-11-D-02 — UX confirm-on-disengage for safety-critical
+  buttons.** Two industrial-HMI-style modals added:
+  - **TopBar E-stop button:** Engage stays single-click (slamming the
+    button must never be slowed down). Disengage now opens a modal
+    that requires explicit acknowledgement and spells out "motors
+    remain disarmed after clear; robot will not move from this click
+    alone." Mirrors hardware E-stop reset latches.
+  - **OperatePanel Disarm button:** When `motors_armed && state ∈
+    {navigating, executing_mission}`, the disarm click is intercepted
+    by a modal warning that disarming mid-traverse will fault the
+    active goal and the robot will coast. The operator must either
+    cancel navigation first or knowingly confirm.
+  Single `.modal-body` CSS class shared between the two. Commit dcf2212.
+
+### Still open after Sprint E.lite
+
+- HIGH-04-03 (kidnapping detection) — deferred. Needs a design pass to
+  define the trigger criteria before implementation.
+- HIGH-04-09 (ekf_local yaw absolute fight) — needs HIL test before
+  merging the fix.
+- HIGH-11-A-03 (TELEOP carve-out for rail_approach) — design call
+  pending.
+- HIGH-11-C-02/03/04 (salted KDF, JWT-off-WS-URL, TLS) — Sprint future
+  (security hardening, not greenhouse-MVP-blocking).
+- HIGH-11-D-04 (no goal-click confirmation) — single-click goal-send
+  on the map is still un-gated; lower priority than E-stop/disarm.
+- MEDIUM-06-* Phase 6 perception findings — depth pipeline refactor,
+  still Sprint E proper.
+- Sprint E proper (calibration wizards XL) — still gated by Sprint A
+  NVRAM dump from the field.
+
+### Sprint E.lite verifier baseline
+
+- `bash tools/verify_specs/all.sh`: 10 scripts, 0 blocking, 1 warning
+  (geometry SSOT drift, expected pending NVRAM dump).
+- `colcon build agv_markers`: clean (-Werror enforced).
+- `npm run build` (dashboard): clean, 39 modules transformed,
+  39 kB CSS / 413 kB JS bundle.
+
+### Cumulative status (Sprints A.5 + B + C + D + E.lite)
+
+23 atomic commits landed across the audit cycle. Findings snapshot:
+
+| Severity | Closed in session | Remaining open |
+|---|---|---|
+| CRITICAL | 2 (11-A-01, 11-C-01 backend+frontend) | 2 (CR-00-01 .repos validation, CRITICAL-02-02 numerical NVRAM fix — both await hardware) |
+| HIGH | 12 | ~11 (most need hardware or design call) |
+| MEDIUM | 12 | ~17 (mostly Sprint E perception + UX) |
+| LOW / NIT | 0 | ~6 |
