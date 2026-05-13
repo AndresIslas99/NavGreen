@@ -237,9 +237,11 @@ sequence:
     source: "src/agv_bringup/launch/agv_full.launch.py:225-243"
     start_time_s: 4.5
     mode: "parallel (publish_tf=false)"
+    condition: "IfCondition(enable_factor_graph), default=false"
+    status: "GATED OFF BY DEFAULT 2026-05-13 Sprint B (HIGH-04-01 / MEDIUM-04-05). Output topic /agv/factor_graph/odometry has zero downstream consumers and the validation it provides is moot because it consumes ekf_global's already-corrected pose and re-applies marker priors. Saves 10–20 % of a CPU core in production. Set enable_factor_graph:=true to run a cutover-validation session."
     provides:
       - "topic /agv/factor_graph/odometry (validation only)"
-    failure_impact: "None — validation node. Not in the critical path."
+    failure_impact: "None — validation node, not in the critical path. With Sprint B gate it does not run by default."
 
   # ── t = 5.0 seconds ──
 

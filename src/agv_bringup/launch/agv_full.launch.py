@@ -114,6 +114,17 @@ def generate_launch_description():
                               description='Enable behavior tree executor'),
         DeclareLaunchArgument('enable_slam_localization', default_value='true',
                               description='Enable SLAM Toolbox in localization mode for loop closure'),
+        # Sprint B (2026-05-13 audit, HIGH-04-01 / MEDIUM-04-05).
+        # agv_factor_graph runs iSAM2 at 10 Hz on a 200-pose sliding
+        # window. Its output topic /agv/factor_graph/odometry has zero
+        # downstream consumers in production; the validation it provides
+        # is moot because it currently consumes ekf_global's output and
+        # re-applies marker_pose priors (double-counting). Default OFF
+        # so production runs don't burn 10–20 % of a CPU core on a
+        # parallel estimator that nobody reads. Enable per-session for
+        # comparator runs (`enable_factor_graph:=true`).
+        DeclareLaunchArgument('enable_factor_graph', default_value='false',
+                              description='Run agv_factor_graph (parallel iSAM2 estimator). Off by default; turn on per-session for cutover validation runs.'),
         DeclareLaunchArgument('slam_map_file', default_value='',
                               description='Path to serialized SLAM Toolbox map (without extension)'),
         DeclareLaunchArgument(
@@ -374,7 +385,8 @@ def generate_launch_description():
         ),
 
         # ── Factor graph estimator (t=4.5s, parallel to ekf_global) ──
-        # Runs alongside ekf_global with publish_tf=false. Compare on
+        # OFF by default (Sprint B / HIGH-04-01). When enabled, runs
+        # alongside ekf_global with publish_tf=false. Compare on
         # /agv/factor_graph/odometry vs /agv/odometry/global to validate.
         # Set publish_tf:=true to perform cutover from ekf_global.
         TimerAction(
@@ -390,6 +402,7 @@ def generate_launch_description():
                         'publish_tf': 'false',  # Parallel mode — ekf_global owns TF
                         'use_sim_time': use_sim_time,
                     }.items(),
+                    condition=IfCondition(LaunchConfiguration('enable_factor_graph')),
                 ),
             ],
         ),
