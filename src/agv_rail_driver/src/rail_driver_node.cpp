@@ -7,7 +7,13 @@
 //   /agv/odometry/global          (nav_msgs/Odometry)   — current pose
 //   /agv/rail_driver/goal         (geometry_msgs/PoseStamped) — target pose
 //   /agv/zone/state               (std_msgs/String JSON) — from zone_detector
-//   /agv/collision_monitor_state  (std_msgs/String)     — "stop"/"slowdown"/"clear"
+//   /agv/collision_monitor_state  (nav2_msgs/CollisionMonitorState) — Nav2 safety chain.
+//                                  Section-0 regression fix (Day 2, 2026-05-13):
+//                                  was std_msgs/String before — same class of bug
+//                                  as CRITICAL-11-A-01 in mode_arbiter. DDS dropped
+//                                  the messages silently due to type mismatch, so
+//                                  rail_driver never entered BLOCKED_WAIT on a Nav2
+//                                  STOP, regardless of whether the obstacle was real.
 //
 // Outputs:
 //   /agv/cmd_vel_rail             (geometry_msgs/Twist) — longitudinal-only
@@ -21,6 +27,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "nav2_msgs/msg/collision_monitor_state.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -79,7 +86,14 @@ class RailDriverNode : public rclcpp::Node {
     sub_zone_ = create_subscription<std_msgs::msg::String>(
         zone_topic, rclcpp::QoS{10},
         std::bind(&RailDriverNode::on_zone, this, _1));
-    sub_collision_ = create_subscription<std_msgs::msg::String>(
+    // Section-0 regression fix (Day 2, 2026-05-13). Previously this
+    // subscriber was declared std_msgs/msg/String — same root-cause class
+    // as CRITICAL-11-A-01 in mode_arbiter. Nav2 publishes the topic as
+    // nav2_msgs/msg/CollisionMonitorState; DDS dropped the messages
+    // silently due to the type mismatch, so rail_driver's
+    // last_collision_stop_ was permanently false and BLOCKED_WAIT was
+    // unreachable. Compare to the STOP constant from the message itself.
+    sub_collision_ = create_subscription<nav2_msgs::msg::CollisionMonitorState>(
         collision_topic, rclcpp::QoS{10},
         std::bind(&RailDriverNode::on_collision, this, _1));
     sub_rail_detections_ = create_subscription<geometry_msgs::msg::PoseArray>(
@@ -189,9 +203,9 @@ class RailDriverNode : public rclcpp::Node {
     last_in_rail_ = zone.rfind("rail_aisle_", 0) == 0;
   }
 
-  void on_collision(const std_msgs::msg::String::ConstSharedPtr msg) {
-    // collision_monitor publishes strings like "stop"/"slowdown"/"clear".
-    last_collision_stop_ = (msg->data.find("stop") != std::string::npos);
+  void on_collision(const nav2_msgs::msg::CollisionMonitorState::ConstSharedPtr msg) {
+    last_collision_stop_ =
+        (msg->action_type == nav2_msgs::msg::CollisionMonitorState::STOP);
   }
 
   // PoseArray has 2 poses, one per rail, in base_link. Midpoint Y = rail
@@ -353,7 +367,7 @@ class RailDriverNode : public rclcpp::Node {
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_zone_;
-  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_collision_;
+  rclcpp::Subscription<nav2_msgs::msg::CollisionMonitorState>::SharedPtr sub_collision_;
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_rail_detections_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_rail_detector_state_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_;
