@@ -91,12 +91,42 @@ void SafetySupervisorNode::declare_parameters() {
   declare_parameter("monitored_topics", std::vector<std::string>{});
   declare_parameter("monitored_types", std::vector<std::string>{});
   declare_parameter("monitored_deadline_ms", std::vector<int64_t>{});
+  // Sprint D / HIGH-09-02 (2026-05-13 audit). Per-topic QoS reliability
+  // class. Empty array (default) preserves backward compatibility:
+  // every monitored topic gets BEST_EFFORT. When provided, this array
+  // must be the same length as monitored_topics. Valid values:
+  //   - "best_effort"             (default)
+  //   - "reliable"
+  //   - "reliable_transient_local"
+  // Required when a critical topic is published RELIABLE — a
+  // best_effort subscriber may still receive it (DDS allows the
+  // asymmetry) but if the publisher's durability is transient_local
+  // and the subscriber's is volatile, late-joining messages get lost.
+  declare_parameter("monitored_qos", std::vector<std::string>{});
 }
+
+namespace {
+// Build a QoS profile from the canonical name. Returns nullopt on
+// unknown names so the caller can log and fall back.
+rclcpp::QoS qos_from_name(const std::string& name) {
+  if (name == "best_effort") {
+    return rclcpp::QoS(10).best_effort();
+  } else if (name == "reliable") {
+    return rclcpp::QoS(10).reliable();
+  } else if (name == "reliable_transient_local") {
+    return rclcpp::QoS(10).reliable().transient_local();
+  }
+  // Unknown: caller decides; we return best_effort as the safest
+  // backward-compatible default and rely on the caller to log a warn.
+  return rclcpp::QoS(10).best_effort();
+}
+}  // namespace
 
 void SafetySupervisorNode::load_monitored_topics() {
   const auto names = get_parameter("monitored_topics").as_string_array();
   const auto types = get_parameter("monitored_types").as_string_array();
   const auto deadlines = get_parameter("monitored_deadline_ms").as_integer_array();
+  const auto qos_names = get_parameter("monitored_qos").as_string_array();
 
   if (names.size() != types.size() || names.size() != deadlines.size()) {
     RCLCPP_ERROR(get_logger(),
@@ -105,6 +135,17 @@ void SafetySupervisorNode::load_monitored_topics() {
                  names.size(), types.size(), deadlines.size());
     return;
   }
+  // monitored_qos is optional. If non-empty it must match length;
+  // empty preserves the pre-Sprint-D default of best_effort everywhere.
+  if (!qos_names.empty() && qos_names.size() != names.size()) {
+    RCLCPP_ERROR(get_logger(),
+                 "monitored_qos, when provided, must match monitored_topics "
+                 "length (got %zu, expected %zu). Falling back to best_effort "
+                 "for all topics.",
+                 qos_names.size(), names.size());
+  }
+  const bool use_per_topic_qos =
+      !qos_names.empty() && qos_names.size() == names.size();
 
   for (size_t i = 0; i < names.size(); ++i) {
     MonitoredTopic t;
@@ -114,19 +155,42 @@ void SafetySupervisorNode::load_monitored_topics() {
     t.last_seen = now();
     t.ever_seen = false;
 
+    // Resolve per-topic QoS or default.
+    std::string qos_label = "best_effort";
+    rclcpp::QoS qos = rclcpp::QoS(10).best_effort();
+    if (use_per_topic_qos) {
+      qos_label = qos_names[i];
+      qos = qos_from_name(qos_label);
+      if (qos_label != "best_effort" && qos_label != "reliable" &&
+          qos_label != "reliable_transient_local") {
+        RCLCPP_WARN(get_logger(),
+                    "monitored_qos[%zu]='%s' for topic '%s' is not one of "
+                    "{best_effort, reliable, reliable_transient_local}; "
+                    "falling back to best_effort.",
+                    i, qos_label.c_str(), t.name.c_str());
+        qos_label = "best_effort (fallback)";
+        qos = rclcpp::QoS(10).best_effort();
+      }
+    }
+
     try {
       t.sub = create_generic_subscription(
-          t.name, t.type, rclcpp::QoS(10).best_effort(),
+          t.name, t.type, qos,
           [this, idx = i](std::shared_ptr<const rclcpp::SerializedMessage>) {
             if (idx < topics_.size()) {
               topics_[idx].last_seen = now();
               topics_[idx].ever_seen = true;
             }
           });
+      RCLCPP_INFO(get_logger(),
+                  "monitor %s (type %s, deadline %ld ms, qos %s)",
+                  t.name.c_str(), t.type.c_str(),
+                  static_cast<long>(t.deadline.count()),
+                  qos_label.c_str());
     } catch (const std::exception& e) {
       RCLCPP_WARN(get_logger(),
-                  "failed to subscribe to %s (type %s): %s",
-                  t.name.c_str(), t.type.c_str(), e.what());
+                  "failed to subscribe to %s (type %s, qos %s): %s",
+                  t.name.c_str(), t.type.c_str(), qos_label.c_str(), e.what());
     }
 
     topics_.push_back(std::move(t));
