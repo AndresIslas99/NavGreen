@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { RobotStatus, RobotState } from '../api/types'
 import { RailStatus } from './RailStatus'
 
@@ -129,6 +130,8 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
   const s = status
   const navActive = s?.nav_state?.active || false
   const mp = s?.mission_progress
+  // Sprint E / MEDIUM-11-D-02. E-stop clear requires confirmation.
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   // Connection quality
   const connColor = connected ? 'var(--normal)' : 'var(--red)'
@@ -236,16 +239,48 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
             <button className="top-btn cancel-btn" onClick={onNavCancel}>Cancel</button>
           )}
 
+          {/* Sprint E / MEDIUM-11-D-02. E-stop is intentionally
+              single-click on the way IN (no confirmation — that
+              would defeat the purpose) but requires explicit
+              acknowledgement on the way OUT. Mirrors industrial
+              hardware E-stop reset latches: anyone can SLAM the
+              button, only an operator can deliberately release it. */}
           <button
             className={`estop-top ${s?.e_stop ? 'engaged' : ''}`}
-            onClick={() => onEStop(!s?.e_stop)}
+            onClick={() => {
+              if (s?.e_stop) {
+                setShowClearConfirm(true)
+              } else {
+                onEStop(true)
+              }
+            }}
             aria-label={s?.e_stop ? 'Clear emergency stop' : 'Activate emergency stop'}
-            title={s?.e_stop ? 'Click to clear E-Stop' : 'EMERGENCY STOP — click to halt'}
+            title={s?.e_stop ? 'Click to start clear-E-stop flow' : 'EMERGENCY STOP — click to halt'}
           >
             {s?.e_stop ? 'CLEAR' : 'E-STOP'}
           </button>
         </div>
       </header>
+
+      {showClearConfirm && (
+        <div className="modal-overlay" onClick={() => setShowClearConfirm(false)}>
+          <div className="modal-body" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 8px 0' }}>Clear emergency stop?</h3>
+            <p style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.4, marginBottom: 16 }}>
+              Acknowledge the hazard has been resolved. After clearing,
+              motors remain disarmed until you click <strong>Arm Motors</strong>
+              in the Operate panel. Robot will NOT move on its own from
+              this click alone.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowClearConfirm(false)}>Cancel</button>
+              <button onClick={() => { onEStop(false); setShowClearConfirm(false) }}>
+                Clear E-Stop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mission progress bar (OTTO-style at-a-glance) */}
       {mp && (mp.status === 'running' || mp.status === 'paused') && (
