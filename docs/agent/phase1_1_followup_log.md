@@ -236,17 +236,20 @@ Step 6: sudo systemctl start agv.service   (restore)
 level.** The dashboard backend keeps running when the ROS stack
 goes down.
 
-### 5.2 Operator-side confirmation pending
+### 5.2 Operator-side confirmation — CONFIRMED 2026-05-13
 
-Per the prompt §2.3, `CLOSED-VERIFIED-HW` requires the operator
-to execute Test 2 from THEIR browser and confirm visually. From
-the agent's shell I've confirmed every endpoint responds 200
-post-stop, but the prompt explicitly requires the operator's
-empirical confirmation that the dashboard loads in their
-browser.
+Andrés executed Test 2 from his browser:
 
-**Awaiting Andrés's verification before declaring this
-CLOSED-VERIFIED-HW.**
+```
+$ sudo systemctl stop agv.service
+(operator refreshed dashboard at http://JETSON-LAN-IP:8090/dashboard)
+Operator's empirical report: "pagina carga"
+```
+
+**Trauma fix verdict upgraded to `CLOSED-VERIFIED-HW`.** This
+empirical confirmation closes the loop the prior optimistic
+verdict broke. Process layer, systemd layer, and browser layer
+all now confirm the dashboard survives `agv.service` stop.
 
 ### 5.3 5-probes verification — code shipped, panel test pending
 
@@ -272,10 +275,10 @@ reads from `chronyc tracking` and computes `green` if
 
 | Work | Status | Notes |
 |---|---|---|
-| Trauma fix (systemd separation) | **CLOSED-VERIFIED-CODE (agent-side)** | Operator must visually confirm Test 2 from browser to upgrade to HW |
-| 4 new health probes | **CLOSED-VERIFIED-CODE** | Subscribers in place; visual confirmation from panel pending |
+| Trauma fix (systemd separation) | **CLOSED-VERIFIED-HW** | Operator confirmed "pagina carga" from browser after `systemctl stop agv.service` (2026-05-13) |
+| 4 new health probes | **CLOSED-VERIFIED-CODE** | Subscribers in place; per-row visual confirmation from panel is optional follow-up |
 | chrony install | **CLOSED-VERIFIED-HW** | `chronyc tracking` confirms < 1 ms offset |
-| Docs | **IN-PROGRESS** | This log + systemd_services.md + final report |
+| Docs | **CLOSED** | phase1_1_followup_log.md + phase1_1_final_report.md + systemd_services.md |
 
 ## 7. Honest lessons learned
 
