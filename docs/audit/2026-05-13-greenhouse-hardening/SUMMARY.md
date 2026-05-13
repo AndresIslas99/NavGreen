@@ -26,6 +26,15 @@ Two findings dominate the priority queue:
 All other findings are MEDIUM or HIGH but localised — none compound to a
 new CRITICAL when those two close.
 
+## Re-rating after Phase 11 (2026-05-13)
+
+| Finding | Prior | After Phase 11 | Why |
+|---|---|---|---|
+| `CR-00-06` (waypoint_manager bypasses gates) | HIGH (active) | **HIGH (latent only)** | The dashboard's mission executor lives in `agv_ui_backend/src/index.ts:461` and goes through `ros.sendNavGoal` → all gates. `agv_waypoint_manager_node` is *shadow code* with a separate file. CR-00-06 stays HIGH because CLI / future callers can still bypass; HIGH-11-B-01 proposes deletion as the canonical fix. |
+| HAZOP `H-14` (untrained operator) | R=9 (P=3) | **R=15 (P=5)** while Sprint A.5 is open | With auth disabled + repo-public default credentials (CRITICAL-11-C-01), any phone on the greenhouse WiFi can drive the robot. Drops back to R≤6 after Sprint A.5 lands. |
+| HAZOP `H-07` (loss of WiFi to operator) | R=12 | **R=12 (confirmed open)** | MEDIUM-11-C-06 confirms no deadman / heartbeat. Open until Sprint B. |
+| `MEDIUM-07-07` (no global BT timeout) | MEDIUM | **MEDIUM** (companion MEDIUM-11-D-06 adds UX surfacing) | Unchanged severity. |
+
 ## Severity recalibration (2026-05-13 review)
 
 The first-pass severities were reviewed and several were rebalanced.
@@ -44,12 +53,29 @@ that definition.
 
 ## Findings filed in this cycle
 
-**42 findings total, 2 critical / 16 high / 20 medium / 4 low** across
-Phases 0–10 (1 NIT marked separately for MEDIUM-07-06). The HAZOP
-skeleton is shipped as `docs/safety/HAZOP_skeleton.md` (not numbered as
-a finding — it's a deliverable). Phases 3 (calibration), 5 (mapping),
-8 (greenhouse behaviors), 11–14 (GUI, sim, CI, docs), and 15 (field)
-remain to be filed — see §F.
+**69 findings total, 4 critical / 25 high / 34 medium / 6 low** across
+Phases 0–11 (1 NIT in Phase 7). The HAZOP skeleton is shipped as
+`docs/safety/HAZOP_skeleton.md`; the commissioning walkthrough is
+shipped as `11_commissioning_walkthrough.md`. Phases 3 (calibration),
+5 (mapping), 8 (greenhouse behaviors), 12–14 (sim, CI, docs), and 15
+(field) remain to be filed — see §F.
+
+**Two new findings from Phase 11 rise to CRITICAL** and trigger a
+dedicated **Sprint A.5** that supersedes Sprint B in priority:
+- `CRITICAL-11-A-01` — `agv_mode_arbiter` subscribes to
+  `/agv/collision_monitor_state` as `std_msgs/String` while the
+  publisher emits `nav2_msgs/msg/CollisionMonitorState`. The
+  type-mismatch is silent; `safety_stop` in the FSM never fires;
+  `BLOCKED_HANDOFF` is unreachable. The physical safety chain (Nav2
+  collision_monitor → cmd_vel_gate) still zeros the wheels, so the
+  robot stops — but the arbiter and its `/agv/mode/state` topic
+  remain "all good", and the dashboard shows green while a safety
+  stop is in progress.
+- `CRITICAL-11-C-01` — backend ships `enabled: false` for auth +
+  hardcoded defaults `engineer:agv2026` / `operator:agv` written to
+  `users.json` on first boot. Public repo → public credentials.
+  Combined with `App.tsx:42` fail-open auth check, any device on the
+  LAN can command the robot.
 
 | ID | Sev | Title | Phase | Anchor | Effort |
 |---|---|---|---|---|---|
@@ -99,6 +125,34 @@ remain to be filed — see §F.
 | MEDIUM-10-03 | MEDIUM | DDS write-side max participants `MaxAutoParticipantIndex 120` — high for single-robot, ok for fleet later | 10 | `agv_start.sh:131` | NIT |
 | MEDIUM-10-04 | MEDIUM | No `rosbag2` rotation policy in launch or systemd | 10 | absence | M |
 | MEDIUM-10-06 | MEDIUM | `rail_approach` subscribes RELIABLE to `transient_local.reliable` publisher — late-join semantics differ | 10 | `rail_approach_node.cpp:162` | S |
+| CRITICAL-11-A-01 | CRITICAL | `mode_arbiter` collision_monitor_state type mismatch — `safety_stop` never fires; `BLOCKED_HANDOFF` unreachable | 11.A | `mode_arbiter_node.cpp:171-175` | S |
+| HIGH-11-A-02 | HIGH | No source-staleness timeout in arbiter; stale `last_*` Twist relayed indefinitely | 11.A | `mode_arbiter_node.cpp:152-160,329-344` | S |
+| HIGH-11-A-03 | HIGH | TELEOP override carve-out lets `rail_approach` keep driving while operator picked teleop | 11.A | `mode_fsm.hpp:147-161` | M |
+| MEDIUM-11-A-04 | MEDIUM | `safety_stop` detection is substring match (`find("stop")`); false-positive prone | 11.A | `mode_arbiter_node.cpp:174` | NIT (combined with CRITICAL-11-A-01) |
+| MEDIUM-11-A-05 | MEDIUM | Default `operator_mode = "nav"` allows immediate motion on cold boot | 11.A | `mode_fsm.hpp:74` | S |
+| MEDIUM-11-A-06 | MEDIUM | Source-state strings hardcoded; no enum / schema; brittle to controller changes | 11.A | `mode_fsm.hpp:182-244` | M |
+| HIGH-11-B-01 | HIGH | Dashboard uses backend's mission executor; `agv_waypoint_manager` is shadow code with a separate file | 11.B | `index.ts:461-545` vs `waypoint_manager_node.cpp:73-345` | S→M |
+| HIGH-11-B-02 | HIGH | `spin_until_future_complete` on a single-threaded executor from a worker thread — deadlock risk | 11.B | `waypoint_manager_node.cpp:309-329` | M |
+| MEDIUM-11-B-03 | MEDIUM | Mission file is append-only; duplicate IDs accumulate; oldest wins on lookup | 11.B | `waypoint_manager_node.cpp:162-211` | S |
+| MEDIUM-11-B-04 | MEDIUM | Auto-generated mission IDs use `time%1e8` — collision within 100 ms | 11.B | `waypoint_manager_node.cpp:141-142` | S |
+| MEDIUM-11-B-05 | MEDIUM | No waypoint validation (NaN, out-of-bounds, in-keepout) | 11.B | `missions.ts:32-55`, `waypoint_manager_node.cpp:134-172` | S |
+| CRITICAL-11-C-01 | CRITICAL | Auth disabled by default + hardcoded credentials shipped in source | 11.C | `auth.ts:64,67-80` | M |
+| HIGH-11-C-02 | HIGH | Unsalted SHA-256 password hashing | 11.C | `auth.ts:48-50` | S |
+| HIGH-11-C-03 | HIGH | JWT token transported as URL query string in WebSocket connect | 11.C | `ws/control.ts:77-80`, `useWebSocket.ts:55-57` | S |
+| HIGH-11-C-04 | HIGH | HTTP without TLS — credentials and JWT cleartext over WiFi | 11.C | Express setup | M |
+| HIGH-11-C-05 | HIGH | `filterActionsForRole` returns all actions for `operator` role despite comment | 11.C | `auth.ts:37-46` | M |
+| MEDIUM-11-C-06 | MEDIUM | No WS heartbeat / deadman; mission keeps running on operator disconnect (closes HAZOP H-07) | 11.C | `ws/control.ts:144-205,274-278` | M |
+| MEDIUM-11-C-07 | MEDIUM | `state.missionPause` ignored by `waypoint_manager_node` (related HIGH-11-B-01) | 11.C | `missions.ts:74-83` vs `waypoint_manager_node.cpp:286-345` | S |
+| MEDIUM-11-C-08 | MEDIUM | `POST /api/nav/goal` no input validation; missing field → goal at (0,0,0) | 11.C | `routes/nav.ts:5-12` | S |
+| MEDIUM-11-C-09 | MEDIUM | No rate limiting on REST endpoints | 11.C | absence | S |
+| HIGH-11-D-01 | HIGH | Auth check is fail-OPEN in frontend (`/api/auth/status` error → logged in) | 11.D | `App.tsx:35-45` | S |
+| MEDIUM-11-D-02 | MEDIUM | E-stop toggle has no protection against accidental disengage | 11.D | `TopBar.tsx:240-241` | S |
+| MEDIUM-11-D-03 | MEDIUM | No confirmation on Disarm Motors during navigation / mission | 11.D | `OperatePanel.tsx:34-40` | S |
+| MEDIUM-11-D-04 | MEDIUM | `handleGoalClick` sends nav_goal on single map click; no confirmation | 11.D | `App.tsx:111-117` | M |
+| MEDIUM-11-D-05 | MEDIUM | No calibration wizards — all 4 wizards (intrinsics, extrinsics, UMBmark, hand-eye) are CLI scripts | 11.D | absence | XL |
+| MEDIUM-11-D-06 | MEDIUM | No "stuck in recovery" surface — operator sees normal state while BT cycles recoveries | 11.D | `state_machine.ts:50-66` | M |
+| LOW-11-D-07 | LOW | JWT in localStorage — XSS-exfiltratable | 11.D | `api/client.ts` | M |
+| LOW-11-D-08 | LOW | WebSocket has no max reconnect cap; backend down hidden forever | 11.D | `useWebSocket.ts:46-82` | S |
 | LOW-01-06 | LOW | TF single-owner invariant not enforced by verifier | 1 | proposal | S |
 | LOW-04-08 | LOW | `relocalization_cooldown_ms` 500 ms is asymmetric to EKF rates; document or tune | 4 | `marker_correction_node.cpp:55` | NIT |
 | LOW-10-05 | LOW | `SocketReceiveBufferSize 64MB` may exceed Orin NX `net.core.rmem_max`; document required sysctl | 10 | `agv_start.sh:144` | NIT |
@@ -172,6 +226,27 @@ The minimum to safely run a hardware test of the rest.
 4. **CRITICAL-02-02 step 3+4+5** — Re-run UMBmark with correct config. Centralise on `robot_params.yaml`. Add `verify_geometry_ssot.py`.
 5. **CR-00-03** — Replace hardcoded `/home/orza/` with `os.environ.get('AGV_DATA_DIR', …)` in the four launch dicts.
 6. **MEDIUM-02-07** — Add boot-time invariant comparing ROS `gear_ratio` against ODrive NVRAM (defense in depth for the diagnostic in step 0).
+
+### Sprint A.5 — close Phase 11 CRITICALs (priority over Sprint B, ~1 day)
+
+Two findings opened in Phase 11 affect either physical-operation
+awareness (mode_arbiter) or "any LAN device can drive the robot"
+(auth defaults). Closing them is cheaper than every Sprint B item
+and has higher-leverage safety impact than the remaining Sprint A
+items already landed.
+
+A.5.1 — **CRITICAL-11-A-01**: change `mode_arbiter_node.cpp:171-175`
+to subscribe to `nav2_msgs/msg/CollisionMonitorState`; drop the
+`std_msgs/String` substring heuristic (this also closes
+MEDIUM-11-A-04). Unit test that `safety_stop` flips on
+`action_type == STOP`.
+
+A.5.2 — **CRITICAL-11-C-01**: change `auth.ts:64` to `enabled: true`;
+remove hardcoded defaults at `auth.ts:67-70`; generate a random
+admin password on first boot, log it once to stdout (systemd
+journal) and force-change on first login. Also fail-closed
+`App.tsx:42` (HIGH-11-D-01) — show "Backend unreachable" instead
+of `setLoggedIn(true)`.
 
 ### Sprint B — environmental robustness (1 week)
 The fixes that protect the first field deployment.
