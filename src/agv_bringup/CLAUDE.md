@@ -47,7 +47,7 @@ authoritative DAG with preconditions and failure modes. Summary:
 | 3s | cuVSLAM + nvblox (TF DISABLED via cuvslam_greenhouse.yaml /**: key) | agv_slam | always |
 | 3.5s | imu_filter (Butterworth vibration filter) | agv_sensor_fusion | always |
 | 4s | ekf_local + ekf_global + fusion_monitor | agv_sensor_fusion | always |
-| 4.5s | factor_graph (parallel, publish_tf=false) | agv_factor_graph | always |
+| 4.5s | factor_graph (parallel, publish_tf=false) | agv_factor_graph | `enable_factor_graph` (default false; Sprint B / HIGH-04-01) |
 | 5s | slam_toolbox_localization (optional, TF DISABLED) | slam_toolbox | enable_slam_localization |
 | 5s | map_manager | agv_map_manager | always (waypoint_manager removed Sprint B / HIGH-11-B-01; dashboard runs its own mission executor) |
 | 6s | Nav2 stack (SmacPlanner2D + MPPI + collision_monitor) | agv_navigation | `has_map` |
@@ -67,6 +67,7 @@ authoritative DAG with preconditions and failure modes. Summary:
 | `enable_slam_localization` | `true` | agv_full |
 | `hil_mode` | `false` | agv_full (skips ZED+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan; drops collision_monitor pointcloud_source) |
 | `enable_foxglove_bridge` | `false` | agv_full (Sprint 1 Fase A4 — diagnostic ws on :8765; intentionally distinct from agv_slam's `enable_foxglove` to avoid scope mutation by IncludeLaunchDescription in Humble) |
+| `enable_factor_graph` | `false` | agv_full (Sprint B / HIGH-04-01 — gated to save 10–20% CPU; turn on for cutover-validation runs only) |
 
 ## TF Ownership (Critical)
 
