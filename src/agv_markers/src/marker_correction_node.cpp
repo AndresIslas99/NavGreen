@@ -14,6 +14,12 @@
 #include <sstream>
 #include <vector>
 
+// Sprint E / HIGH-04-04: replace hand-rolled string-matching parser
+// with yaml-cpp. Library is in libyaml-cpp-dev on Ubuntu 22.04 (already
+// a transitive dep of pluginlib via ROS 2). Linked explicitly in
+// CMakeLists.txt.
+#include <yaml-cpp/yaml.h>
+
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -34,8 +40,12 @@
 #include <opencv2/core.hpp>
 
 struct MarkerPose {
-  double x, y, z;
-  double yaw;
+  double x{0.0}, y{0.0}, z{0.0};
+  double yaw{0.0};
+  // Sprint E / HIGH-04-04: optional per-tag physical size in metres.
+  // 0.0 means "use the global tag_size parameter" — preserves the
+  // pre-Sprint-E behavior when the registry omits the field.
+  double size{0.0};
 };
 
 class MarkerCorrectionNode : public rclcpp::Node {
@@ -213,42 +223,118 @@ private:
     }
   }
 
+  // Sprint E / HIGH-04-04 (2026-05-13 audit). Was a hand-rolled
+  // string-matcher that crashed on typos (std::stod throws on bad
+  // input, no try-catch), silently overwrote duplicate IDs, ignored
+  // any per-tag size, and accepted garbage values without
+  // validation. Now uses yaml-cpp with type checks, range checks,
+  // duplicate detection, and a clear error per offending tag. On a
+  // malformed file, the existing in-memory registry is PRESERVED
+  // (we don't wipe known-good tags because someone fat-fingered the
+  // dashboard registry editor).
   void load_registry(const std::string& path) {
-    std::ifstream in(path);
-    if (!in.is_open()) {
-      RCLCPP_ERROR(get_logger(), "Cannot open registry: %s", path.c_str());
+    YAML::Node root;
+    try {
+      root = YAML::LoadFile(path);
+    } catch (const YAML::Exception& e) {
+      RCLCPP_ERROR(get_logger(),
+        "Cannot parse registry '%s': %s. Keeping previous in-memory registry.",
+        path.c_str(), e.what());
       return;
     }
 
-    // Simple YAML parser for our specific format
-    int current_id = -1;
-    MarkerPose current{0, 0, 0, 0};
-    std::string line;
-    while (std::getline(in, line)) {
-      // Trim
-      size_t start = line.find_first_not_of(" \t-");
-      if (start == std::string::npos || line[start] == '#') continue;
-      std::string trimmed = line.substr(start);
-
-      if (trimmed.substr(0, 3) == "id:") {
-        if (current_id >= 0) registry_[current_id] = current;
-        current_id = std::stoi(trimmed.substr(3));
-        current = {0, 0, 0, 0};
-      } else if (trimmed.substr(0, 2) == "x:") {
-        current.x = std::stod(trimmed.substr(2));
-      } else if (trimmed.substr(0, 2) == "y:") {
-        current.y = std::stod(trimmed.substr(2));
-      } else if (trimmed.substr(0, 2) == "z:") {
-        current.z = std::stod(trimmed.substr(2));
-      } else if (trimmed.substr(0, 4) == "yaw:") {
-        current.yaw = std::stod(trimmed.substr(4));
-      }
+    if (!root["markers"] || !root["markers"].IsSequence()) {
+      RCLCPP_ERROR(get_logger(),
+        "Registry '%s' is missing a `markers:` sequence at the top level. "
+        "Keeping previous registry.", path.c_str());
+      return;
     }
-    if (current_id >= 0) registry_[current_id] = current;
 
-    RCLCPP_INFO(get_logger(), "Loaded %zu markers from %s", registry_.size(), path.c_str());
+    // Build into a staging map and only swap if the whole file parses
+    // cleanly. This matches the "keep previous registry on failure"
+    // promise above.
+    std::map<int, MarkerPose> staged;
+    size_t bad_entries = 0;
+
+    for (size_t i = 0; i < root["markers"].size(); ++i) {
+      const auto& node = root["markers"][i];
+      if (!node["id"]) {
+        RCLCPP_WARN(get_logger(),
+          "Registry '%s' entry %zu missing `id`; skipping.",
+          path.c_str(), i);
+        ++bad_entries;
+        continue;
+      }
+
+      int id;
+      MarkerPose m;
+      try {
+        id = node["id"].as<int>();
+        m.x = node["x"] ? node["x"].as<double>() : 0.0;
+        m.y = node["y"] ? node["y"].as<double>() : 0.0;
+        m.z = node["z"] ? node["z"].as<double>() : 0.0;
+        m.yaw = node["yaw"] ? node["yaw"].as<double>() : 0.0;
+        // Optional per-tag size — 0.0 falls back to the global tag_size
+        // parameter at PnP construction time.
+        m.size = node["size"] ? node["size"].as<double>() : 0.0;
+      } catch (const YAML::Exception& e) {
+        RCLCPP_WARN(get_logger(),
+          "Registry '%s' entry %zu has malformed numeric field: %s. Skipping.",
+          path.c_str(), i, e.what());
+        ++bad_entries;
+        continue;
+      }
+
+      // Range checks.
+      if (id < 0) {
+        RCLCPP_WARN(get_logger(),
+          "Registry '%s' entry %zu: id=%d must be non-negative. Skipping.",
+          path.c_str(), i, id);
+        ++bad_entries;
+        continue;
+      }
+      if (!std::isfinite(m.x) || !std::isfinite(m.y) || !std::isfinite(m.z) ||
+          !std::isfinite(m.yaw) || !std::isfinite(m.size)) {
+        RCLCPP_WARN(get_logger(),
+          "Registry '%s' entry %zu (id=%d): non-finite coordinate or yaw. Skipping.",
+          path.c_str(), i, id);
+        ++bad_entries;
+        continue;
+      }
+      if (m.size < 0.0) {
+        RCLCPP_WARN(get_logger(),
+          "Registry '%s' entry %zu (id=%d): size %.3f must be >= 0. Skipping.",
+          path.c_str(), i, id, m.size);
+        ++bad_entries;
+        continue;
+      }
+      if (staged.count(id)) {
+        RCLCPP_WARN(get_logger(),
+          "Registry '%s' has duplicate id=%d at entry %zu — first definition kept.",
+          path.c_str(), id, i);
+        ++bad_entries;
+        continue;
+      }
+      staged[id] = m;
+    }
+
+    // Commit the staged registry. We merge into registry_ (rather than
+    // assign) because reload_all_registries() calls load_registry()
+    // twice (static then runtime overlay), and the second call should
+    // not erase the first.
+    for (const auto& [id, m] : staged) {
+      registry_[id] = m;
+    }
+
+    RCLCPP_INFO(get_logger(),
+      "Loaded %zu markers from %s (%zu accepted, %zu skipped)",
+      registry_.size(), path.c_str(), staged.size(), bad_entries);
     for (auto& [id, m] : registry_) {
-      RCLCPP_INFO(get_logger(), "  tag_%d: (%.2f, %.2f, %.2f) yaw=%.2f", id, m.x, m.y, m.z, m.yaw);
+      RCLCPP_INFO(get_logger(),
+        "  tag_%d: (%.2f, %.2f, %.2f) yaw=%.2f size=%.3f%s",
+        id, m.x, m.y, m.z, m.yaw,
+        m.size > 0.0 ? m.size : tag_size_,
+        m.size > 0.0 ? "" : " (default)");
     }
   }
 
@@ -296,9 +382,14 @@ private:
       auto it = registry_.find(det.id);
       if (it == registry_.end()) continue;
 
-      // Estimate tag pose in camera frame using solvePnP
-      // Tag corners in tag frame (centered, CCW from bottom-left)
-      double half = tag_size_ / 2.0;
+      // Estimate tag pose in camera frame using solvePnP.
+      // Tag corners in tag frame (centered, CCW from bottom-left).
+      // Sprint E / HIGH-04-04: per-tag `size` field in the registry
+      // overrides the global tag_size_ param. 0 → use global default
+      // (preserves pre-Sprint-E behavior when the registry omits size).
+      const double tag_side =
+          it->second.size > 0.0 ? it->second.size : tag_size_;
+      const double half = tag_side / 2.0;
       std::vector<cv::Point3d> obj_pts = {
         {-half, -half, 0}, { half, -half, 0},
         { half,  half, 0}, {-half,  half, 0}
