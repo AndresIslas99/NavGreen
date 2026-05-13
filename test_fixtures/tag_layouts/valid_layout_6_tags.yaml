@@ -1,0 +1,64 @@
+# Sub-fase 1.2 Test 1.1 fixture — valid layout, 6 tags
+# Test goal: import succeeds, preview shows 6 rows, Apply succeeds.
+
+metadata:
+  greenhouse_name: "Test-Greenhouse"
+  schema_version: 1
+  notes: "Sub-fase 1.2 Test 1.1 fixture"
+
+defaults:
+  family: tag36h11
+  size: 0.20
+
+tags:
+  - id: 99
+    role: charging
+    label: charging_dock
+    pose:
+      x: 0.0
+      y: -2.5
+      z: 0.10
+      yaw_deg: 0.0
+
+  - id: 100
+    role: rail_entry
+    rail_id: rail_1_north
+    pose:
+      x: 1.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: 90.0
+
+  - id: 101
+    role: rail_entry
+    rail_id: rail_2_north
+    pose:
+      x: 3.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: 90.0
+
+  - id: 102
+    role: rail_entry
+    rail_id: rail_3_north
+    pose:
+      x: 5.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: 90.0
+
+  - id: 150
+    role: central_aisle_beacon
+    pose:
+      x: 1.0
+      y: 0.0
+      z: 1.20
+      yaw_deg: 0.0
+
+  - id: 151
+    role: central_aisle_beacon
+    pose:
+      x: 3.0
+      y: 0.0
+      z: 1.20
+      yaw_deg: 0.0

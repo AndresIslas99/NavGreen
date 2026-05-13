@@ -117,6 +117,17 @@ export interface AppState {
   lastVslamTime: number;
   lastMarkerPoseTime: number;
   lastSafetyStatusTime: number;
+  // Sub-fase 1.2 — Tag Layout Loader probe state. Holds the latest
+  // AprilTag detection pose in map frame for the Robot Probe modal.
+  // Populated by the joint subscriber to /agv/marker_pose +
+  // /agv/marker_raw_detected. updated=0 means "no detection yet".
+  probeState: {
+    tag_id: number;             // hardware id of the latest detected tag
+    decision_margin: number;    // 0-100 (or 0 if unknown)
+    range_m: number;            // distance from camera, computed from pose
+    pose_in_map: { x: number; y: number; z: number; yaw_rad: number };
+    updated: number;            // wall-clock seconds
+  };
 }
 
 export interface RosBridge {

@@ -1,0 +1,16 @@
+# Sub-fase 1.2 Test 1.4 fixture — invalid: yaw_deg = 400 (out of [-180, 180])
+# Expected: validate rejects with "yaw_deg must be in [-180, 180]"
+
+defaults:
+  family: tag36h11
+  size: 0.20
+
+tags:
+  - id: 100
+    role: rail_entry
+    rail_id: rail_1_north
+    pose:
+      x: 1.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: 400.0

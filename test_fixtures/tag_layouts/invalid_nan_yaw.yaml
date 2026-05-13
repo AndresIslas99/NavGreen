@@ -1,0 +1,16 @@
+# Sub-fase 1.2 Test 1.2 fixture — invalid: yaw_deg is .nan (YAML literal for NaN)
+# Expected: validate rejects with "yaw_deg must be a finite number"
+
+defaults:
+  family: tag36h11
+  size: 0.20
+
+tags:
+  - id: 100
+    role: rail_entry
+    rail_id: rail_1_north
+    pose:
+      x: 1.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: .nan
