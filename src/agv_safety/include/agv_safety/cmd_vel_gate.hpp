@@ -30,6 +30,16 @@ class CmdVelGateNode : public rclcpp::Node {
   void on_hardware_estop(const std_msgs::msg::Bool& msg);
   void on_safety_timeout();
 
+  // Fail-CLOSED defaults: until the first SafetyStatus arrives, every
+  // cmd_vel input is gated to zero. apply_gate() reads safety_ok_ on
+  // every callback. The on_safety_timeout watchdog explicitly does
+  // NOT fire while last_safety_msg_ is unset (gate.cpp:95) — so the
+  // startup window is "always zero" rather than "always zero after a
+  // short grace". Verified 2026-05-13 (Sprint D, HIGH-09-04).
+  // Distinction: GateInputs::safety_ok defaults to true (permissive)
+  // because it is only used by the pure-logic unit tests where the
+  // tester explicitly sets safety_ok=false to exercise the
+  // zero-output branch. The DRIVING member is the one below.
   bool safety_ok_{false};
   bool hardware_estop_{false};
   rclcpp::Time last_safety_msg_{0, 0, RCL_ROS_TIME};
