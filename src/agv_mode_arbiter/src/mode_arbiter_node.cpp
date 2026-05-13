@@ -202,8 +202,16 @@ class ModeArbiterNode : public rclcpp::Node {
           latest_inputs_.safety_stop =
               (msg->action_type == nav2_msgs::msg::CollisionMonitorState::STOP);
         });
+    // QoS — transient_local so we receive the operator's last-published
+    // mode even when this arbiter starts AFTER the dashboard backend.
+    // Sub-fase 1.1 followup (2026-05-13) split agv-dashboard.service from
+    // agv.service; their startup order is non-deterministic. With volatile
+    // QoS on both sides, the backend's boot-seed publish was being lost
+    // when the arbiter started later, leaving operator_mode at the
+    // default 'nav' and the joystick clobbered by the arbiter's 20 Hz
+    // zero-Twist stream. transient_local on both sides closes the race.
     sub_operator_ = create_subscription<std_msgs::msg::String>(
-        operator_topic, rclcpp::QoS{10},
+        operator_topic, rclcpp::QoS(1).transient_local().reliable(),
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
           latest_inputs_.operator_mode = msg->data;
         });
