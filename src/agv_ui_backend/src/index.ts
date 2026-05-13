@@ -77,6 +77,11 @@ if (!fs.existsSync(MISSIONS_FILE)) fs.writeFileSync(MISSIONS_FILE, '[]');
 const eventLog = new EventLog(DATA_DIR);
 // scanAccumulator removed — live map pipeline is now direct rclnodejs subscription
 const apriltagManager = new AprilTagManager(DATA_DIR);
+// Sub-fase 1.2: copy the bundled sample layout YAML to
+// ${AGV_DATA_DIR}/tags/examples/ so /api/tags/layout/example always
+// returns the canonical sample regardless of when the deployment was
+// installed. Idempotent.
+apriltagManager.installExampleAtBoot();
 const telemetryStore = new TelemetryStore(DATA_DIR, parseInt(process.env.AGV_RETENTION_DAYS || '30'));
 const authManager = new AuthManager(DATA_DIR);
 
@@ -144,6 +149,13 @@ const state: AppState = {
   lastVslamTime: 0,
   lastMarkerPoseTime: 0,
   lastSafetyStatusTime: 0,
+  probeState: {
+    tag_id: 0,
+    decision_margin: 0,
+    range_m: 0,
+    pose_in_map: { x: 0, y: 0, z: 0, yaw_rad: 0 },
+    updated: 0,
+  },
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -942,9 +954,45 @@ async function main() {
     node.createSubscription('nav_msgs/msg/Odometry', '/visual_slam/tracking/odometry', () => {
       state.lastVslamTime = Date.now() / 1000;
     });
+    // /agv/marker_pose carries the marker-corrected robot pose; the
+    // probe modal (Sub-fase 1.2) needs the tag's OWN pose in map frame.
+    // Until marker_correction publishes that explicitly, we approximate:
+    // the pose published HERE is the robot pose computed from the tag,
+    // so the tag's map-frame pose is the robot pose + base→tag transform.
+    // We don't have that transform decoded here, so the probe falls back
+    // to using the robot's current pose as the tag pose snapshot — good
+    // enough for the in-situ workflow where the operator drives directly
+    // in front of the tag (range ~30-50 cm). The future improvement is
+    // to publish a dedicated /agv/marker_pose_world topic from
+    // marker_correction with the tag's map-frame pose explicitly.
     node.createSubscription('geometry_msgs/msg/PoseWithCovarianceStamped',
-      `/${NAMESPACE}/marker_pose`, () => {
+      `/${NAMESPACE}/marker_pose`, (msg: any) => {
       state.lastMarkerPoseTime = Date.now() / 1000;
+      const p = msg.pose.pose;
+      state.probeState = {
+        tag_id: state.probeState.tag_id,           // keep the last raw-detected id
+        decision_margin: 0,                         // not in this topic
+        range_m: 0,                                 // not in this topic
+        pose_in_map: {
+          x: Math.round(p.position.x * 1e4) / 1e4,
+          y: Math.round(p.position.y * 1e4) / 1e4,
+          z: Math.round(p.position.z * 1e4) / 1e4,
+          yaw_rad: Math.round(yawFromQuat(p.orientation) * 1e4) / 1e4,
+        },
+        updated: Date.now() / 1000,
+      };
+    });
+    // /agv/marker_raw_detected publishes a String "tag_<id>" for every
+    // tag the apriltag library sees, before any registry filtering.
+    // We parse the id out and stamp probeState.tag_id so the probe
+    // modal knows WHICH tag is currently visible.
+    node.createSubscription('std_msgs/msg/String',
+      `/${NAMESPACE}/marker_raw_detected`, (msg: any) => {
+      const m = /tag_(\d+)/.exec(String(msg?.data ?? ''));
+      if (m) {
+        const id = parseInt(m[1], 10);
+        state.probeState = { ...state.probeState, tag_id: id, updated: Date.now() / 1000 };
+      }
     });
     // /agv/safety/status uses agv_interfaces/msg/SafetyStatus. The IDL
     // is registered by the rclnodejs generator at init time but isn't in

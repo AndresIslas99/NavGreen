@@ -1,0 +1,25 @@
+# Sub-fase 1.2 Test 1.3 fixture — invalid: two entries with id=100
+# Expected: validate rejects with "duplicate id 100"
+
+defaults:
+  family: tag36h11
+  size: 0.20
+
+tags:
+  - id: 100
+    role: rail_entry
+    rail_id: rail_1_north
+    pose:
+      x: 1.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: 90.0
+
+  - id: 100      # duplicate — should fail
+    role: rail_entry
+    rail_id: rail_2_north
+    pose:
+      x: 3.0
+      y: 1.5
+      z: 0.10
+      yaw_deg: 90.0
