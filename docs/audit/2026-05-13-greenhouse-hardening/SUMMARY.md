@@ -703,3 +703,71 @@ wizard work still pending.
 | HIGH | 12 | ~11 (most need hardware or design call) |
 | MEDIUM | 12 | ~17 (mostly Sprint E perception + UX) |
 | LOW / NIT | 0 | ~6 |
+
+## Section 0 closure (2026-05-13)
+
+After Sprint E.lite, the operator requested an empirical pre-Fase-1
+verification of every audit finding marked "closed". This caught one
+regression of the original 2026-04-13 audit bug class (a third
+occurrence in `agv_rail_driver`, closed inline) and re-framed the
+remaining open CRITICAL.
+
+### Findings re-classified after Section 0
+
+- **CRITICAL-02-02 (geometry SSOT)** — **CLOSED.** The audit's original
+  hypothesis ("the 1.25× factor between scaffold 0.0781 and geometric
+  0.0625 is an ODrive NVRAM bug") was empirically disproven on
+  hardware: NVRAM dump shows stock M8325s values (pole_pairs=20,
+  inc_encoder0.cpr=8192, no internal scale or gearing); manual wheel
+  rotation confirms gearbox is 10:1 to within 1.6%; diameter is
+  vernier-confirmed 125 mm. The 0.0781 scaffold was historical
+  compensation for now-fixed mechanical issues. SSOT-revert sprint
+  (commit `e6804e8`) flipped the values to geometric truth and
+  rescaled HAL accel/decel to preserve real m/s² parity. Verifier
+  WARNs cleared.
+- **CRITICAL-11-A-01 (mode_arbiter type)** — **CLOSED-VERIFIED**
+  end-to-end via synthetic STOP injection on the live stack.
+- **CRITICAL-11-C-01 (auth defaults)** — **CLOSED-VERIFIED** end-to-end
+  via forced-change modal exercised on this Jetson.
+- **HIGH-04-09 (ekf yaw absolute fight)** — still open by design;
+  baseline +2.4° yaw jump on stationary USB-reboot scenario captured
+  for the future fix.
+- **HIGH-07-02 (smoother vs HAL accel)** — **CLOSED-VERIFIED** via
+  ADR-0002. The audit misread defense-in-depth as drift.
+- **HIGH-04-01 (factor_graph), HIGH-11-B-01 (waypoint_manager)** —
+  **CLOSED-VERIFIED** via `ros2 node list` confirming absence under
+  default args + new `verify_no_waypoint_manager.sh` BLOCKING.
+
+### New findings surfaced during Section 0
+
+- **G4** — `agv_rail_driver` was carrying the **same root-cause class**
+  as the 2026-04-13 audit bug #1 and as CRITICAL-11-A-01:
+  `/agv/collision_monitor_state` subscriber declared
+  `std_msgs/msg/String` while Nav2 publishes
+  `nav2_msgs/msg/CollisionMonitorState`. DDS dropped every message
+  silently. **Third occurrence** of the same defect in one repository.
+  Closed inline in commit `08ac348`. Strongly motivates G1 (CI
+  type-matching verifier).
+- **G5** — Bilateral asymmetry in ODrive S1 NVRAM (vel_integrator_gain
+  LEFT=0.333 vs RIGHT=0.167, can.encoder_msg_rate_ms LEFT=10 vs
+  RIGHT=0). HIGH severity; deferred to Fase-1 firmware-write sprint.
+- **G6** — `joint_states` publishes motor-radian as wheel-radian
+  (no `/gear_ratio_` divide in the publisher). LOW severity, cosmetic.
+
+### Section 0 verifier baseline
+
+- `bash tools/verify_specs/all.sh`: 11 scripts, 0 blocking, **0 warnings**
+  (the 2 geometry WARNs cleared after the SSOT revert).
+
+### Cumulative status (Sprints A.5 + B + C + D + E.lite + Section 0)
+
+27 atomic commits landed across the audit cycle. Findings snapshot:
+
+| Severity | Closed | Remaining open |
+|---|---|---|
+| CRITICAL | 3 (02-02 NUMERICAL, 11-A-01, 11-C-01) | 1 (CR-00-01 .repos validation — awaits second machine) |
+| HIGH | 12 + G4 + G5 captured | ~10 + G5 needs firmware-write sprint |
+| MEDIUM | 12 | ~17 |
+| LOW / NIT | 0 + G6 captured | ~7 |
+
+All blocking failures resolved. Section 0 unblocks Fase 1.

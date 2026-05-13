@@ -103,10 +103,52 @@ The original audit hypothesis ("the 1.25× factor is firmware-side NVRAM mis-con
 - The audit's CRITICAL-02-02 framing — "firmware bug, do not change SSOT" — is now disproven. There is no firmware bug.
 - The empirically correct geometry is `wheel_radius=0.0625`, `track_width=0.735`, `gear_ratio=10.0`. Reverting the SSOT to those values is a separate Fase-1 sprint that requires controller re-tuning (slip thresholds, accel limits, caster compensation — all empirically derived under the inflated SSOT).
 
-### Action items (deferred to Fase 1, not blocking)
-- Plan a "SSOT-revert sprint" that flips `robot_geometry.yaml` to geometric truth and re-tunes downstream parameters that were empirically tuned against the inflated scaffold.
-- Update `verify_geometry_ssot.py` once the SSOT is reverted (the WARN lines will clear).
-- Update `robot_geometry.yaml` header comment (the "DO NOT change these values" warning is now misleading).
+### Action items — EXECUTED in this section (Sprint X)
+
+After F1 verdict landed, the operator chose Path X: do the SSOT
+revert sprint BEFORE Fase-1 panels, on the basis that building
+on the inflated SSOT would mean any later revert breaks every
+downstream parameter calibrated against it (slip thresholds,
+caster compensation, accel limits, Nav2 vx_max). Closed in commit
+`e6804e8`:
+
+- `robot_geometry.yaml`: `wheel_radius` 0.0781→0.0625, `track_width`
+  0.96→0.735, `left/right_wheel_y` 0.48→±0.3675. Header rewritten
+  (the "DO NOT change" warning is now disproven and misleading).
+- `odrive_params.yaml`: `max_wheel_accel` 0.5→0.625 turns/s²,
+  `max_wheel_decel` 1.5→1.875 turns/s². 1.25× rescale preserves
+  the same real linear m/s² (0.0245 m/s² accel) that the inflated
+  SSOT historically produced. Without the rescale, step response
+  would feel 20% sluggier without any caster-safety benefit.
+- ADR-0002 numeric table updated. Conclusion stands (HAL is the
+  binding constraint by design; smoother is loose).
+- `tools/verify_specs/all.sh`: **11 scripts, 0 blocking, 0 warnings**
+  (was 1 warning). First clean run in this audit cycle.
+
+Downstream behaviour after revert (verified at runtime):
+- `ros2 param get /agv/agv_odrive_node wheel_radius` → 0.0625 ✓
+- `ros2 param get /agv/agv_odrive_node track_width` → 0.735 ✓
+- `ros2 param get /agv/agv_odrive_node max_wheel_accel` → 0.625 ✓
+- `ros2 param get /agv/agv_odrive_node max_wheel_decel` → 1.875 ✓
+- `/agv/wheel_odom` continues publishing post-restart.
+- Empirical step-test re-validation pending operator re-arming
+  motors (post-restart they were left in IDLE).
+
+Effect on real-world behaviour:
+- `cmd_vel 0.25 m/s` now produces real 0.25 m/s (was 0.20 m/s under
+  the inflated SSOT). Nav2 vx_max cap now matches its engineering intent.
+- `/agv/odometry/local` distance reporting drops 1.25× per same
+  encoder count — distance reports are now veridical.
+- `vx_max=0.25` stopping distance grows from 2 cm → 3 cm. Still
+  well within the 20 cm stop_zone margin.
+- Nav2 footprint half-width (0.37) now matches SSOT track_width/2
+  (0.3675). URDF default 0.0625 also matches SSOT. Both
+  `verify_geometry_ssot` WARN lines cleared.
+
+### Updated verdict for F1
+
+`CLOSED-VERIFIED-AND-FIXED`. Numerical closure shipped. CRITICAL-02-02
+moves from "still open" to "fully closed" in the audit SUMMARY.
 
 ---
 
