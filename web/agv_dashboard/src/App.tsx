@@ -31,18 +31,35 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(false)
   const [username, setUsername] = useState('')
   const [userRole, setUserRole] = useState('')
+  // Sprint A.5 / HIGH-11-D-01: distinguish "backend reachable but auth
+  // disabled" from "backend unreachable". The previous catch handler
+  // logged the user in on any error — including a network failure that
+  // also implies an attacker could DoS only the auth endpoint and gain
+  // access. Fail closed instead: show a "Backend unreachable" banner
+  // with a manual Retry button.
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [retryToken, setRetryToken] = useState(0)
 
   useEffect(() => {
+    let alive = true
     api.getAuthStatus().then(s => {
+      if (!alive) return
+      setAuthError(null)
       setAuthRequired(s.enabled)
       if (!s.enabled) setLoggedIn(true)
       else if (api.getToken()) setLoggedIn(true) // has stored token
       setAuthChecked(true)
-    }).catch(() => {
-      setLoggedIn(true) // if endpoint fails, skip auth
+    }).catch((e) => {
+      if (!alive) return
+      setAuthError(
+        (e && (e.message || String(e))) ||
+        'Cannot reach the backend on this host. Check the robot is powered, ' +
+        'the network is up, and the dashboard URL points at the right port.'
+      )
       setAuthChecked(true)
     })
-  }, [])
+    return () => { alive = false }
+  }, [retryToken])
 
   const handleLogin = (user: string, role: string) => {
     setLoggedIn(true)
@@ -58,6 +75,33 @@ export default function App() {
   }
 
   if (!authChecked) return null
+
+  // Fail closed if /api/auth/status failed. The dashboard refuses to
+  // proceed until the operator either gets the backend back or
+  // explicitly retries. Previously this branch swallowed the error
+  // and granted operator-equivalent access.
+  if (authError) {
+    return (
+      <div className="login-page">
+        <div className="login-form" style={{ maxWidth: 480 }}>
+          <h2 className="login-title">Backend unreachable</h2>
+          <p style={{ opacity: 0.8, fontSize: 14, lineHeight: 1.4, marginBottom: 16 }}>
+            The dashboard could not contact the agv_ui_backend auth endpoint.
+            This may be a transient network issue, the backend being down,
+            or a misconfigured dashboard URL. The dashboard will not enter
+            an unauthenticated session.
+          </p>
+          <p style={{ opacity: 0.6, fontSize: 12, marginBottom: 16, wordBreak: 'break-word' }}>
+            {authError}
+          </p>
+          <button onClick={() => { setAuthError(null); setAuthChecked(false); setRetryToken(n => n + 1) }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (authRequired && !loggedIn) return <LoginPage onLogin={handleLogin} />
 
   return <Dashboard username={username} userRole={userRole} onLogout={handleLogout} />
