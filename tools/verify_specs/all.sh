@@ -18,6 +18,7 @@ BLOCKING=(
   "$DIR/verify_dev_only.py"
   "$DIR/verify_interfaces.py"
   "$DIR/verify_geometry_ssot.py"
+  "$DIR/verify_no_waypoint_manager.sh"
 )
 
 WARNING=(

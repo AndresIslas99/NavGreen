@@ -49,26 +49,66 @@ file as Sprint D follow-up.
 
 ## Step 2 — Authentication & first password set
 
-**State today**:
-- `src/agv_ui_backend/src/auth.ts:64` ships `enabled: false` by
-  default. The first connection logs in without prompting.
-- If the operator enables auth later via PUT, the hardcoded defaults
-  (`engineer / agv2026`, `operator / agv`) are written to
-  `${AGV_DATA_DIR}/users.json` (line 67-81).
-- There is no "set admin password on first connection" wizard.
-- `App.tsx:42` fails-open if `/api/auth/status` errors.
+**State after Sprint A.5 + Sprint E.lite (CRITICAL-11-C-01 / HIGH-11-D-01 closed)**:
 
-**Operator experience**: opens dashboard → fully privileged session
-appears immediately. No prompt to set a password. No indication that
-this is insecure.
+- `src/agv_ui_backend/src/auth.ts` defaults to `enabled: true`. The
+  first boot with no `users.json` on disk generates a random 16-char
+  admin password (~95 bits entropy), writes it to the file, and logs
+  it ONCE to the systemd journal:
 
-**Structural break**: the system **does not require** auth at
-first run. A non-trained operator never encounters the credential
-flow until — and unless — they happen to navigate to a user
-management screen and decide to enable auth.
+  ```
+  ═════════════════════════════════════════════════════
+    agv_ui_backend: FIRST BOOT — admin credentials generated.
+    username: admin
+    password: <random 16 chars>
+    Record this password NOW. It is logged only once.
+    Change at first login via the dashboard prompt.
+  ═════════════════════════════════════════════════════
+  ```
 
-**Linked findings**: `CRITICAL-11-C-01` (auth defaults), `HIGH-11-D-01`
-(fail-open).
+- The admin user is created with `must_change_password: true`. The
+  login endpoint returns that flag, the dashboard renders an in-place
+  "Set a new password" form, and the token is held in component state
+  until the change succeeds. Reloading the page does NOT bypass the
+  prompt (token isn't persisted until the change commits).
+
+- `App.tsx` fails CLOSED on `/api/auth/status` errors: the operator
+  sees "Backend unreachable" with a manual Retry button, never an
+  anonymous session.
+
+**Operator experience (new install)**: opens dashboard → "Set a new
+password" modal → enters a ≥8-char password → enters the dashboard.
+
+**Migration from legacy deployment** (a Jetson with the pre-fix
+`users.json` containing `enabled:false` and/or the legacy hashes for
+`engineer:agv2026` / `operator:agv`):
+
+```bash
+# 1. Stop the service so the file is quiescent.
+sudo systemctl stop agv.service
+
+# 2. Back up the existing users.json. Keep this file off-system; it
+#    holds the JWT secret and password hashes for the legacy accounts.
+cp /home/orza/agv_data/users.json /home/orza/agv_data/users.json.bak-$(date +%F)
+
+# 3. Delete the live file. The next service start will regenerate it.
+rm /home/orza/agv_data/users.json
+
+# 4. Restart.
+sudo systemctl start agv.service
+
+# 5. Grab the new random admin password from the journal (logged once):
+sudo journalctl -u agv.service --since "1 minute ago" | grep -A 5 "FIRST BOOT"
+
+# 6. Log in via the dashboard with admin / <random>; set a new password.
+```
+
+This rotates away from the legacy hardcoded credentials and forces a
+new password without re-creating the legacy users.
+
+**Linked findings**: `CRITICAL-11-C-01` (closed Sprint A.5 + E.lite),
+`HIGH-11-D-01` (closed Sprint A.5), `HIGH-11-C-02` (salted KDF —
+DEFERRED to Sprint future).
 
 ## Step 3 — Initial calibration
 

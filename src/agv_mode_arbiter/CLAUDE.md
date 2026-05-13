@@ -28,15 +28,18 @@ relays its Twist downstream and publishes the current mode.
   (geometry_msgs/Twist) — one of these is relayed.
 - `/agv/zone/state` (std_msgs/String) — from `agv_zone_detector`.
 - `/agv/rail_approach/state`, `/agv/rail_driver/state` (std_msgs/String).
-- `/agv/collision_monitor_state` (std_msgs/String) — Nav2 safety chain.
+- `/agv/collision_monitor_state` (nav2_msgs/CollisionMonitorState) — Nav2 safety chain.
+  Sprint A.5 / CRITICAL-11-A-01: subscriber was previously `std_msgs/String`,
+  silently dropped by DDS due to type mismatch. Now uses the proper Nav2 type
+  and compares `action_type` to `CollisionMonitorState::STOP` constant.
 - `/agv/mode/set` (std_msgs/String) — `nav | teleop | idle`.
 
 ## Invariantes
 
 - The FSM lives in `include/agv_mode_arbiter/mode_fsm.hpp` (header-only,
   ROS-free). 22 unit tests cover every valid transition.
-- Safety stop (`collision_monitor_state == "stop"`) overrides every state
-  → `BLOCKED_HANDOFF` with `source=NONE` (zero cmd_vel).
+- Safety stop (`CollisionMonitorState::action_type == STOP`) overrides every
+  state → `BLOCKED_HANDOFF` with `source=NONE` (zero cmd_vel).
 - Operator `idle` / `teleop` override the FSM before zone-based logic.
 - **RAIL_EXIT hard-lock**: once inside a rail (RAIL_DRIVE or RAIL_EXIT), the
   FSM never hands back to Nav2 until the robot is physically out of the
