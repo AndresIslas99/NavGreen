@@ -370,7 +370,66 @@ remains as a follow-up — procedure documented at
 | `200516b` | verify: enforce geometry SSOT structurally; WARN on numerical drift | new `verify_geometry_ssot.py` |
 | `fead755` | bringup: replace 4 hardcoded /home/orza paths | CR-00-03 closed |
 | `6d2ea72` | build: add agv_greenhouse.repos + NVRAM info log on odrive boot | CR-00-01 closed + MEDIUM-02-07 closed |
-| (this) | docs: bookkeeping (CLAUDE.md tables + this closure section) | — |
+| `5c72ac5` | docs: bookkeeping (CLAUDE.md tables + this closure section) | — |
+
+## Sprint A.5 closure (2026-05-13)
+
+4 atomic commits landed on `claude/amr-security-audit-gPtCd` closing
+the two Phase-11 CRITICALs and HIGH-11-A-02. Sprint A.5 was prioritised
+over Sprint B because (a) the mode_arbiter type mismatch silently
+broke the FSM's safety_stop awareness, and (b) the auth defaults made
+the robot driveable from any LAN device using the public-repo
+credentials.
+
+| Commit | Subject | Findings |
+|---|---|---|
+| `8d81517` | mode_arbiter: subscribe to CollisionMonitorState correct type | CRITICAL-11-A-01 closed + MEDIUM-11-A-04 closed |
+| `5d29df1` | mode_arbiter: per-source staleness timeout | HIGH-11-A-02 closed |
+| `dd4b6ec` | ui_backend: auth defaults safe, generate admin on first boot | CRITICAL-11-C-01 closed (backend side) |
+| `bd46e6b` | dashboard: fail-closed auth status check | HIGH-11-D-01 closed |
+
+### Findings status after Sprint A.5
+
+| ID | Status | Notes |
+|---|---|---|
+| CRITICAL-11-A-01 | **CLOSED** | Subscriber type fixed; STOP constant comparison replaces substring heuristic. |
+| HIGH-11-A-02 | **CLOSED** | Per-source 250 ms staleness gate; throttled WARN on stale relay. |
+| MEDIUM-11-A-04 | **CLOSED** | Closed by the same commit as CRITICAL-11-A-01 — substring trap removed. |
+| CRITICAL-11-C-01 | **CLOSED (backend)** | First-boot admin password + `must_change_password` flag + `POST /api/auth/change-password` route. Existing on-disk `users.json` preserved (dev workflows intact). |
+| HIGH-11-D-01 | **CLOSED** | "Backend unreachable" fail-closed screen with Retry button. |
+
+### HAZOP re-rating
+
+- **H-14 (untrained operator)**: was R=15 (P=5) with the public
+  credentials live. Now back to **R≤6**, contingent on the dev Jetson's
+  legacy `users.json` being cleaned up (engineer/agv2026, operator/agv
+  must be removed manually — the migration logic preserves existing
+  files intentionally, so the dev has to delete those entries).
+
+### Still open (NOT in Sprint A.5)
+
+- HIGH-11-C-02 (SHA-256 unsalted) — Sprint B.
+- HIGH-11-C-03 (JWT in WS URL query) — Sprint B.
+- HIGH-11-C-04 (HTTP without TLS) — Sprint B.
+- HIGH-11-A-03 (TELEOP carve-out for rail_approach) — Sprint B/C.
+- All Phase 11.B findings on `agv_waypoint_manager` — Sprint B (HIGH-11-B-01 proposes deletion).
+
+### Verifier baseline after Sprint A.5
+
+- `bash tools/verify_specs/all.sh`
+- 10 scripts, 0 blocking failures, 1 warning
+- `verify_geometry_ssot.py` still WARNs on the 0.0781↔0.0625
+  divergence (expected until CRITICAL-02-02 NVRAM dump lands).
+
+### Next operational step
+
+With Sprint A.5 closed, the highest-leverage hardware action is the
+ODrive NVRAM dump per
+[`docs/calibration/odrive_nvram_dump_procedure.md`](../../calibration/odrive_nvram_dump_procedure.md).
+30-minute procedure → identifies whether the 1.25× factor lives in
+`encoder.config.cpr` or `motor.config.pole_pairs` → 1-line YAML fix
+closes CRITICAL-02-02 numerically and flips `verify_geometry_ssot`
+from WARNING to OK.
 
 ### Findings status
 
