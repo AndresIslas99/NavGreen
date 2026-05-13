@@ -43,8 +43,8 @@ Publishes differential-drive wheel odometry at 50 Hz and converts `cmd_vel` to m
 | `invert_left` | `true` | Negate left motor direction |
 | `invert_right` | `false` | Negate right motor direction |
 | `left_scale` / `right_scale` | `1.0` | Per-wheel velocity trim |
-| `max_wheel_accel` | `0.5` | Acceleration rate limiter (turns/s²) |
-| `max_wheel_decel` | `1.5` | Deceleration rate limiter (turns/s²) — 3x faster than accel |
+| `max_wheel_accel` | `0.625` | Acceleration rate limiter (turns/s²). Was `0.5` before SSOT-revert sprint (2026-05-13); rescaled to preserve the empirical caster-safe real linear m/s² after `wheel_radius` reverted 0.0781→0.0625. |
+| `max_wheel_decel` | `1.875` | Deceleration rate limiter (turns/s²) — 3× faster than accel. Same rescale as `max_wheel_accel`. |
 | `zero_vel_epsilon` | `0.03` | Velocity deadband (turns/s) |
 | `min_effective_vel` | `0.0` | Stiction compensation minimum |
 | `stiction_torque_ff` | `0.03` | Torque feedforward (Nm) — compensates caster friction |

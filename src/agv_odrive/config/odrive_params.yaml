@@ -26,10 +26,19 @@
     zero_vel_epsilon: 0.03     # turns/s — below this, bypass all shaping and send exact zero
     min_effective_vel: 0.0     # turns/s — disabled; re-enable (e.g. 0.05) if stiction observed
     stiction_torque_ff: 0.03   # Nm — compensates caster wheel static friction
-    max_wheel_accel: 0.5       # turns/s² — gentler ramp reduces wheel slip on caster resistance
-                               #            HAL is the binding constraint (ADR-0002, F5);
+    # SSOT-revert sprint (2026-05-13): scaled up from 0.5 to 0.625 to
+    # preserve the empirical caster-safe real linear m/s² that this
+    # value encodes. The previous 0.5 was tuned against the inflated
+    # SSOT R=0.0781 and corresponded to 0.0245 m/s² real linear accel.
+    # After revert to R=0.0625, holding the same 0.5 turns/s² would
+    # drop real accel to 0.0196 m/s² (-20%), making step response feel
+    # sluggier without any safety benefit. The 0.625 figure restores
+    # the prior real-world feel: 0.625 × 2π × 0.0625 / 10 ≈ 0.0245 m/s².
+    max_wheel_accel: 0.625     # turns/s² — HAL is the binding constraint (ADR-0002, F5);
                                #            kept tighter than velocity_smoother on purpose.
-    max_wheel_decel: 1.5       # turns/s² — decel 3x faster than accel for responsive stopping
+    # Scaled proportionally with max_wheel_accel (same 1.25× factor) to
+    # keep the accel/decel asymmetry ratio (3×) constant.
+    max_wheel_decel: 1.875     # turns/s² — decel 3x faster than accel for responsive stopping
     # Caster wheel resistance compensation — inflates odometry covariance during
     # direction changes when caster wheels resist and then realign, corrupting
     # wheel encoder accuracy. The EKF then naturally shifts weight to IMU/VSLAM.
