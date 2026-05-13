@@ -22,7 +22,7 @@ import * as path from 'path';
 import type { AppDeps } from '../app_deps';
 import {
   evaluateAll, evaluateComponent, getComponents, getVerifiers,
-  recordEvent, readRecentEvents,
+  getRestartTargets, recordEvent, readRecentEvents,
 } from '../health_monitor';
 
 const WS_ROOT = path.resolve(__dirname, '../../../..');
@@ -100,6 +100,70 @@ export function register(app: Express, deps: AppDeps): void {
         exit_code: exitCode,
         duration_ms: durationMs,
         result,
+        stdout: stdout || '',
+        stderr: stderr || '',
+      });
+    });
+  });
+
+  // Restart a component (only if its `restart` field names a target in
+  // `restart_targets`). Caller must send {"confirmation":"yes"} in the body
+  // to acknowledge the destructive nature. Engineer role required.
+  app.post('/api/health/components/:id/restart', (req, res) => {
+    if (!requireAuth(deps, req, res, 'engineer')) return;
+    const comp = getComponents().find(c => c.id === req.params.id);
+    if (!comp) {
+      res.status(404).json({ error: `unknown component '${req.params.id}'` });
+      return;
+    }
+    if (!comp.restart) {
+      res.status(400).json({
+        error: 'component is not restartable',
+        help: (comp as any).restart_help ?? null,
+      });
+      return;
+    }
+    const targets = getRestartTargets();
+    const target = targets[comp.restart];
+    if (!target) {
+      res.status(500).json({ error: `restart target '${comp.restart}' not declared in restart_targets` });
+      return;
+    }
+    if ((req.body || {}).confirmation !== 'yes') {
+      res.status(400).json({
+        error: 'restart requires explicit confirmation',
+        hint: 'POST {"confirmation":"yes"}',
+        target: target.description,
+        self_terminating: !!target.self_terminating,
+      });
+      return;
+    }
+    recordEvent(deps.config.dataDir, {
+      ts: Date.now() / 1000,
+      type: 'verifier_run',                    // reuse the JSONL channel
+      id: comp.id,
+      payload: { action: 'restart', target: comp.restart },
+    });
+    // If the target is self-terminating (e.g., restart agv.service),
+    // respond 202 FIRST, then exec — otherwise the backend dies before
+    // the response flushes.
+    if (target.self_terminating) {
+      res.status(202).json({
+        accepted: true,
+        target: target.description,
+        note: 'Backend will terminate; reconnect in ~15s.',
+      });
+      // Give the response a moment to flush before exec.
+      setTimeout(() => {
+        execFile(target.command, target.args, { timeout: 10_000 }, () => { /* unreachable */ });
+      }, 200);
+      return;
+    }
+    execFile(target.command, target.args, { timeout: 30_000 }, (err, stdout, stderr) => {
+      const exitCode = err && typeof (err as any).code === 'number' ? (err as any).code : (err ? 1 : 0);
+      res.json({
+        exit_code: exitCode,
+        target: target.description,
         stdout: stdout || '',
         stderr: stderr || '',
       });

@@ -33,7 +33,7 @@ import type { AppState } from './app_deps';
 
 export type ComponentStatus = 'green' | 'amber' | 'red' | 'idle' | 'unknown';
 
-interface ComponentDef {
+export interface ComponentDef {
   id: string;
   name: string;
   type: 'sensor' | 'ros_node' | 'systemd' | 'network' | 'process';
@@ -44,6 +44,15 @@ interface ComponentDef {
   deadline_ms?: number;
   unit?: string;
   interface?: string;
+  restart?: string | null;
+  restart_help?: string;
+}
+
+export interface RestartTarget {
+  command: string;
+  args: string[];
+  description: string;
+  self_terminating?: boolean;
 }
 
 interface VerifierDef {
@@ -57,6 +66,7 @@ interface ConfigSchema {
   schema_version: number;
   components: ComponentDef[];
   verifiers: VerifierDef[];
+  restart_targets?: Record<string, RestartTarget>;
 }
 
 export interface ComponentSample {
@@ -95,6 +105,10 @@ export function getVerifiers(): VerifierDef[] {
   return loadConfig().verifiers;
 }
 
+export function getRestartTargets(): Record<string, RestartTarget> {
+  return loadConfig().restart_targets ?? {};
+}
+
 // ── State-derived freshness tracker ──────────────────────────────────────
 //
 // The backend already subscribes to a number of AGV topics and stamps
@@ -125,16 +139,17 @@ function topicLastSeenMsAgo(state: AppState, topic: string): number | null {
     case '/agv/localization/state':
       return state.localization.updated > 0
         ? (nowS - state.localization.updated) * 1000 : null;
-    case '/agv/odometry/local':
-    case '/agv/odometry/global':
     case '/agv/scan':
+      return state.lastScanTime > 0 ? (nowS - state.lastScanTime) * 1000 : null;
+    case '/agv/odometry/global':
+      return state.lastGlobalOdomTime > 0 ? (nowS - state.lastGlobalOdomTime) * 1000 : null;
+    case '/agv/odometry/local':
     case '/visual_slam/tracking/odometry':
     case '/agv/marker_pose':
     case '/agv/safety/status':
-      // These are subscribed by other parts of the backend but the
-      // timestamps aren't currently exported on AppState. Treat as
-      // unknown rather than fabricating a state. Add to AppState when
-      // closing this gap (future_work).
+      // Not subscribed by the backend (the panel reports the topic only
+      // via the ROS layer, which the backend doesn't currently tap).
+      // Add a subscriber + state timestamp when closing this gap.
       return null;
     default:
       return null;

@@ -138,6 +138,8 @@ const state: AppState = {
   collisionMonitor: { action: 'IDLE', polygon: '', updated: 0 },
   localization: { action: 'UNKNOWN', detail: '', map: '', updated: 0 },
   currentMapName: null,
+  lastScanTime: 0,
+  lastGlobalOdomTime: 0,
   health: {
     drive: { status: 'unknown', detail: 'waiting', updated: 0 },
     imu: { status: 'unknown', detail: 'waiting', updated: 0 },
@@ -712,6 +714,7 @@ async function main() {
         y: Math.round(p.position.y * 1e4) / 1e4,
         theta: Math.round(yawFromQuat(p.orientation) * 1e4) / 1e4,
       };
+      state.lastGlobalOdomTime = Date.now() / 1000;
     });
 
     node.createSubscription('std_msgs/msg/String', '/slam/quality', (msg: any) => {
@@ -797,6 +800,9 @@ async function main() {
     const SCAN_THROTTLE_MS = 200;
     node.createSubscription('sensor_msgs/msg/LaserScan', `/${NAMESPACE}/scan`, (msg: any) => {
       const now = Date.now();
+      // Stamp every message for the health monitor (NOT throttled — the
+      // freshness check needs the true publisher rate).
+      state.lastScanTime = now / 1000;
       if (now - lastScanProcessed < SCAN_THROTTLE_MS) return;
       lastScanProcessed = now;
 
