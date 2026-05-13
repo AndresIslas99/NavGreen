@@ -68,6 +68,7 @@ authoritative DAG with preconditions and failure modes. Summary:
 | `hil_mode` | `false` | agv_full (skips ZED+cuVSLAM, ODrive, IMU filter, pointcloud_to_laserscan; drops collision_monitor pointcloud_source) |
 | `enable_foxglove_bridge` | `false` | agv_full (Sprint 1 Fase A4 — diagnostic ws on :8765; intentionally distinct from agv_slam's `enable_foxglove` to avoid scope mutation by IncludeLaunchDescription in Humble) |
 | `enable_factor_graph` | `false` | agv_full (Sprint B / HIGH-04-01 — gated to save 10–20% CPU; turn on for cutover-validation runs only) |
+| `enable_event_recording` | `false` | agv_full (Sprint D / MEDIUM-10-04 — runs `ros2 bag record --snapshot-mode` for safety-critical topics. Trigger a dump via `ros2 service call /rosbag2_recorder/snapshot std_srvs/srv/Trigger`. Output: `${AGV_DATA_DIR}/bags/`. Uses ~32 MB cache while running.) |
 
 ## TF Ownership (Critical)
 

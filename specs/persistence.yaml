@@ -282,6 +282,37 @@ config_artifacts:
 # the sim host, outside this workspace's writable surface. Declared here for
 # traceability, not for the verifier's code_ref check.
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Event-triggered recording artifacts (Sprint D, MEDIUM-10-04)
+# ─────────────────────────────────────────────────────────────────────────────
+# When agv_full.launch.py is invoked with enable_event_recording:=true, an
+# ExecuteProcess runs `ros2 bag record --snapshot-mode --storage mcap` for
+# the safety-critical topic list. Flushes a bag to disk only when its
+# /rosbag2_recorder/snapshot service is called (manual or, in a future
+# commit, by the backend on a /agv/safety/status transition).
+
+recording_artifacts:
+
+  rosbag2_snapshot:
+    path_pattern: "${AGV_DATA_DIR}/bags/snapshot_<rosbag2_timestamp>"
+    format: "MCAP (rosbag2 storage plugin)"
+    writer:
+      package: "agv_bringup (ExecuteProcess in agv_full.launch.py)"
+      code_ref: "src/agv_bringup/launch/agv_full.launch.py"
+      mechanism: "ros2 bag record --snapshot-mode; flushed by /rosbag2_recorder/snapshot service call"
+    readers:
+      - package: "operator / engineer (Foxglove Studio replay)"
+        role: "post-mortem analysis of field events"
+    lifecycle: "persistent until manual cleanup (no rotation policy in Sprint D — tracked for Sprint D follow-up)"
+    required: false
+    note: |
+      enable_event_recording defaults to false. The recorder uses ~32 MB
+      of memory continuously. Trigger a dump via:
+        ros2 service call /rosbag2_recorder/snapshot std_srvs/srv/Trigger
+
+      MEDIUM-10-04 ships the recorder; auto-trigger from the backend on
+      /agv/safety/status transitions is a follow-up.
+
 hil_artifacts:
 
   brain_side_precision_report:

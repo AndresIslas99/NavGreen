@@ -31,7 +31,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, IncludeLaunchDescription, TimerAction,
+    DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, TimerAction,
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -125,6 +125,29 @@ def generate_launch_description():
         # comparator runs (`enable_factor_graph:=true`).
         DeclareLaunchArgument('enable_factor_graph', default_value='false',
                               description='Run agv_factor_graph (parallel iSAM2 estimator). Off by default; turn on per-session for cutover validation runs.'),
+        # Sprint D (2026-05-13 audit, MEDIUM-10-04). Event-triggered
+        # rosbag2 in snapshot mode: ros2 bag record keeps messages
+        # in a memory ring buffer and only writes to disk when its
+        # ~snapshot service is called. A future commit will wire the
+        # backend to call the service on /agv/safety/status.safety_ok
+        # transitions to false, on nav-goal failure, and on operator
+        # request via dashboard. Topics covered:
+        #   cmd_vel chain (cmd_vel, cmd_vel_nav, cmd_vel_approach,
+        #   cmd_vel_rail, cmd_vel_smoothed, cmd_vel_collision_safe,
+        #   cmd_vel_safe) + wheel_odom + odometry/global + scan +
+        #   marker_pose + localization/state + safety/status +
+        #   mode/state.
+        # Default false because the recorder uses memory continuously
+        # (~32 MB cache) — enable per-session when investigating field
+        # incidents or running endurance tests.
+        DeclareLaunchArgument(
+            'enable_event_recording', default_value='false',
+            description=(
+                'Run ros2 bag record in snapshot mode for safety-critical '
+                'topics. Output goes to ${AGV_DATA_DIR}/bags/. Trigger a '
+                'dump via `ros2 service call /rosbag2_recorder/snapshot '
+                'std_srvs/srv/Trigger`. See docs/audit/2026-05-13-greenhouse-'
+                'hardening/10_comms.md MEDIUM-10-04.')),
         DeclareLaunchArgument('slam_map_file', default_value='',
                               description='Path to serialized SLAM Toolbox map (without extension)'),
         DeclareLaunchArgument(
@@ -742,6 +765,55 @@ def generate_launch_description():
                     }],
                     output='log',
                     condition=IfCondition(enable_behaviors),
+                ),
+            ],
+        ),
+
+        # ── Event-triggered rosbag2 (Sprint D, MEDIUM-10-04) ─────────────
+        # ros2 bag record in snapshot mode keeps a ~32 MB in-memory ring
+        # of the listed topics; flushes to disk only when its
+        # /rosbag2_recorder/snapshot service is called. Output bags
+        # land in ${AGV_DATA_DIR}/bags/ with an MCAP storage backend
+        # (compatible with Foxglove Studio). t=8.5 s — after the
+        # backend's status topic is established and after Nav2 has
+        # advertised its outputs.
+        TimerAction(
+            period=8.5,
+            actions=[
+                ExecuteProcess(
+                    cmd=[
+                        'ros2', 'bag', 'record',
+                        '--snapshot-mode',
+                        '--storage', 'mcap',
+                        '--max-cache-size', '33554432',  # 32 MiB ring buffer
+                        '--output',
+                        os.path.join(data_dir, 'bags', 'snapshot'),
+                        # Cmd_vel chain
+                        '/agv/cmd_vel',
+                        '/agv/cmd_vel_nav',
+                        '/agv/cmd_vel_approach',
+                        '/agv/cmd_vel_rail',
+                        '/agv/cmd_vel_smoothed',
+                        '/agv/cmd_vel_collision_safe',
+                        '/agv/cmd_vel_safe',
+                        # State / odom
+                        '/agv/wheel_odom',
+                        '/agv/odometry/global',
+                        '/agv/odometry/local',
+                        '/agv/scan',
+                        '/agv/marker_pose',
+                        '/agv/localization/state',
+                        # Safety + arbiter
+                        '/agv/safety/status',
+                        '/agv/collision_monitor_state',
+                        '/agv/mode/state',
+                        '/agv/mode/set',
+                        '/agv/e_stop',
+                        # ROS framework
+                        '/rosout',
+                    ],
+                    output='log',
+                    condition=IfCondition(LaunchConfiguration('enable_event_recording')),
                 ),
             ],
         ),
