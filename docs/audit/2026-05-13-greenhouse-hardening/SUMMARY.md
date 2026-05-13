@@ -555,3 +555,67 @@ Sprint B (architectural cleanup + WiFi deadman + hardware E-stop doc).
 - `bash tools/verify_specs/all.sh`: 10 scripts, 0 blocking, 1 warning
   (geometry SSOT drift, expected pending NVRAM dump).
 - `colcon build` clean across modified packages (-Werror enforced).
+
+## Sprint D closure (2026-05-13)
+
+4 atomic commits closing the observability + defensive-cleanup cluster.
+
+| Commit | Subject | Findings |
+|---|---|---|
+| `d59943a` | safety: document cmd_vel_gate fail-closed default | **HIGH-09-04 closed** (verification + doc) |
+| `6f30aa0` | safety: per-topic QoS in safety_supervisor | **HIGH-09-02 closed** |
+| `57a7394` | bringup: event-triggered rosbag2 in snapshot mode | **MEDIUM-10-04 closed** (recorder scaffolded; auto-trigger from backend = follow-up) |
+| `8487994` | docs(adr): 0001 diagnostics strategy | **MEDIUM-10-01 closed** (ADR documents the custom-topic choice) |
+
+### Findings status after Sprint D
+
+| ID | Status | Notes |
+|---|---|---|
+| HIGH-09-04 | **CLOSED** | Verified `safety_ok_{false}` default in cmd_vel_gate.hpp; comment + CLAUDE.md document the fail-closed startup behavior. |
+| HIGH-09-02 | **CLOSED** | safety_supervisor accepts `monitored_qos` per-topic; current config explicitly lists best_effort for all three topics so a future RELIABLE flip surfaces in a PR diff. |
+| MEDIUM-10-04 | **CLOSED (scaffold)** | `enable_event_recording` launch arg + `ros2 bag record --snapshot-mode` for safety-critical topics. Operator triggers a dump via service call. Auto-trigger from backend on safety events = future follow-up. |
+| MEDIUM-10-01 | **CLOSED (ADR)** | ADR 0001 documents the decision to keep custom typed topics; engineer-only `/diagnostics` retrofit not pursued. |
+
+### Still open after Sprint D
+
+- HIGH-11-A-03 (TELEOP carve-out for rail_approach) — needs operator
+  workflow design call before code change.
+- HIGH-04-02 / 04-03 / 04-04 (marker_correction hardening) — Sprint E
+  candidate; 04-02 (incidence filter) is the smallest.
+- HIGH-04-09 (ekf_local yaw absolute fight) — needs HIL regression
+  test before merge; defer until hardware sessions are systematic.
+- HIGH-07-01 (MPPI critic normalization) — needs HIL p95 test loop.
+- HIGH-07-02 (smoother ↔ HAL accel mismatch) — needs hardware
+  measurement.
+- HIGH-11-B-02 (waypoint_manager deadlock risk) — closed by deletion
+  of the package once Sprint B's removal-from-launch has soaked.
+- HIGH-11-C-02/03/04 (salted KDF, JWT off WS URL, TLS) — security
+  hardening; needs deployment-network design call.
+- HIGH-11-D-04 (no goal-click confirmation) — Sprint E UX.
+- MEDIUM-06-* Phase 6 perception findings — Sprint E (depth pipeline
+  refactor).
+- Sprint E proper (calibration wizards XL) — still gated by Sprint A
+  NVRAM dump; meaningful only after a first field test informs which
+  wizards matter.
+
+### Sprint D verifier baseline
+
+- `bash tools/verify_specs/all.sh`: 10 scripts, 0 blocking, 1 warning
+  (geometry SSOT drift, expected pending NVRAM dump).
+- `colcon build` clean across modified packages (-Werror enforced).
+- `colcon test agv_safety`: 3/3 pass.
+
+### Cumulative status (Sprints A.5 + B + C + D)
+
+19 atomic commits landed in this session. Findings status snapshot:
+
+| Severity | Closed in session | Remaining open |
+|---|---|---|
+| CRITICAL | 2 (11-A-01, 11-C-01 backend) | 2 (CR-00-01 .repos validation, CRITICAL-02-02 numerical NVRAM fix — both await hardware) |
+| HIGH | 10 | ~13 (most need hardware or design call) |
+| MEDIUM | 11 | ~18 (mostly Sprint E perception + UX) |
+| LOW / NIT | 0 | ~6 |
+
+The two remaining CRITICALs are hardware-gated and have explicit
+procedures ready (NVRAM dump + .repos verification). Everything that
+can be closed at the desk in this audit cycle is closed.
