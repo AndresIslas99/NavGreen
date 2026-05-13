@@ -4,6 +4,10 @@
 #           → collision_monitor (cmd_vel_safe) → ODrive CAN node
 #
 # Runs at 50Hz (higher than 20Hz controller) for smooth interpolation.
+#
+# Asymmetry with the HAL is deliberate (ADR-0002, Section-0 F5,
+# HIGH-07-02). The HAL is roughly 2× tighter; the smoother stays loose
+# so it never becomes the binding constraint. See docs/adr/0002-accel-asymmetry.md.
 
 /**/velocity_smoother:
   ros__parameters:

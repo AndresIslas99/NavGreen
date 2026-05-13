@@ -27,6 +27,8 @@
     min_effective_vel: 0.0     # turns/s — disabled; re-enable (e.g. 0.05) if stiction observed
     stiction_torque_ff: 0.03   # Nm — compensates caster wheel static friction
     max_wheel_accel: 0.5       # turns/s² — gentler ramp reduces wheel slip on caster resistance
+                               #            HAL is the binding constraint (ADR-0002, F5);
+                               #            kept tighter than velocity_smoother on purpose.
     max_wheel_decel: 1.5       # turns/s² — decel 3x faster than accel for responsive stopping
     # Caster wheel resistance compensation — inflates odometry covariance during
     # direction changes when caster wheels resist and then realign, corrupting
