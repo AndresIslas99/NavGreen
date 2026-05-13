@@ -464,3 +464,46 @@ Execute `docs/calibration/odrive_nvram_dump_procedure.md`:
    should drop from RESULT: WARNING to RESULT: OK.
 
 One PR. One commit. CRITICAL-02-02 closes.
+
+## Sprint B closure (2026-05-13)
+
+4 atomic commits landed on `claude/amr-security-audit-gPtCd` closing
+Sprint B (architectural cleanup + WiFi deadman + hardware E-stop doc).
+
+| Commit | Subject | Findings |
+|---|---|---|
+| `35bb850` | bringup: remove agv_waypoint_manager from production launch | **HIGH-11-B-01 closed**. CR-00-06 active risk → latent only (no production caller). |
+| `b4cc2b2` | bringup: gate factor_graph behind enable_factor_graph | **HIGH-04-01 closed** + **MEDIUM-04-05 closed**. Saves 10–20 % CPU in production runs. |
+| `c7a659f` | docs(safety): hardware E-stop wiring procedure option 1 | **HIGH-09-01 option 1 closed** (doc ready; field-install pending). |
+| `1c91c27` | ui_backend: WS heartbeat + mission-pause-on-disconnect | **MEDIUM-11-C-06 closed** + **HAZOP H-07 R=12 closed**. |
+
+### Findings status after Sprint B
+
+| ID | Status | Notes |
+|---|---|---|
+| HIGH-11-B-01 | **CLOSED** | waypoint_manager removed from production launch. Specs updated. Package buildable for CLI/tests. |
+| HIGH-04-01 | **CLOSED (gated)** | factor_graph runs only when `enable_factor_graph:=true`. The "consume-corrected-EKF" architectural concern persists for the optional case but does not affect production CPU. |
+| MEDIUM-04-05 | **CLOSED** | Same gate. The 0-consumer iSAM2 no longer runs in production. |
+| HIGH-09-01 | **CLOSED (option 1 doc)** | Procedure documented at `docs/safety/hardware_estop_wiring.md`. Hardware install pending next field-prep session. Options 2 + 3 (ToF / dual-channel relay) deferred post-MVP. |
+| MEDIUM-11-C-06 | **CLOSED** | WS heartbeat at 2 s; deadman pauses mission when last operator disconnects. |
+| HAZOP H-07 (WiFi loss) | **CLOSED** R=12 → R≤3 | Mission no longer runs unsupervised after disconnect. |
+
+### Still open after Sprint B
+
+- HIGH-11-B-02 (waypoint_manager `spin_until_future_complete` deadlock):
+  package still buildable, latent if called from CLI. The proper fix
+  is deletion of the package — tracked as Sprint C cleanup.
+- HIGH-04-01 architectural side (factor_graph consumes EKF output):
+  unchanged; only the production-cost concern is closed. Architectural
+  fix when cutover is genuinely attempted.
+- HIGH-11-A-03 (TELEOP carve-out for rail_approach): Sprint C.
+- HIGH-11-C-02, -03, -04 (salted KDF, JWT off WS URL, TLS): Sprint C.
+- Sprint D (observability) and Sprint E (calibration wizards XL):
+  unchanged.
+
+### Sprint B verifier baseline
+
+- `bash tools/verify_specs/all.sh`
+- 10 scripts, 0 blocking, 1 warning (`verify_geometry_ssot.py` numerical drift, expected pending NVRAM dump for CRITICAL-02-02).
+- Frontend (`npm run build`) and backend (`npm run build`) clean.
+- `colcon build --packages-select agv_bringup` clean (-Werror enforced).
