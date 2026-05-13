@@ -33,8 +33,11 @@ angular-velocity sampling was driving the robot into crop rows).
   in `map`; yaw ignored).
 - `/agv/zone/state` (std_msgs/String) — from `agv_zone_detector`; supplies
   `rail_yaw_error` and whether we're in a rail aisle.
-- `/agv/collision_monitor_state` (std_msgs/String) — from Nav2's
-  `collision_monitor`; takes absolute priority over all other inputs.
+- `/agv/collision_monitor_state` (nav2_msgs/CollisionMonitorState) — from
+  Nav2's `collision_monitor`; takes absolute priority over all other inputs.
+  Section-0 regression fix (Day 2, 2026-05-13): was incorrectly declared
+  as std_msgs/String, same class of bug as CRITICAL-11-A-01; now uses
+  the proper Nav2 type and compares `action_type` to the `STOP` constant.
 - `/agv/rail_detections` (geometry_msgs/PoseArray) — from
   `agv_rail_detector` (Stage K). Two poses in base_link; midpoint Y is the
   signed visual lateral offset, average yaw is the rail-axis direction.
