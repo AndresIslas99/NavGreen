@@ -267,12 +267,16 @@ sequence:
       - "topic /agv/maps/loaded (transient_local)"
       - "topic /agv/current_map (transient_local)"
 
-  - name: "waypoint_manager"
-    package: "agv_waypoint_manager"
-    source: "src/agv_bringup/launch/agv_full.launch.py:269-296"
-    start_time_s: 5.0
-    preconditions:
-      - "missions_file exists"
+  # waypoint_manager REMOVED from production launch in Sprint B
+  # (2026-05-13 audit, HIGH-11-B-01). The dashboard's mission executor
+  # lives in agv_ui_backend/src/index.ts::executeMission and goes
+  # through ros.sendNavGoal which enforces the localization /
+  # motors-armed / collision-monitor gates. agv_waypoint_manager is
+  # still a buildable package with /agv/waypoint_manager/* services
+  # available for CLI/test use, but no production caller exists. If a
+  # future feature needs ROS-side mission execution, route it through
+  # the backend instead, or refactor waypoint_manager to call the
+  # backend's HTTP endpoint (eliminating CR-00-06 latent gate bypass).
 
   # ── t = 6.0 seconds ── (conditional)
 

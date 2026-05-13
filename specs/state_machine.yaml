@@ -221,14 +221,14 @@ invariants:
     description: "sendNavGoal must reject dispatch when localization.action == 'FAILED'. Allowed states: UNKNOWN (boot), INITIALIZING (cascade running), LOCALIZED, DEGRADED (operator accepts drift risk)."
     enforced_by: "agv_ui_backend::sendNavGoal checks state.localization.action before calling Nav2 action client. Rejections emit a 'crit' event and return a user-facing message."
     code_ref: "src/agv_ui_backend/src/index.ts::sendNavGoal (after motors_armed check)"
-    current_state: "FIXED 2026-04-13 Fase 7 F4 (partial — waypoint_manager bypass remains, tracked for Fase 8)"
+    current_state: "FIXED 2026-04-13 Fase 7 F4 + Sprint B 2026-05-13 (HIGH-11-B-01 removed agv_waypoint_manager from production launch). The dashboard's mission executor lives in agv_ui_backend/src/index.ts and routes every waypoint through sendNavGoal which enforces this gate."
     rationale: |
       With localization FAILED, map→odom is stale (frozen from a prior
       session). Nav2 traduces map-frame goals to odom-frame via the stale
       offset, so the robot physically navigates to phantom coordinates.
       Observed during 2026-04-13 post-Fase6 trip: 2.98 m goal, 0.67 m
       advanced over 3 min 30 s before operator cancelled.
-    known_gap: "agv_waypoint_manager (mission executor) sends NavigateToPose goals directly to Nav2 via action client, bypassing agv_ui_backend. Mission execution is unprotected by this gate. Fix requires refactoring the mission executor to route through the backend — tracked for Fase 8."
+    known_gap: "agv_waypoint_manager still ships as a buildable package and exposes /agv/waypoint_manager/execute via service. A CLI / test caller invoking that service directly bypasses this gate. Mitigated by removing the node from agv_full.launch.py — nothing in production starts it. A future refactor should route its execute service through the backend's HTTP endpoint or delete the package."
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Authorized transitions

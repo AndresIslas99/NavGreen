@@ -788,10 +788,11 @@ actions:
           - "Nav2 action server available"
         code_ref: "src/agv_ui_backend/src/index.ts::sendNavGoal"
       - pkg: "agv_waypoint_manager"
-        role: "mission execution"
+        role: "mission execution (NOT in production launch — see status)"
+        status: "REMOVED FROM PRODUCTION LAUNCH 2026-05-13 Sprint B (HIGH-11-B-01). Package still buildable; service /agv/waypoint_manager/execute exists for CLI/test invocation. Production missions run through agv_ui_backend's own executor (see callers[0] above) which DOES enforce the gates. A CLI caller invoking this service directly bypasses the gates."
         gates:
-          - "NONE — mission executor uses its own action client directly, bypassing the backend gates"
-        known_gap: "Mission execution is unprotected by the localization gate. Tracked for Fase 8 refactor."
+          - "NONE — uses its own action client directly"
+        known_gap: "Latent bypass: anyone calling /agv/waypoint_manager/execute from outside the production launch (CLI, future feature) hits the un-gated path. Mitigated by removing the node from agv_full.launch.py — nothing in production starts it."
         code_ref: "src/agv_waypoint_manager/src/waypoint_manager_node.cpp:109"
 
 # ─────────────────────────────────────────────────────────────────────────────

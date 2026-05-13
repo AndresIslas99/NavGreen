@@ -4,6 +4,26 @@ C++17 ROS2 node for mission storage, listing, and sequential waypoint execution.
 Persists missions as line-delimited JSON and dispatches goals via Nav2's
 `/navigate_to_pose` action.
 
+## ⚠️ NOT in the production launch (since Sprint B, 2026-05-13)
+
+This node is **no longer started by `agv_full.launch.py`**. The dashboard
+executes missions through `agv_ui_backend/src/index.ts::executeMission`,
+which loops over waypoints and calls `ros.sendNavGoal` — that path
+enforces the localization / motors-armed / collision-monitor gates per
+`specs/state_machine.yaml#nav_goal_requires_localization`.
+
+This package keeps building and its `/agv/waypoint_manager/execute`
+service exists for CLI / integration-test invocation, but **no
+production caller** uses it. A CLI caller invoking the service directly
+bypasses every gate, so use it only in tests where that is acceptable.
+
+If a future feature needs a ROS-side mission executor, refactor this
+node's execute path to call the backend's HTTP endpoint instead, or
+delete this package. Tracked as **HIGH-11-B-01** in
+`docs/audit/2026-05-13-greenhouse-hardening/SUMMARY.md`. See also
+`HIGH-11-B-02` (deadlock risk: `rclcpp::spin_until_future_complete`
+from a worker thread on a single-threaded executor).
+
 ## Nodes
 
 - **waypoint_manager_node** (C++17): Mission CRUD operations and sequential goal dispatch

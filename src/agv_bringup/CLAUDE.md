@@ -49,7 +49,7 @@ authoritative DAG with preconditions and failure modes. Summary:
 | 4s | ekf_local + ekf_global + fusion_monitor | agv_sensor_fusion | always |
 | 4.5s | factor_graph (parallel, publish_tf=false) | agv_factor_graph | always |
 | 5s | slam_toolbox_localization (optional, TF DISABLED) | slam_toolbox | enable_slam_localization |
-| 5s | map_manager + waypoint_manager | agv_map_manager, agv_waypoint_manager | always |
+| 5s | map_manager | agv_map_manager | always (waypoint_manager removed Sprint B / HIGH-11-B-01; dashboard runs its own mission executor) |
 | 6s | Nav2 stack (SmacPlanner2D + MPPI + collision_monitor) | agv_navigation | `has_map` |
 | 6.5s | agv_safety (safety_supervisor + cmd_vel_gate) | agv_safety | `has_map` |
 | 7s | AprilTag + marker_correction + rail_approach + auto_init_orchestrator | multiple | enable_markers |
