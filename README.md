@@ -55,6 +55,13 @@ See `docs/architecture.md` for detailed system diagrams.
 # Source ROS2 Humble
 source /opt/ros/humble/setup.bash
 
+# First-time clone: pull external dependencies pinned in agv_greenhouse.repos.
+# This file lists Isaac ROS, ZED wrapper, Nav2, SLAM Toolbox, apriltag_ros and
+# the other packages the production launch files include from outside src/.
+# See CR-00-01 in docs/audit/2026-05-13-greenhouse-hardening/00_inventory.md
+# for the motivation. Skip if your workspace already has them installed.
+vcs import src < agv_greenhouse.repos
+
 # Build all packages (warnings as errors)
 colcon build --symlink-install --cmake-args -DCMAKE_CXX_FLAGS="-Werror"
 
