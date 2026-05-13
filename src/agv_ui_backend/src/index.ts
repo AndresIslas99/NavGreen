@@ -25,6 +25,14 @@ import { AuthManager } from './auth';
 import { registerAllRoutes } from './routes';
 import { setupControlWs, setupTeleopWs } from './ws/control';
 import type { AppDeps, AppState, RosBridge } from './app_deps';
+import { RosBridgeProxy } from './ros_lifecycle';
+
+// Sub-fase 1.1.b — RosBridgeProxy at module level so the lifetime of the
+// reference exactly matches the process. `deps.ros` points at this proxy
+// throughout; the inner impl is swapped on connect (and on disconnect when
+// the health-check / lifecycle manager is added in a follow-up). The
+// /api/system/ros_status route reads from this same proxy.
+const rosProxy = new RosBridgeProxy();
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -240,7 +248,10 @@ async function main() {
     `/${NAMESPACE}/rail_approach/execute`);
 
   // --- ROS Bridge (passed to route modules via AppDeps) ---
-  const ros: RosBridge = {
+  // Sub-fase 1.1.b: renamed from `ros` → `realRos` so the proxy at module
+  // level (rosProxy) can be wired into deps instead. `proxy.setImpl(realRos)`
+  // is called once realRos is fully constructed.
+  const realRos: RosBridge = {
     sendCmdVel(linear: number, angular: number) {
       if (state.eStopActive) return;
       if (state.currentMode !== 'teleop' && state.currentMode !== 'mapping') return;
@@ -340,7 +351,7 @@ async function main() {
             // Use the rclnodejs client (replaces the previous execFile path).
             // skip_coarse_approach=false because Nav2 just delivered us to
             // the standoff — coarse and fine want to compose normally here.
-            ros.callRailApproach({
+            realRos.callRailApproach({
               tag_id: hardware_id, offset_x: 0.3, offset_y: 0.0,
               skip_coarse_approach: false,
             }).then((r) => {
@@ -386,7 +397,7 @@ async function main() {
         // odrive ignores ALL subsequent cmd_vel until cleared, so publishing
         // additional cmd_vel(0,0) here is redundant — and would create a race
         // with the chain. We rely on the dedicated topic + cancelNavGoal.
-        ros.cancelNavGoal();
+        realRos.cancelNavGoal();
       }
       eventLog.emit(active ? 'crit' : 'info', 'SAFETY', active ? 'E-STOP ACTIVATED' : 'E-stop cleared');
       updateState();
@@ -500,8 +511,8 @@ async function main() {
           }
         }
 
-        ros.sendNavGoal(parseFloat(nd.x || 0), parseFloat(nd.y || 0), parseFloat(nd.theta || 0));
-        while (state.navState.active) { await new Promise(r => setTimeout(r, 500)); if (state.missionCancel) { ros.cancelNavGoal(); break; } }
+        realRos.sendNavGoal(parseFloat(nd.x || 0), parseFloat(nd.y || 0), parseFloat(nd.theta || 0));
+        while (state.navState.active) { await new Promise(r => setTimeout(r, 500)); if (state.missionCancel) { realRos.cancelNavGoal(); break; } }
         if (state.navState.status !== 'succeeded') { state.missionProgress!.status = 'failed'; completed = false; break; }
 
         // If this waypoint snapped to a rail_start tag, wait for rail_approach to settle
@@ -524,11 +535,11 @@ async function main() {
           await new Promise(r => setTimeout(r, (parseFloat(nd.pause_sec || 3)) * 1000));
         } else if (nd.action === 'start_recording') {
           eventLog.emit('info', 'MISSION', `Starting recording at waypoint ${i + 1}`);
-          await ros.callTriggerService(ros.startRecClient, 'start_recording').catch(() => {});
+          await realRos.callTriggerService(realRos.startRecClient, 'start_recording').catch(() => {});
           state.recordingActive = true;
         } else if (nd.action === 'stop_recording') {
           eventLog.emit('info', 'MISSION', `Stopping recording at waypoint ${i + 1}`);
-          await ros.callTriggerService(ros.stopRecClient, 'stop_recording').catch(() => {});
+          await realRos.callTriggerService(realRos.stopRecClient, 'stop_recording').catch(() => {});
           state.recordingActive = false;
         }
       }
@@ -935,7 +946,11 @@ async function main() {
 
   // --- Build AppDeps ---
   const deps: AppDeps = {
-    state, ros, eventLog, telemetryStore, authManager, apriltagManager,
+    // Sub-fase 1.1.b: deps.ros points at the proxy (module-level rosProxy).
+    // Routes call deps.ros.X() which dispatches to the proxy, which in turn
+    // delegates to realRos or throws RosOfflineError. The proxy's setImpl is
+    // called at the bottom of main() once realRos and all subs/pubs are built.
+    state, ros: rosProxy, eventLog, telemetryStore, authManager, apriltagManager,
     config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
     updateState,
     async setMode(mode: string): Promise<{ok: boolean; reason?: string}> {
@@ -964,7 +979,7 @@ async function main() {
           return {ok: false, reason};
         }
       }
-      if (mode !== 'nav' && state.navState.active) ros.cancelNavGoal();
+      if (mode !== 'nav' && state.navState.active) realRos.cancelNavGoal();
       eventLog.emit('info', 'SYSTEM', `Mode: ${state.currentMode} → ${mode}`);
       state.currentMode = mode;
       // Publish mode to ROS2 topic (interfaces.yaml compliance)
@@ -1034,6 +1049,12 @@ async function main() {
   // participant discovery for publishers that already exist.
   rclnodejs.spin(node);
 
+  // Sub-fase 1.1.b — wire the real ROS impl into the module-level proxy.
+  // From this point on, deps.ros (which is rosProxy) delegates every call
+  // to realRos. Status flips to 'online'; the /api/system/ros_status
+  // endpoint and the System Health Panel can now observe the live state.
+  rosProxy.setImpl(realRos);
+
   // Boot-time maps/loaded: if the launch file provided AGV_BOOT_MAP_NAME (the
   // basename of the map arg), publish it to /agv/maps/loaded after a short
   // delay so the auto_init_orchestrator (which starts at t=7s per the launch)
@@ -1043,7 +1064,7 @@ async function main() {
   if (bootMapName) {
     setTimeout(() => {
       try {
-        ros.publishMapLoaded(bootMapName);
+        realRos.publishMapLoaded(bootMapName);
         console.log(`[boot] Published maps/loaded for '${bootMapName}'`);
       } catch (e: any) {
         console.warn(`[boot] publishMapLoaded failed: ${e?.message}`);

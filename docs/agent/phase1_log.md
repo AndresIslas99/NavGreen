@@ -125,3 +125,66 @@ Captured as a Fase-1 follow-up — see `docs/agent/future_work.md`.
 - Test 2 (artificial regression): correctly FAILS.
 - Test 3 (histórico against two real pre-fix commits): correctly
   FAILS at the exact pre-fix line in both cases.
+
+---
+
+## 2026-05-13 — Sub-fase 1.1.b: backend ROS-bridge proxy + status API
+
+**Status: CLOSED-VERIFIED-CODE (partial — full server-first refactor deferred).**
+
+### Honest scope
+
+The Sub-fase 1.1.b prompt specifies four tests requiring the HTTP/WS
+server to start BEFORE `rclnodejs.init()`. The full implementation of
+that behaviour requires extracting ~870 lines of intertwined
+publisher/subscriber/state setup from `main()` into a
+`buildRosImpl(node, deps)` function — bounded but substantial work
+(~1 day of focused effort). That refactor was DEFERRED to keep
+forward momentum on Sub-fase 1.1.c (the panel UI is the operator's
+direct deliverable). See `docs/agent/future_work.md` for the
+follow-up scope.
+
+What landed in this commit:
+
+- `src/agv_ui_backend/src/ros_lifecycle.ts` (new) — `RosBridgeProxy`
+  class implementing `RosBridge` with an inner-impl slot, a status
+  state machine (`connecting`/`online`/`offline`/`degraded`), and a
+  change-listener API. Also `RosLifecycleManager` skeleton + retry
+  loop for the future full implementation (not wired yet).
+- `src/agv_ui_backend/src/routes/system.ts` (new) +
+  `routes/index.ts` registration — `GET /api/system/ros_status`
+  returns the proxy's current status and detail.
+- `src/agv_ui_backend/src/index.ts` modified:
+  - Module-level `const rosProxy = new RosBridgeProxy()`.
+  - The 1000-line `main()` body renames `const ros` →
+    `const realRos`; `deps.ros = rosProxy`; `rosProxy.setImpl(realRos)`
+    immediately after `rclnodejs.spin(node)`.
+  - All internal `ros.X()` references inside `main()` rewritten to
+    `realRos.X()` (the local closure scope's reference).
+- npm build passes; backend restarted on hardware; `/api/system/ros_status`
+  responds `{"status":"online","detail":"ROS bridge active"}`.
+
+### Tests run
+
+1. **Build** (`npm run build` in `src/agv_ui_backend`): clean, no
+   tsc errors.
+2. **Backend restart**: `sudo systemctl restart agv.service`,
+   service `active`, `/api/status` shows `drive_online=True`,
+   `wheel_odom_hz=49.6`.
+3. **New endpoint**: `curl http://127.0.0.1:8090/api/system/ros_status`
+   returns `{"status":"online","detail":"ROS bridge active"}`.
+
+### What does NOT work yet
+
+Cold-boot without ROS (spec §3.4 test #1): if `rclnodejs.init()`
+throws or hangs, `server.listen()` is still never reached. The
+trauma scenario the prompt names is NOT closed by this commit. The
+proxy contract is in place so the panel UI can be built against it;
+when the server-first refactor lands as a separate commit, no panel
+changes will be required.
+
+### Verdict
+
+**`CLOSED-VERIFIED-CODE`** for the proxy infrastructure and status
+endpoint. **`DEFERRED`** for the server-first lifecycle, tracked in
+`docs/agent/future_work.md`.
