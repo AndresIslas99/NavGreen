@@ -58,6 +58,12 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('agv_bringup')
     nav_dir = get_package_share_directory('agv_navigation')
     cuvslam_no_tf = os.path.join(bringup_dir, 'config', 'cuvslam_greenhouse.yaml')
+    # Sprint A (CR-00-03, 2026-05-13 audit): single resolution of the
+    # canonical data dir. AGV_DATA_DIR env var wins; otherwise we fall back
+    # to the dev-machine literal. Reused by every per-node parameter dict
+    # that needs to point at the data dir, so reflashing to a Jetson with a
+    # different username only requires setting AGV_DATA_DIR.
+    data_dir = os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data')
     # Fase 7 F3: map_dir unified to ${AGV_DATA_DIR}/maps. Previously
     # maps_dir = os.path.join(nav_dir, 'maps') which pointed at the colcon
     # install share (read-only template dir). Save operations to map_manager
@@ -65,7 +71,7 @@ def generate_launch_description():
     # share while agv_ui_backend reads from AGV_DATA_DIR, causing save/load
     # asymmetry. All consumers now agree on AGV_DATA_DIR/maps — canonical
     # value in specs/project.yaml#deployment.default_data_dir.
-    maps_dir = os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data') + '/maps'
+    maps_dir = os.path.join(data_dir, 'maps')
     missions_file = os.path.join(nav_dir, 'missions', 'missions.json')
     slam_loc_config = os.path.join(nav_dir, 'config', 'slam_toolbox_localization.yaml')
 
@@ -543,7 +549,7 @@ def generate_launch_description():
                         'markers_registry_file': os.path.join(
                             get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
                         # Runtime registry — operator-defined tags from dashboard
-                        'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+                        'runtime_registry_file': os.path.join(data_dir, 'runtime_markers_registry.yaml'),
                         'max_detection_range': 5.0,
                         'tag_size': 0.2,
                         'covariance_xy': 0.01,
@@ -582,7 +588,7 @@ def generate_launch_description():
                                 get_package_share_directory('agv_markers'),
                                 'config', 'markers_registry.yaml'),
                             # Runtime registry — operator-defined rail_start tags from dashboard
-                            'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+                            'runtime_registry_file': os.path.join(data_dir, 'runtime_markers_registry.yaml'),
                             'tag_size': 0.2,
                             'camera_info_topic': '/agv/zed/left/camera_info',
                             # Iter-46 transfer: tighten settle gate. The 12.7 cm plateau
@@ -698,7 +704,7 @@ def generate_launch_description():
                         os.path.join(
                             get_package_share_directory('agv_localization_init'),
                             'config', 'auto_init_params.yaml'),
-                        {'map_dir': '/home/orza/agv_data/maps'},
+                        {'map_dir': maps_dir},
                         {'use_sim_time': use_sim_time},
                     ],
                     output='screen',
@@ -765,7 +771,7 @@ def generate_launch_description():
                     additional_env={
                         'AGV_PORT': '8090',
                         'AGV_NAMESPACE': 'agv',
-                        'AGV_DATA_DIR': '/home/orza/agv_data',
+                        'AGV_DATA_DIR': data_dir,
                         # Pass the map basename (without extension) so the backend
                         # knows which map was loaded by Nav2's map_server at boot.
                         # The backend publishes this to /agv/maps/loaded ~10s after
