@@ -58,6 +58,13 @@ public:
     declare_parameter("map_frame", std::string("map"));
     declare_parameter("camera_info_topic", std::string("/zed/zed_node/left/camera_info"));
     declare_parameter("camera_info_timeout_s", 10.0);
+    // Sprint E / HIGH-04-02: minimum cos(incidence) below which a
+    // detection is rejected outright. 0.30 ≈ 72° from normal — covers
+    // the regime where solvePnP for a planar fiducial becomes
+    // numerically unstable. Above the cutoff the observation is
+    // accepted but its covariance is inflated by 1/cos² to reflect
+    // the geometric uncertainty.
+    declare_parameter("incidence_cos_min", 0.30);
 
     max_range_ = get_parameter("max_detection_range").as_double();
     cov_xy_ = get_parameter("covariance_xy").as_double();
@@ -66,6 +73,7 @@ public:
     reloc_threshold_ = get_parameter("relocalization_threshold").as_double();
     min_confidence_ = get_parameter("min_confidence").as_double();
     reloc_cooldown_ms_ = get_parameter("relocalization_cooldown_ms").as_int();
+    incidence_cos_min_ = get_parameter("incidence_cos_min").as_double();
     camera_frame_ = get_parameter("camera_frame").as_string();
     base_frame_ = get_parameter("base_frame").as_string();
     map_frame_ = get_parameter("map_frame").as_string();
@@ -324,6 +332,35 @@ private:
       double range = cv::norm(tvec);
       if (range > max_range_ || range < 0.1) continue;
 
+      // ── Incidence-angle filter (Sprint E / HIGH-04-02, 2026-05-13) ──
+      // PnP recovers an accurate pose for fiducials seen near-frontal
+      // and degrades fast at grazing incidence. The previous range_factor
+      // only modeled distance uncertainty; for a planar tag the projection
+      // error grows as 1/cos²(incidence). At 80° (cos=0.17) that's a 33×
+      // multiplier — dwarfs the range factor and was driving slow drift
+      // pull-in from tags transiting the FoV edge during normal motion.
+      //
+      // We extract the tag's normal in camera frame from the third
+      // column of R_ct = Rodrigues(rvec). The camera optical axis is
+      // +Z, so the cosine of the angle between the tag normal and the
+      // camera is |R_ct(2,2)| (sign depends on convention — abs()
+      // handles both "tag faces away" and "tag faces toward" the same).
+      cv::Mat R_ct;
+      cv::Rodrigues(rvec, R_ct);
+      const double cos_incidence = std::abs(R_ct.at<double>(2, 2));
+      if (cos_incidence < incidence_cos_min_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "tag %d rejected: incidence cos=%.2f below threshold %.2f "
+            "(angle %.0f° from normal)",
+            det.id, cos_incidence, incidence_cos_min_,
+            std::acos(std::min(1.0, cos_incidence)) * 180.0 / M_PI);
+        continue;
+      }
+      // Inflate covariance proportional to 1/cos²(incidence). Clipped at
+      // 1.0 (head-on) so cos=1 leaves observations untouched. Combined
+      // multiplicatively with the range factor below.
+      const double incidence_factor = 1.0 / (cos_incidence * cos_incidence);
+
       // Get camera→base_link transform from TF to account for camera mounting offset
       geometry_msgs::msg::TransformStamped cam_to_base_msg;
       try {
@@ -397,7 +434,11 @@ private:
       double robot_y = marker.y - (tag_fwd * sin_yaw + tag_left * cos_yaw);
 
       double ref_range = 2.0;
-      double range_factor = 1.0 + (range / ref_range) * (range / ref_range);
+      // Combined uncertainty multiplier: range² × 1/cos²(incidence).
+      // Both terms are dimensionless and >= 1 (head-on at the reference
+      // range = 1.0 baseline; degrades monotonically away from that).
+      double range_factor =
+          (1.0 + (range / ref_range) * (range / ref_range)) * incidence_factor;
 
       candidates.push_back({robot_x, robot_y, robot_yaw, range, range_factor,
                             det.id, det.decision_margin});
@@ -569,6 +610,7 @@ private:
   std::string static_registry_path_, runtime_registry_path_;
   double max_range_, cov_xy_, cov_yaw_, tag_size_;
   double reloc_threshold_, min_confidence_;
+  double incidence_cos_min_{0.30};  // Sprint E / HIGH-04-02
   int64_t reloc_cooldown_ms_;
   std::string camera_frame_, base_frame_, map_frame_;
 
