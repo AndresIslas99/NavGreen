@@ -507,3 +507,51 @@ Sprint B (architectural cleanup + WiFi deadman + hardware E-stop doc).
 - 10 scripts, 0 blocking, 1 warning (`verify_geometry_ssot.py` numerical drift, expected pending NVRAM dump for CRITICAL-02-02).
 - Frontend (`npm run build`) and backend (`npm run build`) clean.
 - `colcon build --packages-select agv_bringup` clean (-Werror enforced).
+
+## Sprint C closure (2026-05-13)
+
+4 atomic commits closing the "quality / consistency" cluster.
+
+| Commit | Subject | Findings |
+|---|---|---|
+| `4046bfe` | nav2: fix doc drift on controller, vx_max, stop_zone | **MEDIUM-02-06, MEDIUM-07-03, MEDIUM-07-04 closed** |
+| `d6a6efc` | nav2: trim stop_zone rear to footprint, not +5 cm | **MEDIUM-09-05 closed** |
+| `b95b9d8` | rail_approach: transient_local QoS for late-join + create launch/ dir | **MEDIUM-10-06 closed** + pre-existing build bug fixed |
+| `478c23d` | bringup: wait for chrony NTP sync at boot | **MEDIUM-01-04 closed** |
+
+### Findings status after Sprint C
+
+| ID | Status | Notes |
+|---|---|---|
+| MEDIUM-02-06 | **CLOSED** | nav2_params.yaml header now correctly says MPPI + RotationShim. |
+| MEDIUM-07-03 | **CLOSED** | CLAUDE.md table updated to vx_max=0.25 with audit cite. |
+| MEDIUM-07-04 | **CLOSED** | CLAUDE.md table + pipeline section now agree with the YAML (20 cm stop_zone, two-source). |
+| MEDIUM-09-05 | **CLOSED** | Stop_zone rear coord at footprint exactly (-0.30); rear lobe no longer false-stops on noise. |
+| MEDIUM-10-06 | **CLOSED** | rail_approach subscriber matches publisher's transient_local; late-join no longer misses the latched localization state. |
+| MEDIUM-01-04 | **CLOSED** | chronyc waitsync 5 0.05 added before ROS source. Graceful fallback if chrony absent. |
+
+### Still open after Sprint C
+
+- HIGH-04-02 (incidence filter for marker_correction) — Sprint D.
+- HIGH-04-03 (kidnapping detection) — Sprint D.
+- HIGH-04-04 (yaml-cpp parser for marker registry) — Sprint D.
+- HIGH-04-09 (yaw-absolute fight in ekf_local) — needs HIL test before
+  merge; Sprint D.
+- HIGH-07-01 (MPPI critic normalization) — Sprint D (needs HIL p95 test).
+- HIGH-07-02 (smoother↔HAL accel mismatch) — Sprint D (needs hardware).
+- HIGH-09-04 (cmd_vel_gate initial state) — Sprint D (1-line header read).
+- HIGH-09-02 (safety_supervisor per-topic QoS) — Sprint D.
+- HIGH-11-A-03 (TELEOP carve-out for rail_approach) — needs design call; Sprint D.
+- HIGH-11-B-02 (waypoint_manager deadlock risk) — closes by deleting the
+  package entirely; Sprint D candidate.
+- HIGH-11-C-02 (salted KDF), HIGH-11-C-03 (JWT off WS URL),
+  HIGH-11-C-04 (TLS) — security hardening; Sprint D.
+- HIGH-11-D-04 (no goal-click confirmation) — Sprint D UX.
+- All Phase 6 perception findings — Sprint D + E.
+- Sprint E (calibration wizards XL) — gated by Sprint A NVRAM dump.
+
+### Sprint C verifier baseline
+
+- `bash tools/verify_specs/all.sh`: 10 scripts, 0 blocking, 1 warning
+  (geometry SSOT drift, expected pending NVRAM dump).
+- `colcon build` clean across modified packages (-Werror enforced).
