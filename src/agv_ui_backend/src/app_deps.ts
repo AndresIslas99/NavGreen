@@ -105,6 +105,11 @@ export interface AppState {
   // when no map is loaded (mapping-first mode) or before the latched value
   // has been received at dashboard boot.
   currentMapName: string | null;
+  // Sub-fase 1.1.c — System Health Panel freshness stamps. Updated by the
+  // existing subscribers when each topic ticks. The health monitor reads
+  // these to render topic-alive components. 0 means "never seen".
+  lastScanTime: number;
+  lastGlobalOdomTime: number;
 }
 
 export interface RosBridge {

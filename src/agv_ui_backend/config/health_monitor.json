@@ -9,7 +9,9 @@
       "check": "topic_alive",
       "topic": "/agv/imu/filtered",
       "deadline_ms": 200,
-      "critical": true
+      "critical": true,
+      "restart": null,
+      "restart_help": "Physical USB cycle required (operator action)"
     },
     {
       "id": "odrive",
@@ -19,7 +21,9 @@
       "check": "topic_alive",
       "topic": "/agv/wheel_odom",
       "deadline_ms": 200,
-      "critical": true
+      "critical": true,
+      "restart": null,
+      "restart_help": "Restart agv.service to re-init CAN talker"
     },
     {
       "id": "lidar",
@@ -29,7 +33,8 @@
       "check": "topic_alive",
       "topic": "/agv/scan",
       "deadline_ms": 500,
-      "critical": false
+      "critical": false,
+      "restart": null
     },
     {
       "id": "ekf_local",
@@ -39,7 +44,8 @@
       "check": "topic_alive",
       "topic": "/agv/odometry/local",
       "deadline_ms": 100,
-      "critical": true
+      "critical": true,
+      "restart": "agv_service"
     },
     {
       "id": "ekf_global",
@@ -49,7 +55,8 @@
       "check": "topic_alive",
       "topic": "/agv/odometry/global",
       "deadline_ms": 200,
-      "critical": true
+      "critical": true,
+      "restart": "agv_service"
     },
     {
       "id": "cuvslam",
@@ -59,7 +66,8 @@
       "check": "topic_alive",
       "topic": "/visual_slam/tracking/odometry",
       "deadline_ms": 500,
-      "critical": false
+      "critical": false,
+      "restart": "agv_service"
     },
     {
       "id": "marker_correction",
@@ -69,7 +77,8 @@
       "check": "topic_alive",
       "topic": "/agv/marker_pose",
       "deadline_ms": 5000,
-      "critical": false
+      "critical": false,
+      "restart": "agv_service"
     },
     {
       "id": "nav2_collision_monitor",
@@ -79,7 +88,8 @@
       "check": "topic_alive",
       "topic": "/agv/collision_monitor_state",
       "deadline_ms": 2000,
-      "critical": true
+      "critical": true,
+      "restart": "agv_service"
     },
     {
       "id": "mode_arbiter",
@@ -89,7 +99,8 @@
       "check": "topic_alive",
       "topic": "/agv/mode/state",
       "deadline_ms": 200,
-      "critical": true
+      "critical": true,
+      "restart": "agv_service"
     },
     {
       "id": "safety_supervisor",
@@ -99,7 +110,8 @@
       "check": "topic_alive",
       "topic": "/agv/safety/status",
       "deadline_ms": 1000,
-      "critical": true
+      "critical": true,
+      "restart": "agv_service"
     },
     {
       "id": "agv_service",
@@ -107,7 +119,8 @@
       "type": "systemd",
       "section": "Services",
       "unit": "agv.service",
-      "critical": true
+      "critical": true,
+      "restart": "agv_service"
     },
     {
       "id": "can_link",
@@ -116,7 +129,9 @@
       "section": "Services",
       "check": "can_link_up",
       "interface": "can0",
-      "critical": true
+      "critical": true,
+      "restart": null,
+      "restart_help": "Restart upstream can-setup.service or reboot Jetson"
     },
     {
       "id": "wifi",
@@ -125,7 +140,8 @@
       "section": "Network",
       "check": "interface_up",
       "interface": "wlP1p1s0",
-      "critical": false
+      "critical": false,
+      "restart": null
     },
     {
       "id": "clock_sync",
@@ -133,7 +149,8 @@
       "type": "process",
       "section": "Network",
       "check": "chrony_synced",
-      "critical": false
+      "critical": false,
+      "restart": null
     }
   ],
   "verifiers": [
@@ -173,5 +190,13 @@
       "script": "tools/verify_specs/all.sh",
       "blocking": false
     }
-  ]
+  ],
+  "restart_targets": {
+    "agv_service": {
+      "command": "sudo",
+      "args": ["systemctl", "restart", "agv.service"],
+      "description": "Restart the agv.service unit (kills + re-launches the entire ROS stack including this backend)",
+      "self_terminating": true
+    }
+  }
 }
