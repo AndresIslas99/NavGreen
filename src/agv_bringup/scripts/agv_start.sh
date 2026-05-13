@@ -79,6 +79,35 @@ else
     sleep 1
 fi
 
+# ── Clock sync wait (Sprint C, MEDIUM-01-04, 2026-05-13 audit) ─────────────
+# Sprint A scaffolded the geometry SSOT; Sprint B closed the cmd_vel chain.
+# This block tackles MEDIUM-01-04: a cold-boot in a clock-isolated greenhouse
+# (no internet, router not advertising NTP yet) causes systemd-timesyncd to
+# adjust the wall clock asynchronously DURING the ROS stack startup. Every
+# TF lookup that bridges the jump rejects messages as TF_OLD_DATA, the dual
+# EKF discards inputs, and the orchestrator declares localization FAILED.
+# Observable as "robot offline" with no clear cause in journalctl.
+#
+# Fix: wait briefly for NTP convergence before sourcing ROS. We do NOT
+# block forever — a router that never speaks NTP would otherwise prevent
+# every cold boot. If chrony is not installed or sync never converges,
+# emit a clear WARNING and continue (healthcheck + dashboard surface the
+# downstream effects). Recommended router config in
+# `docs/hardware_setup.md` — set the UniFi router as the LAN NTP server.
+if command -v chronyc >/dev/null 2>&1; then
+    if chronyc waitsync 5 0.05 0 1 >/dev/null 2>&1; then
+        echo "  chrony: synced (skew < 50 ms)"
+    else
+        echo "  WARNING: chrony did not converge to <50 ms within 5 attempts."
+        echo "           Boot continues; TF lookups across the next clock"
+        echo "           adjustment may show TF_OLD_DATA warnings."
+    fi
+else
+    echo "  WARNING: chronyc not installed; clock sync is best-effort via"
+    echo "           systemd-timesyncd. Install chrony for deterministic"
+    echo "           boot ordering — see docs/hardware_setup.md."
+fi
+
 # ── Generate runtime cyclonedds XML ────────────────────────────────────────
 # Enumerate whitelisted interfaces currently in operstate=up AND with a
 # carrier (link-up at L2). operstate alone is insufficient: a wifi card
