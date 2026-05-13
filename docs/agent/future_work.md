@@ -67,6 +67,56 @@ operations will close the verdict to `CLOSED-VERIFIED-HW`.
 
 ---
 
+## Captured during Sub-fase 1.1.b
+
+### Server-first bootstrap (deferred from spec §3.2)
+
+The Sub-fase 1.1.b prompt specifies that the HTTP/WS server must
+start BEFORE any rclnodejs init, so the dashboard remains accessible
+when ROS is down. The current implementation ships only:
+- `RosBridgeProxy` class wired as `deps.ros` (stable reference for
+  the process lifetime).
+- `/api/system/ros_status` endpoint reading from the proxy.
+- `rosProxy.setImpl(realRos)` called once realRos finishes building.
+
+The `server.listen(...)` call still runs AFTER `rclnodejs.init()`
+because the existing `main()` has ~870 lines of intertwined publisher
+/ subscriber / state setup that need careful extraction into a
+`buildRosImpl(node, deps)` function. That refactor is bounded but
+substantial (~1 day of focused work) and was deferred to keep
+forward progress on the Sub-fase 1.1.c panel UI.
+
+What it means in practice:
+- If `rclnodejs.init()` throws (DDS daemon unreachable, etc.) the
+  HTTP server never listens — the operator still hits the original
+  trauma scenario.
+- The proxy + endpoint contract IS in place, so the System Health
+  Panel can be built against it. Once the full lifecycle lands, no
+  panel changes are needed.
+
+Action: focused follow-up commit that extracts `buildRosImpl` and
+reorders main(). Tests required:
+1. `sudo systemctl stop agv.service`, start backend manually with
+   `node dist/index.js` → dashboard loads, shows ROS offline.
+2. `start agv.service` → ROS transitions to online in < 30 s without
+   refresh.
+3. ROS goes down mid-operation → status flips to offline in < 10 s.
+4. ROS reconnects → automatic.
+
+### setMode and executeMission close over realRos
+
+The functions `deps.setMode` and `deps.executeMission` (defined in
+`index.ts` near lines 957 and 469) close over the local `realRos`
+const inside `main()`. When the server-first refactor lands, these
+will need to either:
+- Use `deps.ros` (the proxy) so calls dispatch through the proxy.
+- OR be extracted alongside `buildRosImpl` so they're rebuilt on
+  every successful ROS connect.
+
+The second option is cleaner because publishers like `modePub` and
+`operatorModePub` (used in `setMode`) are local to the closure that
+builds them.
+
 ## Capture rules
 
 Add an entry here when:
