@@ -1,0 +1,63 @@
+[Unit]
+# AGV operator dashboard — independent of agv.service so the operator
+# can always reach the UI to diagnose, even when the ROS stack fails to
+# start or is intentionally stopped. Phase 1 / Sub-fase 1.1 follow-up
+# (2026-05-13) — the prior "server-first" refactor (commit b79c148)
+# only protected against `rclnodejs.init()` hanging WITHIN the same
+# process; `systemctl stop agv.service` killed everything including
+# the backend.
+#
+# Architecture: this unit runs `node dist/index.js` directly. The
+# backend uses rclnodejs as a CLIENT of the ROS stack (subscribes to
+# topics, calls services) but does NOT require any specific node to
+# be alive — its RosBridgeProxy retries on failure and surfaces the
+# state to the UI via /api/system/ros_status + /api/health/*.
+#
+# Independence: NO `Requires=`/`After=` of `agv.service`. Both units
+# are reachable independently. systemctl stop agv.service leaves this
+# unit untouched.
+Description=AGV Operator Dashboard (HTTP/WS backend)
+After=network-online.target NetworkManager-wait-online.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=orza
+Group=orza
+Environment=HOME=/home/orza
+Environment=NODE_ENV=production
+# Same env contract as the launch file's Node(teleop_backend) action
+# previously provided (see agv_bringup/launch/agv_full.launch.py:848-877
+# before commit ${HEAD} removed that block).
+Environment=AGV_PORT=8090
+Environment=AGV_NAMESPACE=agv
+Environment=AGV_DATA_DIR=/home/orza/agv_data
+# ROS_DOMAIN_ID + CYCLONEDDS_URI must match agv.service so the proxy
+# can discover topics published by the rest of the stack.
+Environment=ROS_DOMAIN_ID=42
+Environment=CYCLONEDDS_URI=file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml
+# NOTE: AGV_BOOT_MAP_NAME was previously set by the launch action from
+# the map: arg. Without it the backend skips the cold-boot
+# /agv/maps/loaded publish (10s post-start). The auto_init_orchestrator
+# still receives the load event later from map_manager when the map is
+# explicitly loaded, so this is a minor cold-boot timing regression
+# documented in docs/operations/systemd_services.md.
+WorkingDirectory=/home/orza/ros2_ws/src/agv_ui_backend
+# rclnodejs requires ROS 2 + the AGV install overlay to be sourced before
+# `node` exec — otherwise it tries to rebuild from source on first init
+# (npm run rebuild) and fails. Use a /bin/bash -c wrapper to source both
+# setup.bash files in sequence then exec the node entry.
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/orza/ros2_ws/install/setup.bash && exec /usr/bin/node /home/orza/ros2_ws/src/agv_ui_backend/dist/index.js'
+Restart=on-failure
+RestartSec=5
+
+# Memory bound — the backend's Node heap rarely exceeds 200 MB; cap at
+# 1 GB so a leak doesn't compete with the ROS stack for the Jetson's
+# 16 GB.
+MemoryHigh=512M
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

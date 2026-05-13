@@ -110,6 +110,13 @@ export interface AppState {
   // these to render topic-alive components. 0 means "never seen".
   lastScanTime: number;
   lastGlobalOdomTime: number;
+  // Sub-fase 1.1 follow-up — extra subscribers cabled specifically for
+  // the System Health Panel (the backend has no other consumer for these
+  // topics). 0 means "never seen".
+  lastLocalOdomTime: number;
+  lastVslamTime: number;
+  lastMarkerPoseTime: number;
+  lastSafetyStatusTime: number;
 }
 
 export interface RosBridge {

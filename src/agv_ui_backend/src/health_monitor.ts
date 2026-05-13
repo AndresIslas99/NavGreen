@@ -144,13 +144,13 @@ function topicLastSeenMsAgo(state: AppState, topic: string): number | null {
     case '/agv/odometry/global':
       return state.lastGlobalOdomTime > 0 ? (nowS - state.lastGlobalOdomTime) * 1000 : null;
     case '/agv/odometry/local':
+      return state.lastLocalOdomTime > 0 ? (nowS - state.lastLocalOdomTime) * 1000 : null;
     case '/visual_slam/tracking/odometry':
+      return state.lastVslamTime > 0 ? (nowS - state.lastVslamTime) * 1000 : null;
     case '/agv/marker_pose':
+      return state.lastMarkerPoseTime > 0 ? (nowS - state.lastMarkerPoseTime) * 1000 : null;
     case '/agv/safety/status':
-      // Not subscribed by the backend (the panel reports the topic only
-      // via the ROS layer, which the backend doesn't currently tap).
-      // Add a subscriber + state timestamp when closing this gap.
-      return null;
+      return state.lastSafetyStatusTime > 0 ? (nowS - state.lastSafetyStatusTime) * 1000 : null;
     default:
       return null;
   }
