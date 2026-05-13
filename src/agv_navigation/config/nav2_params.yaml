@@ -8,7 +8,11 @@
 # For HIL/sim mode, use nav2_hil_overrides.yaml to override frequencies/tolerances.
 #
 # Planner: SmacPlanner2D (flat greenhouse floor)
-# Controller: RegulatedPurePursuit (smooth, predictable)
+# Controller: MPPI (nav2_mppi_controller::MPPIController) wrapped in
+# RotationShimController for in-place rotation before MPPI handoff.
+# Header updated 2026-05-13 Sprint C (MEDIUM-02-06) — previous comment
+# said RegulatedPurePursuit which was stale from before commit a8180b7
+# (collision_monitor hardening + MPPI). See FollowPath block below.
 # No AMCL — dual EKF owns map->odom and odom->base_link
 
 /**/bt_navigator:
