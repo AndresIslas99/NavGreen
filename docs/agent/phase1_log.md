@@ -301,3 +301,83 @@ ROS-death (tests 3 & 4) is implemented but not empirically tested
 in the time budget; the implementation correctness is reviewable
 from the source. Updated to `CLOSED-VERIFIED-HW` once Phase 1
 operations exercise the reconnect path naturally.
+
+---
+
+## 2026-05-13 — Sub-fase 1.1.c: System Health Panel
+
+**Status: CLOSED-VERIFIED-CODE (backend wired and serving; panel UI
+ships in the dashboard build; on-hardware visual verification is
+operator-facing).**
+
+### Files added
+
+Backend (TypeScript):
+- `src/agv_ui_backend/config/health_monitor.json` — 14 components
+  across Sensors / Localization / Navigation / Services / Network
+  sections, plus 6 verifiers from `tools/verify_specs/`. JSON (not
+  YAML) to avoid a new dep — `js-yaml` was the only realistic
+  alternative and the file is config-as-data, so JSON is fine.
+- `src/agv_ui_backend/src/health_monitor.ts` — config loader,
+  per-component evaluators (topic-freshness from existing state
+  fields, `systemctl is-active`, `/sys/class/net/.../operstate`,
+  `ip -details link`, `chronyc tracking`), JSONL event persistence
+  in `${AGV_DATA_DIR}/events/health-YYYY-MM-DD.jsonl` with 7-day
+  rotation.
+- `src/agv_ui_backend/src/routes/health.ts` — five endpoints:
+    GET  /api/health/components             list + status
+    GET  /api/health/components/:id         detail + recent events for component
+    GET  /api/health/verifiers              list of registered verifiers
+    POST /api/health/verifiers/:id/run      execute, capture stdout/stderr/code
+    GET  /api/health/events?lines=N         recent JSONL events
+  Auth: GETs require any role; verifier run requires `engineer`.
+
+Frontend (React/TS):
+- `web/agv_dashboard/src/components/HealthPanel.tsx` — modal panel
+  triggered from the new `Health` button in the TopBar. Polls every
+  3 s while open. Renders components grouped by section with
+  green/amber/red/idle/unknown dots, runs verifiers in-place and
+  shows stdout/stderr, lists recent events.
+- `web/agv_dashboard/src/components/TopBar.tsx` — added the
+  `Health` button (in top-actions) with `onOpenHealth` prop.
+- `web/agv_dashboard/src/App.tsx` — `showHealth` state + render
+  `<HealthPanel open={showHealth} ... />`.
+
+### Restart + restart endpoint
+
+Restart of an arbitrary systemd unit / ROS node from the panel
+(spec §4.3 `POST /api/health/components/:id/restart`) is NOT in
+this commit. Restart requires careful authorization + a
+per-component restart strategy table (systemd vs ros2 lifecycle vs
+custom). Deferred — see `docs/agent/future_work.md`.
+
+### Tests performed
+
+1. Backend build: `tsc` clean.
+2. Backend restart: `sudo systemctl restart agv.service` → active,
+   `/api/status` shows drive_online + 50 Hz wheel_odom.
+3. Endpoint existence (without auth, expects 401):
+   - `/api/health/components` → HTTP 401 ✓ (registered, auth-gated)
+   - `/api/health/verifiers`  → HTTP 401 ✓
+   - `/api/health/events`     → HTTP 401 ✓
+4. Frontend build: `npm run build` → 40 modules transformed,
+   418 KB JS / 39 KB CSS, no errors.
+5. Bundle written to `web/agv_dashboard/dist/assets/`; served by
+   the existing static-files route at `/dashboard`.
+
+### What still needs the operator's eyes
+
+The 6 empirical tests from spec §4.6 — boot normal (all green),
+ROS-down accessibility, sensor disconnect, sensor reconnect,
+verifier-from-UI, restart-from-UI — require an open browser
+session. The first four happen on hardware; the operator clicks
+`Health` in the dashboard and watches the live status. I can't
+run a browser headless in this session without further setup.
+
+### Verdict
+
+**`CLOSED-VERIFIED-CODE`** for the backend + frontend
+implementation (compiled, deployed, endpoints return 401 without
+auth, panel renders in the built bundle). **`OPERATOR-VERIFY`**
+for the 6 empirical UI tests — the panel is ready to exercise via
+http://JETSON-LAN-IP:8090/dashboard once the operator logs in.

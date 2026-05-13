@@ -16,6 +16,7 @@ import * as navRoutes from './nav';
 import * as analyticsRoutes from './analytics';
 import * as apriltagRoutes from './apriltags';
 import * as systemRoutes from './system';
+import * as healthRoutes from './health';
 
 export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): void {
   statusRoutes.register(app, deps);
@@ -30,4 +31,5 @@ export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): v
   analyticsRoutes.register(app, deps);
   apriltagRoutes.register(app, deps);
   systemRoutes.register(app, deps);
+  healthRoutes.register(app, deps);
 }

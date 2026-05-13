@@ -18,6 +18,7 @@ import { AnalyticsPanel } from './components/panels/AnalyticsPanel'
 import { AprilTagsPanel } from './components/panels/AprilTagsPanel'
 import { WaypointBatteryPanel } from './components/panels/WaypointBatteryPanel'
 import { AprilTagAssignmentModal } from './components/AprilTagAssignmentModal'
+import { HealthPanel } from './components/HealthPanel'
 import { ReplaySlider } from './components/ReplaySlider'
 import { FleetOverlay } from './components/FleetOverlay'
 import { useFleetSocket } from './hooks/useFleetSocket'
@@ -115,6 +116,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
   const [pendingWaypoints, setPendingWaypoints] = useState<Waypoint[]>([])
   const [capturingWaypoints, setCapturingWaypoints] = useState(false)
   const [ghostPose, setGhostPose] = useState<{ x: number; y: number; theta: number } | null>(null)
+  const [showHealth, setShowHealth] = useState(false)
 
   // Backend-authoritative state (no more frontend derivation)
   const state: RobotState = connected ? (status?.robot_state || 'idle') : 'offline'
@@ -233,10 +235,12 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         connected={connected}
         onEStop={handleEStop}
         onNavCancel={handleNavCancel}
+        onOpenHealth={() => setShowHealth(true)}
         username={username}
         userRole={userRole}
         onLogout={onLogout}
       />
+      <HealthPanel open={showHealth} onClose={() => setShowHealth(false)} />
 
       <div className="body">
         <ModeRail active={rail} onChange={setRail} />

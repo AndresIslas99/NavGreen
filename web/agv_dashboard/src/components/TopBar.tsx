@@ -8,6 +8,7 @@ interface Props {
   connected: boolean
   onEStop: (active: boolean) => void
   onNavCancel: () => void
+  onOpenHealth?: () => void
   username?: string
   userRole?: string
   onLogout?: () => void
@@ -126,7 +127,7 @@ function localizationTooltip(loc: Loc | undefined): string {
   return `Localization: ${loc.action}${loc.map ? ' · map: ' + loc.map : ''}${loc.detail ? ' · ' + loc.detail : ''}`
 }
 
-export function TopBar({ status, state, connected, onEStop, onNavCancel, username, userRole, onLogout }: Props) {
+export function TopBar({ status, state, connected, onEStop, onNavCancel, onOpenHealth, username, userRole, onLogout }: Props) {
   const s = status
   const navActive = s?.nav_state?.active || false
   const mp = s?.mission_progress
@@ -222,6 +223,16 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
         )}
 
         <div className="top-actions">
+          {onOpenHealth && (
+            <button
+              className="top-btn"
+              onClick={onOpenHealth}
+              title="System Health Panel"
+              style={{ padding: '4px 12px', fontSize: 12 }}
+            >
+              Health
+            </button>
+          )}
           {username && (
             <>
               <span className="user-badge">

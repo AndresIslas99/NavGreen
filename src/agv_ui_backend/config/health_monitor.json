@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "id": "zed_2i",
+      "name": "ZED 2i Camera",
+      "type": "sensor",
+      "section": "Sensors",
+      "check": "topic_alive",
+      "topic": "/agv/imu/filtered",
+      "deadline_ms": 200,
+      "critical": true
+    },
+    {
+      "id": "odrive",
+      "name": "ODrive Motors",
+      "type": "sensor",
+      "section": "Sensors",
+      "check": "topic_alive",
+      "topic": "/agv/wheel_odom",
+      "deadline_ms": 200,
+      "critical": true
+    },
+    {
+      "id": "lidar",
+      "name": "LIDAR (scan)",
+      "type": "sensor",
+      "section": "Sensors",
+      "check": "topic_alive",
+      "topic": "/agv/scan",
+      "deadline_ms": 500,
+      "critical": false
+    },
+    {
+      "id": "ekf_local",
+      "name": "EKF Local",
+      "type": "ros_node",
+      "section": "Localization",
+      "check": "topic_alive",
+      "topic": "/agv/odometry/local",
+      "deadline_ms": 100,
+      "critical": true
+    },
+    {
+      "id": "ekf_global",
+      "name": "EKF Global",
+      "type": "ros_node",
+      "section": "Localization",
+      "check": "topic_alive",
+      "topic": "/agv/odometry/global",
+      "deadline_ms": 200,
+      "critical": true
+    },
+    {
+      "id": "cuvslam",
+      "name": "cuVSLAM",
+      "type": "ros_node",
+      "section": "Localization",
+      "check": "topic_alive",
+      "topic": "/visual_slam/tracking/odometry",
+      "deadline_ms": 500,
+      "critical": false
+    },
+    {
+      "id": "marker_correction",
+      "name": "AprilTag Correction",
+      "type": "ros_node",
+      "section": "Localization",
+      "check": "topic_alive",
+      "topic": "/agv/marker_pose",
+      "deadline_ms": 5000,
+      "critical": false
+    },
+    {
+      "id": "nav2_collision_monitor",
+      "name": "Collision Monitor",
+      "type": "ros_node",
+      "section": "Navigation",
+      "check": "topic_alive",
+      "topic": "/agv/collision_monitor_state",
+      "deadline_ms": 2000,
+      "critical": true
+    },
+    {
+      "id": "mode_arbiter",
+      "name": "Mode Arbiter",
+      "type": "ros_node",
+      "section": "Navigation",
+      "check": "topic_alive",
+      "topic": "/agv/mode/state",
+      "deadline_ms": 200,
+      "critical": true
+    },
+    {
+      "id": "safety_supervisor",
+      "name": "Safety Supervisor",
+      "type": "ros_node",
+      "section": "Navigation",
+      "check": "topic_alive",
+      "topic": "/agv/safety/status",
+      "deadline_ms": 1000,
+      "critical": true
+    },
+    {
+      "id": "agv_service",
+      "name": "AGV Service",
+      "type": "systemd",
+      "section": "Services",
+      "unit": "agv.service",
+      "critical": true
+    },
+    {
+      "id": "can_link",
+      "name": "CAN0 Link",
+      "type": "process",
+      "section": "Services",
+      "check": "can_link_up",
+      "interface": "can0",
+      "critical": true
+    },
+    {
+      "id": "wifi",
+      "name": "WiFi (wlP1p1s0)",
+      "type": "network",
+      "section": "Network",
+      "check": "interface_up",
+      "interface": "wlP1p1s0",
+      "critical": false
+    },
+    {
+      "id": "clock_sync",
+      "name": "Clock Sync (chrony)",
+      "type": "process",
+      "section": "Network",
+      "check": "chrony_synced",
+      "critical": false
+    }
+  ],
+  "verifiers": [
+    {
+      "id": "verify_topic_types",
+      "name": "Topic type cross-check",
+      "script": "tools/verify_specs/verify_topic_types.py",
+      "blocking": true
+    },
+    {
+      "id": "verify_geometry_ssot",
+      "name": "Geometry SSOT alignment",
+      "script": "tools/verify_specs/verify_geometry_ssot.py",
+      "blocking": true
+    },
+    {
+      "id": "verify_interfaces",
+      "name": "Interfaces presence",
+      "script": "tools/verify_specs/verify_interfaces.py",
+      "blocking": true
+    },
+    {
+      "id": "verify_no_waypoint_manager",
+      "name": "Shadow waypoint_manager guard",
+      "script": "tools/verify_specs/verify_no_waypoint_manager.sh",
+      "blocking": true
+    },
+    {
+      "id": "verify_werror",
+      "name": "Werror compile flags",
+      "script": "tools/verify_specs/verify_werror.sh",
+      "blocking": true
+    },
+    {
+      "id": "all",
+      "name": "Run all verifiers",
+      "script": "tools/verify_specs/all.sh",
+      "blocking": false
+    }
+  ]
+}
