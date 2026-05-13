@@ -14,6 +14,12 @@
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>sensor_msgs</depend>
+  <!-- agv_description is consumed at launch time only (its share dir
+       provides config/robot_geometry.yaml — the kinematic SSOT chained
+       before odrive_params.yaml in launch/odrive.launch.py). Declared as
+       exec_depend so colcon installs agv_description before agv_odrive
+       in the colcon graph. -->
+  <exec_depend>agv_description</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
 
