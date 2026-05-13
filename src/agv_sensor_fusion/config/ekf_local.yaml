@@ -47,13 +47,28 @@
     # In HIL sim: /agv/imu/data at ~20Hz (overridden via launch param)
     imu0: /agv/imu/filtered
     imu0_config: [false, false, false,     # x, y, z
-                  true,  true,  true,      # roll, pitch, yaw
+                  false, false, false,     # roll, pitch, yaw  ← HIGH-04-09 fix (2026-05-13)
                   false, false, false,     # vx, vy, vz
                   true,  true,  true,      # vroll, vpitch, vyaw
                   true,  true,  false]     # ax, ay, az
-    # Absolute IMU yaw provides a global heading reference that can correct
-    # wheel-odometry heading drift. Covariance set wider (0.1) to account for
-    # potential magnetic interference in greenhouse.
+    # HIGH-04-09 fix (Section-0 carry-over closure, 2026-05-13):
+    # Orientation row was previously [T, T, T] — the EKF treated IMU yaw as
+    # an absolute heading reference. On any IMU re-zero event (USB-reboot,
+    # power glitch), the EKF would snap to follow the new yaw zero,
+    # producing a measurable +2.4° map-frame yaw jump on a stationary robot
+    # (Section-0 F4 baseline, 5 s disconnect). The BMI088 has no true-north
+    # reference — its "yaw zero" is wherever the IMU was facing at boot, so
+    # treating it as absolute was the bug.
+    #
+    # Fix: orientation row → [F, F, F]. The EKF now consumes only the
+    # angular-velocity (gyro RATE) row, which is intrinsically differential
+    # and immune to re-zero events. Local yaw will drift slowly over
+    # minutes; ekf_global corrects via cuVSLAM (odom1 yaw rate), AprilTag
+    # markers (pose0 absolute), and ZED Area Memory (pose1 absolute).
+    #
+    # Baseline before fix: +2.4° yaw jump on a stationary 5 s ZED USB
+    # disconnect. Target after fix: <0.5° (gyro integration over 5 s is
+    # ~0.1° for BMI088).
     imu0_differential: false
     imu0_relative: false
     imu0_remove_gravitational_acceleration: true
