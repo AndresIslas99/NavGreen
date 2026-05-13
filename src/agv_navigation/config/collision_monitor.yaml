@@ -49,9 +49,21 @@
     # value (3) could miss small/thin objects that only generate 1-2 hits in the
     # scan. We accept some false positives from sensor noise in exchange for
     # never missing a real obstacle.
+    # Stop zone polygon: front extended +20cm (footprint front x=0.50 →
+    # 0.70m), lateral +5cm (footprint y=±0.37 → ±0.42m), rear AT the
+    # footprint (x=-0.30, NOT footprint+5cm).
+    #
+    # Sprint C / MEDIUM-09-05 (2026-05-13): rear x was -0.35 (= footprint
+    # rear -0.30 minus 5 cm safety margin) up to this commit. The robot
+    # is forward-only — MPPI vx_min=0, BT removes BackUp, no rear sensor.
+    # A "rear obstacle" can only be either (a) unavoidable (we can't
+    # reverse to clear it anyway) or (b) noise / reflection in the
+    # pointcloud_source feeding the polygon. Either way the 5 cm rear
+    # extension only produces false stops, never prevents collisions —
+    # the rear lobe is sized to match the footprint exactly.
     stop_zone:
       type: "polygon"
-      points: [0.70, 0.42, 0.70, -0.42, -0.35, -0.42, -0.35, 0.42]
+      points: [0.70, 0.42, 0.70, -0.42, -0.30, -0.42, -0.30, 0.42]
       action_type: "stop"
       max_points: 1
       visualize: true
