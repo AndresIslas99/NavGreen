@@ -55,6 +55,15 @@ A built-in watchdog also forces `safety_ok=false` if no `SafetyStatus` arrives
 within `safety_timeout_s` (default 0.5s) — this catches a crashed
 `safety_supervisor`.
 
+**Startup behavior — fail-closed (verified Sprint D, HIGH-09-04)**:
+the node's `safety_ok_` member defaults to `false`. Any `cmd_vel_in`
+arriving before the first `SafetyStatus` produces zero output. The
+watchdog only starts measuring once the first `SafetyStatus` has
+been seen (`cmd_vel_gate.cpp:95` short-circuits while
+`last_safety_msg_.nanoseconds() == 0`). The header field
+`GateInputs::safety_ok` defaults to `true` because it is the
+pure-logic test struct — the runtime member is the authority.
+
 ## Topology (wired into agv_full.launch.py as of 2026-04-13)
 
 ```
