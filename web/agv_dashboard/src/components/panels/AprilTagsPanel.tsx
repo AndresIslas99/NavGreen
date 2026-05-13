@@ -48,6 +48,8 @@ export function AprilTagsPanel() {
   const [layoutBusy, setLayoutBusy] = useState(false)
   const [layoutMsg, setLayoutMsg] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pasteText, setPasteText] = useState('')
+  const [showPaste, setShowPaste] = useState(false)
 
   // ── Sub-fase 1.2 Probe state ──
   const [probeOpen, setProbeOpen] = useState(false)
@@ -172,33 +174,39 @@ export function AprilTagsPanel() {
 
   // ── Sub-fase 1.2 Layout Loader handlers ──
 
+  // Single validate call shared by both input paths (file upload + paste).
+  const validateYamlText = async (yamlText: string) => {
+    setLayoutBusy(true)
+    setLayoutMsg(null)
+    try {
+      const r = await authedFetch('/api/tags/layout/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/yaml' },
+        body: yamlText,
+      })
+      const data = await r.json()
+      if (r.ok && data.valid) {
+        setLayoutPreview({ tags: data.tags, errors: [], yamlText })
+      } else {
+        setLayoutPreview({ tags: [], errors: data.errors || [], yamlText })
+      }
+    } catch (ex: any) {
+      setLayoutMsg(`Network: ${ex?.message}`)
+    } finally {
+      setLayoutBusy(false)
+    }
+  }
+
   const handleLayoutFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = async () => {
-      const yamlText = String(reader.result ?? '')
-      setLayoutBusy(true)
-      setLayoutMsg(null)
-      try {
-        const r = await authedFetch('/api/tags/layout/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/yaml' },
-          body: yamlText,
-        })
-        const data = await r.json()
-        if (r.ok && data.valid) {
-          setLayoutPreview({ tags: data.tags, errors: [], yamlText })
-        } else {
-          setLayoutPreview({ tags: [], errors: data.errors || [], yamlText })
-        }
-      } catch (ex: any) {
-        setLayoutMsg(`Network: ${ex?.message}`)
-      } finally {
-        setLayoutBusy(false)
-      }
-    }
+    reader.onload = () => { void validateYamlText(String(reader.result ?? '')) }
     reader.readAsText(file)
+  }
+  const handleLayoutPaste = () => {
+    if (!pasteText.trim()) return
+    void validateYamlText(pasteText)
   }
 
   const handleLayoutApply = async () => {
@@ -418,7 +426,34 @@ export function AprilTagsPanel() {
           />
           <button className="btn-small" onClick={handleLayoutDownloadCurrent}>Download current</button>
           <button className="btn-small" onClick={handleLayoutDownloadExample}>Download example</button>
+          <button className="btn-small" onClick={() => setShowPaste(!showPaste)}>
+            {showPaste ? 'Hide paste' : 'Or paste YAML'}
+          </button>
         </div>
+
+        {showPaste && (
+          <div style={{ marginBottom: 8 }}>
+            <textarea
+              value={pasteText}
+              onChange={e => setPasteText(e.target.value)}
+              placeholder="Paste YAML here…"
+              style={{
+                width: '100%', minHeight: 180, fontFamily: 'monospace',
+                fontSize: 12, padding: 6, background: '#0f0f1e',
+                border: '1px solid #2a2a3e', color: 'var(--text, #e0e0e0)',
+                borderRadius: 4,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button className="btn-small" disabled={layoutBusy || !pasteText.trim()} onClick={handleLayoutPaste}>
+                Validate pasted YAML
+              </button>
+              <button className="btn-small" onClick={() => { setPasteText(''); setLayoutPreview(null) }}>
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
 
         {layoutBusy && <div className="dim">Working…</div>}
         {layoutMsg && <div style={{ fontSize: 12, opacity: 0.9 }}>{layoutMsg}</div>}
