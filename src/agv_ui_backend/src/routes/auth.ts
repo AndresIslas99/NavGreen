@@ -16,6 +16,23 @@ export function register(app: Express, deps: AppDeps): void {
     res.json(result);
   });
 
+  // Sprint A.5 / CRITICAL-11-C-01 — first-login password change route.
+  // The caller proves identity by supplying the old password; no JWT
+  // middleware needed. Used to clear the must_change_password flag set
+  // for the auto-generated admin user on first boot.
+  app.post('/api/auth/change-password', (req, res) => {
+    const { username, old_password, new_password } = req.body || {};
+    if (!username || !old_password || !new_password) {
+      return res.status(400).json({ error: 'Missing fields' });
+    }
+    if (typeof new_password !== 'string' || new_password.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    const ok = authManager.changePassword(username, old_password, new_password);
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    res.json({ success: true });
+  });
+
   app.get('/api/auth/me', authManager.requireAuth(), (req, res) => {
     res.json((req as any).user);
   });
