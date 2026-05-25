@@ -53,6 +53,8 @@ interface Props {
   state?: RobotState
   /** Operator-defined base/dock pose — rendered as a pulsing home landmark. */
   homePoint?: HomePoint | null
+  /** Battery percent — triggers the low-battery blinking dot on the robot icon when < 15. */
+  batteryPct?: number | null
 }
 
 // Robot icon factory moved to './map/RobotIcon.tsx' — top-down vehicle outline
@@ -63,7 +65,7 @@ function worldToLatLng(x: number, y: number): L.LatLng {
   return L.latLng(y, x)
 }
 
-export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage, state, homePoint }: Props) {
+export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage, state, homePoint, batteryPct }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
 
@@ -850,12 +852,15 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
     const latlng = worldToLatLng(pose.x, pose.y)
 
+    const lowBattery = batteryPct != null && batteryPct >= 0 && batteryPct < 15
+    const iconOpts = { lowBattery }
+
     if (robotMarkerRef.current) {
       robotMarkerRef.current.setLatLng(latlng)
-      robotMarkerRef.current.setIcon(robotIcon(pose.theta, state))
+      robotMarkerRef.current.setIcon(robotIcon(pose.theta, state, iconOpts))
     } else {
       const marker = L.marker(latlng, {
-        icon: robotIcon(pose.theta, state),
+        icon: robotIcon(pose.theta, state, iconOpts),
         zIndexOffset: 1000,
       }).addTo(map)
       robotMarkerRef.current = marker
@@ -880,7 +885,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     }
 
     // Follow logic moved to useCameraFollow hook (smooth animated panTo).
-  }, [pose, state])
+  }, [pose, state, batteryPct])
 
   // Update navigation path (state-aware coloring + animated dashes via CSS).
   // Default: accent green dashed line flowing toward the goal.
