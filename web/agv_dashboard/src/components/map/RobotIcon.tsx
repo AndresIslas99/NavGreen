@@ -24,9 +24,15 @@
  * Leaflet. SVG is rendered as an inline HTML string with CSS data-attributes
  * driving animations, so updates only re-key the divIcon (~cheap).
  *
- * Heading convention (preserved from the original robotIcon):
+ * Heading convention:
  *   ROS theta=0 → robot faces world +X (east in CRS.Simple).
- *   CSS rotation: deg = -(theta * 180/π) + 90 (because SVG default is "up").
+ *   The SVG body's heading wedge points RIGHT by default (tip at the right
+ *   edge of the body), so the CSS rotation that maps world theta to the
+ *   screen is simply `deg = -(theta * 180/π)` — no +90 offset.
+ *   - theta=0 (east)  → deg=0    → wedge points right (east on screen). ✓
+ *   - theta=π/2 (N)   → deg=-90  → wedge points up (north).             ✓
+ *   - theta=π (west)  → deg=-180 → wedge points left.                   ✓
+ *   - theta=-π/2 (S)  → deg=90   → wedge points down.                   ✓
  */
 import L from 'leaflet';
 import type { RobotState } from '../../api/types';
@@ -71,7 +77,7 @@ export function robotIcon(
   state: RobotState = 'idle',
   opts: RobotIconOptions = {},
 ): L.DivIcon {
-  const deg = -(theta * 180 / Math.PI) + 90;
+  const deg = -(theta * 180 / Math.PI);
   const tone = STROKE_BY_STATE[state] ?? 'accent';
   const stroke = STROKE_HEX[tone];
   const fill   = FILL_HEX[tone];
