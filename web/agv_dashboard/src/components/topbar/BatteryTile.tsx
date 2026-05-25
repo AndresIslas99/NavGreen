@@ -8,6 +8,7 @@
  * Color tiers: <20% crit, <40% warn, otherwise accent. Unknown → neutral.
  */
 import { Tile } from '../ui/Tile';
+import { Skeleton } from '../ui/Skeleton';
 import { Battery, BatteryLow, BatteryWarning, BatteryFull } from '../ui/icons';
 import type { LucideIcon } from '../ui/icons';
 
@@ -16,6 +17,7 @@ type Tone = 'neutral' | 'accent' | 'warn' | 'crit';
 interface Props {
   batteryPct: number | null | undefined;
   tteSeconds: number | null | undefined;
+  loading?: boolean;
 }
 
 function formatTte(seconds: number): string {
@@ -37,7 +39,7 @@ function pickIconAndTone(pct: number | null | undefined): { Icon: LucideIcon; to
   return                              { Icon: Battery,          tone: 'accent'  };
 }
 
-export function BatteryTile({ batteryPct, tteSeconds }: Props) {
+export function BatteryTile({ batteryPct, tteSeconds, loading }: Props) {
   const known = batteryPct != null && batteryPct >= 0;
   const { Icon, tone } = pickIconAndTone(batteryPct);
   const valueLabel = known ? `${Math.round(batteryPct!)}%` : '—';
@@ -53,8 +55,12 @@ export function BatteryTile({ batteryPct, tteSeconds }: Props) {
       <Tile.Icon><Icon size={24} strokeWidth={1.8} /></Tile.Icon>
       <Tile.Content>
         <Tile.Eyebrow>Batería</Tile.Eyebrow>
-        <Tile.Value>{valueLabel}</Tile.Value>
-        <Tile.Sub>{subLabel}</Tile.Sub>
+        <Tile.Value>
+          {loading && !known ? <Skeleton variant="bar" width={72} height={22} /> : valueLabel}
+        </Tile.Value>
+        <Tile.Sub>
+          {loading && !known ? <Skeleton variant="text" width={140} height={11} /> : subLabel}
+        </Tile.Sub>
       </Tile.Content>
     </Tile>
   );

@@ -185,8 +185,13 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
     }
   }
 
+  const estopEngaged = !!status?.e_stop
+
   return (
-    <div className={`app app--immersive ${connected ? '' : 'is-disconnected'}`}>
+    <div
+      className={`app app--immersive ${connected ? '' : 'is-disconnected'}`}
+      data-estop={estopEngaged ? 'active' : 'idle'}
+    >
       {/* Capa 0 — mapa full-bleed (la identidad del producto). */}
       <div className="map-bg">
         <MapView
@@ -235,7 +240,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         onSelectRobot={selectRobot}
         connected={fleetConnected}
       />
-      <HeroRow status={status} state={state} />
+      <HeroRow status={status} state={state} loading={connected && status === null} />
       <ReplaySlider
         visible={rail === 'analytics'}
         onGhostPose={setGhostPose}

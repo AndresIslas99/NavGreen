@@ -1978,6 +1978,39 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   100%    { opacity: 1; }
 }
 
+/* Ambient E-stop border — when an emergency stop is engaged (`e_stop:
+   true` on the status payload), the entire viewport gains a soft
+   yellow inset glow that gently pulses. Unmistakable peripheral cue
+   the operator can never accidentally ignore, without being alarming
+   like a flashing red banner. Pointer-events: none so it doesn't
+   intercept clicks. */
+.app[data-estop="active"]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9990;   /* above all chrome, below modals (10000) */
+  box-shadow:
+    inset 0 0 0 4px #ffeb3b,
+    inset 0 0 36px 6px rgba(255, 215, 0, 0.45);
+  animation: estop-ambient-pulse 1.8s var(--ease) infinite;
+}
+@keyframes estop-ambient-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 4px #ffeb3b,
+      inset 0 0 36px 6px rgba(255, 215, 0, 0.45);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 6px #ffe600,
+      inset 0 0 48px 8px rgba(255, 215, 0, 0.62);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app[data-estop="active"]::before { animation: none; }
+}
+
 /* AprilTag detection ripple — brief expanding ring on a Leaflet circle
    marker. Triggered when the robot pose comes within 2 m of a defined
    tag. The ring lives for ~800 ms; we animate the SVG circle's radius
