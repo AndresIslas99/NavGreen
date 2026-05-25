@@ -8,7 +8,7 @@ import { TopBar } from './components/TopBar'
 import { ModeRail } from './components/ModeRail'
 import { MapView } from './components/MapView'
 import { CameraFeed } from './components/CameraFeed'
-import { EventLog } from './components/EventLog'
+import { MissionStrip } from './components/strip/MissionStrip'
 
 import { OperatePanel } from './components/panels/OperatePanel'
 import { MappingPanel } from './components/panels/MappingPanel'
@@ -244,7 +244,12 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         </div>
       </div>
 
-      <EventLog entries={events} onClear={() => fetch(api.apiUrl('/api/events'), { method: 'DELETE' })} />
+      <MissionStrip
+        events={events}
+        missionProgress={status?.mission_progress || null}
+        distanceRemaining={status?.nav_state?.distance_remaining ?? null}
+        onClear={() => fetch(api.apiUrl('/api/events'), { method: 'DELETE' })}
+      />
 
       {pendingApriltag !== null && (
         <AprilTagAssignmentModal
