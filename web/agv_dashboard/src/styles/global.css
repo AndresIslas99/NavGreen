@@ -31,8 +31,14 @@
   --normal-bg: #333;
   --rail-w: 72px;               /* Was 64px — larger touch targets */
   --panel-w: 300px;             /* Was 280px — accommodate larger buttons */
-  --topbar-h: 64px;             /* Was 44px — accommodate larger E-stop */
+  --topbar-h: 64px;             /* Header row baseline; .app row is auto-sized to fit the hero strip below */
   --log-h: 140px;               /* Was 120px — larger log readability */
+  /* Topbar hero strip (state / battery / localization tiles) */
+  --hero-tile-h: 72px;
+  --hero-tile-min-w: 188px;
+  --hero-tile-gap: 12px;
+  --font-hero: 28px;            /* Battery %, state label */
+  --font-hero-sub: 12px;
   /* Touch targets (WCAG AAA = 44px+) */
   --tap-min: 44px;
   --tap-small: 36px;
@@ -67,7 +73,11 @@ body {
 
 .app {
   display: grid;
-  grid-template-rows: var(--topbar-h) 1fr var(--log-h);
+  /* The topbar row is auto-sized: it grows to fit the header row (--topbar-h)
+     plus the hero strip plus the optional mission-bar. This keeps the map +
+     log rows pinned to their explicit sizes regardless of how tall the hero
+     content gets at narrow viewports. */
+  grid-template-rows: auto 1fr var(--log-h);
   height: 100%;
 }
 
@@ -148,6 +158,146 @@ body {
   width: 10px; height: 10px; border-radius: 50%;
   display: inline-block;
   border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* =========================================================================
+   Topbar Hero — Block A
+   3 prominent tiles directly below the topbar header. STATE / BATTERY /
+   LOCALIZATION. Each tile has an eyebrow label and a big value + glyph.
+   Always visible. ISA-101 color discipline kept: gray for normal, color
+   for abnormal/active.
+   ========================================================================= */
+
+.topbar-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(var(--hero-tile-min-w), 1fr));
+  gap: var(--hero-tile-gap);
+  padding: 8px 16px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--hero-tile-h);
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  position: relative;
+  /* subtle inner highlight, like the existing state-badge */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset 0 -1px 0 rgba(0,0,0,0.18);
+}
+
+.hero-tile-eyebrow {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.hero-tile-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  opacity: 0.95;
+  flex-shrink: 0;
+}
+
+.hero-tile-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hero-tile-value {
+  font-size: var(--font-hero);
+  line-height: 1.05;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero-tile-value--bold { font-weight: 700; }
+
+.hero-tile-sub {
+  font-size: var(--font-hero-sub);
+  color: var(--text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Per-state coloring — mirrors the existing state-badge palette but applied
+   to the value (the eyebrow stays neutral so the layout reads consistently
+   regardless of state). Same ISA-101 discipline as the topbar pills above. */
+.hero-tile--state-e_stop      .hero-tile-value,
+.hero-tile--state-e_stop      .hero-tile-icon { color: var(--red); }
+.hero-tile--state-fault       .hero-tile-value,
+.hero-tile--state-fault       .hero-tile-icon { color: var(--red); }
+.hero-tile--state-blocked     .hero-tile-value,
+.hero-tile--state-blocked     .hero-tile-icon { color: var(--orange); }
+.hero-tile--state-mapping     .hero-tile-value,
+.hero-tile--state-mapping     .hero-tile-icon,
+.hero-tile--state-navigating  .hero-tile-value,
+.hero-tile--state-navigating  .hero-tile-icon,
+.hero-tile--state-executing_mission .hero-tile-value,
+.hero-tile--state-executing_mission .hero-tile-icon { color: var(--blue); }
+.hero-tile--state-ready       .hero-tile-value,
+.hero-tile--state-ready       .hero-tile-icon { color: var(--text); }
+.hero-tile--state-idle        .hero-tile-value,
+.hero-tile--state-idle        .hero-tile-icon { color: var(--text-secondary); }
+.hero-tile--state-offline     .hero-tile-value,
+.hero-tile--state-offline     .hero-tile-icon { color: var(--dim); }
+
+.hero-tile--battery-crit .hero-tile-value,
+.hero-tile--battery-crit .hero-tile-icon { color: var(--red); }
+.hero-tile--battery-warn .hero-tile-value,
+.hero-tile--battery-warn .hero-tile-icon { color: var(--orange); }
+.hero-tile--battery-ok   .hero-tile-value { color: var(--text); }
+.hero-tile--battery-ok   .hero-tile-icon  { color: var(--green); }
+.hero-tile--battery-unknown .hero-tile-value,
+.hero-tile--battery-unknown .hero-tile-icon { color: var(--dim); }
+
+.hero-tile--loc-crit    .hero-tile-value,
+.hero-tile--loc-crit    .hero-tile-icon { color: var(--red); }
+.hero-tile--loc-warn    .hero-tile-value,
+.hero-tile--loc-warn    .hero-tile-icon { color: var(--orange); }
+.hero-tile--loc-ok      .hero-tile-value { color: var(--text); }
+.hero-tile--loc-ok      .hero-tile-icon  { color: var(--green); }
+.hero-tile--loc-unknown .hero-tile-value,
+.hero-tile--loc-unknown .hero-tile-icon { color: var(--dim); }
+
+/* Narrow viewports — stack tiles 2-up then 1-up. The hero strip is the
+   primary surface so we prioritise tile size over keeping all three on a
+   row at narrow widths. */
+@media (max-width: 1100px) {
+  .topbar-hero { grid-template-columns: repeat(2, minmax(var(--hero-tile-min-w), 1fr)); }
+  .topbar-hero .hero-tile--loc { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .topbar-hero {
+    grid-template-columns: 1fr;
+    padding: 6px 12px 10px;
+  }
+  .topbar-hero .hero-tile--loc { grid-column: auto; }
+  :root { --font-hero: 24px; }
 }
 
 /* Mission progress bar (OTTO-style at-a-glance) */

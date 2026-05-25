@@ -72,6 +72,18 @@ export interface MissionProgress {
 }
 
 // ---------------------------------------------------------------------------
+// Home point (operator-defined base/dock pose)
+// ---------------------------------------------------------------------------
+
+export interface HomePoint {
+  x: number
+  y: number
+  theta: number
+  set_at: number   // unix seconds
+  name: string
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket payloads
 // ---------------------------------------------------------------------------
 
@@ -95,6 +107,14 @@ export interface RobotStatus {
   mode: 'teleop' | 'mapping' | 'nav'
   pose: { x: number; y: number; theta: number }
   battery_pct: number | null
+  // Backend-derived heuristic seconds-to-empty (slope of battery_pct over a
+  // rolling window). null while charging, flat, or with insufficient samples.
+  // See src/agv_ui_backend/src/battery_tte.ts and specs/hmi_api.yaml.
+  battery_time_to_empty_s: number | null
+  // Operator-defined base/dock pose. POST /api/home_point/go dispatches a
+  // navigate_to_pose action to this pose. null when no base has been set —
+  // the IR A BASE button stays disabled in that case (no implicit default).
+  home_point: HomePoint | null
   nav_state: { active: boolean; distance_remaining: number; status: string }
   health: HealthMap
   mapping_coverage: number
