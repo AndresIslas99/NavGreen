@@ -1,5 +1,6 @@
 import type { RobotStatus, RobotState } from '../api/types'
 import { RailStatus } from './RailStatus'
+import { TopBarHero } from './topbar/TopBarHero'
 
 interface Props {
   status: RobotStatus | null
@@ -246,6 +247,12 @@ export function TopBar({ status, state, connected, onEStop, onNavCancel, usernam
           </button>
         </div>
       </header>
+
+      {/* Hero strip: 3 prominent tiles (state / battery / localization) sitting
+          directly below the topbar header. Always visible; visible from across
+          the room. The metrics row inside the header keeps the engineer-grade
+          Hz/velocity/pose readouts that are still useful but secondary. */}
+      <TopBarHero status={status} state={state} />
 
       {/* Mission progress bar (OTTO-style at-a-glance) */}
       {mp && (mp.status === 'running' || mp.status === 'paused') && (
