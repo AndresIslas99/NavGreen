@@ -27,6 +27,7 @@ export {
   BatteryLow,
   BatteryWarning,
   BatteryFull,
+  BatteryCharging,
   Zap,
 
   // Localization
@@ -61,6 +62,7 @@ export {
   Wifi,
   User,
   LogOut,
+  LogIn,
 
   // Navigation / chevrons
   ChevronRight,
