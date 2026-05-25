@@ -5,11 +5,12 @@
  * Layers: occupancy grid, scan points, nav path, pose trail, waypoints, robot pose.
  */
 
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone, RobotState, HomePoint } from '../api/types'
 import { robotIcon } from './map/RobotIcon'
+import { useCameraFollow } from './map/useCameraFollow'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
 import {
@@ -86,9 +87,19 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   // Trail accumulator
   const trailRef = useRef<L.LatLng[]>([])
 
-  // Track if user has manually panned (don't auto-center)
-  const userPannedRef = useRef(false)
-  const [followRobot, setFollowRobot] = useState(true)
+  // State mirror of mapRef so the camera hook re-runs when the map exists.
+  // (Refs don't trigger re-renders; the hook needs the live map instance.)
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
+
+  // Camera follow logic — owns the "always centered on robot" behavior with
+  // smooth panTo animation, manual-pan detection (via movestart guarded by
+  // programmaticMoveRef), and stale-pose freezing.
+  const { cameraMode, followRobot, recenter } = useCameraFollow(
+    mapInstance,
+    pose,
+    worldToLatLng,
+    { defaultZoom: 4, bottomBias: 0.20 },
+  )
 
   // Initialize map
   useEffect(() => {
@@ -105,16 +116,11 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       dragging: true,
     })
 
-    // Default view: fit to the greenhouse enclosure so the geometry is
-    // immediately visible. If a SLAM map loads later, its own fitBounds
-    // takes over (see the mapData effect below).
-    {
-      const enc = enclosureBounds()
-      map.fitBounds(
-        [[enc.minY, enc.minX], [enc.maxY, enc.maxX]],
-        { padding: [32, 32] },
-      )
-    }
+    // Initial view delegated to useCameraFollow: it sets a tighter zoom (4)
+    // centered on the robot pose so the operator sees ~10-15 m around the
+    // vehicle, Google-Maps style. If no pose has been received yet the hook
+    // is a no-op and we fall back to default Leaflet zoom (handled below).
+    map.setView([0, 0], 4, { animate: false })
 
     // Add zoom control in top-right
     L.control.zoom({ position: 'topright' }).addTo(map)
@@ -226,11 +232,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const tagGroup = L.layerGroup().addTo(map)
     tagLayerRef.current = tagGroup
 
-    // Track user interaction
-    map.on('dragstart', () => {
-      userPannedRef.current = true
-      setFollowRobot(false)
-    })
+    // User-pan detection is now owned by useCameraFollow (uses movestart +
+    // zoomstart guarded by programmaticMoveRef). No dragstart listener here.
 
     // Click-to-goal
     map.on('click', (e: L.LeafletMouseEvent) => {
@@ -240,10 +243,12 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     })
 
     mapRef.current = map
+    setMapInstance(map)   // notify React-tree consumers (e.g. useCameraFollow)
 
     return () => {
       map.remove()
       mapRef.current = null
+      setMapInstance(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -559,11 +564,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       }).addTo(map)
     }
 
-    // Follow robot
-    if (followRobot && !userPannedRef.current) {
-      map.panTo(latlng, { animate: false })
-    }
-  }, [pose, followRobot, state])
+    // Follow logic moved to useCameraFollow hook (smooth animated panTo).
+  }, [pose, state])
 
   // Update navigation path (state-aware coloring + animated dashes via CSS).
   // Default: accent green dashed line flowing toward the goal.
@@ -722,14 +724,9 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     }
   }, [ghostPose])
 
-  // Center on robot button
-  const centerOnRobot = useCallback(() => {
-    const map = mapRef.current
-    if (!map) return
-    userPannedRef.current = false
-    setFollowRobot(true)
-    map.panTo(worldToLatLng(pose.x, pose.y), { animate: true })
-  }, [pose])
+  // Center-on-robot is now delegated to the useCameraFollow hook's recenter().
+  // The button below is kept as a fallback control inside the map; the
+  // floating RecenterButton (I5 commit) is the primary UI.
 
   return (
     <div className="map-container" style={{ position: 'relative' }}>
@@ -740,6 +737,16 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         <span className="map-coord">
           ({pose.x.toFixed(2)}, {pose.y.toFixed(2)}) {(pose.theta * 180 / Math.PI).toFixed(0)}&deg;
         </span>
+        {cameraMode === 'manual' && (
+          <span className="camera-status-pill camera-status-pill--manual" title="Toca el botón Centrar para volver al robot">
+            Vista manual
+          </span>
+        )}
+        {cameraMode === 'frozen' && (
+          <span className="camera-status-pill camera-status-pill--frozen" title="Sin actualización de pose por más de 2 s">
+            Vista congelada
+          </span>
+        )}
       </div>
       {mappingCoverage != null && mappingCoverage > 0 && (
         <div className="coverage-badge">
@@ -749,8 +756,9 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       <div className="map-overlay-bl">
         <button
           className={`map-btn ${followRobot ? 'map-btn-active' : ''}`}
-          onClick={centerOnRobot}
-          title="Center on robot"
+          onClick={recenter}
+          title="Centrar en robot"
+          aria-label="Centrar el mapa en el robot"
         >
           &#8853;
         </button>

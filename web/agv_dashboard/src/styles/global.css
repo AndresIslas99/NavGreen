@@ -224,8 +224,9 @@ body {
   z-index: var(--z-map);
   background: var(--bg);
 }
+.map-bg > .map-container,
 .map-bg > .map-section,
-.map-bg .leaflet-container { width: 100%; height: 100%; }
+.map-bg .leaflet-container { width: 100%; height: 100%; position: relative; }
 
 /* Pointer-events helpers — let clicks fall through to the map in the gaps
    between floating cards. Wrappers carry pass-through; visible cards
@@ -3529,6 +3530,31 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   margin-top: var(--sp-2);
   flex-wrap: wrap;
   justify-content: center;
+}
+
+/* Camera status pill — shown in map's top-left overlay when the camera
+   is in manual or frozen modes. Tells operator the view is no longer
+   auto-following the robot. */
+.camera-status-pill {
+  display: inline-block;
+  margin-left: var(--sp-2);
+  padding: 2px 8px;
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-radius: var(--r-xs);
+  border: 1px solid transparent;
+}
+.camera-status-pill--manual {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.camera-status-pill--frozen {
+  background: var(--crit-soft);
+  color: var(--crit);
+  border-color: var(--crit);
 }
 
 /* Navigation path — animated marching dashes when actively navigating;
