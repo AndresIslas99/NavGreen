@@ -79,11 +79,17 @@ export function robotIcon(
   const moving = MOVING_STATES.includes(state);
   const halted = state === 'e_stop' || state === 'fault';
 
-  // Outer canvas leaves room for the glow ring + wedge pulse without
-  // clipping. The body still occupies the centre 36×24 area.
-  const W = 48, H = 40;
+  // Canvas sized so the body roughly matches the AGV's real footprint
+  // at Leaflet zoom 4 (1 m ≈ 16 px in CRS.Simple). AGV is 0.80 × 0.90 m
+  // (`agv_geometry.yaml`) → ~13 × 14 px at true scale. We render at 1.6×
+  // for visibility (22 × 20 body) — slightly bigger than reality but
+  // proportional with the 2 m row spacing (~32 px) and 3 m corridor
+  // (~48 px) the operator sees on the map.
+  const W = 32, H = 28;
   const CX = W / 2, CY = H / 2;
-  const BODY_X = CX - 18, BODY_Y = CY - 12;   // 36×24 centered
+  const BODY_W = 22, BODY_H = 20;
+  const BODY_X = CX - BODY_W / 2;   // = 5
+  const BODY_Y = CY - BODY_H / 2;   // = 4
 
   const ringStrokeOpacity = halted ? 0.85 : 0.55;
   const ringDataState = halted ? 'halted' : (moving ? 'moving' : 'idle');
@@ -107,39 +113,43 @@ export function robotIcon(
              axis (sun-from-above convention) rather than rotating with the
              robot. Gives the vehicle a sense of weight against the ground. -->
         <ellipse class="robot-icon__shadow"
-                 cx="${CX}" cy="${CY + 3}" rx="17" ry="6"
+                 cx="${CX}" cy="${CY + 2}" rx="11" ry="4"
                  fill="url(#contact-shadow)" />
         <!-- State glow ring (drawn next, beneath the chassis) -->
         <circle class="robot-icon__ring"
-                cx="${CX}" cy="${CY}" r="20"
+                cx="${CX}" cy="${CY}" r="13"
                 fill="none"
-                stroke="${stroke}" stroke-width="1.2"
+                stroke="${stroke}" stroke-width="1"
                 stroke-opacity="${ringStrokeOpacity}"
                 stroke-dasharray="2 3" />
-        <!-- Body group — rotated as a whole to align with heading. -->
+        <!-- Body group — rotated as a whole to align with heading.
+             Body is 22 × 20 (matches ~1.6× the real 80×90 cm AGV footprint
+             at zoom 4). Wheels 4×3 at the 4 corners; chassis is a rounded
+             rectangle inset 2 px from the body; wedge protrudes from the
+             right edge. -->
         <g filter="url(#rs)"
            transform="rotate(${deg} ${CX} ${CY})"
            class="robot-icon__body">
           <!-- Wheels (4 corners) -->
-          <rect x="${BODY_X + 2}"  y="${BODY_Y + 0}"  width="7" height="4" rx="1" fill="#1a2421" />
-          <rect x="${BODY_X + 2}"  y="${BODY_Y + 20}" width="7" height="4" rx="1" fill="#1a2421" />
-          <rect x="${BODY_X + 27}" y="${BODY_Y + 0}"  width="7" height="4" rx="1" fill="#1a2421" />
-          <rect x="${BODY_X + 27}" y="${BODY_Y + 20}" width="7" height="4" rx="1" fill="#1a2421" />
+          <rect x="${BODY_X + 1}"  y="${BODY_Y + 0}"  width="5" height="3" rx="0.8" fill="#1a2421" />
+          <rect x="${BODY_X + 1}"  y="${BODY_Y + 17}" width="5" height="3" rx="0.8" fill="#1a2421" />
+          <rect x="${BODY_X + 16}" y="${BODY_Y + 0}"  width="5" height="3" rx="0.8" fill="#1a2421" />
+          <rect x="${BODY_X + 16}" y="${BODY_Y + 17}" width="5" height="3" rx="0.8" fill="#1a2421" />
           <!-- Body chassis -->
-          <rect x="${BODY_X + 3}" y="${BODY_Y + 4}" width="30" height="16" rx="3"
-                fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+          <rect x="${BODY_X + 2}" y="${BODY_Y + 3}" width="18" height="14" rx="2.4"
+                fill="${fill}" stroke="${stroke}" stroke-width="1.3"/>
           <!-- Heading wedge -->
           <path class="robot-icon__wedge"
-                d="M${BODY_X + 28} ${BODY_Y + 8} L${BODY_X + 34} ${BODY_Y + 12} L${BODY_X + 28} ${BODY_Y + 16} Z"
+                d="M${BODY_X + 16} ${BODY_Y + 6} L${BODY_X + 21} ${BODY_Y + 10} L${BODY_X + 16} ${BODY_Y + 14} Z"
                 fill="${stroke}" />
           <!-- base_link origin dot -->
-          <circle cx="${CX}" cy="${CY}" r="1.2" fill="${stroke}" opacity="0.6" />
+          <circle cx="${CX}" cy="${CY}" r="1" fill="${stroke}" opacity="0.6" />
         </g>
         ${opts.lowBattery ? `
           <!-- Low-battery indicator: red dot top-right of canvas, blinking -->
           <circle class="robot-icon__lowbat"
-                  cx="${W - 5}" cy="5" r="3.4"
-                  fill="#a8392a" stroke="#fefdfb" stroke-width="1.2" />
+                  cx="${W - 4}" cy="4" r="2.8"
+                  fill="#a8392a" stroke="#fefdfb" stroke-width="1" />
         ` : ''}
       </svg>
     </div>`;

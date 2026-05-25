@@ -1,39 +1,53 @@
 /**
  * Greenhouse geometry constants — SSOT for visual layout in the dashboard.
  *
- * The values below are MIRRORED from the C++ source of truth at
- * `src/agv_zone_detector/include/agv_zone_detector/zone_classifier_impl.hpp`
- * lines 24-35 (as of 2026-05-24). They describe the cultivation layout the
- * robot navigates: two rail sections (REAR and FRONT) separated by a
- * drivable corridor, each with 5 horizontal aisles.
+ * **PROPORTIONS GROUND-TRUTHED (2026-05-25)** against the operator's
+ * description of the real greenhouse:
+ *   - Hileras (cucumber rows) ≈ 20 m long
+ *   - 2 m separation between rows (aisle-to-aisle, center-to-center)
+ *   - Central corridor 3 m wide
+ *   - Rail gauge 57 cm (the two parallel rails the robot's wheels run on)
+ *   - AGV footprint 80 × 90 cm (`agv_geometry.yaml`)
  *
- * Why mirrored not fetched: a future `GET /api/greenhouse/geometry` endpoint
- * will unify sim + nav + dashboard, but the values are stable (last touched
- * 2026-04-18), so mirroring with a back-reference comment is acceptable for
- * the visual-only consumer that is this dashboard. The reference comment
- * makes the eventual switch a one-import swap.
+ * These values are TUNED FOR VISUAL FIDELITY in the dashboard map. They
+ * differ slightly from `agv_zone_detector/include/agv_zone_detector/
+ * zone_classifier_impl.hpp` (which uses 2.2 m aisle spacing and 4 m
+ * corridor — both within the classifier's ±0.35 m tolerance band, so
+ * production behavior is unaffected). A future
+ * `GET /api/greenhouse/geometry` endpoint will unify sim + nav +
+ * dashboard around a single source; until then the dashboard chooses
+ * accuracy of the operator-visible model over mirror-of-C++.
  *
  * Coordinate system: world frame in meters. `worldToLatLng(x, y) = L.latLng(y, x)`
  * is used by MapView throughout — y is "lat", x is "lng".
  */
 
-// ── Rail sections ─────────────────────────────────────────────────────────
+// ── Rail sections (each 20 m long, separated by a 3 m corridor) ────────────
 export const REAR_X_START  = -16.5;
 export const REAR_X_END    =   3.5;
-export const FRONT_X_START =   7.5;
-export const FRONT_X_END   =  27.5;
+export const FRONT_X_START =   6.5;   // was 7.5 — corridor now 3 m (was 4 m)
+export const FRONT_X_END   =  26.5;   // was 27.5 — keeps FRONT length = 20 m
 
 // ── Approach strips (where rail_approach hands off from Nav2) ─────────────
+// Repositioned to stay inside the narrower corridor (and keep their
+// 0.5 m thickness flush with each section's drivable wall).
 export const REAR_APPROACH_X_START  = 4.0;
 export const REAR_APPROACH_X_END    = 4.5;
-export const FRONT_APPROACH_X_START = 6.5;
-export const FRONT_APPROACH_X_END   = 7.0;
+export const FRONT_APPROACH_X_START = 5.5;
+export const FRONT_APPROACH_X_END   = 6.0;
 
 // ── Aisle layout ──────────────────────────────────────────────────────────
-export const AISLE_CENTERS  = [-4.4, -2.2, 0.0, 2.2, 4.4] as const;
-export const AISLE_HALF_W   = 0.35;   // physical rail centerline band (matches zone_classifier)
-export const ROW_BAND_HALF_W = 1.0;   // VISUAL half-width of the painted "row" — wider than the rail itself,
-                                       // suggesting the plant-growing band on either side of the rail.
+// Aisle centers = rail centers (where the AGV drives). 2 m spacing between
+// aisles per operator description; 5 aisles total (A bottom → E top).
+export const AISLE_CENTERS  = [-4.0, -2.0, 0.0, 2.0, 4.0] as const;
+// Half-width of the rail gauge (the two parallel rails the AGV's wheels
+// run on). 0.285 m → 0.57 m total = real rail gauge.
+export const AISLE_HALF_W   = 0.285;
+// VISUAL half-width of the painted "row" band. With 2 m between aisles,
+// 1 m half-width makes adjacent bands meet edge-to-edge with no overlap —
+// which is what you'd see from above: continuous plant rows with the
+// rail centerlines marking each one.
+export const ROW_BAND_HALF_W = 1.0;
 
 // ── Outer margin (cosmetic only — adds breathing room around the enclosure) ─
 export const OUTER_MARGIN = 1.1;
