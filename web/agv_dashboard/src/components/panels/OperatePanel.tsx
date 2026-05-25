@@ -19,6 +19,8 @@ import { ControlModeRail } from '../cockpit/ControlModeRail';
 import { ActionStack } from '../cockpit/ActionStack';
 import { TaskInfoCard } from '../cockpit/TaskInfoCard';
 import { HomePointHint } from '../cockpit/HomePointHint';
+import { Section, Button } from '../ui';
+import { Zap, Power } from '../ui/icons';
 import type { AllowedActions, RobotStatus, HomePoint } from '../../api/types';
 
 interface Props {
@@ -71,24 +73,25 @@ export function OperatePanel({
         onSet={hp => onHomePointSet?.(hp)}
       />
 
-      <div className="cockpit-section">
-        <div className="cockpit-eyebrow">MOTORES</div>
-        <button
-          className={`full-width motor-toggle ${motorsArmed ? 'armed' : ''}`}
-          onClick={() => onMotorEnable(!motorsArmed)}
+      <Section title="Motores">
+        <Button
+          variant={motorsArmed ? 'primary' : 'secondary'}
+          size="lg"
+          block
+          leadingIcon={motorsArmed ? Zap : Power}
           disabled={!actions.canMotorEnable && !motorsArmed}
+          onClick={() => onMotorEnable(!motorsArmed)}
           title={
             !motorsArmed && !actions.canMotorEnable
               ? 'Activar motores no permitido en el estado actual'
               : motorsArmed ? 'Desactivar motores' : 'Activar motores'
           }
         >
-          {motorsArmed ? 'Desactivar Motores' : 'Activar Motores'}
-        </button>
-      </div>
+          {motorsArmed ? 'Desactivar motores' : 'Activar motores'}
+        </Button>
+      </Section>
 
-      <div className="cockpit-section cockpit-section--joystick">
-        <div className="cockpit-eyebrow">JOYSTICK</div>
+      <Section title="Joystick" description={mode === 'nav' ? 'Disponible en modo Manual' : undefined}>
         <Joystick
           enabled={actions.canTeleop && mode === 'teleop'}
           maxLinear={0.5}
@@ -96,9 +99,9 @@ export function OperatePanel({
           onMove={onCmdVel}
         />
         {mode === 'nav' && (
-          <div className="panel-hint">Click en el mapa para enviar un goal de navegación</div>
+          <p className="cockpit-hint">Click en el mapa para enviar un goal de navegación</p>
         )}
-      </div>
+      </Section>
     </div>
   );
 }

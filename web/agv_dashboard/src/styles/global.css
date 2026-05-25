@@ -446,15 +446,31 @@ body {
   align-items: stretch;
 }
 
-/* At narrow viewports, stack to 2 then 1 column so each tile stays readable.
-   Combined with --hero-h growing via media query so the rows fit. */
+/* At narrow viewports we keep the row 1-line tall by COMPACTING the tiles
+   (smaller icon + smaller value) rather than wrapping to multiple rows.
+   This protects the .app grid's fixed --hero-h from being overflowed. */
 @media (max-width: 1100px) {
-  .hero-row { grid-template-columns: repeat(2, 1fr); }
-  .hero-row > :last-child { grid-column: span 2; }
+  .hero-row {
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+  }
+  .hero-row .ui-tile {
+    grid-template-columns: 40px 1fr;
+    padding: var(--sp-3) var(--sp-4);
+    min-height: 80px;
+    gap: var(--sp-3);
+  }
+  .hero-row .ui-tile__icon { width: 40px; height: 40px; }
+  .hero-row .ui-tile__value { font-size: var(--font-lg); }
+  .hero-row .ui-tile__sub { font-size: var(--font-2xs); }
 }
 @media (max-width: 760px) {
-  .hero-row { grid-template-columns: 1fr; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); }
-  .hero-row > :last-child { grid-column: auto; }
+  /* When even compacting isn't enough, hide the Localization sub line and
+     let the tile shrink horizontally. Localization stays visible — we don't
+     drop indicators, we densify. */
+  .hero-row .ui-tile__sub { display: none; }
+  .hero-row .ui-tile__icon { width: 36px; height: 36px; }
+  .hero-row .ui-tile { min-height: 64px; padding: var(--sp-2) var(--sp-3); }
 }
 
 /* Spinner — used by Loader icon in LocalizationTile when INITIALIZING.
@@ -2639,4 +2655,276 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 @keyframes ui-toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================================
+   Cockpit panel — Operate right column (Light Minimal).
+   Uses Section + Card + Button primitives; this section just adds the
+   panel-level layout + bespoke composition styles (mode pills, action
+   stack, task card, home-point card, modal).
+   ========================================================================= */
+
+.context-panel.cockpit-panel {
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  padding: var(--sp-4);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.cockpit-hint {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  margin: var(--sp-2) 0 0;
+}
+
+/* ── Mode pills (Modo de control) ──────────────────────────────────────── */
+.control-mode-rail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+.mode-pill {
+  position: relative;
+  min-height: var(--tap-large);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.mode-pill:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.mode-pill:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.mode-pill:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mode-pill--active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.mode-pill--active:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+  border-color: var(--accent-hover);
+}
+
+.mode-pill__label {
+  font-size: var(--font-md);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.mode-pill__sub {
+  font-size: var(--font-2xs);
+  opacity: 0.85;
+  letter-spacing: 0.3px;
+}
+
+/* ── Action stack ──────────────────────────────────────────────────────── */
+.action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* ── Task info card ────────────────────────────────────────────────────── */
+.task-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  min-height: 120px;
+}
+.task-card--mission {
+  justify-content: flex-start;
+}
+.task-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+}
+.task-card__name {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-doughnut { display: block; flex-shrink: 0; }
+.task-doughnut__value {
+  font-size: 18px;
+  font-weight: 600;
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.task-doughnut__label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.task-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.task-metric__value {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+}
+.task-metric__sub {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+/* ── Home point card ───────────────────────────────────────────────────── */
+.home-point-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.home-point-card--set { border-top: 2px solid var(--accent); }
+.home-point-card__body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.home-point-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.home-point-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.home-point-card__name {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.home-point-card__coords {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Modal (light theme, calm) ─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 36, 33, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: var(--sp-5);
+}
+.modal-card {
+  width: min(440px, 100%);
+  max-height: calc(100vh - var(--sp-10));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.modal-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.modal-card__title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.modal-card__body-text {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.modal-card__pose {
+  margin: 0;
+  font-size: var(--font-xs);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+}
+.modal-card__pose--err { color: var(--warn); background: var(--warn-soft); }
+.modal-card__label {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+.modal-card__input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-3);
+  font-size: var(--font-base);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.modal-card__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+.modal-card__error {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--crit);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--crit-soft);
+  border-radius: var(--r-sm);
+}
+.modal-card__footer {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
 }

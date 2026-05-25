@@ -1,11 +1,13 @@
 /**
- * ControlModeRail — two big pills (MANUAL / NAVEGACIÓN) at the top of the
- * mission cockpit. Replaces the small mode-toggle buttons that used to sit
- * in the OperatePanel.
+ * ControlModeRail — two big pills at the top of the mission cockpit.
  *
- * The pills are 56 px tall (--mode-pill-h) so they're comfortably clickable
- * with a gloved hand. Active state uses the existing --blue accent.
+ * Sentence case: "Manual" / "Navegación". Active pill uses the accent
+ * green; inactive sits on surface-2 cream. Disabled while a mission is
+ * actively running (operator can't switch modes mid-mission).
  */
+import { Section } from '../ui/Section';
+import { Gamepad, Crosshair } from '../ui/icons';
+import type { LucideIcon } from '../ui/icons';
 
 interface Props {
   mode: string;
@@ -13,33 +15,41 @@ interface Props {
   onChange: (m: string) => void;
 }
 
-const MODES: Array<{ id: string; label: string; sub: string }> = [
-  { id: 'teleop', label: 'MANUAL', sub: 'Joystick' },
-  { id: 'nav',    label: 'NAVEGACIÓN', sub: 'Goals + misiones' },
+interface ModeDef {
+  id: string;
+  label: string;
+  sub: string;
+  icon: LucideIcon;
+}
+
+const MODES: ModeDef[] = [
+  { id: 'teleop', label: 'Manual',     sub: 'Joystick',         icon: Gamepad },
+  { id: 'nav',    label: 'Navegación', sub: 'Goals + misiones', icon: Crosshair },
 ];
 
 export function ControlModeRail({ mode, canChange, onChange }: Props) {
   return (
-    <div className="cockpit-section">
-      <div className="cockpit-eyebrow">MODO DE CONTROL</div>
+    <Section title="Modo de control">
       <div className="control-mode-rail" role="tablist" aria-label="Modo de control">
         {MODES.map(m => {
           const active = mode === m.id;
+          const Icon = m.icon;
           return (
             <button
               key={m.id}
               role="tab"
               aria-selected={active}
-              className={`control-mode-pill ${active ? 'active' : ''}`}
+              className={`mode-pill ${active ? 'mode-pill--active' : ''}`}
               onClick={() => onChange(m.id)}
               disabled={!canChange && !active}
             >
-              <span className="control-mode-pill-label">{m.label}</span>
-              <span className="control-mode-pill-sub">{m.sub}</span>
+              <Icon size={18} strokeWidth={1.8} />
+              <span className="mode-pill__label">{m.label}</span>
+              <span className="mode-pill__sub">{m.sub}</span>
             </button>
           );
         })}
       </div>
-    </div>
+    </Section>
   );
 }
