@@ -44,6 +44,8 @@ export {
   // Teleop / map
   Move,
   Crosshair,
+  Gamepad,
+  Gamepad2,
 
   // Mode rail
   LayoutGrid,

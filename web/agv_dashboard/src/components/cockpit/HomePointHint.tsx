@@ -1,17 +1,21 @@
 /**
- * HomePointHint — small inline CTA that appears when no home/base point is
- * defined. Lets the operator capture the robot's current pose as the base
- * with a single click + confirmation.
+ * HomePointHint — inline panel for managing the operator's "home / base"
+ * pose. Two presentations:
  *
- * Why a separate component: the empty state for the home point isn't just
- * "hide the button" — the IR A BASE button stays *visible but disabled* so
- * the layout doesn't reflow, and this hint sits next to the action stack to
- * teach the operator how to enable it.
+ *   - No home defined → EmptyState with "Fijar base aquí" CTA.
+ *   - Home defined    → calm passive card showing the saved name + coords +
+ *                       a "Cambiar" ghost button to redefine.
+ *
+ * Modal capture uses the Card primitive on a modal-overlay backdrop.
  */
-
 import { useState } from 'react';
 import type { HomePoint } from '../../api/types';
 import * as api from '../../api/client';
+import { Section } from '../ui/Section';
+import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
+import { Home, X } from '../ui/icons';
 
 interface Props {
   homePoint: HomePoint | null;
@@ -20,79 +24,76 @@ interface Props {
 }
 
 export function HomePointHint({ homePoint, currentPose, onSet }: Props) {
-  const [open, setOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (homePoint) {
-    // When the home point is already set, render a tiny passive line so the
-    // operator can see WHAT the base is + has a quick way to redefine it.
-    return (
-      <div className="home-point-hint home-point-hint--set">
-        <span>
-          Base: <strong>{homePoint.name}</strong>
-          {' '}<span className="home-point-coords">({homePoint.x.toFixed(1)}, {homePoint.y.toFixed(1)})</span>
-        </span>
-        <button className="home-point-btn-secondary" onClick={() => setOpen(true)}>
-          Cambiar
-        </button>
-        {open && (
-          <HomeModal
-            currentPose={currentPose}
-            initialName={homePoint.name}
-            busy={busy}
-            error={error}
-            onClose={() => { setOpen(false); setError(null); }}
-            onConfirm={async (name) => {
-              if (!currentPose) return;
-              setBusy(true); setError(null);
-              try {
-                const resp: any = await api.setHomePoint({ ...currentPose, name });
-                if (resp?.home_point) onSet(resp.home_point);
-                setOpen(false);
-              } catch (e: any) {
-                setError(e?.message || 'No se pudo guardar la base');
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-        )}
-      </div>
-    );
-  }
+  const handleConfirm = async (name: string) => {
+    if (!currentPose) return;
+    setBusy(true); setError(null);
+    try {
+      const resp: any = await api.setHomePoint({ ...currentPose, name });
+      if (resp?.home_point) onSet(resp.home_point);
+      setModalOpen(false);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo guardar la base');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="home-point-hint home-point-hint--empty">
-      <span>Sin base definida — fija aquí para habilitar <strong>IR A BASE</strong>.</span>
-      <button className="home-point-btn-primary"
+    <Section title="Base">
+      {homePoint ? (
+        <Card padding="default" className="home-point-card home-point-card--set">
+          <div className="home-point-card__body">
+            <div className="home-point-card__icon"><Home size={18} strokeWidth={1.8} /></div>
+            <div className="home-point-card__text">
+              <span className="home-point-card__name">{homePoint.name}</span>
+              <span className="home-point-card__coords">
+                ({homePoint.x.toFixed(1)}, {homePoint.y.toFixed(1)})
+              </span>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setModalOpen(true)}>
+            Cambiar
+          </Button>
+        </Card>
+      ) : (
+        <EmptyState
+          icon={Home}
+          title="Sin base definida"
+          description={
+            <>
+              Marca la pose actual del robot como la base/cargador para
+              habilitar <strong>Ir a base</strong>.
+            </>
+          }
+          action={
+            <Button
+              variant="primary"
+              size="sm"
               disabled={!currentPose}
-              onClick={() => setOpen(true)}>
-        Fijar base aquí
-      </button>
-      {open && (
-        <HomeModal
-          currentPose={currentPose}
-          initialName="Base"
-          busy={busy}
-          error={error}
-          onClose={() => { setOpen(false); setError(null); }}
-          onConfirm={async (name) => {
-            if (!currentPose) return;
-            setBusy(true); setError(null);
-            try {
-              const resp: any = await api.setHomePoint({ ...currentPose, name });
-              if (resp?.home_point) onSet(resp.home_point);
-              setOpen(false);
-            } catch (e: any) {
-              setError(e?.message || 'No se pudo guardar la base');
-            } finally {
-              setBusy(false);
-            }
-          }}
+              onClick={() => setModalOpen(true)}
+            >
+              Fijar base aquí
+            </Button>
+          }
+          compact
         />
       )}
-    </div>
+
+      {modalOpen && (
+        <HomeModal
+          currentPose={currentPose}
+          initialName={homePoint?.name ?? 'Base'}
+          busy={busy}
+          error={error}
+          onClose={() => { setModalOpen(false); setError(null); }}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </Section>
   );
 }
 
@@ -107,45 +108,61 @@ interface ModalProps {
 
 function HomeModal({ currentPose, initialName, busy, error, onClose, onConfirm }: ModalProps) {
   const [name, setName] = useState(initialName);
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-body" onClick={e => e.stopPropagation()}>
-        <h3 style={{ margin: '0 0 8px 0' }}>Fijar punto base</h3>
-        <p style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.4, marginBottom: 12 }}>
-          Guarda la pose actual del robot como la base/cargador. El botón
-          <strong> IR A BASE </strong>
-          enviará un nav goal a esta pose.
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <Card
+        as="div"
+        padding="spacious"
+        shadow="md"
+        className="modal-card"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <div className="modal-card__header">
+          <h3 className="modal-card__title">Fijar punto base</h3>
+          <Button variant="ghost" size="sm" leadingIcon={X} onClick={onClose} aria-label="Cerrar" />
+        </div>
+        <p className="modal-card__body-text">
+          Guarda la pose actual del robot como base/cargador. El botón
+          <strong> Ir a base </strong>
+          enviará un goal de navegación a esta pose.
         </p>
+
         {currentPose ? (
-          <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 12, fontFamily: 'monospace' }}>
-            Pose: x={currentPose.x.toFixed(2)} y={currentPose.y.toFixed(2)} θ={currentPose.theta.toFixed(2)}
+          <p className="modal-card__pose">
+            Pose actual: x={currentPose.x.toFixed(2)} m · y={currentPose.y.toFixed(2)} m · θ={currentPose.theta.toFixed(2)} rad
           </p>
         ) : (
-          <p style={{ fontSize: 12, color: 'var(--orange)', marginBottom: 12 }}>
-            Pose no disponible (sin conexión al backend).
+          <p className="modal-card__pose modal-card__pose--err">
+            Pose no disponible (sin conexión).
           </p>
         )}
-        <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Nombre</label>
+
+        <label htmlFor="home-name-input" className="modal-card__label">Nombre</label>
         <input
+          id="home-name-input"
+          className="modal-card__input"
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          style={{ width: '100%', padding: '8px', fontSize: 14, marginBottom: 12 }}
           autoFocus
+          placeholder="Base"
         />
-        {error && (
-          <p style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12 }}>{error}</p>
-        )}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} disabled={busy}>Cancelar</button>
-          <button
+
+        {error && <p className="modal-card__error">{error}</p>}
+
+        <div className="modal-card__footer">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button
+            variant="primary"
             onClick={() => onConfirm(name.trim() || 'Base')}
             disabled={busy || !currentPose}
+            loading={busy}
           >
-            {busy ? 'Guardando…' : 'Guardar base'}
-          </button>
+            Guardar base
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
