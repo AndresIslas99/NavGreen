@@ -328,6 +328,133 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           },
         ).addTo(greenhouseGroup)
       }
+
+      // ── Rural context: features outside the active greenhouse ──
+      // Visible when the operator zooms out for an overview. Faint enough
+      // to never compete with the live operating area, narrative enough
+      // that the map reads as "this is a real place in the world".
+
+      // Distant neighbour greenhouse to the west — same long-axis
+      // orientation, slightly smaller. Dashed outline + very faint
+      // interior. Reads as another building you'd see from a drone shot.
+      const distMinX = enc.minX - 24   // 24 m west of our west wall
+      const distMaxX = enc.minX - 6    // 6 m gap between the two
+      const distMinY = enc.minY + 1.0
+      const distMaxY = enc.maxY - 1.0
+      L.rectangle(
+        [[distMinY, distMinX], [distMaxY, distMaxX]],
+        {
+          color: '#a8997a',
+          weight: 1,
+          dashArray: '3,5',
+          opacity: 0.55,
+          fillColor: '#e8dfc9',
+          fillOpacity: 0.45,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+      // Distant greenhouse skylight hint — a soft warm strip.
+      L.rectangle(
+        [[(distMinY + distMaxY) / 2 - 0.35, distMinX + 0.4], [(distMinY + distMaxY) / 2 + 0.35, distMaxX - 0.4]],
+        {
+          color: 'transparent',
+          weight: 0,
+          fillColor: '#fff5d8',
+          fillOpacity: 0.35,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+      // Tiny label for the neighbour.
+      L.marker([(distMinY + distMaxY) / 2 - 2.2, (distMinX + distMaxX) / 2], {
+        icon: L.divIcon({
+          className: 'rural-distant-label',
+          html: '<span>Invernadero B</span>',
+          iconSize: [80, 12],
+          iconAnchor: [40, 6],
+        }),
+        interactive: false,
+      }).addTo(greenhouseGroup)
+
+      // Dirt road — starts at our greenhouse's "Acceso" (x=enc.maxX, y=0)
+      // and curves east-then-south toward the field gate. Tan dashed
+      // double-line to look like compacted dirt with wheel ruts.
+      const roadPts: [number, number][] = [
+        [0, enc.maxX + 0.6],
+        [-0.6, enc.maxX + 3],
+        [-1.8, enc.maxX + 7],
+        [-3.4, enc.maxX + 11],
+        [-4.6, enc.maxX + 15],
+        [-5.4, enc.maxX + 19],
+      ]
+      // Wider lighter underline = the road bed.
+      L.polyline(roadPts, {
+        color: '#d4c19e',
+        weight: 6,
+        opacity: 0.55,
+        lineCap: 'round',
+        lineJoin: 'round',
+        interactive: false,
+      }).addTo(greenhouseGroup)
+      // Two thin dashed wheel-rut lines on top.
+      L.polyline(roadPts, {
+        color: '#a8997a',
+        weight: 0.8,
+        dashArray: '6,4',
+        opacity: 0.7,
+        lineCap: 'round',
+        interactive: false,
+      }).addTo(greenhouseGroup)
+
+      // Water tank — small filled circle northeast of the greenhouse,
+      // next to the "main road". Slate-blue suggests stored water.
+      const tankX = enc.maxX + 9
+      const tankY = enc.maxY + 4
+      L.circleMarker([tankY, tankX], {
+        radius: 8,
+        color: '#5b6e7e',
+        fillColor: '#9bb0c2',
+        fillOpacity: 0.6,
+        weight: 1.4,
+        interactive: false,
+      }).addTo(greenhouseGroup)
+      // Inner ring suggests a top-down view of a cylindrical tank.
+      L.circleMarker([tankY, tankX], {
+        radius: 5,
+        color: '#5b6e7e',
+        fill: false,
+        weight: 0.8,
+        opacity: 0.7,
+        interactive: false,
+      }).addTo(greenhouseGroup)
+      // Label.
+      L.marker([tankY - 2.0, tankX], {
+        icon: L.divIcon({
+          className: 'rural-distant-label',
+          html: '<span>Cisterna</span>',
+          iconSize: [60, 12],
+          iconAnchor: [30, 6],
+        }),
+        interactive: false,
+      }).addTo(greenhouseGroup)
+
+      // Faint field plots far south — three small dashed rectangles
+      // suggesting cultivated land beyond the greenhouse. Pure scenery.
+      for (let i = 0; i < 3; i++) {
+        const px = enc.minX + 4 + i * 12
+        const py = enc.minY - 8
+        L.rectangle(
+          [[py - 1.8, px], [py, px + 9]],
+          {
+            color: '#a08a64',
+            weight: 0.6,
+            dashArray: '2,4',
+            opacity: 0.45,
+            fillColor: '#d8c8a0',
+            fillOpacity: 0.20,
+            interactive: false,
+          },
+        ).addTo(greenhouseGroup)
+      }
     }
 
     // Row band layer — populated from /api/rails fetch (M2 effect below).
