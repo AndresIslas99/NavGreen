@@ -5,6 +5,7 @@ import * as api from './api/client'
 
 import { LoginPage } from './components/LoginPage'
 import { TopBar } from './components/TopBar'
+import { HeroRow } from './components/HeroRow'
 import { ModeRail } from './components/ModeRail'
 import { MapView } from './components/MapView'
 import { CameraFeed } from './components/CameraFeed'
@@ -194,6 +195,8 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         userRole={userRole}
         onLogout={onLogout}
       />
+
+      <HeroRow status={status} state={state} />
 
       <div className="body">
         <ModeRail active={rail} onChange={setRail} />

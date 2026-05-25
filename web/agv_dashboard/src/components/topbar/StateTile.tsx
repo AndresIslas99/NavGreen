@@ -1,91 +1,53 @@
 /**
- * Hero state tile — big icon + bold label, color-coded by robot_state.
+ * StateTile — primary "what is the robot doing right now" indicator.
  *
- * The single most important indicator on the dashboard. Visible from across
- * the room. ISA-101 discipline: gray for "normal" (IDLE/READY), color only
- * for abnormal/active states.
+ * Renders the canonical robot_state as a labeled hero tile with an icon
+ * circle and a contextual sub-line. Sentence case for the value; the
+ * descriptive sub keeps it human and calm.
  */
+import { Tile } from '../ui/Tile';
+import {
+  Circle, Play, MapPin, AlertOctagon, AlertTriangle, CheckCircle2, Power, Pause,
+} from '../ui/icons';
+import type { LucideIcon } from '../ui/icons';
 import type { RobotState } from '../../api/types';
 
-const STATE_LABELS: Record<RobotState, string> = {
-  offline: 'OFFLINE',
-  idle: 'IDLE',
-  ready: 'READY',
-  mapping: 'MAPPING',
-  navigating: 'NAVIGATING',
-  executing_mission: 'MISSION',
-  blocked: 'BLOCKED',
-  e_stop: 'E-STOP',
-  fault: 'FAULT',
-};
+type Tone = 'neutral' | 'accent' | 'warn' | 'crit';
 
-// Inline SVG glyphs scaled to ~32 px. We don't pull in an icon library here
-// because the hero tiles need to remain dependency-light (this file is loaded
-// on every dashboard frame).
-function stateIcon(state: RobotState) {
-  switch (state) {
-    case 'e_stop':
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M8 8 L16 16 M16 8 L8 16" />
-        </svg>
-      );
-    case 'fault':
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 3 L22 20 H2 Z" />
-          <path d="M12 10 V14" /><circle cx="12" cy="17" r="0.6" fill="currentColor" />
-        </svg>
-      );
-    case 'mapping':
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6 L9 4 L15 6 L21 4 V18 L15 20 L9 18 L3 20 Z" />
-          <path d="M9 4 V18 M15 6 V20" />
-        </svg>
-      );
-    case 'navigating':
-    case 'executing_mission':
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 12 L21 4 L13 22 L11 13 Z" />
-        </svg>
-      );
-    case 'blocked':
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M5 5 L19 19" />
-        </svg>
-      );
-    case 'ready':
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M5 12 L10 17 L19 7" />
-        </svg>
-      );
-    default:  // idle, offline
-      return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="12" cy="12" r="8" />
-        </svg>
-      );
-  }
+interface StateMeta {
+  label: string;
+  sub: string;
+  icon: LucideIcon;
+  tone: Tone;
 }
+
+const STATE_META: Record<RobotState, StateMeta> = {
+  offline:           { label: 'Sin conexión', sub: 'Esperando enlace con el robot',  icon: Power,          tone: 'neutral' },
+  idle:              { label: 'En espera',    sub: 'Todo en orden',                  icon: Circle,         tone: 'neutral' },
+  ready:             { label: 'Listo',        sub: 'Listo para comandos',            icon: CheckCircle2,   tone: 'accent'  },
+  mapping:           { label: 'Mapeando',     sub: 'Construyendo mapa SLAM',         icon: MapPin,         tone: 'accent'  },
+  navigating:        { label: 'Navegando',    sub: 'En camino a destino',            icon: Play,           tone: 'accent'  },
+  executing_mission: { label: 'En misión',    sub: 'Ejecutando misión',              icon: Play,           tone: 'accent'  },
+  blocked:           { label: 'Bloqueado',    sub: 'Obstáculo detectado',            icon: Pause,          tone: 'warn'    },
+  e_stop:            { label: 'Paro activo',  sub: 'Liberar para reanudar',          icon: AlertOctagon,   tone: 'crit'    },
+  fault:             { label: 'Falla',        sub: 'Revisar diagnóstico',            icon: AlertTriangle,  tone: 'crit'    },
+};
 
 interface Props {
   state: RobotState;
 }
 
 export function StateTile({ state }: Props) {
+  const meta = STATE_META[state];
+  const Icon = meta.icon;
   return (
-    <div className={`hero-tile hero-tile--state hero-tile--state-${state}`} role="status" aria-live="polite">
-      <span className="hero-tile-eyebrow">STATE</span>
-      <div className="hero-tile-body">
-        <span className="hero-tile-icon">{stateIcon(state)}</span>
-        <span className="hero-tile-value hero-tile-value--bold">{STATE_LABELS[state]}</span>
-      </div>
-    </div>
+    <Tile tone={meta.tone}>
+      <Tile.Icon><Icon size={24} strokeWidth={1.8} /></Tile.Icon>
+      <Tile.Content>
+        <Tile.Eyebrow>Estado</Tile.Eyebrow>
+        <Tile.Value>{meta.label}</Tile.Value>
+        <Tile.Sub>{meta.sub}</Tile.Sub>
+      </Tile.Content>
+    </Tile>
   );
 }
