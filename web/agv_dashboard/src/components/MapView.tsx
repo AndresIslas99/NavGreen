@@ -25,7 +25,10 @@ import {
   rowBands,
   ghostRowBands,
   activeRowBand,
+  aisleSpanishLabel,
   AISLE_CENTERS,
+  REAR_X_END,
+  FRONT_X_START,
   type RowBand,
 } from './map/greenhouseGeometry'
 
@@ -517,69 +520,183 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Fetch defined AprilTags and render them on the rail overlay. Polled
-  // at a low rate (every 30s) so newly defined tags appear without reload.
+  // Fetch defined AprilTags and render them. Two visual layers:
+  //
+  //  1. STRUCTURAL slot grid — 10 deterministic rail-entry markers
+  //     (5 aisles × 2 sections) drawn at (corridor_edge_x, aisle_y).
+  //     These ARE the operator's mental model of "where each rail
+  //     enters the corridor." Each slot is either:
+  //       - linked: a rail_start AprilTag is configured close enough
+  //         to be visually associated with this slot. Full-opacity
+  //         accent-green diamond.
+  //       - unlinked: no nearby tag yet — faint dashed-outline diamond
+  //         so the operator sees the layout even pre-configuration.
+  //
+  //  2. LOOSE / WALL markers — wall-type tags are rendered at their
+  //     raw configured pose (they're precise floor references, not
+  //     structural). Rail-type tags that didn't link to any slot
+  //     because their pose is too far off (> 2.5 m in x or > 1.5 m in
+  //     y from any slot) render as amber "loose" diamonds to flag
+  //     miscalibration without losing them.
+  //
+  // The nav stack still uses tag.x/tag.y unchanged — this is purely
+  // about what the operator SEES on the schematic.
   useEffect(() => {
     const group = tagLayerRef.current
     if (!group) return
 
+    // SVG glyphs (3 variants).
+    const glyphRailLinked = `<svg width="14" height="14" viewBox="0 0 14 14">
+        <rect x="3" y="3" width="8" height="8" rx="1.2"
+              transform="rotate(45 7 7)"
+              fill="#e2eedc" stroke="#2f6f2a" stroke-width="1.4"/>
+        <path d="M5 7 L9 7" stroke="#2f6f2a" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>`
+    const glyphRailUnlinked = `<svg width="14" height="14" viewBox="0 0 14 14">
+        <rect x="3" y="3" width="8" height="8" rx="1.2"
+              transform="rotate(45 7 7)"
+              fill="#f0f4ec"
+              stroke="#5a8a52" stroke-width="1.1"
+              stroke-dasharray="2 1.5"/>
+      </svg>`
+    const glyphRailLoose = `<svg width="12" height="12" viewBox="0 0 12 12">
+        <rect x="2.5" y="2.5" width="7" height="7" rx="1"
+              transform="rotate(45 6 6)"
+              fill="#f6e7d4" stroke="#b8612e" stroke-width="1.3"/>
+        <text x="6" y="8" text-anchor="middle" font-size="6"
+              font-weight="700" fill="#b8612e">!</text>
+      </svg>`
+    const glyphWall = `<svg width="12" height="12" viewBox="0 0 12 12">
+        <rect x="1.5" y="1.5" width="9" height="9" rx="1"
+              fill="#efece5" stroke="#7a847c" stroke-width="1.2"/>
+      </svg>`
+
     const render = (tags: DefinedTag[]) => {
       group.clearLayers()
-      // Mirror into ref so the proximity-ripple effect below can read it
-      // without re-rendering on every poll.
       definedTagsRef.current = tags
 
-      // Visual snap: rail_start tags are the markers at the entry of each
-      // rail. If the configured world Y is off by < 0.5 m from the nearest
-      // rail centerline (= an AISLE_CENTER), nudge the rendered y to the
-      // rail line so the marker reads as "anchored to this rail" instead
-      // of floating loose. Real-world tag pose used by the navigation
-      // stack is unchanged; this is purely a display alignment so the
-      // operator sees structural meaning.
-      const snapY = (rawY: number, type: string): number => {
-        if (type !== 'rail_start') return rawY
-        let best = rawY, bestDelta = Infinity
-        for (const yc of AISLE_CENTERS) {
-          const d = Math.abs(rawY - yc)
-          if (d < bestDelta && d < 0.5) { best = yc; bestDelta = d }
-        }
-        return best
+      // Letters indexed by aisle order, matching AISLE_CENTERS bottom-up.
+      const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
+      const SLOT_MATCH_X = 2.5     // metres of x tolerance for linking
+      const SLOT_MATCH_Y = 1.5     // metres of y tolerance for linking
+
+      // Build the 10 structural slots and link the nearest unclaimed
+      // rail_start tag to each (greedy: each tag links to at most ONE
+      // slot, by smallest Euclidean distance).
+      type Slot = {
+        letter: string
+        section: 'rear' | 'front'
+        x: number
+        y: number
+        linkedTag: DefinedTag | null
+        linkedDist: number
+      }
+      const slots: Slot[] = []
+      for (let i = 0; i < AISLE_CENTERS.length; i++) {
+        const y = AISLE_CENTERS[i]
+        const letter = LETTERS[i]
+        slots.push({ letter, section: 'rear',  x: REAR_X_END,    y, linkedTag: null, linkedDist: Infinity })
+        slots.push({ letter, section: 'front', x: FRONT_X_START, y, linkedTag: null, linkedDist: Infinity })
       }
 
-      for (const t of tags) {
-        // Type-distinct glyphs:
-        //  - rail_start → forest-green diamond (suggests "approach target")
-        //  - wall       → muted-grey square   (suggests "fixed reference")
-        const isRail = t.type === 'rail_start'
-        const glyphSvg = isRail
-          ? `<svg width="14" height="14" viewBox="0 0 14 14">
-               <rect x="3" y="3" width="8" height="8" rx="1.2"
-                     transform="rotate(45 7 7)"
-                     fill="#e2eedc" stroke="#2f6f2a" stroke-width="1.4"/>
-               <path d="M5 7 L9 7" stroke="#2f6f2a" stroke-width="1.2" stroke-linecap="round"/>
-             </svg>`
-          : `<svg width="12" height="12" viewBox="0 0 12 12">
-               <rect x="1.5" y="1.5" width="9" height="9" rx="1"
-                     fill="#efece5" stroke="#7a847c" stroke-width="1.2"/>
-             </svg>`
-        const displayY = snapY(t.y, t.type)
-        const marker = L.marker(worldToLatLng(t.x, displayY), {
+      const railTags = tags.filter(t => t.type === 'rail_start')
+      const claimed = new Set<number>()
+      for (const t of railTags) {
+        let bestSlot: Slot | null = null
+        let bestDist = Infinity
+        for (const slot of slots) {
+          if (Math.abs(t.x - slot.x) > SLOT_MATCH_X) continue
+          if (Math.abs(t.y - slot.y) > SLOT_MATCH_Y) continue
+          const dx = t.x - slot.x, dy = t.y - slot.y
+          const d = Math.sqrt(dx * dx + dy * dy)
+          if (d < bestDist && (!slot.linkedTag || d < slot.linkedDist)) {
+            bestSlot = slot
+            bestDist = d
+          }
+        }
+        if (bestSlot) {
+          // If the slot is already linked to another tag with worse
+          // distance, kick that one out — it becomes a loose tag.
+          if (bestSlot.linkedTag) {
+            // Previous tag stays in `tags` but isn't `claimed` — it'll
+            // render as loose below.
+            claimed.delete(bestSlot.linkedTag.id)
+          }
+          bestSlot.linkedTag = t
+          bestSlot.linkedDist = bestDist
+          claimed.add(t.id)
+        }
+      }
+
+      // Render all slots.
+      for (const slot of slots) {
+        const sectionLabel = aisleSpanishLabel(slot.letter, slot.section)
+        const linked = slot.linkedTag
+        const html = linked ? glyphRailLinked : glyphRailUnlinked
+        const cls = linked ? 'apriltag-marker apriltag-marker--rail'
+                           : 'apriltag-marker apriltag-marker--rail-empty'
+        const marker = L.marker(worldToLatLng(slot.x, slot.y), {
           icon: L.divIcon({
-            className: `apriltag-marker apriltag-marker--${isRail ? 'rail' : 'wall'}`,
-            html: glyphSvg,
-            iconSize: isRail ? [14, 14] : [12, 12],
-            iconAnchor: isRail ? [7, 7] : [6, 6],
+            className: cls,
+            html,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
           }),
           interactive: true,
         }).addTo(group)
-        const snapNote = displayY !== t.y ? ' · anclado al riel' : ''
-        marker.bindTooltip(`#${t.id} · ${t.label}${isRail ? ' (entrada de riel)' : ''}${snapNote}`, {
+        const tooltipText = linked
+          ? `Entrada · ${sectionLabel} · #${linked.id} ${linked.label}`
+          : `Entrada · ${sectionLabel} · sin tag configurado`
+        marker.bindTooltip(tooltipText, {
+          direction: 'top',
+          offset: [0, -4],
+          className: 'apriltag-tooltip',
+        })
+      }
+
+      // Loose rail tags — rail_start tags that didn't link to any slot,
+      // OR were displaced by a closer tag. Rendered at raw pose with
+      // an amber-warn diamond so the operator notices miscalibration.
+      for (const t of railTags) {
+        if (claimed.has(t.id)) continue
+        const marker = L.marker(worldToLatLng(t.x, t.y), {
+          icon: L.divIcon({
+            className: 'apriltag-marker apriltag-marker--rail-loose',
+            html: glyphRailLoose,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
+          }),
+          interactive: true,
+        }).addTo(group)
+        marker.bindTooltip(
+          `#${t.id} · ${t.label} · posición irregular (no anclada a riel)`,
+          { direction: 'top', offset: [0, -4], className: 'apriltag-tooltip' },
+        )
+      }
+
+      // Wall-type tags — precise references at the configured pose.
+      for (const t of tags) {
+        if (t.type !== 'wall') continue
+        const marker = L.marker(worldToLatLng(t.x, t.y), {
+          icon: L.divIcon({
+            className: 'apriltag-marker apriltag-marker--wall',
+            html: glyphWall,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
+          }),
+          interactive: true,
+        }).addTo(group)
+        marker.bindTooltip(`#${t.id} · ${t.label} (referencia de pared)`, {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',
         })
       }
     }
+
+    // Render once with empty tags so the structural slots show even
+    // before /api/apriltags responds.
+    render([])
 
     let canceled = false
     const fetchTags = () => {
