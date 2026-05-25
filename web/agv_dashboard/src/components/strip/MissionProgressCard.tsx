@@ -1,17 +1,22 @@
 /**
- * MissionProgressCard — the left column of the bottom MissionStrip.
+ * MissionProgressCard — left column of the bottom MissionStrip.
  *
- * Shows the current mission name + progress bar + N/M nodes + a heuristic
- * ETA based on average time per node. When no mission is running, shows a
- * neutral "Sin misión activa" line so the strip stays visually present.
+ * Active: status pill + mission name + progress bar (accent green) + footer
+ * with N/M nodes, distance, ETA. Empty: EmptyState with Route icon.
+ *
+ * ETA extrapolated client-side from elapsed time + nodes completed.
  */
-
 import type { MissionProgress } from '../../api/types';
+import { Card } from '../ui/Card';
+import { Pill } from '../ui/Pill';
+import { EmptyState } from '../ui/EmptyState';
+import { Route, Play, Pause, CheckCircle2, AlertOctagon, X } from '../ui/icons';
+import type { LucideIcon } from '../ui/icons';
 
 interface Props {
   missionProgress: MissionProgress | null;
-  distanceRemaining: number | null;   // metres to the next nav goal, when known
-  startedAt: number | null;           // unix seconds when this mission started locally
+  distanceRemaining: number | null;
+  startedAt: number | null;
 }
 
 function formatEta(s: number): string {
@@ -23,13 +28,33 @@ function formatEta(s: number): string {
   return r ? `~${h} h ${r} min` : `~${h} h`;
 }
 
+type Tone = 'neutral' | 'accent' | 'warn' | 'crit' | 'info';
+
+interface StatusMeta {
+  label: string;
+  tone: Tone;
+  icon: LucideIcon;
+}
+
+const STATUS_META: Record<MissionProgress['status'], StatusMeta> = {
+  running:   { label: 'En marcha',   tone: 'accent',  icon: Play },
+  paused:    { label: 'Pausada',     tone: 'warn',    icon: Pause },
+  completed: { label: 'Completada',  tone: 'accent',  icon: CheckCircle2 },
+  failed:    { label: 'Falló',       tone: 'crit',    icon: AlertOctagon },
+  canceled:  { label: 'Cancelada',   tone: 'neutral', icon: X },
+};
+
 export function MissionProgressCard({ missionProgress, distanceRemaining, startedAt }: Props) {
   if (!missionProgress) {
     return (
-      <div className="mission-strip-progress mission-strip-progress--idle">
-        <span className="mission-strip-eyebrow">MISIÓN</span>
-        <span className="mission-strip-empty">Sin misión activa</span>
-      </div>
+      <Card padding="compact" className="strip-card strip-card--mission">
+        <EmptyState
+          icon={Route}
+          title="Sin misión activa"
+          description="Crea una misión desde el rail Misiones para arrancar."
+          compact
+        />
+      </Card>
     );
   }
 
@@ -37,9 +62,8 @@ export function MissionProgressCard({ missionProgress, distanceRemaining, starte
   const done = current_node + 1;
   const total = total_nodes || 1;
   const pct = (done / total) * 100;
+  const meta = STATUS_META[status] ?? STATUS_META.running;
 
-  // ETA: extrapolate from elapsed time vs nodes completed. Requires at least
-  // one completed node and a startedAt timestamp; otherwise we just omit it.
   let eta: string | null = null;
   if (startedAt && current_node > 0 && status === 'running') {
     const elapsed = Date.now() / 1000 - startedAt;
@@ -50,37 +74,40 @@ export function MissionProgressCard({ missionProgress, distanceRemaining, starte
     }
   }
 
+  const barClass =
+    status === 'paused' ? 'mission-bar mission-bar--paused' :
+    status === 'failed' ? 'mission-bar mission-bar--failed' :
+    'mission-bar';
+
   return (
-    <div className={`mission-strip-progress mission-strip-progress--${status}`}>
-      <div className="mission-strip-progress-header">
-        <span className="mission-strip-eyebrow">MISIÓN</span>
-        <span className="mission-strip-name" title={mission_name}>{mission_name}</span>
-        <span className="mission-strip-status">
-          {status === 'running' ? '▶ EN MARCHA' :
-           status === 'paused' ? '⏸ PAUSADA' :
-           status === 'completed' ? '✓ COMPLETA' :
-           status === 'failed' ? '⛔ FALLÓ' :
-           status === 'canceled' ? '⊘ CANCELADA' : status}
-        </span>
+    <Card padding="compact" className={`strip-card strip-card--mission strip-card--status-${status}`}>
+      <div className="strip-card__header">
+        <span className="strip-card__eyebrow">Misión</span>
+        <span className="strip-card__title" title={mission_name}>{mission_name}</span>
+        <Pill tone={meta.tone} size="xs" leadingIcon={meta.icon}>{meta.label}</Pill>
       </div>
 
-      <div className="mission-strip-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-        <div className="mission-strip-bar-fill" style={{ width: `${pct}%` }} />
+      <div
+        className={barClass}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+      >
+        <div className="mission-bar__fill" style={{ width: `${pct}%` }} />
       </div>
 
-      <div className="mission-strip-progress-footer">
-        <span className="mission-strip-progress-count">
-          PROGRESO: <strong>{done}/{total}</strong> nodos ({Math.round(pct)}%)
+      <div className="strip-card__footer">
+        <span>
+          Progreso: <strong>{done}/{total}</strong> nodos ({Math.round(pct)}%)
         </span>
         {distanceRemaining != null && distanceRemaining > 0 && (
-          <span className="mission-strip-progress-dist">
-            · {distanceRemaining.toFixed(1)} m al siguiente
-          </span>
+          <span className="strip-card__footer-dim">· {distanceRemaining.toFixed(1)} m al siguiente</span>
         )}
         {eta && (
-          <span className="mission-strip-progress-eta">· ETA {eta}</span>
+          <span className="strip-card__footer-dim">· ETA {eta}</span>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
