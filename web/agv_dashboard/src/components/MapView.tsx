@@ -22,7 +22,9 @@ import {
   approachStrips,
   rowBands,
   ghostRowBands,
+  activeRowBand,
   AISLE_CENTERS,
+  type RowBand,
 } from './map/greenhouseGeometry'
 
 // Rail aisle geometry is now data-driven via GET /api/rails (backed by
@@ -82,8 +84,12 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   const greenhouseLayerRef = useRef<L.LayerGroup | null>(null)
   // Row band layer — re-rendered when /api/rails returns data.
   const rowBandLayerRef = useRef<L.LayerGroup | null>(null)
-  // Map of letter+section → rectangle so M3 can flip active-row opacity.
+  // Map of letter+section → rectangle so the spotlight effect can flip
+  // active-row opacity. `rowBandsRef` mirrors the geometric definition of
+  // each rendered band so the spotlight effect can also lookup the
+  // operator-facing label without re-deriving it.
   const rowRectsRef = useRef<Map<string, L.Rectangle>>(new Map())
+  const rowBandsRef = useRef<RowBand[]>([])
   // Home / base landmark — pulses gently when defined.
   const homeMarkerRef = useRef<L.Marker | null>(null)
 
@@ -647,6 +653,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       const bands = rowBands(rails)
       const useGhost = bands.length === 0
       const bandsToRender = useGhost ? ghostRowBands() : bands
+      rowBandsRef.current = bandsToRender
       for (const b of bandsToRender) {
         const rect = L.rectangle(
           [[b.yMin, b.xStart], [b.yMax, b.xEnd]],
@@ -665,7 +672,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           direction: 'center',
           className: useGhost ? 'row-band-label row-band-label--ghost' : 'row-band-label',
         })
-        // Key by letter+section so the M3 active-row effect can flip opacity
+        // Key by letter+section so the spotlight effect can flip opacity
         // and tooltip class for the specific band the robot occupies.
         rowRectsRef.current.set(`${b.letter}-${b.section}`, rect)
       }
@@ -682,6 +689,42 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const iv = setInterval(fetchRails, 30000)
     return () => { canceled = true; clearInterval(iv) }
   }, [])
+
+  // Active-row spotlight — whenever the robot pose changes, find the band
+  // it currently occupies (if any) and brighten that one while dimming
+  // the rest. Turns the row layout into a narrator: "the robot is here,
+  // working this row". Re-runs cheaply: just iterates ≤10 rectangles and
+  // mutates Leaflet styles + tooltip classes.
+  useEffect(() => {
+    const bands = rowBandsRef.current
+    if (!bands.length) return
+    const active = activeRowBand(bands, pose)
+    const activeKey = active ? `${active.letter}-${active.section}` : null
+
+    rowRectsRef.current.forEach((rect, key) => {
+      const isActive = key === activeKey
+      const isGhost = bands.find(b => `${b.letter}-${b.section}` === key && b.label.includes('Hilera')) == null
+      // Pure visual style flips — opacity, color and weight only.
+      rect.setStyle({
+        fillColor: isActive ? '#a4d090' : (isGhost ? '#e2eedc' : '#e2eedc'),
+        fillOpacity: isActive ? 0.78 : (activeKey ? 0.32 : (isGhost ? 0.30 : 0.55)),
+        color: isActive ? '#2f6f2a' : '#c1d9b6',
+        weight: isActive ? 2.2 : 1.2,
+      })
+      // Tooltip class flip so the chip also shifts to the active treatment.
+      const tooltip = rect.getTooltip() as L.Tooltip | undefined
+      if (tooltip) {
+        const el = tooltip.getElement()
+        if (el) {
+          el.classList.toggle('row-band-label--active', isActive)
+          // Dim the labels of non-active bands while one IS active, so
+          // attention focuses on the row being worked. We don't dim if
+          // nothing is active.
+          el.classList.toggle('row-band-label--dimmed', !isActive && activeKey != null)
+        }
+      }
+    })
+  }, [pose])
 
   // Home / base landmark — pulsing house glyph at home_point pose.
   // Visible only when an operator has set a home point. Clicking it opens

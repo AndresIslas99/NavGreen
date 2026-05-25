@@ -3457,6 +3457,15 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   color: var(--accent) !important;
   border-color: var(--accent-soft-strong) !important;
   box-shadow: var(--shadow-sm);
+  transform: scale(1.05);
+  transition: all var(--dur-slow) var(--ease-bounce);
+}
+
+/* When ANY row is active, the others dim so the operator's eye locks
+   on the working row. Smooth fade so changing rows doesn't flash. */
+.row-band-label--dimmed {
+  opacity: 0.45;
+  transition: opacity var(--dur-slow) var(--ease);
 }
 
 /* Ghost row band — shown when /api/rails is empty (no rails registered yet).
