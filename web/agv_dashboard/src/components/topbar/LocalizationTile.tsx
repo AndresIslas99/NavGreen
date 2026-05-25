@@ -21,11 +21,11 @@ interface LocMeta {
 }
 
 const LOC_META: Record<string, LocMeta> = {
-  UNKNOWN:      { label: 'Esperando…',     icon: Compass,    tone: 'neutral' },
-  INITIALIZING: { label: 'Inicializando',  icon: Loader,     tone: 'warn'    },
-  LOCALIZED:    { label: 'Localizado',     icon: Compass,    tone: 'accent'  },
-  DEGRADED:     { label: 'Degradada',      icon: AlertCircle, tone: 'warn'    },
-  FAILED:       { label: 'Falló',          icon: LocateOff,  tone: 'crit'    },
+  UNKNOWN:      { label: 'Sin datos',          icon: Compass,    tone: 'neutral' },
+  INITIALIZING: { label: 'Localizando…',       icon: Loader,     tone: 'warn'    },
+  LOCALIZED:    { label: 'Localizado',         icon: Compass,    tone: 'accent'  },
+  DEGRADED:     { label: 'Localización débil', icon: AlertCircle, tone: 'warn'    },
+  FAILED:       { label: 'Localización perdida', icon: LocateOff,  tone: 'crit'    },
 };
 
 const DEFAULT_META: LocMeta = { label: '—', icon: Compass, tone: 'neutral' };

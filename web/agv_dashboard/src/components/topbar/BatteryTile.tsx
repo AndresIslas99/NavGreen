@@ -43,7 +43,7 @@ export function BatteryTile({ batteryPct, tteSeconds }: Props) {
   const valueLabel = known ? `${Math.round(batteryPct!)}%` : '—';
   const subLabel =
     !known
-      ? 'Esperando lectura del driver'
+      ? 'Esperando datos de batería'
       : tteSeconds != null && tteSeconds > 0
         ? formatTte(tteSeconds)
         : 'Calculando autonomía…';

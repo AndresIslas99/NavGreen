@@ -22,15 +22,15 @@ interface StateMeta {
 }
 
 const STATE_META: Record<RobotState, StateMeta> = {
-  offline:           { label: 'Sin conexión', sub: 'Esperando enlace con el robot',  icon: Power,          tone: 'neutral' },
-  idle:              { label: 'En espera',    sub: 'Todo en orden',                  icon: Circle,         tone: 'neutral' },
+  offline:           { label: 'Sin conexión', sub: 'Reintentando enlace…',           icon: Power,          tone: 'neutral' },
+  idle:              { label: 'En espera',    sub: 'Sin tarea activa',               icon: Circle,         tone: 'neutral' },
   ready:             { label: 'Listo',        sub: 'Listo para comandos',            icon: CheckCircle2,   tone: 'accent'  },
   mapping:           { label: 'Mapeando',     sub: 'Construyendo mapa SLAM',         icon: MapPin,         tone: 'accent'  },
   navigating:        { label: 'Navegando',    sub: 'En camino a destino',            icon: Play,           tone: 'accent'  },
   executing_mission: { label: 'En misión',    sub: 'Ejecutando misión',              icon: Play,           tone: 'accent'  },
-  blocked:           { label: 'Bloqueado',    sub: 'Obstáculo detectado',            icon: Pause,          tone: 'warn'    },
-  e_stop:            { label: 'Paro activo',  sub: 'Liberar para reanudar',          icon: AlertOctagon,   tone: 'crit'    },
-  fault:             { label: 'Falla',        sub: 'Revisar diagnóstico',            icon: AlertTriangle,  tone: 'crit'    },
+  blocked:           { label: 'Bloqueado',    sub: 'Esperando despeje',              icon: Pause,          tone: 'warn'    },
+  e_stop:            { label: 'Paro activo',  sub: 'Paro de emergencia activo',      icon: AlertOctagon,   tone: 'crit'    },
+  fault:             { label: 'Falla',        sub: 'Revisa el panel Recuperar',      icon: AlertTriangle,  tone: 'crit'    },
 };
 
 interface Props {
