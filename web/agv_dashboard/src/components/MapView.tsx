@@ -11,6 +11,14 @@ import 'leaflet/dist/leaflet.css'
 import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone } from '../api/types'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
+import {
+  enclosureBounds,
+  corridorBounds,
+  approachStrips,
+  rowBands,
+  ghostRowBands,
+  AISLE_CENTERS,
+} from './map/greenhouseGeometry'
 
 // Rail aisle geometry is now data-driven via GET /api/rails (backed by
 // agv_rail_approach/list_rail_starts). The hardcoded RAIL_AISLE_Y array
@@ -81,6 +89,14 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   const railLayerRef = useRef<L.LayerGroup | null>(null)
   const tagLayerRef = useRef<L.LayerGroup | null>(null)
   const zoneLayerRef = useRef<L.LayerGroup | null>(null)
+  // Greenhouse "place" layer — static structural geometry (enclosure outline,
+  // drivable corridor, approach strips). Built once on map init from the
+  // constants in greenhouseGeometry.ts.
+  const greenhouseLayerRef = useRef<L.LayerGroup | null>(null)
+  // Row band layer — re-rendered when /api/rails returns data.
+  const rowBandLayerRef = useRef<L.LayerGroup | null>(null)
+  // Map of letter+section → rectangle so M3 can flip active-row opacity.
+  const rowRectsRef = useRef<Map<string, L.Rectangle>>(new Map())
 
   // Trail accumulator
   const trailRef = useRef<L.LatLng[]>([])
@@ -104,10 +120,105 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       dragging: true,
     })
 
-    map.setView([0, 0], 1)
+    // Default view: fit to the greenhouse enclosure so the geometry is
+    // immediately visible. If a SLAM map loads later, its own fitBounds
+    // takes over (see the mapData effect below).
+    {
+      const enc = enclosureBounds()
+      map.fitBounds(
+        [[enc.minY, enc.minX], [enc.maxY, enc.maxX]],
+        { padding: [32, 32] },
+      )
+    }
 
     // Add zoom control in top-right
     L.control.zoom({ position: 'topright' }).addTo(map)
+
+    // ── Greenhouse "place" layer (bottommost) ──
+    // Static structural geometry built once from the greenhouseGeometry constants.
+    // Enclosure outline + drivable corridor stripe + AprilTag approach strips.
+    // Row bands (the green-tinted "crop row" rectangles) come later from the
+    // rails fetch — see the rowBandLayer effect below.
+    const greenhouseGroup = L.layerGroup().addTo(map)
+    greenhouseLayerRef.current = greenhouseGroup
+    {
+      // Enclosure: subtle dashed outline + slightly darker cream fill so the
+      // cultivation area reads as a defined space, not a void.
+      const enc = enclosureBounds()
+      L.rectangle(
+        [[enc.minY, enc.minX], [enc.maxY, enc.maxX]],
+        {
+          color: '#d8d2c5',
+          weight: 1.5,
+          dashArray: '6,4',
+          fillColor: '#efece5',   // = --surface-2 literal (Leaflet can't read CSS vars)
+          fillOpacity: 1.0,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+
+      // Drivable corridor — slightly lighter than the enclosure to suggest
+      // "drive through here". Reads as the central passable lane.
+      const cor = corridorBounds()
+      L.rectangle(
+        [[cor.minY, cor.minX], [cor.maxY, cor.maxX]],
+        {
+          color: 'transparent',
+          weight: 0,
+          fillColor: '#fefdfb',   // = --surface
+          fillOpacity: 0.65,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+
+      // Dashed centerline through the corridor (a visual hint of "drive lane").
+      const corCenterX = (cor.minX + cor.maxX) / 2
+      L.polyline(
+        [[cor.minY, corCenterX], [cor.maxY, corCenterX]],
+        {
+          color: '#c5beae',
+          weight: 1,
+          dashArray: '2,12',
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+
+      // AprilTag approach strips (where rail_approach hands off from Nav2).
+      // Faint warm-tan wash so operators see "this is the precision zone".
+      const aps = approachStrips()
+      for (const strip of [aps.rear, aps.front]) {
+        L.rectangle(
+          [[strip.minY, strip.minX], [strip.maxY, strip.maxX]],
+          {
+            color: 'transparent',
+            weight: 0,
+            fillColor: '#d4a373',   // = --amber
+            fillOpacity: 0.16,
+            interactive: false,
+          },
+        ).addTo(greenhouseGroup)
+      }
+
+      // Aisle centerline guides — very subtle dashed lines along each aisle
+      // y-center, spanning the full enclosure. Helps operator align mentally
+      // even before any rails are registered.
+      for (const yc of AISLE_CENTERS) {
+        L.polyline(
+          [[yc, enc.minX], [yc, enc.maxX]],
+          {
+            color: '#c1d9b6',     // = --accent-soft-strong
+            weight: 0.5,
+            dashArray: '1,8',
+            opacity: 0.65,
+            interactive: false,
+          },
+        ).addTo(greenhouseGroup)
+      }
+    }
+
+    // Row band layer — populated from /api/rails fetch (M2 effect below).
+    const rowBandGroup = L.layerGroup().addTo(map)
+    rowBandLayerRef.current = rowBandGroup
 
     // Layer groups
     const scanGroup = L.layerGroup().addTo(map)
@@ -240,27 +351,68 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   // identify which aisle the robot is in. Falls back to no labels when
   // the rail_approach service is unavailable.
   useEffect(() => {
-    const group = railLayerRef.current
-    if (!group) return
+    const railGroup = railLayerRef.current
+    const bandGroup = rowBandLayerRef.current
+    if (!railGroup || !bandGroup) return
 
     const render = (rails: RailEntry[]) => {
-      group.clearLayers()
+      // 1. Rail entry markers (small dot + tooltip).
+      railGroup.clearLayers()
       for (const r of rails) {
         const ll = worldToLatLng(r.x, r.y)
         const dot = L.circleMarker(ll, {
           radius: 4,
-          color: '#7a9d8e',
-          fillColor: '#7a9d8e',
-          fillOpacity: 0.85,
-          weight: 1,
+          color: '#2f6f2a',       // = --accent (clearer rail-entry marker)
+          fillColor: '#e2eedc',   // = --accent-soft
+          fillOpacity: 0.9,
+          weight: 1.5,
           interactive: false,
-        }).addTo(group)
+        }).addTo(railGroup)
         dot.bindTooltip(r.label, {
           permanent: true,
           direction: 'right',
-          offset: [6, 0],
+          offset: [8, 0],
           className: 'rail-label-tooltip',
         })
+      }
+
+      // 2. Row bands — the green-tinted "crop row" rectangles spanning each
+      // rail's length. This is the layer that makes the map read as a
+      // greenhouse, not a coordinate plane.
+      //
+      // Behavior:
+      //  - When the rail registry has entries: paint solid bands per rail.
+      //  - When the registry is empty (e.g. on a freshly installed system,
+      //    or in dev): paint GHOST bands at every possible aisle×section
+      //    position so the operator still sees the greenhouse skeleton with
+      //    a clear "not yet registered" visual hint (dashed border, lower
+      //    opacity, suffix "(sin riel)").
+      bandGroup.clearLayers()
+      rowRectsRef.current.clear()
+      const bands = rowBands(rails)
+      const useGhost = bands.length === 0
+      const bandsToRender = useGhost ? ghostRowBands() : bands
+      for (const b of bandsToRender) {
+        const rect = L.rectangle(
+          [[b.yMin, b.xStart], [b.yMax, b.xEnd]],
+          {
+            color: '#c1d9b6',     // = --accent-soft-strong
+            weight: useGhost ? 1 : 1.2,
+            dashArray: useGhost ? '4,4' : undefined,
+            fillColor: '#e2eedc', // = --accent-soft
+            fillOpacity: useGhost ? 0.30 : 0.55,
+            interactive: false,
+          },
+        ).addTo(bandGroup)
+        const labelText = useGhost ? `${b.label} (sin riel)` : b.label
+        rect.bindTooltip(labelText, {
+          permanent: true,
+          direction: 'center',
+          className: useGhost ? 'row-band-label row-band-label--ghost' : 'row-band-label',
+        })
+        // Key by letter+section so the M3 active-row effect can flip opacity
+        // and tooltip class for the specific band the robot occupies.
+        rowRectsRef.current.set(`${b.letter}-${b.section}`, rect)
       }
     }
 

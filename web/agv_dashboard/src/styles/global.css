@@ -3287,6 +3287,44 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   color: var(--text-secondary) !important;
   border: 1px solid var(--border) !important;
   box-shadow: var(--shadow-xs);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* Row band label — permanent tooltip centered inside each crop row band.
+   "HILERA A · FRENTE" / "HILERA A · ATRÁS". Subtle but legible at zoom-out;
+   M3 flips this to .row-band-label--active when the robot enters the band. */
+.row-band-label {
+  background: rgba(254, 253, 251, 0.92) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-xs);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px !important;
+  border-radius: var(--r-xs);
+  pointer-events: none;
+}
+.row-band-label::before { display: none !important; }   /* hide arrow */
+
+.row-band-label--active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border-color: var(--accent-soft-strong) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Ghost row band — shown when /api/rails is empty (no rails registered yet).
+   Operator still sees the greenhouse skeleton with a clear "to be configured"
+   visual hint. */
+.row-band-label--ghost {
+  color: var(--dim) !important;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  background: rgba(254, 253, 251, 0.85) !important;
 }
 
 /* Camera PIP — softer than the old hard black. */
