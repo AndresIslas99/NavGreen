@@ -602,24 +602,26 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     }
   }, [path, state])
 
-  // Update scan points
+  // Update scan points — softened from aggressive red dots to a calm
+  // muted-grey dust. The point cloud is informational ("here's what the
+  // lidar sees"), not an alarm. Decimated to ~200 max visible markers
+  // for render perf on the Jetson.
   useEffect(() => {
     const group = scanGroupRef.current
     if (!group) return
 
-    // Clear old scan markers
     group.clearLayers()
-
-    // Only show every Nth point for performance
     const step = Math.max(1, Math.floor(scanPoints.length / 200))
     for (let i = 0; i < scanPoints.length; i += step) {
       const pt = scanPoints[i]
       L.circleMarker(worldToLatLng(pt.x, pt.y), {
-        radius: 2,
-        color: '#f44336',
-        fillColor: '#f44336',
-        fillOpacity: 0.7,
+        radius: 1.4,
+        color: '#7a847c',       // = --dim
+        fillColor: '#7a847c',
+        fillOpacity: 0.5,
+        opacity: 0.4,
         weight: 0,
+        interactive: false,
       }).addTo(group)
     }
   }, [scanPoints])
