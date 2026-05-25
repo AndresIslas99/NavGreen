@@ -3492,6 +3492,22 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   box-shadow: var(--shadow-xs);
 }
 
+/* Rural context labels — neighbour greenhouse, water tank, distant
+   features. Tiny, dim, never compete with the active operating area. */
+.rural-distant-label {
+  background: transparent;
+  border: none;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #7c6e4f;
+  text-align: center;
+  opacity: 0.7;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* Home / base landmark — pulsing accent-soft circle with a house glyph.
    Marks the operator-defined base where "Ir a base" will navigate to. */
 .home-landmark-wrapper { background: transparent !important; border: none !important; }
