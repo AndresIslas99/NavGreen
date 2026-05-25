@@ -561,12 +561,14 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
               stroke="#5a8a52" stroke-width="1.1"
               stroke-dasharray="2 1.5"/>
       </svg>`
+    // Loose rail glyph — calm neutral grey, not amber. The marker
+    // communicates "this is an extra reference not anchored to a slot"
+    // without raising the alarm bell red would.
     const glyphRailLoose = `<svg width="12" height="12" viewBox="0 0 12 12">
         <rect x="2.5" y="2.5" width="7" height="7" rx="1"
               transform="rotate(45 6 6)"
-              fill="#f6e7d4" stroke="#b8612e" stroke-width="1.3"/>
-        <text x="6" y="8" text-anchor="middle" font-size="6"
-              font-weight="700" fill="#b8612e">!</text>
+              fill="#efece5" stroke="#9aa098" stroke-width="1.1"
+              stroke-dasharray="2 1.5"/>
       </svg>`
     const glyphWallLinked = `<svg width="12" height="12" viewBox="0 0 12 12">
         <rect x="1.5" y="1.5" width="9" height="9" rx="1"
@@ -590,12 +592,16 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
       // Letters indexed by aisle order, matching AISLE_CENTERS bottom-up.
       const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
-      const SLOT_MATCH_X = 2.5     // metres of x tolerance for linking
-      const SLOT_MATCH_Y = 1.5     // metres of y tolerance for linking
+      const RAIL_Y_TOLERANCE = 1.5     // metres of Y tolerance for linking
 
-      // Build the 10 structural slots and link the nearest unclaimed
-      // rail_start tag to each (greedy: each tag links to at most ONE
-      // slot, by smallest Euclidean distance).
+      // Build the 10 structural slots; section-based linking matches the
+      // wall logic: a rail_start tag whose x falls inside REAR section
+      // is a candidate for whichever REAR rail slot has the closest Y;
+      // same for FRONT. If x falls in the central corridor or outside,
+      // fall back to choosing the section by which corridor edge is
+      // closer. Multiple tags want the same slot → smallest Y delta
+      // wins; the others render as small neutral grey "extra ref"
+      // markers at their raw poses, NOT in an alarm color.
       type Slot = {
         letter: string
         section: 'rear' | 'front'
@@ -614,29 +620,31 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
       const railTags = tags.filter(t => t.type === 'rail_start')
       const claimed = new Set<number>()
+      const CORRIDOR_MID = (REAR_X_END + FRONT_X_START) / 2
       for (const t of railTags) {
+        // Section assignment: strict inside-bounds first; if the tag
+        // sits in the corridor or outside both sections, fall back to
+        // whichever corridor edge is closer.
+        let section: 'rear' | 'front'
+        if (t.x >= REAR_X_START && t.x <= REAR_X_END) section = 'rear'
+        else if (t.x >= FRONT_X_START && t.x <= FRONT_X_END) section = 'front'
+        else section = t.x <= CORRIDOR_MID ? 'rear' : 'front'
+
         let bestSlot: Slot | null = null
-        let bestDist = Infinity
+        let bestDeltaY = Infinity
         for (const slot of slots) {
-          if (Math.abs(t.x - slot.x) > SLOT_MATCH_X) continue
-          if (Math.abs(t.y - slot.y) > SLOT_MATCH_Y) continue
-          const dx = t.x - slot.x, dy = t.y - slot.y
-          const d = Math.sqrt(dx * dx + dy * dy)
-          if (d < bestDist && (!slot.linkedTag || d < slot.linkedDist)) {
+          if (slot.section !== section) continue
+          const dy = Math.abs(t.y - slot.y)
+          if (dy > RAIL_Y_TOLERANCE) continue
+          if (dy < bestDeltaY && (!slot.linkedTag || dy < slot.linkedDist)) {
             bestSlot = slot
-            bestDist = d
+            bestDeltaY = dy
           }
         }
         if (bestSlot) {
-          // If the slot is already linked to another tag with worse
-          // distance, kick that one out — it becomes a loose tag.
-          if (bestSlot.linkedTag) {
-            // Previous tag stays in `tags` but isn't `claimed` — it'll
-            // render as loose below.
-            claimed.delete(bestSlot.linkedTag.id)
-          }
+          if (bestSlot.linkedTag) claimed.delete(bestSlot.linkedTag.id)
           bestSlot.linkedTag = t
-          bestSlot.linkedDist = bestDist
+          bestSlot.linkedDist = bestDeltaY
           claimed.add(t.id)
         }
       }
@@ -667,9 +675,11 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         })
       }
 
-      // Loose rail tags — rail_start tags that didn't link to any slot,
-      // OR were displaced by a closer tag. Rendered at raw pose with
-      // an amber-warn diamond so the operator notices miscalibration.
+      // Extra rail references — rail_start tags whose slot was claimed
+      // by a tag with a closer Y, or whose section couldn't accommodate
+      // them. Rendered at raw pose as small neutral grey diamonds; this
+      // is informational ("here's an extra rail reference"), not an
+      // alarm.
       for (const t of railTags) {
         if (claimed.has(t.id)) continue
         const marker = L.marker(worldToLatLng(t.x, t.y), {
@@ -682,7 +692,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           interactive: true,
         }).addTo(group)
         marker.bindTooltip(
-          `#${t.id} · ${t.label} · posición irregular (no anclada a riel)`,
+          `#${t.id} · ${t.label} · referencia adicional`,
           { direction: 'top', offset: [0, -4], className: 'apriltag-tooltip' },
         )
       }
