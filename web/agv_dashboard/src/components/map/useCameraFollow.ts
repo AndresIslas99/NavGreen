@@ -24,6 +24,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type L from 'leaflet';
+import type { RobotState } from '../../api/types';
 
 export interface CameraFollowApi {
   cameraMode: 'follow' | 'manual' | 'frozen';
@@ -33,6 +34,15 @@ export interface CameraFollowApi {
   recenter: () => void;
   /** Programmatic fit-to-bounds (e.g. "Fit greenhouse" control). */
   fitBounds: (bounds: L.LatLngBoundsExpression) => void;
+  /**
+   * Heading-up map rotation (Google Maps Nav-style). Returns the
+   * degrees the leaflet-container should rotate so the robot's
+   * heading appears UP on screen. 0 means "north-up, no rotation".
+   * Active only while following the robot AND driving (navigating,
+   * executing_mission, mapping). Hysteresis built in to avoid
+   * flickering when theta drifts a fraction of a degree.
+   */
+  mapRotationDeg: number;
 }
 
 interface Options {
@@ -55,16 +65,29 @@ function reducedMotion(): boolean {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+// States where the heading-up rotation is active. Mirrors Google Maps:
+// rotate while actively navigating; stay north-up otherwise.
+const DRIVING_STATES: ReadonlyArray<RobotState> = [
+  'navigating', 'executing_mission', 'mapping',
+];
+
 export function useCameraFollow(
   map: L.Map | null,
   pose: { x: number; y: number; theta: number } | null,
   worldToLatLng: (x: number, y: number) => L.LatLng,
+  state: RobotState | undefined,
   options: Options = {},
 ): CameraFollowApi {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   const [followRobot, setFollowRobot] = useState(true);
   const [poseStale, setPoseStale] = useState(false);
+  // Latched rotation value with hysteresis — only updates when the
+  // robot's heading has changed by more than HEADING_DEAD_BAND_DEG so
+  // tiny theta jitter while stationary doesn't cause visible spin.
+  const [mapRotationDeg, setMapRotationDeg] = useState(0);
+  const HEADING_DEAD_BAND_DEG = 2;
+  const lastSignificantThetaRef = useRef<number | null>(null);
 
   // Guard refs — distinguish OUR panTo/flyTo from operator-initiated moves.
   const programmaticMoveRef = useRef(false);
@@ -223,5 +246,34 @@ export function useCameraFollow(
   const cameraMode: 'follow' | 'manual' | 'frozen' =
     poseStale ? 'frozen' : followRobot ? 'follow' : 'manual';
 
-  return { cameraMode, followRobot, poseStale, recenter, fitBounds };
+  // ── Heading-up rotation ────────────────────────────────────────────
+  // Active only while the camera is following AND the robot is in a
+  // driving state. Outside of that (idle, blocked, e_stop, fault,
+  // manual pan, frozen pose) the map snaps back to north-up.
+  //
+  // Formula (see plan): mapRotationDeg = theta_deg - 90, because the
+  // icon is already rotated by `-theta` and we want the composed
+  // visual rotation to be -90° (wedge pointing UP).
+  const headingUpActive =
+    followRobot && !poseStale &&
+    state != null && DRIVING_STATES.includes(state) &&
+    pose != null;
+  useEffect(() => {
+    if (!headingUpActive || !pose) {
+      // Return to north-up.
+      if (mapRotationDeg !== 0) setMapRotationDeg(0);
+      lastSignificantThetaRef.current = null;
+      return;
+    }
+    const thetaDeg = pose.theta * 180 / Math.PI;
+    const last = lastSignificantThetaRef.current;
+    if (last != null && Math.abs(thetaDeg - last) < HEADING_DEAD_BAND_DEG) {
+      // Within dead band — keep current rotation.
+      return;
+    }
+    lastSignificantThetaRef.current = thetaDeg;
+    setMapRotationDeg(thetaDeg - 90);
+  }, [headingUpActive, pose, mapRotationDeg]);
+
+  return { cameraMode, followRobot, poseStale, recenter, fitBounds, mapRotationDeg };
 }
