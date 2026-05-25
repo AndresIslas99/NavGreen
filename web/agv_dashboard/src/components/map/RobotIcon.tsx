@@ -96,8 +96,20 @@ export function robotIcon(
           <filter id="rs" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.18"/>
           </filter>
+          <radialGradient id="contact-shadow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"  stop-color="rgba(26,36,33,0.45)"/>
+            <stop offset="60%" stop-color="rgba(26,36,33,0.18)"/>
+            <stop offset="100%" stop-color="rgba(26,36,33,0)"/>
+          </radialGradient>
         </defs>
-        <!-- State glow ring (drawn first, beneath everything) -->
+        <!-- Contact shadow — soft ellipse beneath the chassis. NOT inside the
+             rotated group so the shadow stays oriented to the world's "down"
+             axis (sun-from-above convention) rather than rotating with the
+             robot. Gives the vehicle a sense of weight against the ground. -->
+        <ellipse class="robot-icon__shadow"
+                 cx="${CX}" cy="${CY + 3}" rx="17" ry="6"
+                 fill="url(#contact-shadow)" />
+        <!-- State glow ring (drawn next, beneath the chassis) -->
         <circle class="robot-icon__ring"
                 cx="${CX}" cy="${CY}" r="20"
                 fill="none"

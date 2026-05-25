@@ -204,9 +204,10 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
       // 5. Skylight ridge — real polycarbonate greenhouses have a peaked
       // roof with a continuous skylight along the long axis. We render
-      // this as a soft warm gradient strip along y=0 (the building's long
-      // axis). It's the most "this place is lit by the sun" detail and
-      // sells the indoor-but-bright feel.
+      // this as a soft warm strip along y=0. The `skylight-ridge` class
+      // attaches a very slow shimmer animation (8 s cycle) suggesting
+      // light moving through the day. Sells the indoor-but-bright feel
+      // without ever competing with operating elements.
       L.rectangle(
         [[-0.45, enc.minX + 0.6], [0.45, enc.maxX - 0.6]],
         {
@@ -215,6 +216,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           fillColor: '#fff8e2',
           fillOpacity: 0.55,
           interactive: false,
+          className: 'skylight-ridge',
         },
       ).addTo(greenhouseGroup)
       // Skylight centerline — thin tinted seam representing the ridge cap.

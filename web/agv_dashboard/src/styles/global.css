@@ -2003,6 +2003,21 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   100%    { opacity: 1; }
 }
 
+/* Skylight ridge — slow shimmer that suggests sunlight moving through the
+   polycarbonate roof. Very long cycle (8 s) and tiny opacity range so it
+   never competes with operator-facing elements. Targets the SVG fill of
+   the rectangle's path element. */
+.skylight-ridge {
+  animation: skylight-shimmer 8s ease-in-out infinite;
+}
+@keyframes skylight-shimmer {
+  0%, 100% { fill-opacity: 0.45; }
+  50%      { fill-opacity: 0.65; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skylight-ridge { animation: none; }
+}
+
 /* Ambient E-stop border — when an emergency stop is engaged (`e_stop:
    true` on the status payload), the entire viewport gains a soft
    yellow inset glow that gently pulses. Unmistakable peripheral cue
@@ -4150,7 +4165,12 @@ button.depth-pip:focus-visible {
     backdrop-filter: var(--glass-blur-strong);
     -webkit-backdrop-filter: var(--glass-blur-strong);
     border-bottom: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
+    /* Soft elevation shadow + accent hairline at the bottom edge — the
+       hairline is the Ada Labs forest-green at very low alpha, so a thin
+       brand stripe runs across the whole top of the app without shouting. */
+    box-shadow:
+      0 4px 14px rgba(26, 36, 33, 0.06),
+      inset 0 -2px 0 rgba(47, 111, 42, 0.10);
   }
   .app.is-disconnected .topbar { top: 36px; }   /* banner pushes topbar down */
 
