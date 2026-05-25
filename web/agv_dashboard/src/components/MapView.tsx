@@ -8,7 +8,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone } from '../api/types'
+import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone, RobotState } from '../api/types'
+import { robotIcon } from './map/RobotIcon'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
 import {
@@ -42,39 +43,19 @@ interface Props {
   selectedRobot?: string | null
   ghostPose?: { x: number; y: number; theta: number } | null
   mappingCoverage?: number
+  /** Robot state for icon coloring (accent/warn/crit). Optional — defaults to 'idle'. */
+  state?: RobotState
 }
 
-// Robot icon: circular body + clear arrow head pointing in the heading direction.
-// SVG default orientation: arrow tip at top (north). ROS theta=0 means facing
-// X+ (east in our CRS.Simple → right). The conversion from ROS yaw to CSS
-// rotation is the same as before: deg = -theta*180/π + 90.
-function robotIcon(theta: number): L.DivIcon {
-  const deg = -(theta * 180 / Math.PI) + 90
-  const svg = `
-    <svg viewBox="0 0 32 32" width="32" height="32"
-         style="transform: rotate(${deg}deg); transform-origin: 16px 16px;">
-      <!-- Body circle -->
-      <circle cx="16" cy="16" r="9" fill="#1b5e20" stroke="#4caf50" stroke-width="2"/>
-      <!-- Heading arrow: tip up, base inside circle -->
-      <path d="M16,2 L24,15 L16,11 L8,15 Z"
-            fill="#69f0ae" stroke="#fff" stroke-width="1" stroke-linejoin="round"/>
-      <!-- Center dot for reference -->
-      <circle cx="16" cy="16" r="1.5" fill="#fff"/>
-    </svg>`
-  return L.divIcon({
-    className: 'robot-marker',
-    html: svg,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  })
-}
+// Robot icon factory moved to './map/RobotIcon.tsx' — top-down vehicle outline
+// with 4 wheels + heading wedge + state-aware coloring (accent / warn / crit).
 
 // Convert world coords to Leaflet LatLng (y=lat, x=lng in CRS.Simple)
 function worldToLatLng(x: number, y: number): L.LatLng {
   return L.latLng(y, x)
 }
 
-export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage }: Props) {
+export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage, state }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
 
@@ -489,10 +470,10 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
     if (robotMarkerRef.current) {
       robotMarkerRef.current.setLatLng(latlng)
-      robotMarkerRef.current.setIcon(robotIcon(pose.theta))
+      robotMarkerRef.current.setIcon(robotIcon(pose.theta, state))
     } else {
       const marker = L.marker(latlng, {
-        icon: robotIcon(pose.theta),
+        icon: robotIcon(pose.theta, state),
         zIndexOffset: 1000,
       }).addTo(map)
       robotMarkerRef.current = marker
@@ -520,7 +501,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     if (followRobot && !userPannedRef.current) {
       map.panTo(latlng, { animate: false })
     }
-  }, [pose, followRobot])
+  }, [pose, followRobot, state])
 
   // Update navigation path
   useEffect(() => {
