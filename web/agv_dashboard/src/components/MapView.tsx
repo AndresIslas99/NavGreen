@@ -67,6 +67,13 @@ interface Props {
 // Robot icon factory moved to './map/RobotIcon.tsx' — top-down vehicle outline
 // with 4 wheels + heading wedge + state-aware coloring (accent / warn / crit).
 
+// Wrap tooltip text in a span the CSS counter-rotation targets.
+// Leaflet sets `transform: translate3d(...)` inline on the outer tooltip
+// element, which beats any stylesheet `transform: rotate(...)` we'd
+// try to apply there. So we put the rotation on an INNER span and
+// leave Leaflet's outer translate alone.
+const tip = (text: string): string => `<span class="ll-rotate">${text}</span>`
+
 // Convert world coords to Leaflet LatLng (y=lat, x=lng in CRS.Simple)
 function worldToLatLng(x: number, y: number): L.LatLng {
   return L.latLng(y, x)
@@ -114,12 +121,23 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   // programmaticMoveRef), and stale-pose freezing. The state machine
   // (follow|manual|frozen) drives the visibility of RecenterButton and
   // OffScreenIndicator below.
-  const { cameraMode, recenter } = useCameraFollow(
+  const { cameraMode, recenter, mapRotationDeg } = useCameraFollow(
     mapInstance,
     pose,
     worldToLatLng,
+    state,
     { defaultZoom: 5, bottomBias: 0.20 },
   )
+
+  // Mirror the rotation into a ref so click handlers (which are bound
+  // once and live with stale closures) can read the current value
+  // without forcing a re-bind on every rotation update.
+  const mapRotationRef = useRef(0)
+  mapRotationRef.current = mapRotationDeg
+  // Robot's current pose stored in a ref for the same reason — the
+  // click rotation pivots around the robot, so we need its live latlng.
+  const poseRef = useRef(pose)
+  poseRef.current = pose
 
   // Initialize map
   useEffect(() => {
@@ -504,10 +522,13 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     // User-pan detection is now owned by useCameraFollow (uses movestart +
     // zoomstart guarded by programmaticMoveRef). No dragstart listener here.
 
-    // Click-to-goal
+    // Click-to-goal — inverse-rotate around the robot to account for
+    // the heading-up CSS transform on .leaflet-container (Leaflet's
+    // latLngToContainerPoint doesn't know about the transform).
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (mode === 'nav' && onGoalClick) {
-        onGoalClick(e.latlng.lng, e.latlng.lat)
+        const ll = unrotateClick(map, e)
+        onGoalClick(ll.lng, ll.lat)
       }
     })
 
@@ -719,7 +740,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         const tooltipText = linked
           ? `Entrada · ${sectionLabel} · #${linked.id} ${linked.label}`
           : `Entrada · ${sectionLabel} · sin tag configurado`
-        marker.bindTooltip(tooltipText, {
+        marker.bindTooltip(tip(tooltipText), {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',
@@ -743,7 +764,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           interactive: true,
         }).addTo(group)
         marker.bindTooltip(
-          `#${t.id} · ${t.label} · referencia adicional`,
+          tip(`#${t.id} · ${t.label} · referencia adicional`),
           { direction: 'top', offset: [0, -4], className: 'apriltag-tooltip' },
         )
       }
@@ -845,7 +866,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           : linked
             ? `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · #${linked.id} ${linked.label}`
             : `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · sin tag configurado`
-        marker.bindTooltip(tooltipText, {
+        marker.bindTooltip(tip(tooltipText), {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',
@@ -867,7 +888,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           }),
           interactive: true,
         }).addTo(group)
-        marker.bindTooltip(`#${t.id} · ${t.label} (referencia auxiliar)`, {
+        marker.bindTooltip(tip(`#${t.id} · ${t.label} (referencia auxiliar)`), {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',
@@ -914,7 +935,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           interactive: false,
         }).addTo(group)
         // Permanent tooltip = label rendered directly on the map.
-        poly.bindTooltip(z.label, {
+        poly.bindTooltip(tip(z.label), {
           permanent: true,
           direction: 'center',
           className: 'zone-label-tooltip',
@@ -958,7 +979,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           weight: 1.5,
           interactive: false,
         }).addTo(railGroup)
-        dot.bindTooltip(r.label, {
+        dot.bindTooltip(tip(r.label), {
           permanent: true,
           direction: 'right',
           offset: [8, 0],
@@ -1002,7 +1023,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
             interactive: false,
           },
         ).addTo(bandGroup)
-        rect.bindTooltip(b.label, {
+        rect.bindTooltip(tip(b.label), {
           permanent: true,
           direction: 'center',
           className: 'row-band-label',
@@ -1192,7 +1213,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       zIndexOffset: 600,
       interactive: true,
     }).addTo(map)
-    marker.bindTooltip(`Base: ${homePoint.name}`, {
+    marker.bindTooltip(tip(`Base: ${homePoint.name}`), {
       permanent: true,
       direction: 'bottom',
       offset: [0, 14],
@@ -1209,10 +1230,43 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     map.off('click')
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (mode === 'nav' && onGoalClick) {
-        onGoalClick(e.latlng.lng, e.latlng.lat)
+        const ll = unrotateClick(map, e)
+        onGoalClick(ll.lng, ll.lat)
       }
     })
   }, [mode, onGoalClick])
+
+  // Apply the heading-up CSS rotation to the .leaflet-container.
+  // Origin = robot's current container-point so the robot stays fixed
+  // and the world spins around it (Google Maps Nav style).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const container = map.getContainer()
+    if (!pose) return
+    const robotPx = map.latLngToContainerPoint(worldToLatLng(pose.x, pose.y))
+    container.style.setProperty('--map-bearing', `${mapRotationDeg}deg`)
+    container.style.transformOrigin = `${robotPx.x}px ${robotPx.y}px`
+    container.style.transform = `rotate(${mapRotationDeg}deg)`
+  }, [mapRotationDeg, pose])
+
+  // Helper: convert a click event on the rotated .leaflet-container
+  // back to a world latlng. We do this by inverse-rotating the click's
+  // container point around the robot's container point, then asking
+  // Leaflet to convert the un-rotated point to latlng.
+  function unrotateClick(map: L.Map, e: L.LeafletMouseEvent): L.LatLng {
+    const rot = mapRotationRef.current
+    const p = poseRef.current
+    if (rot === 0 || !p) return e.latlng
+    const robotPx = map.latLngToContainerPoint(worldToLatLng(p.x, p.y))
+    const dx = e.containerPoint.x - robotPx.x
+    const dy = e.containerPoint.y - robotPx.y
+    const rad = -rot * Math.PI / 180  // inverse rotation
+    const rx = dx * Math.cos(rad) - dy * Math.sin(rad)
+    const ry = dx * Math.sin(rad) + dy * Math.cos(rad)
+    const truePoint = L.point(robotPx.x + rx, robotPx.y + ry)
+    return map.containerPointToLatLng(truePoint)
+  }
 
   // Update map image overlay
   // Track which type of map is displayed to detect switches (static↔live)
@@ -1394,7 +1448,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         weight: 2,
       }).addTo(group)
 
-      marker.bindTooltip(`${i + 1}`, {
+      marker.bindTooltip(tip(`${i + 1}`), {
         permanent: true,
         direction: 'right',
         offset: [8, 0],
@@ -1439,7 +1493,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
       const drivingLabel = robot.driving ? 'Driving' : 'Idle'
       marker.bindTooltip(
-        `<b>${robot.id.split('/').pop()}</b><br/>${drivingLabel} — ${robot.connectionState}`,
+        tip(`<b>${robot.id.split('/').pop()}</b><br/>${drivingLabel} — ${robot.connectionState}`),
         { direction: 'top', offset: [0, -10] }
       )
     }
@@ -1466,7 +1520,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         ghostMarkerRef.current.setIcon(icon)
       } else {
         ghostMarkerRef.current = L.marker(latlng, { icon, zIndexOffset: 800 }).addTo(map)
-        ghostMarkerRef.current.bindTooltip('Replay', { direction: 'top', offset: [0, -10] })
+        ghostMarkerRef.current.bindTooltip(tip('Replay'), { direction: 'top', offset: [0, -10] })
       }
     } else if (ghostMarkerRef.current) {
       ghostMarkerRef.current.remove()
