@@ -566,7 +566,18 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         <text x="6" y="8" text-anchor="middle" font-size="6"
               font-weight="700" fill="#b8612e">!</text>
       </svg>`
-    const glyphWall = `<svg width="12" height="12" viewBox="0 0 12 12">
+    const glyphWallLinked = `<svg width="12" height="12" viewBox="0 0 12 12">
+        <rect x="1.5" y="1.5" width="9" height="9" rx="1"
+              fill="#efece5" stroke="#7a847c" stroke-width="1.3"/>
+        <path d="M3 6 L9 6" stroke="#7a847c" stroke-width="1.1" stroke-linecap="round"/>
+      </svg>`
+    const glyphWallUnlinked = `<svg width="12" height="12" viewBox="0 0 12 12">
+        <rect x="1.5" y="1.5" width="9" height="9" rx="1"
+              fill="#f5f3ee"
+              stroke="#9aa098" stroke-width="1"
+              stroke-dasharray="2 1.5"/>
+      </svg>`
+    const glyphWallOther = `<svg width="12" height="12" viewBox="0 0 12 12">
         <rect x="1.5" y="1.5" width="9" height="9" rx="1"
               fill="#efece5" stroke="#7a847c" stroke-width="1.2"/>
       </svg>`
@@ -674,19 +685,93 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         )
       }
 
-      // Wall-type tags — precise references at the configured pose.
-      for (const t of tags) {
-        if (t.type !== 'wall') continue
-        const marker = L.marker(worldToLatLng(t.x, t.y), {
+      // ── Wall reference slots ────────────────────────────────────────
+      // Between each pair of consecutive rail entries (in y) is where a
+      // cucumber row starts, and that's where wall-reference AprilTags
+      // are physically placed. 4 inter-aisle slots per section × 2
+      // sections = 8 wall slots. Same linking rules as rail slots.
+      type WallSlot = {
+        // Letters identifying the bracketing rails (e.g. 'A-B', 'B-C').
+        between: string
+        section: 'rear' | 'front'
+        x: number
+        y: number
+        linkedTag: DefinedTag | null
+        linkedDist: number
+      }
+      const wallSlots: WallSlot[] = []
+      for (let i = 0; i < AISLE_CENTERS.length - 1; i++) {
+        const y = (AISLE_CENTERS[i] + AISLE_CENTERS[i + 1]) / 2
+        const between = `${LETTERS[i]}-${LETTERS[i + 1]}`
+        wallSlots.push({ between, section: 'rear',  x: REAR_X_END,    y, linkedTag: null, linkedDist: Infinity })
+        wallSlots.push({ between, section: 'front', x: FRONT_X_START, y, linkedTag: null, linkedDist: Infinity })
+      }
+
+      const wallTags = tags.filter(t => t.type === 'wall')
+      const wallClaimed = new Set<number>()
+      for (const t of wallTags) {
+        let bestSlot: WallSlot | null = null
+        let bestDist = Infinity
+        for (const slot of wallSlots) {
+          if (Math.abs(t.x - slot.x) > SLOT_MATCH_X) continue
+          if (Math.abs(t.y - slot.y) > SLOT_MATCH_Y) continue
+          const dx = t.x - slot.x, dy = t.y - slot.y
+          const d = Math.sqrt(dx * dx + dy * dy)
+          if (d < bestDist && (!slot.linkedTag || d < slot.linkedDist)) {
+            bestSlot = slot
+            bestDist = d
+          }
+        }
+        if (bestSlot) {
+          if (bestSlot.linkedTag) wallClaimed.delete(bestSlot.linkedTag.id)
+          bestSlot.linkedTag = t
+          bestSlot.linkedDist = bestDist
+          wallClaimed.add(t.id)
+        }
+      }
+
+      // Render all wall slots.
+      for (const slot of wallSlots) {
+        const sectionLabel = slot.section === 'rear' ? 'Atrás' : 'Frente'
+        const linked = slot.linkedTag
+        const html = linked ? glyphWallLinked : glyphWallUnlinked
+        const cls = linked ? 'apriltag-marker apriltag-marker--wall'
+                           : 'apriltag-marker apriltag-marker--wall-empty'
+        const marker = L.marker(worldToLatLng(slot.x, slot.y), {
           icon: L.divIcon({
-            className: 'apriltag-marker apriltag-marker--wall',
-            html: glyphWall,
+            className: cls,
+            html,
             iconSize: [12, 12],
             iconAnchor: [6, 6],
           }),
           interactive: true,
         }).addTo(group)
-        marker.bindTooltip(`#${t.id} · ${t.label} (referencia de pared)`, {
+        const tooltipText = linked
+          ? `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · #${linked.id} ${linked.label}`
+          : `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · sin tag configurado`
+        marker.bindTooltip(tooltipText, {
+          direction: 'top',
+          offset: [0, -4],
+          className: 'apriltag-tooltip',
+        })
+      }
+
+      // Wall-type tags that didn't link to any wall slot — these are
+      // OTHER physical references like the charging dock (not cucumber-
+      // row-start). Render at raw pose with the neutral wall glyph so
+      // the operator still sees them but they read as "auxiliary".
+      for (const t of wallTags) {
+        if (wallClaimed.has(t.id)) continue
+        const marker = L.marker(worldToLatLng(t.x, t.y), {
+          icon: L.divIcon({
+            className: 'apriltag-marker apriltag-marker--wall-other',
+            html: glyphWallOther,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
+          }),
+          interactive: true,
+        }).addTo(group)
+        marker.bindTooltip(`#${t.id} · ${t.label} (referencia auxiliar)`, {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',

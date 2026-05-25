@@ -3809,6 +3809,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .apriltag-marker--rail-empty:hover { opacity: 1; }
 .apriltag-marker--rail-loose { /* keeps full opacity — the warning glyph
                                    already telegraphs the issue */ }
+.apriltag-marker--wall-empty { opacity: 0.75; }
+.apriltag-marker--wall-empty:hover { opacity: 1; }
+.apriltag-marker--wall-other { opacity: 0.7; }   /* auxiliary refs (dock, etc.) */
+.apriltag-marker--wall-other:hover { opacity: 1; }
 
 /* Map empty state overlay — visible when no occupancy grid is loaded.
    Sits on top of the greenhouse template (rendered behind via Leaflet),
