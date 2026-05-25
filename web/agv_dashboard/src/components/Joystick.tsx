@@ -136,7 +136,7 @@ export function Joystick({ enabled, maxLinear, maxAngular, onMove }: Props) {
         onPointerCancel={handlePointerUp}
         style={{ touchAction: 'none' }}
       />
-      {!enabled && <div className="joystick-overlay">Not in Teleop</div>}
+      {!enabled && <div className="joystick-overlay">Disponible en modo Manual</div>}
     </div>
   )
 }
