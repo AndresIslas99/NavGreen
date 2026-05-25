@@ -113,7 +113,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     mapInstance,
     pose,
     worldToLatLng,
-    { defaultZoom: 4, bottomBias: 0.20 },
+    { defaultZoom: 5, bottomBias: 0.20 },
   )
 
   // Initialize map
@@ -135,7 +135,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     // centered on the robot pose so the operator sees ~10-15 m around the
     // vehicle, Google-Maps style. If no pose has been received yet the hook
     // is a no-op and we fall back to default Leaflet zoom (handled below).
-    map.setView([0, 0], 4, { animate: false })
+    map.setView([0, 0], 5, { animate: false })
 
     // No Leaflet zoom control — it sat at z=1000 in the top-right and
     // crossed the translucent topbar's edge. The operator zooms via
@@ -528,6 +528,24 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       // Mirror into ref so the proximity-ripple effect below can read it
       // without re-rendering on every poll.
       definedTagsRef.current = tags
+
+      // Visual snap: rail_start tags are the markers at the entry of each
+      // rail. If the configured world Y is off by < 0.5 m from the nearest
+      // rail centerline (= an AISLE_CENTER), nudge the rendered y to the
+      // rail line so the marker reads as "anchored to this rail" instead
+      // of floating loose. Real-world tag pose used by the navigation
+      // stack is unchanged; this is purely a display alignment so the
+      // operator sees structural meaning.
+      const snapY = (rawY: number, type: string): number => {
+        if (type !== 'rail_start') return rawY
+        let best = rawY, bestDelta = Infinity
+        for (const yc of AISLE_CENTERS) {
+          const d = Math.abs(rawY - yc)
+          if (d < bestDelta && d < 0.5) { best = yc; bestDelta = d }
+        }
+        return best
+      }
+
       for (const t of tags) {
         // Type-distinct glyphs:
         //  - rail_start → forest-green diamond (suggests "approach target")
@@ -544,7 +562,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
                <rect x="1.5" y="1.5" width="9" height="9" rx="1"
                      fill="#efece5" stroke="#7a847c" stroke-width="1.2"/>
              </svg>`
-        const marker = L.marker(worldToLatLng(t.x, t.y), {
+        const displayY = snapY(t.y, t.type)
+        const marker = L.marker(worldToLatLng(t.x, displayY), {
           icon: L.divIcon({
             className: `apriltag-marker apriltag-marker--${isRail ? 'rail' : 'wall'}`,
             html: glyphSvg,
@@ -553,7 +572,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           }),
           interactive: true,
         }).addTo(group)
-        marker.bindTooltip(`#${t.id} · ${t.label}${isRail ? ' (rail)' : ''}`, {
+        const snapNote = displayY !== t.y ? ' · anclado al riel' : ''
+        marker.bindTooltip(`#${t.id} · ${t.label}${isRail ? ' (entrada de riel)' : ''}${snapNote}`, {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',
@@ -648,40 +668,33 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         })
       }
 
-      // 2. Row bands — the green-tinted "crop row" rectangles spanning each
-      // rail's length. This is the layer that makes the map read as a
-      // greenhouse, not a coordinate plane.
-      //
-      // Behavior:
-      //  - When the rail registry has entries: paint solid bands per rail.
-      //  - When the registry is empty (e.g. on a freshly installed system,
-      //    or in dev): paint GHOST bands at every possible aisle×section
-      //    position so the operator still sees the greenhouse skeleton with
-      //    a clear "not yet registered" visual hint (dashed border, lower
-      //    opacity, suffix "(sin riel)").
+      // 2. Rail bands — the green-tinted operating lanes the AGV drives on.
+      // The greenhouse has a fixed rail layout (5 rails × 2 sections); we
+      // ALWAYS render the full set. When the rail registry has entries
+      // from /api/rails we use those positions; otherwise we fall back to
+      // the geometric default (ghostRowBands). Either way the operator
+      // sees the rail layout — there's no "sin riel" state, because the
+      // rails are physical infrastructure.
       bandGroup.clearLayers()
       rowRectsRef.current.clear()
       const bands = rowBands(rails)
-      const useGhost = bands.length === 0
-      const bandsToRender = useGhost ? ghostRowBands() : bands
+      const bandsToRender = bands.length > 0 ? bands : ghostRowBands()
       rowBandsRef.current = bandsToRender
       for (const b of bandsToRender) {
         const rect = L.rectangle(
           [[b.yMin, b.xStart], [b.yMax, b.xEnd]],
           {
             color: '#c1d9b6',     // = --accent-soft-strong
-            weight: useGhost ? 1 : 1.2,
-            dashArray: useGhost ? '4,4' : undefined,
+            weight: 1.2,
             fillColor: '#e2eedc', // = --accent-soft
-            fillOpacity: useGhost ? 0.30 : 0.55,
+            fillOpacity: 0.55,
             interactive: false,
           },
         ).addTo(bandGroup)
-        const labelText = useGhost ? `${b.label} (sin riel)` : b.label
-        rect.bindTooltip(labelText, {
+        rect.bindTooltip(b.label, {
           permanent: true,
           direction: 'center',
-          className: useGhost ? 'row-band-label row-band-label--ghost' : 'row-band-label',
+          className: 'row-band-label',
         })
         // Key by letter+section so the spotlight effect can flip opacity
         // and tooltip class for the specific band the robot occupies.
