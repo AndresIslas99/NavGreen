@@ -7,6 +7,7 @@
  * current map name when there's no specific detail to share.
  */
 import { Tile } from '../ui/Tile';
+import { Skeleton } from '../ui/Skeleton';
 import { Compass, Loader, LocateOff, AlertCircle } from '../ui/icons';
 import type { LucideIcon } from '../ui/icons';
 import type { RobotStatus } from '../../api/types';
@@ -32,9 +33,10 @@ const DEFAULT_META: LocMeta = { label: '—', icon: Compass, tone: 'neutral' };
 
 interface Props {
   localization: Loc | undefined;
+  loading?: boolean;
 }
 
-export function LocalizationTile({ localization }: Props) {
+export function LocalizationTile({ localization, loading }: Props) {
   const action = localization?.action ?? 'UNKNOWN';
   const meta = LOC_META[action] ?? DEFAULT_META;
   const Icon = meta.icon;
@@ -42,6 +44,8 @@ export function LocalizationTile({ localization }: Props) {
   const sub =
     localization?.detail?.trim()
     || (localization?.map ? `Mapa: ${localization.map}` : 'Sin información');
+
+  const isUnknown = !localization || action === 'UNKNOWN';
 
   return (
     <Tile tone={meta.tone}>
@@ -54,8 +58,12 @@ export function LocalizationTile({ localization }: Props) {
       </Tile.Icon>
       <Tile.Content>
         <Tile.Eyebrow>Localización</Tile.Eyebrow>
-        <Tile.Value>{meta.label}</Tile.Value>
-        <Tile.Sub>{sub}</Tile.Sub>
+        <Tile.Value>
+          {loading && isUnknown ? <Skeleton variant="bar" width={120} height={22} /> : meta.label}
+        </Tile.Value>
+        <Tile.Sub>
+          {loading && isUnknown ? <Skeleton variant="text" width={160} height={11} /> : sub}
+        </Tile.Sub>
       </Tile.Content>
     </Tile>
   );

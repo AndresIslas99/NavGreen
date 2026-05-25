@@ -6,6 +6,7 @@
  * descriptive sub keeps it human and calm.
  */
 import { Tile } from '../ui/Tile';
+import { Skeleton } from '../ui/Skeleton';
 import {
   Circle, Play, MapPin, AlertOctagon, AlertTriangle, CheckCircle2, Power, Pause,
 } from '../ui/icons';
@@ -35,18 +36,27 @@ const STATE_META: Record<RobotState, StateMeta> = {
 
 interface Props {
   state: RobotState;
+  loading?: boolean;
 }
 
-export function StateTile({ state }: Props) {
+export function StateTile({ state, loading }: Props) {
   const meta = STATE_META[state];
   const Icon = meta.icon;
+  // Only show the skeleton when we genuinely don't know the state yet —
+  // i.e. status hasn't loaded AND state is still the default 'offline'.
+  // Showing it for a known offline state would feel like a glitch.
+  const isPlaceholder = loading && state === 'offline';
   return (
     <Tile tone={meta.tone}>
       <Tile.Icon><Icon size={24} strokeWidth={1.8} /></Tile.Icon>
       <Tile.Content>
         <Tile.Eyebrow>Estado</Tile.Eyebrow>
-        <Tile.Value>{meta.label}</Tile.Value>
-        <Tile.Sub>{meta.sub}</Tile.Sub>
+        <Tile.Value>
+          {isPlaceholder ? <Skeleton variant="bar" width={130} height={22} /> : meta.label}
+        </Tile.Value>
+        <Tile.Sub>
+          {isPlaceholder ? <Skeleton variant="text" width={170} height={11} /> : meta.sub}
+        </Tile.Sub>
       </Tile.Content>
     </Tile>
   );

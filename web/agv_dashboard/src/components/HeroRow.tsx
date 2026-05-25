@@ -15,17 +15,21 @@ import { LocalizationTile } from './topbar/LocalizationTile';
 interface Props {
   status: RobotStatus | null;
   state: RobotState;
+  /** True while the WS is connected but no status payload has arrived yet.
+      Tiles render skeleton shimmers instead of stale placeholders. */
+  loading?: boolean;
 }
 
-export function HeroRow({ status, state }: Props) {
+export function HeroRow({ status, state, loading = false }: Props) {
   return (
     <div className="hero-row" role="region" aria-label="Indicadores principales del robot">
-      <StateTile state={state} />
+      <StateTile state={state} loading={loading} />
       <BatteryTile
         batteryPct={status?.battery_pct ?? null}
         tteSeconds={status?.battery_time_to_empty_s ?? null}
+        loading={loading}
       />
-      <LocalizationTile localization={status?.localization} />
+      <LocalizationTile localization={status?.localization} loading={loading} />
     </div>
   );
 }
