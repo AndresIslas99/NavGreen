@@ -15,6 +15,9 @@ import * as missionsRoutes from './missions';
 import * as navRoutes from './nav';
 import * as analyticsRoutes from './analytics';
 import * as apriltagRoutes from './apriltags';
+import * as homePointRoutes from './home_point';
+import * as zonesRoutes from './zones';
+import * as railsRoutes from './rails';
 
 export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): void {
   statusRoutes.register(app, deps);
@@ -28,4 +31,7 @@ export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): v
   // Camera streams served directly by C++ image_server_node on port 8091
   analyticsRoutes.register(app, deps);
   apriltagRoutes.register(app, deps);
+  homePointRoutes.register(app, deps);
+  zonesRoutes.register(app, deps);
+  railsRoutes.register(app, deps);
 }

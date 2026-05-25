@@ -32,6 +32,8 @@ export function register(app: Express, deps: AppDeps): void {
       nav_state: s.navState,
       health: s.health,
       mission_progress: s.missionProgress,
+      battery_time_to_empty_s: s.batteryTteS,
+      home_point: s.homePoint,
     });
   });
 

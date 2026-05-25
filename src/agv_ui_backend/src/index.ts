@@ -23,7 +23,9 @@ import { AprilTagManager } from './apriltag_manager';
 import { TelemetryStore } from './telemetry_store';
 import { AuthManager } from './auth';
 import { registerAllRoutes } from './routes';
+import { readHomePoint } from './routes/home_point';
 import { setupControlWs, setupTeleopWs } from './ws/control';
+import { deriveBatteryTte } from './battery_tte';
 import type { AppDeps, AppState, RosBridge } from './app_deps';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +80,9 @@ const state: AppState = {
   missionCancel: false,
   missionPause: false,
   batteryPct: -1,
+  batterySamples: [],
+  batteryTteS: null,
+  homePoint: null,
   lastImuTime: 0,
   mapPng: null,
   mapMeta: null,
@@ -238,6 +243,14 @@ async function main() {
   const railApproachClient = (node as any).createClient(
     'agv_interfaces/srv/RailApproach',
     `/${NAMESPACE}/rail_approach/execute`);
+
+  // list_rail_starts: empty Request, Response carries RailStartPoint[].
+  // Same cast-to-any pattern as railApproachClient — rclnodejs's static type
+  // map doesn't include agv_interfaces. Used by routes/rails.ts to drive the
+  // data-driven rail-label overlay (replaces hardcoded RAIL_AISLE_Y).
+  const listRailStartsClient = (node as any).createClient(
+    'agv_interfaces/srv/ListRailStarts',
+    `/${NAMESPACE}/rail_approach/list_rail_starts`);
 
   // --- ROS Bridge (passed to route modules via AppDeps) ---
   const ros: RosBridge = {
@@ -431,6 +444,18 @@ async function main() {
         return { success: !!r.success, message: r.message || '' };
       } catch (e: any) {
         return { success: false, message: e?.message || 'rail_approach call failed' };
+      }
+    },
+
+    async listRailStarts(): Promise<Array<{
+      tag_id: number; x: number; y: number; approach_yaw: number; tag_size: number;
+    }>> {
+      if (!listRailStartsClient.isServiceServerAvailable()) return [];
+      try {
+        const r: any = await listRailStartsClient.sendRequestAsync({}, { timeout: 2000 });
+        return Array.isArray(r?.rail_starts) ? r.rail_starts : [];
+      } catch {
+        return [];
       }
     },
 
@@ -802,9 +827,17 @@ async function main() {
   // to be registered before spinning so they are announced to the network.
   createAllSubscriptions();
 
-  // Battery state — extract percentage for dashboard display
+  // Battery state — extract percentage for dashboard display + rolling sample
+  // buffer for the time-to-empty (TTE) heuristic. The TTE itself is computed
+  // in the 5 Hz broadcast loop, not here, to avoid recomputing the slope on
+  // every BatteryState message.
   node.createSubscription('sensor_msgs/msg/BatteryState', `/${NAMESPACE}/battery`, (msg: any) => {
-    state.batteryPct = typeof msg.percentage === 'number' ? Math.round(msg.percentage * 100) / 100 : -1;
+    const pct = typeof msg.percentage === 'number' ? Math.round(msg.percentage * 100) / 100 : -1;
+    state.batteryPct = pct;
+    if (pct >= 0) {
+      state.batterySamples.push({ t_s: Date.now() / 1000, pct });
+      if (state.batterySamples.length > 30) state.batterySamples.shift();
+    }
   });
 
   // OccupancyGrid (transient local QoS)
@@ -897,6 +930,10 @@ async function main() {
       ? { status: 'ok', detail: state.navState.active ? `Active (${state.navState.distance_remaining}m)` : 'Ready', updated: now }
       : { status: 'warn', detail: 'Nav2 not ready', updated: now };
     state.health.network = { status: 'ok', detail: `${state.activeClients} client(s)`, updated: now };
+    // Recompute battery time-to-empty heuristic at 1 Hz. The result feeds the
+    // 5 Hz status broadcast; computing it more often is pure waste because the
+    // input window is 30 samples / ≥60 s.
+    state.batteryTteS = deriveBatteryTte(state.batterySamples);
     updateState();
   }, 1000);
   setInterval(() => { try { telemetryStore.recordSample({ timestamp: Date.now() / 1000,
@@ -934,9 +971,19 @@ async function main() {
   }, 500);
 
   // --- Build AppDeps ---
+  const HOME_POINT_PATH = path.join(DATA_DIR, 'home_point.json');
+  const ZONES_YAML_PATH = path.join(DATA_DIR, 'zones.yaml');
+  // Load persisted home point at boot. If absent/malformed, state.homePoint
+  // stays null — the dashboard's IR A BASE button stays disabled, no default.
+  state.homePoint = readHomePoint(HOME_POINT_PATH);
+
   const deps: AppDeps = {
     state, ros, eventLog, telemetryStore, authManager, apriltagManager,
-    config: { port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE, mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE },
+    config: {
+      port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE,
+      mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE,
+      homePointPath: HOME_POINT_PATH, zonesYamlPath: ZONES_YAML_PATH,
+    },
     updateState,
     async setMode(mode: string): Promise<{ok: boolean; reason?: string}> {
       if (mode === state.currentMode) return {ok: true};
