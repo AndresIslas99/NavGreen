@@ -60,6 +60,11 @@ export {
   BarChart3,
   Tag,
 
+  // Mapping panel
+  Save,
+  FolderOpen,
+  Trash2,
+
   // Top bar / status
   WifiOff,
   Wifi,

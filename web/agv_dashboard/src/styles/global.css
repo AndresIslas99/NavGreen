@@ -2815,6 +2815,51 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   gap: var(--sp-3);
 }
 
+/* Input row inside a Section — used by MappingPanel save/load + future
+   forms. Text input grows; trailing Button stays at intrinsic size. */
+.cockpit-input-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+.cockpit-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 0 var(--sp-3);
+  height: var(--tap-min);   /* 44 px — same touch floor as buttons */
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.cockpit-input::placeholder { color: var(--text-secondary); }
+.cockpit-input:hover:not(:disabled) { border-color: var(--text-secondary); }
+.cockpit-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+.cockpit-input:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+/* Screen-reader-only utility — visually hidden text that screen readers
+   still announce. Used for icon-only buttons where the icon carries the
+   meaning visually but ARIA needs a label. */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
 /* ── EmptyState ────────────────────────────────────────────────────────── */
 .ui-empty {
   display: flex;
@@ -4124,6 +4169,23 @@ button.depth-pip {
   font: inherit;
   color: inherit;
   cursor: pointer;
+  transition:
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+/* Hover affordance — the PIP was a button but had no tactile feedback,
+   so it read as a static thumbnail. Lift the shadow and tighten the
+   border on hover so the operator sees it's pressable. */
+button.camera-pip:hover,
+button.depth-pip:hover {
+  box-shadow: var(--shadow-lg) !important;
+  border-color: var(--border-strong) !important;
+  transform: translateY(-1px);
+}
+button.camera-pip:active,
+button.depth-pip:active {
+  transform: translateY(0) scale(0.99);
 }
 button.camera-pip:focus-visible,
 button.depth-pip:focus-visible {
@@ -4323,7 +4385,18 @@ button.depth-pip:focus-visible {
     box-shadow: var(--shadow-lg);
     overflow-y: auto;
     transition: width var(--dur-slow) var(--ease);
+    /* Scroll affordance — a soft fade-out at the bottom of the drawer
+       tells the operator there's more content below when overflow exists.
+       The fade is part of the scrollable surface so it stays static while
+       content scrolls underneath. */
+    mask-image: linear-gradient(to bottom,
+      black 0%, black calc(100% - 32px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom,
+      black 0%, black calc(100% - 32px), transparent 100%);
   }
+  /* Disable the fade when at the bottom — feels weird otherwise. We
+     can't easily detect scroll position in CSS, so this stays on; the
+     fade is gentle enough (32 px) that it doesn't truncate content. */
   /* The cockpit panel inside loses its old left-border + grid bg. */
   .cockpit-drawer .context-panel.cockpit-panel {
     background: transparent;
