@@ -3469,6 +3469,29 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   background: rgba(254, 253, 251, 0.85) !important;
 }
 
+/* Door label — sits just outside the greenhouse wall at the operator
+   access point. Calm tan-on-cream so it reads as architectural signage,
+   not a UI control. */
+.greenhouse-door-label {
+  background: transparent;
+  border: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #7c6e4f;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.greenhouse-door-label span {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(255, 248, 226, 0.85);
+  border: 1px solid rgba(124, 110, 79, 0.25);
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-xs);
+}
+
 /* Home / base landmark — pulsing accent-soft circle with a house glyph.
    Marks the operator-defined base where "Ir a base" will navigate to. */
 .home-landmark-wrapper { background: transparent !important; border: none !important; }
