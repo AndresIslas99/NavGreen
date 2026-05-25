@@ -26,12 +26,15 @@ interface Props {
 }
 
 // Ada Labs brand lockup — official logomark + wordmark. The PNG lives in
-// /public so Vite serves it as a static asset. We render at the height
-// that matches the slim topbar (32 px) and let aspect ratio do the rest.
+// /public; we prefix with import.meta.env.BASE_URL because Vite serves
+// the dashboard under `/dashboard/` (see vite.config.ts → `base`),
+// so a bare `/adalabs_logo_transparent.png` 404s in dev.
+const ADALABS_LOGO_SRC = `${import.meta.env.BASE_URL}adalabs_logo_transparent.png`
+
 function BrandLogo() {
   return (
     <img
-      src="/adalabs_logo_transparent.png"
+      src={ADALABS_LOGO_SRC}
       alt="Ada Labs"
       className="topbar-brand__logo"
       draggable={false}
