@@ -3805,6 +3805,16 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    - rail-loose  → tag at irregular pose (amber warning glyph)
    - wall        → precise floor reference (grey square at raw pose) */
 .apriltag-marker { background: transparent !important; border: none !important; }
+
+/* Plant glyphs — small leaf silhouettes along each row band's edges
+   (where cucumber plants actually grow tight against the rail beds).
+   Decorative only: pointer-events off, kept under all other markers
+   via negative zIndexOffset on the Leaflet side. */
+.plant-marker {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+}
 .apriltag-marker--rail-empty { opacity: 0.85; }
 .apriltag-marker--rail-empty:hover { opacity: 1; }
 .apriltag-marker--rail-loose { /* keeps full opacity — the warning glyph

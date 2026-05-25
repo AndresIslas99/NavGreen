@@ -955,6 +955,19 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       const bands = rowBands(rails)
       const bandsToRender = bands.length > 0 ? bands : ghostRowBands()
       rowBandsRef.current = bandsToRender
+      // Visual constants for the rail-track + plant decorations.
+      // Gauge 0.57 m = real distance between the two parallel rails.
+      const RAIL_HALF_GAUGE = 0.285
+      // Brownish-steel for the rail polyline. Subtle so it doesn't
+      // compete with the row-band fill or the active-row spotlight.
+      const RAIL_COLOR = '#8a7256'
+      // Cross-tie spacing: a tick mark every 1.5 m along the rail.
+      const TIE_SPACING_M = 1.5
+      // Each row of cucumber plants lives just outside the gauge,
+      // tight against the band edge. We render small leaf glyphs
+      // every ~1.2 m to suggest a continuous crop line.
+      const PLANT_SPACING_M = 1.2
+
       for (const b of bandsToRender) {
         const rect = L.rectangle(
           [[b.yMin, b.xStart], [b.yMax, b.xEnd]],
@@ -974,6 +987,55 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         // Key by letter+section so the spotlight effect can flip opacity
         // and tooltip class for the specific band the robot occupies.
         rowRectsRef.current.set(`${b.letter}-${b.section}`, rect)
+
+        // ── Rail track visualization ───────────────────────────────
+        // Two parallel polylines at gauge distance on either side of
+        // the aisle centerline, plus cross-ties every TIE_SPACING_M
+        // metres. Subtle but recognizable — the operator sees actual
+        // train-style track where the AGV runs.
+        const yc = b.yCenter
+        for (const offset of [-RAIL_HALF_GAUGE, +RAIL_HALF_GAUGE]) {
+          L.polyline(
+            [[yc + offset, b.xStart], [yc + offset, b.xEnd]],
+            { color: RAIL_COLOR, weight: 1.2, opacity: 0.6, interactive: false },
+          ).addTo(bandGroup)
+        }
+        // Cross-ties — short perpendicular dashes across the gauge.
+        for (let x = b.xStart + 0.5; x <= b.xEnd - 0.5; x += TIE_SPACING_M) {
+          L.polyline(
+            [[yc - RAIL_HALF_GAUGE - 0.05, x], [yc + RAIL_HALF_GAUGE + 0.05, x]],
+            { color: RAIL_COLOR, weight: 0.6, opacity: 0.45, interactive: false },
+          ).addTo(bandGroup)
+        }
+
+        // ── Plant row decorations ──────────────────────────────────
+        // Cucumber plants grow tight against the band edges (where
+        // the actual plant beds sit). We render small leaf glyphs as
+        // L.divIcon markers spaced every PLANT_SPACING_M along the
+        // top and bottom edge of the band.
+        const plantTopY = b.yMax - 0.15
+        const plantBotY = b.yMin + 0.15
+        for (let x = b.xStart + 0.6; x < b.xEnd - 0.4; x += PLANT_SPACING_M) {
+          for (const py of [plantTopY, plantBotY]) {
+            L.marker(worldToLatLng(x, py), {
+              icon: L.divIcon({
+                className: 'plant-marker',
+                html: `
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <path d="M 6 2.5 Q 3 4 3.5 7 Q 4 9 6 9 Q 8 9 8.5 7 Q 9 4 6 2.5 Z"
+                          fill="#6fa05e" opacity="0.55"/>
+                    <path d="M 6 4 V 9" stroke="#3d6233" stroke-width="0.7"
+                          opacity="0.5" stroke-linecap="round"/>
+                  </svg>`,
+                iconSize: [12, 12],
+                iconAnchor: [6, 6],
+              }),
+              interactive: false,
+              keyboard: false,
+              zIndexOffset: -100,
+            }).addTo(bandGroup)
+          }
+        }
       }
     }
 
