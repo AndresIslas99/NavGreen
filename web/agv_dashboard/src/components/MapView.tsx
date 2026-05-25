@@ -190,6 +190,87 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         },
       ).addTo(greenhouseGroup)
 
+      // 5. Skylight ridge — real polycarbonate greenhouses have a peaked
+      // roof with a continuous skylight along the long axis. We render
+      // this as a soft warm gradient strip along y=0 (the building's long
+      // axis). It's the most "this place is lit by the sun" detail and
+      // sells the indoor-but-bright feel.
+      L.rectangle(
+        [[-0.45, enc.minX + 0.6], [0.45, enc.maxX - 0.6]],
+        {
+          color: 'transparent',
+          weight: 0,
+          fillColor: '#fff8e2',
+          fillOpacity: 0.55,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+      // Skylight centerline — thin tinted seam representing the ridge cap.
+      L.polyline(
+        [[0, enc.minX + 0.6], [0, enc.maxX - 0.6]],
+        {
+          color: '#e8c875',
+          weight: 0.6,
+          opacity: 0.6,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+
+      // 6. Corner posts — small filled circles at each of the 4 corners
+      // suggesting steel uprights. Pure visual detail.
+      for (const [py, px] of [
+        [enc.minY, enc.minX], [enc.minY, enc.maxX],
+        [enc.maxY, enc.minX], [enc.maxY, enc.maxX],
+      ] as [number, number][]) {
+        L.circleMarker([py, px], {
+          radius: 3.2,
+          color: '#7c6e4f',
+          fillColor: '#a8997a',
+          fillOpacity: 1,
+          weight: 1.2,
+          interactive: false,
+        }).addTo(greenhouseGroup)
+      }
+
+      // 7. Door — a 1.2 m opening on the FRONT-east wall (x = enc.maxX),
+      // centered on y=0. The wall already passes through this point; we
+      // add a brighter accent gap + two small "door frame" posts and a
+      // short label that reads "Acceso" as a tooltip. Operators learn
+      // "the robot enters/exits here".
+      const doorHalf = 0.6
+      // The gap itself — a brighter accent-soft sliver on the wall.
+      L.polyline(
+        [[-doorHalf, enc.maxX], [doorHalf, enc.maxX]],
+        {
+          color: '#fef9e8',
+          weight: 4,
+          opacity: 1,
+          lineCap: 'butt',
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+      // Door frame posts (top + bottom of the opening).
+      for (const dy of [-doorHalf, doorHalf]) {
+        L.circleMarker([dy, enc.maxX], {
+          radius: 2.6,
+          color: '#7c6e4f',
+          fillColor: '#d4a373',
+          fillOpacity: 1,
+          weight: 1.1,
+          interactive: false,
+        }).addTo(greenhouseGroup)
+      }
+      // Door label — small permanent tooltip just outside the wall.
+      L.marker([0, enc.maxX + 0.5], {
+        icon: L.divIcon({
+          className: 'greenhouse-door-label',
+          html: '<span>Acceso</span>',
+          iconSize: [44, 14],
+          iconAnchor: [0, 7],
+        }),
+        interactive: false,
+      }).addTo(greenhouseGroup)
+
       // Drivable corridor — slightly lighter than the enclosure to suggest
       // "drive through here". Reads as the central passable lane.
       const cor = corridorBounds()
