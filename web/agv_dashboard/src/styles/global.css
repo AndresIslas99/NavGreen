@@ -430,11 +430,43 @@ body {
 }
 
 /* =========================================================================
-   Topbar Hero — Block A
-   3 prominent tiles directly below the topbar header. STATE / BATTERY /
-   LOCALIZATION. Each tile has an eyebrow label and a big value + glyph.
-   Always visible. ISA-101 color discipline kept: gray for normal, color
-   for abnormal/active.
+   Hero row — Block A redux (light minimal).
+   Lives in row 2 of the .app grid: 3 horizontal Tile cards across the
+   full width below the topbar. Uses the Tile primitive (defined down in
+   the design system section). The wrapper just provides the 3-column
+   grid and edge padding.
+   ========================================================================= */
+
+.hero-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--bg);
+  align-items: stretch;
+}
+
+/* At narrow viewports, stack to 2 then 1 column so each tile stays readable.
+   Combined with --hero-h growing via media query so the rows fit. */
+@media (max-width: 1100px) {
+  .hero-row { grid-template-columns: repeat(2, 1fr); }
+  .hero-row > :last-child { grid-column: span 2; }
+}
+@media (max-width: 760px) {
+  .hero-row { grid-template-columns: 1fr; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); }
+  .hero-row > :last-child { grid-column: auto; }
+}
+
+/* Spinner — used by Loader icon in LocalizationTile when INITIALIZING.
+   Respects prefers-reduced-motion via the --dur-* tokens (which collapse
+   to 1ms in the reduced-motion block at top of file). */
+.ui-icon--spin { animation: ui-spin var(--dur-slower) linear infinite; animation-duration: 1.4s; }
+
+/* =========================================================================
+   Legacy .topbar-hero / .hero-tile-* (dead code from the old dark design;
+   no longer referenced anywhere — the new Tile primitive uses .ui-tile-*).
+   Kept for one commit so a quick revert is harmless; cleaned in the final
+   cleanup commit.
    ========================================================================= */
 
 .topbar-hero {

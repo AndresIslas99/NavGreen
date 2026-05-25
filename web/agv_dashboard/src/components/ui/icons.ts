@@ -30,6 +30,7 @@ export {
 
   // Localization
   Compass,
+  LocateOff,
   Loader,
   AlertCircle,
 

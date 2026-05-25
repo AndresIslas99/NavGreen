@@ -1,72 +1,62 @@
 /**
- * Hero localization tile — analog of the reference HMI's "RTK" tile.
+ * LocalizationTile — analog of the reference HMI's "Connectivity / RTK" tile.
  *
- * Greenhouse deployment uses SLAM (no GPS/RTK), so the tile reads the
- * auto_init_orchestrator's localization.action field:
- *   UNKNOWN | INITIALIZING | LOCALIZED | DEGRADED | FAILED
- *
- * We show one of four visual states (ok/warn/crit/unknown) with a glyph,
- * matching the topbar's existing LOC pill but at hero scale.
+ * We use SLAM (no GNSS) so the tile binds to auto_init_orchestrator's
+ * localization.action: UNKNOWN | INITIALIZING | LOCALIZED | DEGRADED | FAILED.
+ * The sub line shows the detail message from the orchestrator, or the
+ * current map name when there's no specific detail to share.
  */
+import { Tile } from '../ui/Tile';
+import { Compass, Loader, LocateOff, AlertCircle } from '../ui/icons';
+import type { LucideIcon } from '../ui/icons';
 import type { RobotStatus } from '../../api/types';
 
 type Loc = RobotStatus['localization'];
+type Tone = 'neutral' | 'accent' | 'warn' | 'crit';
+
+interface LocMeta {
+  label: string;
+  icon: LucideIcon;
+  tone: Tone;
+}
+
+const LOC_META: Record<string, LocMeta> = {
+  UNKNOWN:      { label: 'Esperando…',     icon: Compass,    tone: 'neutral' },
+  INITIALIZING: { label: 'Inicializando',  icon: Loader,     tone: 'warn'    },
+  LOCALIZED:    { label: 'Localizado',     icon: Compass,    tone: 'accent'  },
+  DEGRADED:     { label: 'Degradada',      icon: AlertCircle, tone: 'warn'    },
+  FAILED:       { label: 'Falló',          icon: LocateOff,  tone: 'crit'    },
+};
+
+const DEFAULT_META: LocMeta = { label: '—', icon: Compass, tone: 'neutral' };
 
 interface Props {
   localization: Loc | undefined;
 }
 
-const LABEL: Record<string, string> = {
-  UNKNOWN: '…',
-  INITIALIZING: 'INIT',
-  LOCALIZED: 'LOCALIZED',
-  DEGRADED: 'DEGRADED',
-  FAILED: 'FAILED',
-};
-
-function tier(action: string | undefined): 'ok' | 'warn' | 'crit' | 'unknown' {
-  if (action === 'LOCALIZED') return 'ok';
-  if (action === 'INITIALIZING') return 'warn';
-  if (action === 'DEGRADED') return 'warn';
-  if (action === 'FAILED') return 'crit';
-  return 'unknown';
-}
-
-// Compass/lock combo: a chevron pointing to a point with a tiny lock when good.
-function LocGlyph({ tier: t }: { tier: 'ok' | 'warn' | 'crit' | 'unknown' }) {
-  if (t === 'crit') {
-    return (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M6 6 L18 18 M18 6 L6 18" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 5 L15 12 L12 11 L9 12 Z" fill="currentColor" />
-      {t === 'ok' && <circle cx="12" cy="12" r="1.4" fill="currentColor" />}
-    </svg>
-  );
-}
-
 export function LocalizationTile({ localization }: Props) {
   const action = localization?.action ?? 'UNKNOWN';
-  const t = tier(action);
-  const label = LABEL[action] ?? action;
-  const detail = localization?.detail || (localization?.map ? `Mapa: ${localization.map}` : '');
+  const meta = LOC_META[action] ?? DEFAULT_META;
+  const Icon = meta.icon;
+
+  const sub =
+    localization?.detail?.trim()
+    || (localization?.map ? `Mapa: ${localization.map}` : 'Sin información');
 
   return (
-    <div className={`hero-tile hero-tile--loc hero-tile--loc-${t}`} title={detail || `Localization: ${action}`} role="status">
-      <span className="hero-tile-eyebrow">LOCALIZATION</span>
-      <div className="hero-tile-body">
-        <span className="hero-tile-icon"><LocGlyph tier={t} /></span>
-        <div className="hero-tile-stack">
-          <span className="hero-tile-value hero-tile-value--bold">{label}</span>
-          {detail && <span className="hero-tile-sub">{detail}</span>}
-        </div>
-      </div>
-    </div>
+    <Tile tone={meta.tone}>
+      <Tile.Icon>
+        <Icon
+          size={24}
+          strokeWidth={1.8}
+          className={action === 'INITIALIZING' ? 'ui-icon--spin' : ''}
+        />
+      </Tile.Icon>
+      <Tile.Content>
+        <Tile.Eyebrow>Localización</Tile.Eyebrow>
+        <Tile.Value>{meta.label}</Tile.Value>
+        <Tile.Sub>{sub}</Tile.Sub>
+      </Tile.Content>
+    </Tile>
   );
 }
