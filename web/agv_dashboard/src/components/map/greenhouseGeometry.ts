@@ -172,3 +172,33 @@ export function activeRowBand(bands: RowBand[], pose: { x: number; y: number } |
   }
   return null;
 }
+
+/**
+ * Placeholder bands for the empty-registry state. Emits a band for every
+ * aisle × section combination using the section's full x-extent. Visualized
+ * with a "ghost" treatment (dashed border, lower opacity) so the operator
+ * sees the greenhouse skeleton even before defining the AprilTag-anchored
+ * rail registry.
+ */
+export function ghostRowBands(): RowBand[] {
+  const out: RowBand[] = [];
+  for (let i = 0; i < AISLE_CENTERS.length; i++) {
+    const y = AISLE_CENTERS[i];
+    const letter = AISLE_LETTERS[i];
+    for (const section of ['rear', 'front'] as const) {
+      const xStart = section === 'rear' ? REAR_X_START  : FRONT_X_START;
+      const xEnd   = section === 'rear' ? REAR_X_END    : FRONT_X_END;
+      out.push({
+        letter,
+        label: aisleSpanishLabel(letter, section),
+        section,
+        yCenter: y,
+        yMin: y - ROW_BAND_HALF_W,
+        yMax: y + ROW_BAND_HALF_W,
+        xStart,
+        xEnd,
+      });
+    }
+  }
+  return out;
+}
