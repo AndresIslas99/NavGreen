@@ -235,6 +235,34 @@ global_artifacts:
     lifecycle: "persistent"
     required: false
 
+  home_point_json:
+    path: "${AGV_DATA_DIR}/home_point.json"
+    format: 'JSON {"x": float, "y": float, "theta": float, "set_at": unix_s, "name": str}'
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/routes/home_point.ts"
+      mechanism: "PUT /api/home_point, atomic tmp+rename"
+    readers:
+      - package: "agv_ui_backend"
+        role: "GET /api/home_point + status broadcast + POST /api/home_point/go nav goal"
+    lifecycle: "persistent"
+    required: false
+    note: "Operator-defined base/dock pose. POST /api/home_point/go dispatches a navigate_to_pose action goal to this pose (reuses existing nav interface — no new DDS contract). No implicit default: if file is absent, IR A BASE button stays disabled rather than navigating to map origin."
+
+  semantic_zones_yaml:
+    path: "${AGV_DATA_DIR}/zones.yaml"
+    format: "YAML [{name, label, polygon: [{x,y}…], color, kind}]"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/routes/zones.ts"
+      mechanism: "PUT /api/zones, atomic tmp+rename"
+    readers:
+      - package: "agv_ui_backend"
+        role: "GET /api/zones for dashboard semantic overlay"
+    lifecycle: "persistent"
+    required: false
+    note: "Distinct from zones_json above (Nav2 costmap traffic zones). This is the operator-facing labeled overlay: BASE DE CARGA, ZONA DE TRABAJO A, ESTACIONAMIENTO. If file absent, GET returns {zones: []} with 200 (graceful degradation — frontend draws nothing)."
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HIL validation artifacts (not iterated by verify_persistence.py)
 # ─────────────────────────────────────────────────────────────────────────────
