@@ -16,6 +16,7 @@ import type { AllowedActions, MissionProgress, HomePoint } from '../../api/types
 import * as api from '../../api/client';
 import { Section } from '../ui/Section';
 import { Button } from '../ui/Button';
+import { useToast } from '../ui/Toast';
 import { Pause, RotateCcw, Home, XOctagon } from '../ui/icons';
 
 interface Props {
@@ -29,12 +30,26 @@ interface Props {
 export function ActionStack({
   actions, missionProgress, homePoint, navActive, onCancelNav,
 }: Props) {
+  const toast = useToast();
   const missionRunning = missionProgress?.status === 'running';
   const missionPaused  = missionProgress?.status === 'paused';
   const canPause   = !!actions.canPauseMission && missionRunning;
   const canResume  = !!actions.canPauseMission && missionPaused;
   const canGoHome  = !!homePoint && !!actions.canSendGoal && !missionRunning;
   const canCancel  = !!actions.canCancelNav || missionRunning || missionPaused || navActive;
+
+  const guard = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      toast.push({ tone: 'ok', title: `${label} ✓` });
+    } catch (e: any) {
+      toast.push({
+        tone: 'crit',
+        title: `No se pudo: ${label.toLowerCase()}`,
+        description: e?.message,
+      });
+    }
+  };
 
   const handleCancel = async () => {
     if (missionRunning || missionPaused) await api.cancelGoal();
@@ -56,7 +71,7 @@ export function ActionStack({
             !missionRunning     ? `La misión está ${missionProgress.status}.` :
             'Pausa no permitida en el estado actual.'
           }
-          onClick={() => api.pauseMission()}
+          onClick={() => guard('Misión pausada', () => api.pauseMission())}
         >
           Pausar misión
         </Button>
@@ -72,7 +87,7 @@ export function ActionStack({
             !missionPaused   ? `La misión no está pausada (${missionProgress.status}).` :
             'Reanudación no permitida.'
           }
-          onClick={() => api.resumeMission()}
+          onClick={() => guard('Misión reanudada', () => api.resumeMission())}
         >
           Reanudar
         </Button>
@@ -89,7 +104,7 @@ export function ActionStack({
             !actions.canSendGoal  ? 'Goals de navegación no permitidos ahora.' :
             'Enviar al robot al punto base.'
           }
-          onClick={() => api.goHome()}
+          onClick={() => guard('Goal a base enviado', () => api.goHome())}
         >
           Ir a base
         </Button>
@@ -101,7 +116,7 @@ export function ActionStack({
           leadingIcon={XOctagon}
           disabled={!canCancel}
           title="Cancelar misión y navegación activa."
-          onClick={handleCancel}
+          onClick={() => guard('Tarea cancelada', async () => { await handleCancel(); })}
         >
           Cancelar tarea
         </Button>

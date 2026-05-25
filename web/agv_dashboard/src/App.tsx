@@ -6,6 +6,7 @@ import * as api from './api/client'
 import { LoginPage } from './components/LoginPage'
 import { TopBar } from './components/TopBar'
 import { HeroRow } from './components/HeroRow'
+import { ConnectionBanner } from './components/ConnectionBanner'
 import { ModeRail } from './components/ModeRail'
 import { MapView } from './components/MapView'
 import { CameraFeed } from './components/CameraFeed'
@@ -185,6 +186,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
 
   return (
     <div className="app">
+      <ConnectionBanner connected={connected} />
       <TopBar
         status={status}
         state={state}
