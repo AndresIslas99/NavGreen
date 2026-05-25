@@ -186,7 +186,178 @@ body {
 }
 
 /* =========================================================================
-   Top bar — always visible, ISA-101: neutral base, color for state
+   Topbar — slim 56px header (Light Minimal Redesign).
+   Replaces the old .top-bar (kept below as dead code until cleanup commit).
+   Composition: brand → map pill → spacer → conn → user → E-STOP.
+   ========================================================================= */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: var(--topbar-h);
+  position: relative;
+  z-index: 10;
+}
+
+/* Brand lockup */
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+.topbar-brand__logo { display: block; }
+.topbar-brand__text { display: flex; flex-direction: column; line-height: 1.1; }
+.topbar-brand__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+}
+.topbar-brand__sub {
+  font-size: var(--font-2xs);
+  color: var(--dim);
+  letter-spacing: 0.4px;
+}
+
+/* Spacer pushes the right group to the edge */
+.topbar-spacer { flex: 1 1 auto; }
+
+/* Connection indicator */
+.topbar-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.topbar-conn__icon { color: var(--crit); flex-shrink: 0; }
+.topbar-conn__label { font-weight: 500; }
+
+/* User badge with dropdown */
+.topbar-user {
+  position: relative;
+  flex-shrink: 0;
+}
+.topbar-user__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px var(--sp-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  min-height: 36px;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.topbar-user__trigger:hover { background: var(--surface-2); }
+.topbar-user__trigger:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.topbar-user__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.topbar-user__name {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+.topbar-user__role {
+  font-size: var(--font-2xs);
+  color: var(--dim);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.topbar-user__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-1);
+  min-width: 180px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topbar-user__menu .ui-btn { justify-content: flex-start; width: 100%; }
+
+/* E-STOP — always far right, prominent. */
+.topbar-estop {
+  background: var(--estop);
+  color: var(--on-crit);
+  border: none;
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 0 var(--sp-4);
+  height: 40px;
+  min-width: 112px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+  flex-shrink: 0;
+}
+.topbar-estop:hover {
+  background: var(--estop-pressed);
+  box-shadow: var(--shadow-lg);
+}
+.topbar-estop:active {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-sm);
+}
+.topbar-estop:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(192, 57, 43, 0.35);
+}
+.topbar-estop--engaged {
+  background: var(--estop-engaged);
+  color: var(--estop-engaged-text);
+  animation: topbar-estop-pulse 2s ease-in-out infinite;
+}
+.topbar-estop--engaged:hover { background: #ffea2c; }
+
+@keyframes topbar-estop-pulse {
+  0%, 100% { box-shadow: var(--shadow-md), 0 0 0 0 rgba(255, 235, 59, 0.5); }
+  50%      { box-shadow: var(--shadow-md), 0 0 0 8px rgba(255, 235, 59, 0); }
+}
+
+/* Narrow viewports — hide the user role label, then the user name, to
+   keep the topbar single-row. The E-STOP stays at all sizes. */
+@media (max-width: 900px) {
+  .topbar-user__role { display: none; }
+}
+@media (max-width: 720px) {
+  .topbar-conn__label { display: none; }
+  .topbar-brand__sub { display: none; }
+  .topbar-user__name { display: none; }
+}
+
+/* =========================================================================
+   Legacy .top-bar (dead code from the old design; kept for now so the build
+   stays clean — removed in a later cleanup commit).
    ========================================================================= */
 
 .top-bar {
