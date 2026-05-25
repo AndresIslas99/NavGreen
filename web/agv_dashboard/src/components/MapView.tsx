@@ -11,6 +11,9 @@ import 'leaflet/dist/leaflet.css'
 import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone, RobotState, HomePoint } from '../api/types'
 import { robotIcon } from './map/RobotIcon'
 import { useCameraFollow } from './map/useCameraFollow'
+import { RecenterButton } from './map/RecenterButton'
+import { OffScreenIndicator } from './map/OffScreenIndicator'
+import { LocateOff, Compass } from './ui/icons'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
 import {
@@ -93,8 +96,10 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
   // Camera follow logic — owns the "always centered on robot" behavior with
   // smooth panTo animation, manual-pan detection (via movestart guarded by
-  // programmaticMoveRef), and stale-pose freezing.
-  const { cameraMode, followRobot, recenter } = useCameraFollow(
+  // programmaticMoveRef), and stale-pose freezing. The state machine
+  // (follow|manual|frozen) drives the visibility of RecenterButton and
+  // OffScreenIndicator below.
+  const { cameraMode, recenter } = useCameraFollow(
     mapInstance,
     pose,
     worldToLatLng,
@@ -519,12 +524,11 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     } else {
       const overlay = L.imageOverlay(imageUrl, bounds, { opacity: 0.9 }).addTo(map)
       imageLayerRef.current = overlay
-
-      if (mapType === 'live') {
-        map.setView(worldToLatLng(pose.x, pose.y), 3)
-      } else {
-        map.fitBounds(bounds)
-      }
+      // No explicit setView/fitBounds here — initial centering is owned by
+      // useCameraFollow (it runs setView once on first pose receipt). Calling
+      // setView/fitBounds here would fire movestart outside the hook's grace
+      // window and flip followRobot=false the moment the SLAM map first
+      // arrives, breaking the always-centered Google-Maps experience.
     }
   }, [mapData])
 
@@ -724,45 +728,66 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     }
   }, [ghostPose])
 
-  // Center-on-robot is now delegated to the useCameraFollow hook's recenter().
-  // The button below is kept as a fallback control inside the map; the
-  // floating RecenterButton (I5 commit) is the primary UI.
+  // Center-on-robot is now owned by the useCameraFollow hook (`recenter`),
+  // surfaced through the floating <RecenterButton> FAB rendered below.
+  // The previous inline ⊕ button in `.map-overlay-bl` was removed — it
+  // duplicated the FAB and was easy to miss.
 
   return (
     <div className="map-container" style={{ position: 'relative' }}>
       <div ref={containerRef} className="map-leaflet" />
 
-      {/* Overlays */}
+      {/* Pose coords (small dim chip, always visible top-left). */}
       <div className="map-overlay-tl">
         <span className="map-coord">
           ({pose.x.toFixed(2)}, {pose.y.toFixed(2)}) {(pose.theta * 180 / Math.PI).toFixed(0)}&deg;
         </span>
-        {cameraMode === 'manual' && (
-          <span className="camera-status-pill camera-status-pill--manual" title="Toca el botón Centrar para volver al robot">
-            Vista manual
-          </span>
-        )}
-        {cameraMode === 'frozen' && (
-          <span className="camera-status-pill camera-status-pill--frozen" title="Sin actualización de pose por más de 2 s">
-            Vista congelada
-          </span>
-        )}
       </div>
+
+      {/* Camera status pill — centered top of the map. Tells the operator
+          why the view is no longer auto-following (manual pan vs. stale pose). */}
+      {cameraMode !== 'follow' && (
+        <div className="camera-status-pill-wrap">
+          <span
+            className={`camera-status-pill camera-status-pill--${cameraMode}`}
+            title={
+              cameraMode === 'manual'
+                ? 'Toca el botón Centrar para volver al robot'
+                : 'Sin actualización de pose por más de 2 s'
+            }
+          >
+            {cameraMode === 'manual' ? (
+              <>
+                <LocateOff size={12} strokeWidth={2.2} aria-hidden />
+                <span>Vista manual</span>
+              </>
+            ) : (
+              <>
+                <Compass size={12} strokeWidth={2.2} aria-hidden />
+                <span>Vista congelada</span>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
       {mappingCoverage != null && mappingCoverage > 0 && (
         <div className="coverage-badge">
           Cobertura: {mappingCoverage.toFixed(1)}%
         </div>
       )}
-      <div className="map-overlay-bl">
-        <button
-          className={`map-btn ${followRobot ? 'map-btn-active' : ''}`}
-          onClick={recenter}
-          title="Centrar en robot"
-          aria-label="Centrar el mapa en el robot"
-        >
-          &#8853;
-        </button>
-      </div>
+
+      {/* Floating "back to robot" FAB. Auto-hidden in follow mode. */}
+      <RecenterButton cameraMode={cameraMode} onRecenter={recenter} />
+
+      {/* Edge chevron when the robot is off-screen. */}
+      <OffScreenIndicator
+        map={mapInstance}
+        pose={pose}
+        cameraMode={cameraMode}
+        worldToLatLng={worldToLatLng}
+        onRecenter={recenter}
+      />
     </div>
   )
 }
