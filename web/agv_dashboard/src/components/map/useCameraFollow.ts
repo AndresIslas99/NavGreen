@@ -68,10 +68,21 @@ export function useCameraFollow(
 
   // Guard refs — distinguish OUR panTo/flyTo from operator-initiated moves.
   const programmaticMoveRef = useRef(false);
+  // Timestamp of last programmatic pan/fly. We treat any movestart within
+  // GRACE_MS after a programmatic op as "still ours" — defends against
+  // Leaflet firing movestart late (after moveend has already reset
+  // programmaticMoveRef) or for follow-on internal events like setView's
+  // post-pan refresh, which would otherwise flip followRobot=false.
+  const lastProgrammaticAtRef = useRef<number>(0);
   // Skip new panTo if a previous animation is still running.
   const panInFlightRef = useRef(false);
   // Track last pose timestamp for stale detection.
   const lastPoseAtRef = useRef<number>(0);
+  // Grace window: movestart within this many ms of a programmatic op is ours.
+  const GRACE_MS = 400;
+  const isWithinProgrammaticGrace = () =>
+    programmaticMoveRef.current ||
+    Date.now() - lastProgrammaticAtRef.current < GRACE_MS;
 
   // Compute the centering target with bottom-bias: the robot sits below
   // the geometric center of the viewport so the operator sees more of the
@@ -92,11 +103,11 @@ export function useCameraFollow(
   useEffect(() => {
     if (!map) return;
     const onMoveStart = () => {
-      if (programmaticMoveRef.current) return;
+      if (isWithinProgrammaticGrace()) return;
       setFollowRobot(false);
     };
     const onZoomStart = () => {
-      if (programmaticMoveRef.current) return;
+      if (isWithinProgrammaticGrace()) return;
       setFollowRobot(false);
     };
     const onMoveEnd = () => {
@@ -131,18 +142,29 @@ export function useCameraFollow(
     return () => window.clearInterval(id);
   }, [poseStale, opts.staleAfterMs]);
 
-  // Continuous follow — pan on every pose update when in follow mode.
+  // Continuous follow — pan only when the pose VALUE changes (App re-creates
+  // the pose object literal on every render, so depending on identity would
+  // call panTo every ~500 ms even when the robot is stationary, renewing the
+  // programmatic-grace window and breaking user-pan detection).
+  const lastPoseValueRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (!map || !pose) return;
     if (!followRobot) return;
     if (poseStale) return;
-    if (panInFlightRef.current) return;   // skip if previous animation still running
+    if (panInFlightRef.current) return;
+
+    const last = lastPoseValueRef.current;
+    if (last && Math.abs(last.x - pose.x) < 0.001 && Math.abs(last.y - pose.y) < 0.001) {
+      return;   // pose value unchanged — skip pan, leave grace window alone
+    }
+    lastPoseValueRef.current = { x: pose.x, y: pose.y };
 
     const latlng = worldToLatLng(pose.x, pose.y);
     const target = computeBiasedTarget(latlng) ?? latlng;
 
     programmaticMoveRef.current = true;
     panInFlightRef.current = true;
+    lastProgrammaticAtRef.current = Date.now();
     if (reducedMotion()) {
       map.panTo(target, { animate: false });
     } else {
@@ -164,6 +186,7 @@ export function useCameraFollow(
     if (!pose) return;
     const latlng = worldToLatLng(pose.x, pose.y);
     programmaticMoveRef.current = true;
+    lastProgrammaticAtRef.current = Date.now();
     map.setView(latlng, opts.defaultZoom, { animate: false });
     didInitialCenterRef.current = true;
   }, [map, pose, worldToLatLng, opts.defaultZoom]);
@@ -175,6 +198,7 @@ export function useCameraFollow(
     const target = computeBiasedTarget(latlng) ?? latlng;
     programmaticMoveRef.current = true;
     panInFlightRef.current = true;
+    lastProgrammaticAtRef.current = Date.now();
     if (reducedMotion()) {
       map.setView(target, opts.defaultZoom, { animate: false });
     } else {
@@ -190,6 +214,7 @@ export function useCameraFollow(
   const fitBounds = (bounds: L.LatLngBoundsExpression) => {
     if (!map) return;
     programmaticMoveRef.current = true;
+    lastProgrammaticAtRef.current = Date.now();
     map.fitBounds(bounds, { padding: [48, 48] });
     // Programmatic operation — operator may want overview, so don't auto-follow.
     setFollowRobot(false);

@@ -3532,29 +3532,216 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   justify-content: center;
 }
 
-/* Camera status pill — shown in map's top-left overlay when the camera
-   is in manual or frozen modes. Tells operator the view is no longer
-   auto-following the robot. */
-.camera-status-pill {
-  display: inline-block;
-  margin-left: var(--sp-2);
-  padding: 2px 8px;
-  font-size: var(--font-2xs);
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
+/* Camera status pill — top-center of the map, shown when the camera is
+   in manual or frozen modes. Tells the operator why the view is no longer
+   auto-following. Paired with the floating RecenterButton FAB so the
+   "vista manual" callout has an obvious "tap to fix" affordance.
+
+   Centered absolute positioning so the pill reads as a system-level
+   status banner rather than a control. Pointer-events: none — pure label. */
+.camera-status-pill-wrap {
+  position: absolute;
+  top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-2));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: none;
 }
+.camera-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  animation: camera-pill-in var(--dur-base) var(--ease-out);
+}
+.camera-status-pill svg { flex-shrink: 0; }
 .camera-status-pill--manual {
-  background: var(--warn-soft);
+  background: rgba(246, 231, 212, 0.92);  /* warn-soft @ glass */
   color: var(--warn);
-  border-color: var(--warn);
+  border-color: rgba(184, 97, 46, 0.35);
 }
 .camera-status-pill--frozen {
-  background: var(--crit-soft);
+  background: rgba(245, 216, 210, 0.92);  /* crit-soft @ glass */
   color: var(--crit);
-  border-color: var(--crit);
+  border-color: rgba(168, 57, 42, 0.40);
+}
+@keyframes camera-pill-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+}
+@media (prefers-reduced-motion: reduce) {
+  .camera-status-pill { animation: none; }
+}
+
+/* Recenter FAB — floating action button at the bottom-right corner of the
+   map. Visible only when cameraMode !== 'follow'. Sized to clear the
+   cockpit drawer's left edge on tablet (1280×800 landscape). On viewports
+   below 900 px (responsive fallback), it shifts to the bottom-left so the
+   bottom sheet doesn't overlap.
+
+   Expanded state (first 4 s after appearing): label slides in to teach
+   the affordance. Collapses to icon-only afterward to stay calm. */
+.recenter-fab {
+  position: fixed;
+  bottom: calc(var(--log-h) + var(--sp-4));
+  right: calc(var(--drawer-w-expanded) + var(--sp-4));
+  z-index: var(--z-recenter, 45);
+
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--fab-size);
+  min-width: var(--fab-size);
+  padding: 0;
+  border: 1px solid var(--accent-hover);
+  border-radius: var(--r-full);
+  /* Accent primary treatment — the FAB is a true CTA ("get me back to the
+     robot"), and a cream-on-cream ghost button disappears against the
+     greenhouse template. Forest-green bg with white text reads instantly
+     against any map content. */
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-lg), 0 0 0 4px rgba(254, 253, 251, 0.55);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+
+  /* Width animates between icon-only and expanded label. */
+  overflow: hidden;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+  animation: recenter-fab-in var(--dur-slow) var(--ease-bounce);
+}
+.recenter-fab > svg {
+  flex-shrink: 0;
+  margin-left: 14px;
+  margin-right: 14px;
+}
+.recenter-fab--expanded > svg {
+  margin-right: var(--sp-2);
+}
+.recenter-fab__label {
+  max-width: 0;
+  opacity: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  padding-right: 0;
+  transition:
+    max-width var(--dur-slow) var(--ease),
+    opacity var(--dur-base) var(--ease),
+    padding-right var(--dur-slow) var(--ease);
+}
+.recenter-fab--expanded .recenter-fab__label {
+  max-width: 200px;
+  opacity: 1;
+  padding-right: var(--sp-4);
+}
+.recenter-fab:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-active);
+  box-shadow: var(--shadow-xl), 0 0 0 4px rgba(254, 253, 251, 0.55);
+}
+.recenter-fab:active {
+  transform: scale(0.96);
+  background: var(--accent-active);
+}
+.recenter-fab:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), 0 0 0 4px rgba(254, 253, 251, 0.55), var(--shadow-focus);
+}
+.recenter-fab--frozen {
+  background: var(--crit);
+  border-color: var(--crit-hover);
+  color: var(--on-crit);
+}
+.recenter-fab--frozen:hover {
+  background: var(--crit-hover);
+}
+@keyframes recenter-fab-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recenter-fab,
+  .recenter-fab__label { animation: none; transition: none; }
+}
+
+/* When the cockpit drawer collapses (or on narrow viewports), shift the
+   FAB to the left edge so it doesn't pile on top of the strip pill. */
+@media (max-width: 1199px) {
+  .recenter-fab {
+    right: calc(var(--rail-w-floating) + var(--sp-4));
+  }
+}
+@media (max-width: 899px) {
+  /* Below the immersive breakpoint the layout reverts to a grid; the FAB
+     pins above the bottom strip so it doesn't overlap content. */
+  .recenter-fab {
+    bottom: calc(var(--log-h) + var(--sp-3));
+    right: var(--sp-3);
+  }
+}
+
+/* Off-screen indicator — circular chevron pinned to the viewport edge when
+   the robot is outside the visible map bounds. Rotates to point toward
+   the robot; clicking re-engages camera follow. Smaller than the FAB so
+   the two reading levels (status vs. action) are distinct. */
+.offscreen-indicator {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  z-index: var(--z-recenter, 45);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent-hover);
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6);
+  cursor: pointer;
+  animation: offscreen-pulse 1.8s var(--ease) infinite;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.offscreen-indicator:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-xl), 0 0 0 3px rgba(254, 253, 251, 0.6);
+}
+.offscreen-indicator:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6), var(--shadow-focus);
+}
+/* Pulse via a glowing accent ring so we don't fight the inline transform
+   that React uses to apply the rotation toward the off-screen robot. */
+@keyframes offscreen-pulse {
+  0%, 100% {
+    box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6),
+                0 0 0 0 rgba(47, 111, 42, 0.45);
+  }
+  50% {
+    box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6),
+                0 0 0 10px rgba(47, 111, 42, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .offscreen-indicator { animation: none; }
 }
 
 /* Navigation path — animated marching dashes when actively navigating;

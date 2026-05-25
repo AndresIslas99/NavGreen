@@ -46,6 +46,9 @@ export {
   // Teleop / map
   Move,
   Crosshair,
+  LocateFixed,
+  Navigation,
+  ArrowUp,
   Gamepad,
   Gamepad2,
 
