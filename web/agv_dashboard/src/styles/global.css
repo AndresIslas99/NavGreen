@@ -3696,6 +3696,72 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   justify-content: center;
 }
 
+/* Compass + scale chip — top-right of the viewport, just below the
+   topbar. Two stacked readouts:
+   - compass arrow rotating with the robot's heading
+   - dynamic scale bar that updates with the map zoom
+   Portal'd to body so it lives above Leaflet's compositor. */
+.compass-scale {
+  position: fixed;
+  top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3));
+  right: var(--sp-4);
+  z-index: var(--z-recenter, 45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+.compass-scale__compass svg {
+  display: block;
+}
+.compass-scale__bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+.compass-scale__bar-line {
+  height: 4px;
+  background:
+    linear-gradient(to right,
+      var(--accent) 0%, var(--accent) 50%,
+      var(--text-secondary) 50%, var(--text-secondary) 100%);
+  border-radius: 1px;
+  position: relative;
+  transition: width var(--dur-base) var(--ease);
+}
+.compass-scale__bar-line::before,
+.compass-scale__bar-line::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 8px;
+  background: var(--text-secondary);
+}
+.compass-scale__bar-line::before { left: 0; }
+.compass-scale__bar-line::after  { right: 0; }
+.compass-scale__bar-label {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* Hide on narrow viewports — operators on phones don't need it. */
+@media (max-width: 899px) {
+  .compass-scale { display: none; }
+}
+
 /* Camera status pill — top-center of the map, shown when the camera is
    in manual or frozen modes. Tells the operator why the view is no longer
    auto-following. Paired with the floating RecenterButton FAB so the
