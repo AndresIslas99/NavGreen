@@ -1957,7 +1957,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* Glow ring around the body. Always present; pulses by state. */
 .robot-icon__ring {
-  transform-origin: 24px 20px;     /* center of the 48×40 canvas */
+  transform-origin: 16px 14px;     /* center of the new 32×28 canvas */     /* center of the 48×40 canvas */
   animation: robot-ring-pulse 2.4s var(--ease) infinite;
 }
 .robot-icon[data-state="halted"] .robot-icon__ring {
@@ -1973,14 +1973,14 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    distracting at 5 Hz pose updates. */
 .robot-icon[data-state="moving"] .robot-icon__body {
   animation: robot-body-wobble 0.65s var(--ease) infinite alternate;
-  transform-origin: 24px 20px;
+  transform-origin: 16px 14px;     /* center of the new 32×28 canvas */
 }
 
 /* Heading wedge pulse when navigating — tiny scale breath on the wedge
    that suggests the robot is "looking ahead". */
 .robot-icon[data-state="moving"] .robot-icon__wedge {
   animation: robot-wedge-pulse 1.2s var(--ease) infinite;
-  transform-origin: 28px 12px;
+  transform-origin: 21px 14px;     /* wedge tip on new 32×28 canvas */
 }
 
 /* Low-battery dot — gentle red blink, top-right of the icon canvas. */
