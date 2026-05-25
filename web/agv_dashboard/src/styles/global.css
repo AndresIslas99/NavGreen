@@ -1978,6 +1978,23 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   100%    { opacity: 1; }
 }
 
+/* AprilTag detection ripple — brief expanding ring on a Leaflet circle
+   marker. Triggered when the robot pose comes within 2 m of a defined
+   tag. The ring lives for ~800 ms; we animate the SVG circle's radius
+   and opacity via CSS on the `.apriltag-ripple > circle` selector. */
+.apriltag-ripple {
+  animation: apriltag-ripple-anim 850ms ease-out forwards;
+  pointer-events: none;
+}
+@keyframes apriltag-ripple-anim {
+  0%   { transform: scale(0.6); opacity: 1;   }
+  60%  { transform: scale(2.0); opacity: 0.45; }
+  100% { transform: scale(3.0); opacity: 0;   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .apriltag-ripple { animation: none; opacity: 0.5; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .robot-icon__ring,
   .robot-icon__body,

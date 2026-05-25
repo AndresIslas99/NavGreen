@@ -16,6 +16,7 @@ import { OffScreenIndicator } from './map/OffScreenIndicator'
 import { CompassScale } from './map/CompassScale'
 import { LocateOff, Compass } from './ui/icons'
 import { apiUrl } from '../api/client'
+import { useToast } from './ui/Toast'
 import type { FleetRobot } from '../hooks/useFleetSocket'
 import {
   enclosureBounds,
@@ -520,6 +521,9 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
 
     const render = (tags: DefinedTag[]) => {
       group.clearLayers()
+      // Mirror into ref so the proximity-ripple effect below can read it
+      // without re-rendering on every poll.
+      definedTagsRef.current = tags
       for (const t of tags) {
         // Type-distinct glyphs:
         //  - rail_start → forest-green diamond (suggests "approach target")
@@ -728,6 +732,54 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       }
     })
   }, [pose])
+
+  // AprilTag ripple — when the robot pose comes within DETECTION_RADIUS of
+  // a defined tag for the first time (since it left the radius), trigger
+  // a brief expanding ring at the tag's position and a toast. This is a
+  // proxy for "the camera just saw this tag" without requiring the backend
+  // to publish a new event type — the heuristic is accurate enough at
+  // typical greenhouse layouts where tags are placed on rail entries and
+  // the robot reaches them deliberately.
+  const definedTagsRef = useRef<DefinedTag[]>([])
+  const recentlySeenTagsRef = useRef<Set<number>>(new Set())
+  const toast = useToast()
+  useEffect(() => {
+    const tags = definedTagsRef.current
+    const group = tagLayerRef.current
+    if (!group || !tags.length) return
+    const DETECTION_RADIUS = 2.0   // metres
+    const recent = recentlySeenTagsRef.current
+    for (const t of tags) {
+      const dx = t.x - pose.x
+      const dy = t.y - pose.y
+      const d2 = dx * dx + dy * dy
+      const inside = d2 < DETECTION_RADIUS * DETECTION_RADIUS
+      if (inside && !recent.has(t.id)) {
+        recent.add(t.id)
+        // Brief expanding circle marker that dissolves after 800ms.
+        const ring = L.circleMarker(worldToLatLng(t.x, t.y), {
+          radius: 6,
+          color: '#2f6f2a',
+          fillColor: '#2f6f2a',
+          fillOpacity: 0.35,
+          weight: 2,
+          interactive: false,
+          className: 'apriltag-ripple',
+        }).addTo(group)
+        window.setTimeout(() => { try { group.removeLayer(ring) } catch {} }, 900)
+        toast.push({
+          tone: 'ok',
+          title: `AprilTag ${t.label}`,
+          description: `Etiqueta #${t.id} detectada — ${t.type === 'rail_start' ? 'entrada de riel' : 'referencia de pared'}`,
+          durationMs: 2500,
+        })
+      } else if (!inside && recent.has(t.id)) {
+        // Robot left the detection radius — re-arm so the next entry
+        // ripples again.
+        recent.delete(t.id)
+      }
+    }
+  }, [pose, toast])
 
   // Home / base landmark — pulsing house glyph at home_point pose.
   // Visible only when an operator has set a home point. Clicking it opens
