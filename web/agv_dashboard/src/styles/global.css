@@ -311,8 +311,8 @@ body {
   font-weight: 700;
   letter-spacing: 1px;
   padding: 0 var(--sp-4);
-  height: 40px;
-  min-width: 112px;
+  height: var(--tap-min);   /* 44 px — WCAG minimum for critical safety control */
+  min-width: 120px;
   cursor: pointer;
   box-shadow: var(--shadow-md);
   transition: background-color var(--dur-fast) var(--ease),
@@ -3454,6 +3454,20 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 
 /* Camera PIP — softer than the old hard black. */
+/* a11y: PIPs are now <button> elements — reset default button chrome and
+   restore the visual treatment that the old <div> had. */
+button.camera-pip,
+button.depth-pip {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+button.camera-pip:focus-visible,
+button.depth-pip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-md), var(--shadow-focus) !important;
+}
 .camera-pip {
   border: 1px solid var(--border) !important;
   border-radius: var(--r-md) !important;

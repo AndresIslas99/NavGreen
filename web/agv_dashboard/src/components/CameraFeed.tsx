@@ -64,50 +64,65 @@ export function CameraFeed({ visible, expanded: forceExpanded }: Props) {
 
   return (
     <>
-      {/* Camera PIP */}
-      <div
+      {/* Camera PIP — a11y: button so it's keyboard-reachable (Enter/Space). */}
+      <button
+        type="button"
         className={`camera-pip ${isExpanded ? 'camera-pip-expanded' : ''}`}
         onClick={() => setExpanded(!expanded)}
+        aria-label={isExpanded ? 'Contraer vista de cámara' : 'Expandir vista de cámara'}
+        aria-pressed={isExpanded}
+        title={isExpanded ? 'Contraer cámara' : 'Expandir cámara'}
       >
         {hasError ? (
           <div className="camera-pip-placeholder">
-            <span>No camera</span>
+            <span>Sin cámara</span>
           </div>
         ) : (
           <img
             src={cameraUrl}
-            alt="Camera"
+            alt="Vista de cámara del robot"
             className="camera-pip-img"
             onError={() => setHasError(true)}
           />
         )}
         {!hasError && (
-          <button className="camera-snapshot-btn" onClick={handleSnapshot} title="Save snapshot">
-            &#128247;
-          </button>
+          <span
+            role="button"
+            tabIndex={0}
+            className="camera-snapshot-btn"
+            onClick={handleSnapshot}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSnapshot(e as any); } }}
+            title="Guardar snapshot"
+            aria-label="Guardar snapshot"
+          >
+            <span aria-hidden="true">&#128247;</span>
+          </span>
         )}
-      </div>
+      </button>
 
-      {/* Depth heatmap PIP */}
-      <div
+      {/* Depth heatmap PIP — same a11y treatment as camera PIP. */}
+      <button
+        type="button"
         className={`depth-pip ${depthExpanded ? 'depth-pip-expanded' : ''}`}
         onClick={() => setDepthExpanded(!depthExpanded)}
-        title="Depth heatmap (click to expand)"
+        aria-label={depthExpanded ? 'Contraer mapa de profundidad' : 'Expandir mapa de profundidad'}
+        aria-pressed={depthExpanded}
+        title={depthExpanded ? 'Contraer profundidad' : 'Expandir profundidad'}
       >
         {depthError ? (
           <div className="camera-pip-placeholder">
-            <span>No depth</span>
+            <span>Sin profundidad</span>
           </div>
         ) : (
           <img
             src={depthUrl}
-            alt="Depth"
+            alt="Mapa de profundidad"
             className="camera-pip-img"
             onError={() => setDepthError(true)}
           />
         )}
-        <span className="depth-label">Depth</span>
-      </div>
+        <span className="depth-label">Profundidad</span>
+      </button>
     </>
   )
 }

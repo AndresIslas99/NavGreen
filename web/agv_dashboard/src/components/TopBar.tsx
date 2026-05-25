@@ -9,7 +9,7 @@
  * (vel / Hz / SLAM / pose / SAFETY / RailStatus) was demoted to the cockpit
  * panel's "Detalles técnicos" collapsible section so the topbar stays calm.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RobotStatus, RobotState } from '../api/types'
 import { Pill, Button, StatusDot } from './ui'
 import { MapIcon, WifiOff, Wifi, LogOut, User } from './ui/icons'
@@ -49,6 +49,24 @@ export function TopBar({
   const navActive = status?.nav_state?.active || false
   const mapName = status?.current_map_name ?? null
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // a11y: Escape closes; pointer outside closes. Only active while open.
+  useEffect(() => {
+    if (!showUserMenu) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowUserMenu(false) }
+    const onDown = (e: PointerEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onDown)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onDown)
+    }
+  }, [showUserMenu])
 
   return (
     <header className="topbar">
@@ -79,7 +97,7 @@ export function TopBar({
       </span>
 
       {username && (
-        <div className="topbar-user">
+        <div className="topbar-user" ref={userMenuRef}>
           <button
             type="button"
             className="topbar-user__trigger"

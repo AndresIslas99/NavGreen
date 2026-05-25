@@ -8,7 +8,7 @@
  *
  * Modal capture uses the Card primitive on a modal-overlay backdrop.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { HomePoint } from '../../api/types';
 import * as api from '../../api/client';
 import { Section } from '../ui/Section';
@@ -109,8 +109,16 @@ interface ModalProps {
 function HomeModal({ currentPose, initialName, busy, error, onClose, onConfirm }: ModalProps) {
   const [name, setName] = useState(initialName);
 
+  // a11y: Escape key closes the modal. Combined with the existing
+  // click-on-backdrop behavior, modals now dismiss via every standard path.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
-    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="home-modal-title">
       <Card
         as="div"
         padding="spacious"
@@ -119,8 +127,8 @@ function HomeModal({ currentPose, initialName, busy, error, onClose, onConfirm }
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
         <div className="modal-card__header">
-          <h3 className="modal-card__title">Fijar punto base</h3>
-          <Button variant="ghost" size="sm" leadingIcon={X} onClick={onClose} aria-label="Cerrar" />
+          <h3 id="home-modal-title" className="modal-card__title">Fijar punto base</h3>
+          <Button variant="ghost" size="md" leadingIcon={X} onClick={onClose} aria-label="Cerrar (Esc)" title="Cerrar (Esc)" />
         </div>
         <p className="modal-card__body-text">
           Guarda la pose actual del robot como base/cargador. El botón
