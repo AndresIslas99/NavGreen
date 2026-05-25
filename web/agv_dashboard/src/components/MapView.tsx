@@ -8,20 +8,19 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapUpdate, PathPoint, DefinedTag } from '../api/types'
+import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone } from '../api/types'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
 
-// Greenhouse rail aisle geometry. y-centers measured in world frame
-// (meters), aisle half-width ≈ 0.35m (matches zone_detector params).
-// X spans two segments: rear (x < GAP_MIN) and front (x > GAP_MAX);
-// the gap between GAP_MIN..GAP_MAX is rail-free corridor.
-const RAIL_AISLE_Y = [-4.4, -2.2, 0, 2.2, 4.4] as const
-const RAIL_HALF_W = 0.35
-const RAIL_X_MIN = -2
-const RAIL_X_MAX = 13
-const GAP_MIN = 3.5
-const GAP_MAX = 7.5
+// Rail aisle geometry is now data-driven via GET /api/rails (backed by
+// agv_rail_approach/list_rail_starts). The hardcoded RAIL_AISLE_Y array
+// previously here was removed in Block C (specs/persistence.yaml +
+// /api/rails) — it violated the "no hardcoded physical parameters" rule
+// and forced manual edits whenever the greenhouse layout changed.
+//
+// Named semantic zones (BASE DE CARGA, ZONA DE TRABAJO A, ESTACIONAMIENTO)
+// come from GET /api/zones (backed by ${AGV_DATA_DIR}/zones.yaml). The
+// frontend draws polygons + labels; the backend is the SSOT.
 
 interface Props {
   mapData: MapUpdate | null
@@ -81,6 +80,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   const waypointLayerRef = useRef<L.LayerGroup | null>(null)
   const railLayerRef = useRef<L.LayerGroup | null>(null)
   const tagLayerRef = useRef<L.LayerGroup | null>(null)
+  const zoneLayerRef = useRef<L.LayerGroup | null>(null)
 
   // Trail accumulator
   const trailRef = useRef<L.LatLng[]>([])
@@ -116,24 +116,15 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const waypointGroup = L.layerGroup().addTo(map)
     waypointLayerRef.current = waypointGroup
 
-    // Rail aisle geometry: two rectangles per aisle centerline (rear + front),
-    // skipping the gap. Drawn once on init — geometry is static.
+    // Rail label overlay group. Filled by the /api/rails fetch effect below.
+    // Data-driven (replaces the hardcoded RAIL_AISLE_Y / GAP_* constants).
     const railGroup = L.layerGroup().addTo(map)
     railLayerRef.current = railGroup
-    for (const yc of RAIL_AISLE_Y) {
-      const yLo = yc - RAIL_HALF_W
-      const yHi = yc + RAIL_HALF_W
-      // Rear segment (LatLngBoundsLiteral: [[lat,lng],[lat,lng]] where lat=y, lng=x)
-      L.rectangle(
-        [[yLo, RAIL_X_MIN], [yHi, GAP_MIN]],
-        { color: '#4fc3f7', weight: 1, fillColor: '#4fc3f7', fillOpacity: 0.08, dashArray: '4,4', interactive: false },
-      ).addTo(railGroup)
-      // Front segment
-      L.rectangle(
-        [[yLo, GAP_MAX], [yHi, RAIL_X_MAX]],
-        { color: '#4fc3f7', weight: 1, fillColor: '#4fc3f7', fillOpacity: 0.08, dashArray: '4,4', interactive: false },
-      ).addTo(railGroup)
-    }
+
+    // Semantic zone polygons (BASE / ZONA TRABAJO / ESTACIONAMIENTO).
+    // Filled by the /api/zones fetch effect below.
+    const zoneGroup = L.layerGroup().addTo(map)
+    zoneLayerRef.current = zoneGroup
 
     // AprilTag markers (rail_start). Tags loaded once via fetch below.
     const tagGroup = L.layerGroup().addTo(map)
@@ -196,6 +187,92 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     }
     fetchTags()
     const iv = setInterval(fetchTags, 30000)
+    return () => { canceled = true; clearInterval(iv) }
+  }, [])
+
+  // Semantic zones overlay — fetches GET /api/zones (backed by zones.yaml)
+  // and paints labeled polygons over the map. Graceful degradation: an
+  // empty/missing zones.yaml on the backend returns {zones: []} and we
+  // simply render nothing. Poll mirrors AprilTags (30 s).
+  useEffect(() => {
+    const group = zoneLayerRef.current
+    if (!group) return
+
+    const render = (zones: SemanticZone[]) => {
+      group.clearLayers()
+      for (const z of zones) {
+        if (!z.polygon || z.polygon.length < 3) continue
+        // Leaflet polygon expects [lat, lng] = [y, x]. worldToLatLng()
+        // is the single source of truth for this swap.
+        const latlngs = z.polygon.map(p => worldToLatLng(p.x, p.y))
+        const poly = L.polygon(latlngs, {
+          color: z.color || '#7a9d8e',
+          fillColor: z.color || '#7a9d8e',
+          fillOpacity: 0.14,
+          weight: 1.5,
+          interactive: false,
+        }).addTo(group)
+        // Permanent tooltip = label rendered directly on the map.
+        poly.bindTooltip(z.label, {
+          permanent: true,
+          direction: 'center',
+          className: 'zone-label-tooltip',
+        })
+      }
+    }
+
+    let canceled = false
+    const fetchZones = () => {
+      fetch(apiUrl('/api/zones'))
+        .then(r => r.json())
+        .then(s => { if (!canceled) render(s.zones || []) })
+        .catch(() => {})
+    }
+    fetchZones()
+    const iv = setInterval(fetchZones, 30000)
+    return () => { canceled = true; clearInterval(iv) }
+  }, [])
+
+  // Rail label overlay — replaces the hardcoded RAIL_AISLE_Y constants
+  // with a data-driven fetch of /api/rails (which proxies
+  // agv_rail_approach/list_rail_starts). Each rail entry renders as a
+  // small dot + "RIEL A", "RIEL B", … label so operators can quickly
+  // identify which aisle the robot is in. Falls back to no labels when
+  // the rail_approach service is unavailable.
+  useEffect(() => {
+    const group = railLayerRef.current
+    if (!group) return
+
+    const render = (rails: RailEntry[]) => {
+      group.clearLayers()
+      for (const r of rails) {
+        const ll = worldToLatLng(r.x, r.y)
+        const dot = L.circleMarker(ll, {
+          radius: 4,
+          color: '#7a9d8e',
+          fillColor: '#7a9d8e',
+          fillOpacity: 0.85,
+          weight: 1,
+          interactive: false,
+        }).addTo(group)
+        dot.bindTooltip(r.label, {
+          permanent: true,
+          direction: 'right',
+          offset: [6, 0],
+          className: 'rail-label-tooltip',
+        })
+      }
+    }
+
+    let canceled = false
+    const fetchRails = () => {
+      fetch(apiUrl('/api/rails'))
+        .then(r => r.json())
+        .then(rails => { if (!canceled) render(Array.isArray(rails) ? rails : []) })
+        .catch(() => {})
+    }
+    fetchRails()
+    const iv = setInterval(fetchRails, 30000)
     return () => { canceled = true; clearInterval(iv) }
   }, [])
 
