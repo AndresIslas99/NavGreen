@@ -13,6 +13,7 @@ import { robotIcon } from './map/RobotIcon'
 import { useCameraFollow } from './map/useCameraFollow'
 import { RecenterButton } from './map/RecenterButton'
 import { OffScreenIndicator } from './map/OffScreenIndicator'
+import { CompassScale } from './map/CompassScale'
 import { LocateOff, Compass } from './ui/icons'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
@@ -1092,6 +1093,9 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           Cobertura: {mappingCoverage.toFixed(1)}%
         </div>
       )}
+
+      {/* Compass + scale chip — top-right of the map area, portal'd to body. */}
+      <CompassScale map={mapInstance} theta={pose.theta} />
 
       {/* Floating "back to robot" FAB. Auto-hidden in follow mode. */}
       <RecenterButton cameraMode={cameraMode} onRecenter={recenter} />
