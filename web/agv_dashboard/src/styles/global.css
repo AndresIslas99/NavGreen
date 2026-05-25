@@ -4408,18 +4408,12 @@ button.depth-pip:focus-visible {
     box-shadow: var(--shadow-lg);
     overflow-y: auto;
     transition: width var(--dur-slow) var(--ease);
-    /* Scroll affordance — a soft fade-out at the bottom of the drawer
-       tells the operator there's more content below when overflow exists.
-       The fade is part of the scrollable surface so it stays static while
-       content scrolls underneath. */
-    mask-image: linear-gradient(to bottom,
-      black 0%, black calc(100% - 32px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom,
-      black 0%, black calc(100% - 32px), transparent 100%);
+    /* Earlier had a bottom mask-image fade as a "scroll affordance",
+       but the operator reported it generated doubt more than it
+       communicated overflow — the controls near the bottom edge
+       looked half-rendered. Removed; the scrollbar plus the
+       MissionStrip sitting below carry enough visual context. */
   }
-  /* Disable the fade when at the bottom — feels weird otherwise. We
-     can't easily detect scroll position in CSS, so this stays on; the
-     fade is gentle enough (32 px) that it doesn't truncate content. */
   /* The cockpit panel inside loses its old left-border + grid bg. */
   .cockpit-drawer .context-panel.cockpit-panel {
     background: transparent;
