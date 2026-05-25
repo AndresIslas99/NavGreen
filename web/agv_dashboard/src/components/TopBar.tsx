@@ -25,20 +25,17 @@ interface Props {
   onLogout?: () => void
 }
 
-// Tiny inline logo: rounded leaf shape in the brand accent.
-// Drop-in stand-in until we wire the real Ada Labs lockup.
+// Ada Labs brand lockup — official logomark + wordmark. The PNG lives in
+// /public so Vite serves it as a static asset. We render at the height
+// that matches the slim topbar (32 px) and let aspect ratio do the rest.
 function BrandLogo() {
   return (
-    <svg
-      width="28" height="28" viewBox="0 0 28 28"
-      className="topbar-brand__logo" aria-hidden="true"
-    >
-      <path
-        d="M14 3 C 8 5 4 10 5 17 C 5 22 9 25 14 25 C 19 25 23 22 23 17 C 24 10 20 5 14 3 Z"
-        fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth="1.5"
-      />
-      <path d="M14 6 L14 24" stroke="var(--accent)" strokeWidth="1.2" opacity="0.65" />
-    </svg>
+    <img
+      src="/adalabs_logo_transparent.png"
+      alt="Ada Labs"
+      className="topbar-brand__logo"
+      draggable={false}
+    />
   )
 }
 
