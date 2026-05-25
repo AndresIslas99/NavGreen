@@ -125,9 +125,11 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             actions={actions}
             motorsArmed={status?.motors_armed || false}
             mode={mode}
+            status={status}
             onCmdVel={handleCmdVel}
             onMotorEnable={handleMotorEnable}
             onModeChange={handleModeChange}
+            onCancelNav={handleNavCancel}
           />
         )
       case 'map':

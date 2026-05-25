@@ -1,58 +1,104 @@
-import { useCallback } from 'react'
-import { Joystick } from '../Joystick'
-import type { AllowedActions } from '../../api/types'
+/**
+ * OperatePanel — the "mission cockpit" rebuild.
+ *
+ * Vertical column of sections, top to bottom:
+ *   1. Control mode rail (TELEOP / NAV pills)
+ *   2. Action stack (PAUSAR / REANUDAR / IR A BASE / CANCELAR)
+ *   3. Task info card (mode-aware visualization)
+ *   4. Home point hint (set / change base)
+ *   5. Motors arm/disarm row
+ *   6. Joystick (always rendered; only enabled in teleop)
+ *
+ * Existing safety behaviors are preserved: the joystick gating still respects
+ * actions.canTeleop and mode='teleop', the motor button still respects
+ * actions.canMotorEnable. No flows were removed.
+ */
+import { useCallback } from 'react';
+import { Joystick } from '../Joystick';
+import { ControlModeRail } from '../cockpit/ControlModeRail';
+import { ActionStack } from '../cockpit/ActionStack';
+import { TaskInfoCard } from '../cockpit/TaskInfoCard';
+import { HomePointHint } from '../cockpit/HomePointHint';
+import type { AllowedActions, RobotStatus, HomePoint } from '../../api/types';
 
 interface Props {
-  actions: AllowedActions
-  motorsArmed: boolean
-  mode: string
-  onCmdVel: (linear: number, angular: number) => void
-  onMotorEnable: (active: boolean) => void
-  onModeChange: (mode: string) => void
+  actions: AllowedActions;
+  motorsArmed: boolean;
+  mode: string;
+  status: RobotStatus | null;
+  onCmdVel: (linear: number, angular: number) => void;
+  onMotorEnable: (active: boolean) => void;
+  onModeChange: (mode: string) => void;
+  onCancelNav: () => void;
+  onHomePointSet?: (hp: HomePoint) => void;
 }
 
-export function OperatePanel({ actions, motorsArmed, mode, onCmdVel, onMotorEnable, onModeChange }: Props) {
-  const handleTeleop = useCallback(() => onModeChange('teleop'), [onModeChange])
-  const handleNav = useCallback(() => onModeChange('nav'), [onModeChange])
+export function OperatePanel({
+  actions, motorsArmed, mode, status,
+  onCmdVel, onMotorEnable, onModeChange, onCancelNav, onHomePointSet,
+}: Props) {
+  const handleModeChange = useCallback((m: string) => onModeChange(m), [onModeChange]);
+
+  const missionProgress = status?.mission_progress ?? null;
+  const homePoint = status?.home_point ?? null;
+  const navActive = !!status?.nav_state?.active;
+  const pose = status?.pose ?? null;
+
+  // Whether mode switching is allowed at all. Backend gates via canTeleop /
+  // canSendGoal indirectly; we expose a simple "true unless mission is
+  // actively driving" rule so the operator can't switch modes mid-mission.
+  const canChangeMode =
+    !navActive &&
+    !(missionProgress?.status === 'running');
 
   return (
-    <div className="context-panel">
-      <div className="panel-section">
-        <div className="section-title">Control Mode</div>
-        <div className="btn-row">
-          <button className={`mode-toggle ${mode === 'teleop' ? 'active' : ''}`} onClick={handleTeleop}>
-            Teleop
-          </button>
-          <button className={`mode-toggle ${mode === 'nav' ? 'active' : ''}`} onClick={handleNav}>
-            Nav
-          </button>
-        </div>
-      </div>
+    <div className="context-panel cockpit-panel">
+      <ControlModeRail mode={mode} canChange={canChangeMode} onChange={handleModeChange} />
 
-      <div className="panel-section">
-        <div className="section-title">Motors</div>
+      <ActionStack
+        actions={actions}
+        missionProgress={missionProgress}
+        homePoint={homePoint}
+        navActive={navActive}
+        onCancelNav={onCancelNav}
+      />
+
+      <TaskInfoCard mode={mode} status={status} missionProgress={missionProgress} />
+
+      <HomePointHint
+        homePoint={homePoint}
+        currentPose={pose}
+        onSet={hp => onHomePointSet?.(hp)}
+      />
+
+      <div className="cockpit-section">
+        <div className="cockpit-eyebrow">MOTORES</div>
         <button
-          className={`full-width ${motorsArmed ? 'armed' : ''}`}
+          className={`full-width motor-toggle ${motorsArmed ? 'armed' : ''}`}
           onClick={() => onMotorEnable(!motorsArmed)}
           disabled={!actions.canMotorEnable && !motorsArmed}
+          title={
+            !motorsArmed && !actions.canMotorEnable
+              ? 'Activar motores no permitido en el estado actual'
+              : motorsArmed ? 'Desactivar motores' : 'Activar motores'
+          }
         >
-          {motorsArmed ? 'Disarm Motors' : 'Arm Motors'}
+          {motorsArmed ? 'Desactivar Motores' : 'Activar Motores'}
         </button>
       </div>
 
-      <div className="panel-section">
-        <div className="section-title">Joystick</div>
+      <div className="cockpit-section cockpit-section--joystick">
+        <div className="cockpit-eyebrow">JOYSTICK</div>
         <Joystick
           enabled={actions.canTeleop && mode === 'teleop'}
           maxLinear={0.5}
           maxAngular={0.5}
           onMove={onCmdVel}
         />
+        {mode === 'nav' && (
+          <div className="panel-hint">Click en el mapa para enviar un goal de navegación</div>
+        )}
       </div>
-
-      {mode === 'nav' && (
-        <div className="panel-hint">Click on map to send navigation goal</div>
-      )}
     </div>
-  )
+  );
 }

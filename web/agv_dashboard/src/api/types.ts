@@ -84,6 +84,36 @@ export interface HomePoint {
 }
 
 // ---------------------------------------------------------------------------
+// Semantic map overlay (operator-facing labeled zones, separate from the
+// Nav2 traffic zones served by the fleet manager).
+// ---------------------------------------------------------------------------
+
+export interface ZonePoint { x: number; y: number }
+export interface SemanticZone {
+  name: string                    // stable id ("base_de_carga")
+  label: string                   // display label ("BASE DE CARGA")
+  polygon: ZonePoint[]
+  color: string                   // CSS color
+  kind: 'home' | 'work' | 'parking' | 'other'
+}
+
+// ---------------------------------------------------------------------------
+// Rail map labels (data-driven from agv_rail_approach/list_rail_starts).
+// Replaces the hardcoded RAIL_AISLE_Y constants previously in MapView.tsx.
+// ---------------------------------------------------------------------------
+
+export interface RailEntry {
+  id: string                      // 'tag_<id>' — stable across calls
+  tag_id: number
+  label: string                   // 'RIEL A', 'RIEL B', …
+  x: number
+  y: number
+  yaw: number
+  aisle_letter: string
+  kind: 'rail_entry'
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket payloads
 // ---------------------------------------------------------------------------
 
