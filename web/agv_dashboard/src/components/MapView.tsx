@@ -518,6 +518,29 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       map.remove()
       mapRef.current = null
       setMapInstance(null)
+      // Clear all layer/marker refs so the next remount (StrictMode in
+      // dev, HMR after edits) recreates them against the new map.
+      // Without this, e.g. `robotMarkerRef.current` keeps a dangling
+      // pointer to a marker on the destroyed map and the robot effect
+      // takes the "update existing" branch instead of "create new",
+      // leaving the new map with no robot icon at all.
+      robotMarkerRef.current = null
+      trailLayerRef.current = null
+      pathLayerRef.current = null
+      imageLayerRef.current = null
+      homeMarkerRef.current = null
+      ghostMarkerRef.current = null
+      fleetLayerRef.current = null
+      scanGroupRef.current = null
+      waypointLayerRef.current = null
+      railLayerRef.current = null
+      tagLayerRef.current = null
+      zoneLayerRef.current = null
+      greenhouseLayerRef.current = null
+      rowBandLayerRef.current = null
+      rowRectsRef.current.clear()
+      rowBandsRef.current = []
+      trailRef.current = []
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
