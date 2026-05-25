@@ -585,6 +585,34 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         <rect x="1.5" y="1.5" width="9" height="9" rx="1"
               fill="#efece5" stroke="#7a847c" stroke-width="1.2"/>
       </svg>`
+    // Charging dock = home + charging station combo. Larger accent
+    // badge with a house silhouette and a lightning-bolt micro-badge
+    // in the top-right corner — like Apple Maps' "Home" + the EV
+    // charging convention. Clearly communicates both meanings at a
+    // glance without clutter.
+    const glyphDock = `<svg width="24" height="24" viewBox="0 0 24 24">
+        <defs>
+          <filter id="dock-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1" stdDeviation="0.9" flood-opacity="0.22"/>
+          </filter>
+        </defs>
+        <!-- Main accent-green badge -->
+        <circle cx="12" cy="12" r="10" fill="#2f6f2a"
+                stroke="#245821" stroke-width="0.8"
+                filter="url(#dock-shadow)"/>
+        <!-- House icon (Lucide-style) -->
+        <path d="M 6.5 12.5 L 12 7 L 17.5 12.5"
+              fill="none" stroke="#fefdfb" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 8 12 V 17 H 16 V 12"
+              fill="none" stroke="#fefdfb" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Lightning bolt badge in top-right corner -->
+        <circle cx="18.5" cy="5.5" r="4" fill="#fefdfb"
+                stroke="#2f6f2a" stroke-width="0.8"/>
+        <path d="M 18.8 3.2 L 17 6 L 18.4 6 L 17.8 7.8 L 19.8 5 L 18.4 5 Z"
+              fill="#2f6f2a"/>
+      </svg>`
 
     const render = (tags: DefinedTag[]) => {
       group.clearLayers()
@@ -760,24 +788,40 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       }
 
       // Render all wall slots.
+      // A wall tag whose label hints at "charging dock / home base"
+      // gets a distinct, larger glyph (house silhouette + lightning
+      // badge) so the operator can find it at a glance — it's both
+      // the docking station AND the home base. Other linked walls
+      // keep the small square glyph. Substring match (no \b boundaries)
+      // so labels like "charging_dock" are caught (underscore is a
+      // word character and would otherwise block the boundary).
+      const isDockLabel = (s: string) => /(dock|charging|home|base)/i.test(s)
       for (const slot of wallSlots) {
         const sectionLabel = slot.section === 'rear' ? 'Atrás' : 'Frente'
         const linked = slot.linkedTag
-        const html = linked ? glyphWallLinked : glyphWallUnlinked
-        const cls = linked ? 'apriltag-marker apriltag-marker--wall'
+        const isDock = !!(linked && isDockLabel(linked.label))
+        const html = isDock ? glyphDock
+                            : (linked ? glyphWallLinked : glyphWallUnlinked)
+        const cls = isDock ? 'apriltag-marker apriltag-marker--dock'
+                  : linked ? 'apriltag-marker apriltag-marker--wall'
                            : 'apriltag-marker apriltag-marker--wall-empty'
+        const iconSize: [number, number] = isDock ? [24, 24] : [12, 12]
+        const iconAnchor: [number, number] = isDock ? [12, 12] : [6, 6]
         const marker = L.marker(worldToLatLng(slot.x, slot.y), {
           icon: L.divIcon({
             className: cls,
             html,
-            iconSize: [12, 12],
-            iconAnchor: [6, 6],
+            iconSize,
+            iconAnchor,
           }),
           interactive: true,
+          zIndexOffset: isDock ? 400 : 0,   // dock sits above other walls
         }).addTo(group)
-        const tooltipText = linked
-          ? `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · #${linked.id} ${linked.label}`
-          : `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · sin tag configurado`
+        const tooltipText = isDock
+          ? `Base de carga · home · entre rieles ${slot.between} · ${sectionLabel} · #${linked!.id} ${linked!.label}`
+          : linked
+            ? `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · #${linked.id} ${linked.label}`
+            : `Pared (inicio de hilera) · entre rieles ${slot.between} · ${sectionLabel} · sin tag configurado`
         marker.bindTooltip(tooltipText, {
           direction: 'top',
           offset: [0, -4],
