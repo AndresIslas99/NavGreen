@@ -218,6 +218,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             ghostPose={rail === 'analytics' ? ghostPose : null}
             mappingCoverage={status?.mapping_coverage}
             state={state}
+            homePoint={status?.home_point ?? null}
           />
           <FleetOverlay
             robots={fleetRobots}

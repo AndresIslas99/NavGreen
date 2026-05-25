@@ -8,7 +8,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone, RobotState } from '../api/types'
+import type { MapUpdate, PathPoint, DefinedTag, RailEntry, SemanticZone, RobotState, HomePoint } from '../api/types'
 import { robotIcon } from './map/RobotIcon'
 import { apiUrl } from '../api/client'
 import type { FleetRobot } from '../hooks/useFleetSocket'
@@ -45,6 +45,8 @@ interface Props {
   mappingCoverage?: number
   /** Robot state for icon coloring (accent/warn/crit). Optional — defaults to 'idle'. */
   state?: RobotState
+  /** Operator-defined base/dock pose — rendered as a pulsing home landmark. */
+  homePoint?: HomePoint | null
 }
 
 // Robot icon factory moved to './map/RobotIcon.tsx' — top-down vehicle outline
@@ -55,7 +57,7 @@ function worldToLatLng(x: number, y: number): L.LatLng {
   return L.latLng(y, x)
 }
 
-export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage, state }: Props) {
+export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, waypoints, fleetRobots, selectedRobot, ghostPose, mappingCoverage, state, homePoint }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
 
@@ -78,6 +80,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
   const rowBandLayerRef = useRef<L.LayerGroup | null>(null)
   // Map of letter+section → rectangle so M3 can flip active-row opacity.
   const rowRectsRef = useRef<Map<string, L.Rectangle>>(new Map())
+  // Home / base landmark — pulses gently when defined.
+  const homeMarkerRef = useRef<L.Marker | null>(null)
 
   // Trail accumulator
   const trailRef = useRef<L.LatLng[]>([])
@@ -253,16 +257,31 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const render = (tags: DefinedTag[]) => {
       group.clearLayers()
       for (const t of tags) {
-        const color = t.type === 'rail_start' ? '#ffd54f' : '#90a4ae'
-        const fill = t.type === 'rail_start' ? '#ffb300' : '#607d8b'
-        const marker = L.circleMarker(worldToLatLng(t.x, t.y), {
-          radius: 5,
-          color,
-          fillColor: fill,
-          fillOpacity: 0.9,
-          weight: 2,
+        // Type-distinct glyphs:
+        //  - rail_start → forest-green diamond (suggests "approach target")
+        //  - wall       → muted-grey square   (suggests "fixed reference")
+        const isRail = t.type === 'rail_start'
+        const glyphSvg = isRail
+          ? `<svg width="14" height="14" viewBox="0 0 14 14">
+               <rect x="3" y="3" width="8" height="8" rx="1.2"
+                     transform="rotate(45 7 7)"
+                     fill="#e2eedc" stroke="#2f6f2a" stroke-width="1.4"/>
+               <path d="M5 7 L9 7" stroke="#2f6f2a" stroke-width="1.2" stroke-linecap="round"/>
+             </svg>`
+          : `<svg width="12" height="12" viewBox="0 0 12 12">
+               <rect x="1.5" y="1.5" width="9" height="9" rx="1"
+                     fill="#efece5" stroke="#7a847c" stroke-width="1.2"/>
+             </svg>`
+        const marker = L.marker(worldToLatLng(t.x, t.y), {
+          icon: L.divIcon({
+            className: `apriltag-marker apriltag-marker--${isRail ? 'rail' : 'wall'}`,
+            html: glyphSvg,
+            iconSize: isRail ? [14, 14] : [12, 12],
+            iconAnchor: isRail ? [7, 7] : [6, 6],
+          }),
+          interactive: true,
         }).addTo(group)
-        marker.bindTooltip(`#${t.id} · ${t.label}${t.type === 'rail_start' ? ' (rail)' : ''}`, {
+        marker.bindTooltip(`#${t.id} · ${t.label}${isRail ? ' (rail)' : ''}`, {
           direction: 'top',
           offset: [0, -4],
           className: 'apriltag-tooltip',
@@ -409,6 +428,49 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     return () => { canceled = true; clearInterval(iv) }
   }, [])
 
+  // Home / base landmark — pulsing house glyph at home_point pose.
+  // Visible only when an operator has set a home point. Clicking it opens
+  // a tooltip showing the name; the actual "Ir a base" action lives in the
+  // cockpit ActionStack.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    // Tear down old marker on change/removal
+    if (homeMarkerRef.current) {
+      homeMarkerRef.current.remove()
+      homeMarkerRef.current = null
+    }
+    if (!homePoint) return
+    const svg = `
+      <div class="home-landmark">
+        <div class="home-landmark__pulse"></div>
+        <div class="home-landmark__core">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12 L12 4 L21 12"/>
+            <path d="M5 10 V20 H10 V14 H14 V20 H19 V10"/>
+          </svg>
+        </div>
+      </div>`
+    const marker = L.marker(worldToLatLng(homePoint.x, homePoint.y), {
+      icon: L.divIcon({
+        className: 'home-landmark-wrapper',
+        html: svg,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      }),
+      zIndexOffset: 600,
+      interactive: true,
+    }).addTo(map)
+    marker.bindTooltip(`Base: ${homePoint.name}`, {
+      permanent: true,
+      direction: 'bottom',
+      offset: [0, 14],
+      className: 'home-landmark-tooltip',
+    })
+    homeMarkerRef.current = marker
+  }, [homePoint])
+
   // Update click handler when mode/callback changes
   useEffect(() => {
     const map = mapRef.current
@@ -503,28 +565,42 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     }
   }, [pose, followRobot, state])
 
-  // Update navigation path
+  // Update navigation path (state-aware coloring + animated dashes via CSS).
+  // Default: accent green dashed line flowing toward the goal.
+  // Blocked: warm tan dashed, no animation.
+  // E-stop/fault: crit red solid, no animation (stop signal).
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
     const latlngs = path.map(p => worldToLatLng(p.x, p.y))
 
+    const isCrit = state === 'e_stop' || state === 'fault'
+    const isWarn = state === 'blocked'
+    const color = isCrit ? '#a8392a' : isWarn ? '#b8612e' : '#2f6f2a'
+    const dashArray = isCrit ? undefined : '8, 6'
+    const className = (isCrit || isWarn) ? 'nav-path' : 'nav-path nav-path--animated'
+
     if (pathLayerRef.current) {
       pathLayerRef.current.setLatLngs(latlngs)
+      pathLayerRef.current.setStyle({
+        color, dashArray, opacity: latlngs.length > 0 ? 0.92 : 0,
+      })
+      ;(pathLayerRef.current.options as any).className = className
     } else if (latlngs.length > 0) {
       pathLayerRef.current = L.polyline(latlngs, {
-        color: '#4fc3f7',
+        color,
         weight: 3,
-        opacity: 0.8,
-        dashArray: '8, 4',
+        opacity: 0.92,
+        dashArray,
+        className,
       }).addTo(map)
     }
 
     if (latlngs.length === 0 && pathLayerRef.current) {
       pathLayerRef.current.setLatLngs([])
     }
-  }, [path])
+  }, [path, state])
 
   // Update scan points
   useEffect(() => {

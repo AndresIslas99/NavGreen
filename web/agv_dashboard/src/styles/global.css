@@ -3327,6 +3327,69 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   background: rgba(254, 253, 251, 0.85) !important;
 }
 
+/* Home / base landmark — pulsing accent-soft circle with a house glyph.
+   Marks the operator-defined base where "Ir a base" will navigate to. */
+.home-landmark-wrapper { background: transparent !important; border: none !important; }
+.home-landmark {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+.home-landmark__core {
+  position: absolute;
+  inset: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+.home-landmark__pulse {
+  position: absolute;
+  inset: 8px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  opacity: 0.35;
+  animation: home-landmark-pulse 2s cubic-bezier(0, 0.4, 0.6, 1) infinite;
+}
+@keyframes home-landmark-pulse {
+  0%   { transform: scale(1);   opacity: 0.4; }
+  100% { transform: scale(2.0); opacity: 0;   }
+}
+.home-landmark-tooltip {
+  background: rgba(254, 253, 251, 0.95) !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--accent-soft-strong) !important;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px !important;
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-xs);
+}
+.home-landmark-tooltip::before { display: none !important; }
+
+/* AprilTag marker labels — styled tooltip for the new divIcon glyphs. */
+.apriltag-marker { background: transparent !important; border: none !important; }
+
+/* Navigation path — animated marching dashes when actively navigating;
+   static when blocked or stopped. Targets the Leaflet SVG path element. */
+.nav-path { transition: stroke var(--dur-slow) var(--ease); }
+.nav-path--animated {
+  animation: nav-path-march 0.9s linear infinite;
+}
+@keyframes nav-path-march {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -14; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-path--animated { animation: none; }
+}
+
 /* Camera PIP — softer than the old hard black. */
 .camera-pip {
   border: 1px solid var(--border) !important;
