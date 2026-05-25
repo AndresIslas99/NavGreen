@@ -3122,6 +3122,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   letter-spacing: 0.2px;
   text-align: center;
   line-height: 1.15;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rail-btn--active {
@@ -3138,6 +3142,13 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   height: 24px;
   background: var(--accent);
   border-radius: 0 var(--r-full) var(--r-full) 0;
+}
+
+/* Narrow viewports — hide labels (icon + native title tooltip still
+   give plenty of context). Cleaner than ellipsis-truncated nonsense. */
+@media (max-width: 1280px) {
+  .rail-btn__label { display: none; }
+  .rail-btn { padding: var(--sp-3) var(--sp-2); min-height: var(--tap-min); }
 }
 
 /* =========================================================================

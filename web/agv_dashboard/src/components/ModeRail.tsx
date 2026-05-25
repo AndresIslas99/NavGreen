@@ -28,7 +28,7 @@ const MODES: ModeDef[] = [
   { key: 'missions',         icon: Route,            label: 'Misiones' },
   { key: 'apriltags',        icon: Tag,              label: 'AprilTags' },
   { key: 'waypoint_battery', icon: BatteryCharging,  label: 'Batería' },
-  { key: 'recovery',         icon: Wrench,           label: 'Recuperación' },
+  { key: 'recovery',         icon: Wrench,           label: 'Recuperar' },
   { key: 'analytics',        icon: BarChart3,        label: 'Análisis' },
 ]
 
