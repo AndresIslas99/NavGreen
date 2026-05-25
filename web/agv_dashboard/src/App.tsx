@@ -9,6 +9,7 @@ import { HeroRow } from './components/HeroRow'
 import { ConnectionBanner } from './components/ConnectionBanner'
 import { ModeRail } from './components/ModeRail'
 import { MapView } from './components/MapView'
+import { MapEmptyState } from './components/map/MapEmptyState'
 import { CameraFeed } from './components/CameraFeed'
 import { MissionStrip } from './components/strip/MissionStrip'
 
@@ -220,6 +221,17 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             state={state}
             homePoint={status?.home_point ?? null}
           />
+          {/* M6: empty state overlay sits on top of the greenhouse template
+              when no SLAM map is loaded yet. Operator sees the greenhouse
+              skeleton + a CTA card instead of a blank canvas.
+              Effective map is `state==='mapping' ? accMapData : mapData`,
+              so empty iff BOTH are null. */}
+          {(state === 'mapping' ? !accMapData : !mapData) && (
+            <MapEmptyState
+              onStartMapping={() => handleModeChange('mapping')}
+              onOpenMapPanel={() => setRail('map')}
+            />
+          )}
           <FleetOverlay
             robots={fleetRobots}
             selectedRobot={selectedRobot}

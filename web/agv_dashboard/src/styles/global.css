@@ -2055,6 +2055,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .map-area:not(.mapping-layout) .map-section {
   width: 100%;
   height: 100%;
+  position: relative;   /* anchor for .map-empty-overlay and similar overlays */
 }
 
 /* Coverage badge overlay on map */
@@ -3375,6 +3376,68 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* AprilTag marker labels — styled tooltip for the new divIcon glyphs. */
 .apriltag-marker { background: transparent !important; border: none !important; }
+
+/* Map empty state overlay — visible when no occupancy grid is loaded.
+   Sits on top of the greenhouse template (rendered behind via Leaflet),
+   centered with backdrop blur so the template peeks through. */
+.map-empty-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  pointer-events: none;   /* card itself enables pointer events */
+  padding: var(--sp-5);
+}
+.map-empty-card {
+  pointer-events: auto;
+  width: min(420px, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  backdrop-filter: blur(3px);
+  background: rgba(254, 253, 251, 0.92) !important;
+}
+.map-empty-card__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.map-empty-card__eyebrow {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.map-empty-card__title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.map-empty-card__description {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.map-empty-card__actions {
+  display: inline-flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
 
 /* Navigation path — animated marching dashes when actively navigating;
    static when blocked or stopped. Targets the Leaflet SVG path element. */
