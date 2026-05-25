@@ -15,6 +15,19 @@ export interface RobotPose {
   theta: number;
 }
 
+export interface HomePoint {
+  x: number;
+  y: number;
+  theta: number;
+  set_at: number;   // unix seconds
+  name: string;
+}
+
+export interface BatterySample {
+  t_s: number;       // unix seconds
+  pct: number;       // 0..100
+}
+
 export interface AppState {
   eStopActive: boolean;
   currentMode: string;
@@ -33,6 +46,18 @@ export interface AppState {
   missionCancel: boolean;
   missionPause: boolean;
   batteryPct: number;
+  // Rolling buffer of (timestamp, pct) samples for time-to-empty derivation.
+  // Capped at 30 entries in the BatteryState subscription callback. See
+  // deriveBatteryTte() in src/battery_tte.ts for the slope calculation.
+  batterySamples: BatterySample[];
+  // Heuristic estimate of seconds until the battery is empty, or null when
+  // charging, flat, or insufficient samples. Recomputed in the 5 Hz status
+  // broadcast loop (not on every BatteryState message — too noisy).
+  batteryTteS: number | null;
+  // Operator-defined base/dock pose, persisted at AGV_DATA_DIR/home_point.json.
+  // Loaded at boot; null if the file is absent. POST /api/home_point/go
+  // dispatches a navigate_to_pose action to this pose.
+  homePoint: HomePoint | null;
   lastImuTime: number;
   mapPng: Buffer | null;
   mapMeta: any;
@@ -122,6 +147,12 @@ export interface RosBridge {
     tag_id: number; offset_x: number; offset_y: number;
     skip_coarse_approach: boolean;
   }): Promise<{ success: boolean; message: string }>;
+  // Calls /agv/rail_approach/list_rail_starts. Returns the raw rail starts
+  // array on success. Used by routes/rails.ts to drive the map's data-driven
+  // rail-label overlay (replaces the hardcoded RAIL_AISLE_Y in MapView.tsx).
+  listRailStarts(): Promise<Array<{
+    tag_id: number; x: number; y: number; approach_yaw: number; tag_size: number;
+  }>>;
   // Fires the /agv/maps/loaded event so auto_init_orchestrator starts its
   // relocalization sequence. Must be called after any successful Nav2
   // load_map. The name is the map stem (without path or .yaml extension).
@@ -145,6 +176,10 @@ export interface AppDeps {
     namespace: string;
     mapsDir: string;
     missionsFile: string;
+    // Persistence paths declared in specs/persistence.yaml. Constructed from
+    // dataDir (AGV_DATA_DIR) so verify_no_hardcoded_paths.sh stays green.
+    homePointPath: string;     // ${AGV_DATA_DIR}/home_point.json
+    zonesYamlPath: string;     // ${AGV_DATA_DIR}/zones.yaml
   };
   // Functions that modify state
   updateState(): void;
