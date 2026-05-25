@@ -117,10 +117,17 @@ export function aisleLetterFor(yCenter: number): string {
   return idx >= 0 ? AISLE_LETTERS[idx] : '';
 }
 
-/** Operator-facing label combining aisle letter + section. */
+/** Operator-facing label combining rail letter + section.
+ *
+ * Naming note: an earlier version used "Hilera X" — but "hilera" in Spanish
+ * means "row of plants" (cucumbers), which is what GROWS BETWEEN the rails,
+ * not what the AGV drives on. The bands we render are the rails themselves
+ * (the operating lanes where the AGV runs); calling them "Riel" matches the
+ * operator's mental model and removes the "robot is on cucumbers" confusion.
+ */
 export function aisleSpanishLabel(letter: string, section: 'rear' | 'front'): string {
   const sectionLabel = section === 'rear' ? 'Atrás' : 'Frente';
-  return `Hilera ${letter} · ${sectionLabel}`;
+  return `Riel ${letter} · ${sectionLabel}`;
 }
 
 /**
