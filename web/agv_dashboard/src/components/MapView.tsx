@@ -138,17 +138,54 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     const greenhouseGroup = L.layerGroup().addTo(map)
     greenhouseLayerRef.current = greenhouseGroup
     {
-      // Enclosure: subtle dashed outline + slightly darker cream fill so the
-      // cultivation area reads as a defined space, not a void.
+      // Enclosure — built up in three concentric rectangles to read as
+      // physical greenhouse walls on top of a continuing satellite-style
+      // earth wash:
+      //   1. Outer halo: a slightly larger dark band beyond the walls
+      //      that gives the enclosure depth/elevation against the soil.
+      //   2. Wall ring: solid border, slightly thicker; this is "the glass".
+      //   3. Interior fill: brighter than the outside wash so it reads as
+      //      a lit, structured space (skylight on the roof, cement floor).
+      //   4. Inner trim: a thinner border 0.25 m inside the wall ring,
+      //      suggesting the double-pane / steel frame of polycarbonate
+      //      greenhouse construction. Pure visual detail, no functional
+      //      meaning.
       const enc = enclosureBounds()
+      const halo = 1.4    // metres of "soil shadow" beyond the walls
+      const trim = 0.30   // metres inset of the inner trim line
+
+      // 1. Outer halo — slightly darker soil ring extending past the walls.
+      L.rectangle(
+        [[enc.minY - halo, enc.minX - halo], [enc.maxY + halo, enc.maxX + halo]],
+        {
+          color: 'transparent',
+          weight: 0,
+          fillColor: '#9c9587',
+          fillOpacity: 0.10,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+
+      // 2. + 3. Enclosure wall ring + interior fill, as a single rectangle.
       L.rectangle(
         [[enc.minY, enc.minX], [enc.maxY, enc.maxX]],
         {
-          color: '#d8d2c5',
-          weight: 1.5,
-          dashArray: '6,4',
-          fillColor: '#efece5',   // = --surface-2 literal (Leaflet can't read CSS vars)
-          fillOpacity: 1.0,
+          color: '#b3a98f',           // warm tan-grey, reads as anodised frame
+          weight: 2.4,
+          fillColor: '#fbf8f0',       // brighter than outside wash → "interior"
+          fillOpacity: 0.96,
+          interactive: false,
+        },
+      ).addTo(greenhouseGroup)
+
+      // 4. Inner trim — second-pane / frame, 0.30 m inside the main wall.
+      L.rectangle(
+        [[enc.minY + trim, enc.minX + trim], [enc.maxY - trim, enc.maxX - trim]],
+        {
+          color: '#c9bea0',
+          weight: 0.8,
+          fill: false,
+          dashArray: '4,4',
           interactive: false,
         },
       ).addTo(greenhouseGroup)
@@ -518,11 +555,20 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       imageLayerRef.current = null
     }
 
+    // SLAM occupancy grid — rendered with `multiply` blend so white pixels
+    // (free/unknown space) disappear into the greenhouse template and only
+    // dark pixels (walls/obstacles) remain as subtle traces. When the
+    // robot is NOT in mapping mode we further hide the raster entirely
+    // (the greenhouse layer carries the visual), which the SLAM toggle
+    // effect below applies.
     if (imageLayerRef.current) {
       imageLayerRef.current.setBounds(bounds)
       imageLayerRef.current.setUrl(imageUrl)
     } else {
-      const overlay = L.imageOverlay(imageUrl, bounds, { opacity: 0.9 }).addTo(map)
+      const overlay = L.imageOverlay(imageUrl, bounds, {
+        opacity: 0.45,
+        className: 'slam-overlay',
+      }).addTo(map)
       imageLayerRef.current = overlay
       // No explicit setView/fitBounds here — initial centering is owned by
       // useCameraFollow (it runs setView once on first pose receipt). Calling
@@ -531,6 +577,20 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       // arrives, breaking the always-centered Google-Maps experience.
     }
   }, [mapData])
+
+  // Toggle SLAM raster visibility based on robot state. When the operator
+  // is just driving / observing / idling, the greenhouse template is the
+  // visual; the SLAM PNG behind it is redundant noise. We keep it loaded
+  // (so a mode-switch to mapping/nav is instant) but fade it out via the
+  // `.slam-hidden` modifier class.
+  useEffect(() => {
+    const overlay = imageLayerRef.current
+    if (!overlay) return
+    const el = overlay.getElement()
+    if (!el) return
+    const showSlam = state === 'mapping' || state === 'navigating'
+    el.classList.toggle('slam-hidden', !showSlam)
+  }, [state, mapData])
 
   // Update robot position
   useEffect(() => {

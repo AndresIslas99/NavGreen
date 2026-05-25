@@ -217,7 +217,13 @@ body {
 
 /* The full-bleed map background layer. MapView's Leaflet container fills
    this absolutely-positioned wrapper, so the map covers the whole viewport
-   even when chrome (topbar, hero, etc.) floats on top. */
+   even when chrome (topbar, hero, etc.) floats on top.
+
+   The "satellite" feel: the leaflet pane shows our greenhouse template
+   (enclosure + row bands + AprilTags) painted on top of a continuous earth
+   wash. The wash is built from three layered backgrounds on .leaflet-container
+   (see below) so it scrolls WITH the map content rather than staying pinned
+   to the viewport. */
 .map-bg {
   position: absolute;
   inset: 0;
@@ -227,6 +233,25 @@ body {
 .map-bg > .map-container,
 .map-bg > .map-section,
 .map-bg .leaflet-container { width: 100%; height: 100%; position: relative; }
+
+/* Earth wash on the leaflet pane — outside the greenhouse rectangle we
+   want it to read as "rural Mexican soil from above", not as the cream
+   interior of a card. Built from four CSS background layers:
+
+     1) Edge vignette (darker corners) → "we're looking down from altitude"
+     2) Hot-spot light (warmer center)  → "sun above the greenhouse"
+     3) Tiled soil grain — visible-but-quiet dotted SVG, 18 px tile
+     4) Solid sandy-tan base                                            */
+.map-bg .leaflet-container {
+  background-color: #ece1ca !important;   /* sandy tan — overrides --bg */
+  background-image:
+    radial-gradient(ellipse 130% 110% at 50% 50%, transparent 45%, rgba(120, 92, 50, 0.14) 100%),
+    radial-gradient(ellipse 55% 38% at 50% 38%, rgba(255, 247, 230, 0.50), transparent 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'><circle cx='3' cy='4' r='0.9' fill='%23a08a64' opacity='0.32'/><circle cx='12' cy='9' r='0.7' fill='%23a08a64' opacity='0.22'/><circle cx='6' cy='13' r='0.5' fill='%23a08a64' opacity='0.18'/><circle cx='15' cy='15' r='0.4' fill='%23a08a64' opacity='0.15'/></svg>");
+  background-size: cover, cover, 18px 18px;
+  background-repeat: no-repeat, no-repeat, repeat;
+  background-attachment: fixed, fixed, fixed;
+}
 
 /* Pointer-events helpers — let clicks fall through to the map in the gaps
    between floating cards. Wrappers carry pass-through; visible cards
@@ -3337,8 +3362,31 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    ========================================================================= */
 
 .leaflet-container {
-  background: var(--bg);
+  /* `background-color` only — not the shorthand — so the .map-bg
+     .leaflet-container rule above can still layer its earth-wash
+     background-image. The !important is needed to defeat leaflet.css'
+     own `background: #ddd` default. */
+  background-color: var(--bg) !important;
   font-family: inherit;
+}
+
+/* SLAM occupancy overlay — only the dark (obstacle/wall) pixels survive
+   after multiply with the greenhouse layer, so free-space white doesn't
+   sit as a hard rectangle behind our row bands. The chained filter
+   pushes white pixels toward neutral grey before blending, which makes
+   the multiply visually "kill" the white-square artifact entirely while
+   keeping detected walls/obstacles legible as soft shadows. */
+.slam-overlay {
+  mix-blend-mode: multiply;
+  filter: contrast(1.4) brightness(1.08) saturate(0.7);
+  pointer-events: none;
+}
+/* When the robot is NOT in mapping mode the SLAM raster is redundant
+   noise behind the hand-designed greenhouse layout — the React layer
+   adds `.slam-hidden` to fade it out. */
+.slam-overlay.slam-hidden {
+  opacity: 0 !important;
+  transition: opacity var(--dur-slow) var(--ease);
 }
 
 .leaflet-control-zoom {
@@ -3973,20 +4021,35 @@ button.depth-pip:focus-visible {
     box-shadow: var(--shadow-md);
   }
 
-  /* ── CameraFeed PIP — bottom-left, above ModeRail's column ──────────── */
+  /* ── CameraFeed PIPs — left column, right of ModeRail, stacked ──────────
+     Operator's left column reads top-to-bottom: ModeRail (icons) → blank →
+     Camera RGB → Depth heatmap → MissionStrip. Both PIPs share the same
+     `left` offset and width; they're stacked by varying `bottom`. Compact
+     enough that the camera + depth + strip don't fight for vertical room
+     on a 1280×800 tablet. */
   .camera-pip,
   button.camera-pip {
     position: fixed !important;
-    bottom: calc(var(--log-h) + var(--sp-3) * 2) !important;
     left: calc(var(--rail-w-floating) + var(--sp-3) * 2) !important;
+    bottom: calc(var(--log-h) + var(--sp-3) * 3 + 132px) !important;
+    width: 220px !important;
+    height: 132px !important;
     z-index: var(--z-camera);
   }
   .depth-pip,
   button.depth-pip {
     position: fixed !important;
+    left: calc(var(--rail-w-floating) + var(--sp-3) * 2) !important;
     bottom: calc(var(--log-h) + var(--sp-3) * 2) !important;
-    left: calc(var(--rail-w-floating) + var(--sp-3) * 3 + 240px) !important;
+    width: 220px !important;
+    height: 132px !important;
     z-index: var(--z-camera);
+  }
+  /* Snapshot button reads against the new compact aspect ratio. */
+  .camera-pip .camera-snapshot-btn,
+  button.camera-pip .camera-snapshot-btn {
+    top: 6px;
+    right: 6px;
   }
 
   /* ── Map empty state — sits OVER the map-bg, behind chrome ──────────── */
