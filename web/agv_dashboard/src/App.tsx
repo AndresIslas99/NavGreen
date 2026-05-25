@@ -203,6 +203,7 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
           mappingCoverage={status?.mapping_coverage}
           state={state}
           homePoint={status?.home_point ?? null}
+          batteryPct={status?.battery_pct ?? null}
         />
         {/* Empty state overlay — visible cuando no hay SLAM map cargado.
             Sigue mostrando el greenhouse template detrás. */}

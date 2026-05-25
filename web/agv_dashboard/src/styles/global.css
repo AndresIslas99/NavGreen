@@ -1917,6 +1917,74 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   filter: drop-shadow(0 0 3px rgba(76,175,80,0.6));
 }
 
+/* Robot icon "vivo" animations — make the AGV read as a character with
+   mood. State and tone come through as data attributes on the wrapper
+   so we can target each axis independently. */
+.robot-icon { position: relative; line-height: 0; }
+
+/* Glow ring around the body. Always present; pulses by state. */
+.robot-icon__ring {
+  transform-origin: 24px 20px;     /* center of the 48×40 canvas */
+  animation: robot-ring-pulse 2.4s var(--ease) infinite;
+}
+.robot-icon[data-state="halted"] .robot-icon__ring {
+  animation: robot-ring-halt 1.4s var(--ease) infinite;
+}
+.robot-icon[data-state="idle"] .robot-icon__ring {
+  animation-duration: 4s;
+  opacity: 0.55;
+}
+
+/* Body wobble — only when actively moving (mapping / navigating / mission).
+   1.5px translate on x is just enough to read as motion without being
+   distracting at 5 Hz pose updates. */
+.robot-icon[data-state="moving"] .robot-icon__body {
+  animation: robot-body-wobble 0.65s var(--ease) infinite alternate;
+  transform-origin: 24px 20px;
+}
+
+/* Heading wedge pulse when navigating — tiny scale breath on the wedge
+   that suggests the robot is "looking ahead". */
+.robot-icon[data-state="moving"] .robot-icon__wedge {
+  animation: robot-wedge-pulse 1.2s var(--ease) infinite;
+  transform-origin: 28px 12px;
+}
+
+/* Low-battery dot — gentle red blink, top-right of the icon canvas. */
+.robot-icon__lowbat {
+  animation: robot-lowbat-blink 1.4s var(--ease) infinite;
+}
+
+@keyframes robot-ring-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.55; }
+  50%      { transform: scale(1.08); opacity: 0.85; }
+}
+@keyframes robot-ring-halt {
+  /* Faster, slightly louder pulse — communicates "stopped, attention". */
+  0%, 100% { transform: scale(1);    opacity: 0.85; }
+  50%      { transform: scale(1.10); opacity: 0.40; }
+}
+@keyframes robot-body-wobble {
+  from { transform: translateY(-0.4px); }
+  to   { transform: translateY(0.4px);  }
+}
+@keyframes robot-wedge-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1;    }
+  50%      { transform: scale(1.18); opacity: 0.85; }
+}
+@keyframes robot-lowbat-blink {
+  0%, 60% { opacity: 1; }
+  70%     { opacity: 0.2; }
+  100%    { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .robot-icon__ring,
+  .robot-icon__body,
+  .robot-icon__wedge,
+  .robot-icon__lowbat { animation: none !important; }
+}
+
 /* Waypoint tooltip */
 .waypoint-tooltip {
   background: rgba(255,152,0,0.9) !important;

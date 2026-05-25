@@ -5,18 +5,24 @@
  *   front +0.50 m, rear −0.30 m, half-width ±0.37 m
  *   → footprint 0.80 m × 0.74 m (aspect 1.08:1)
  *
- * The icon uses a fixed CSS pixel size (36×24) so it stays legible at any
- * zoom level. The 36:24 ≈ 1.5 ratio exaggerates the longitudinal axis
- * slightly so the operator can read the heading at a glance.
+ * The icon uses a fixed CSS pixel size (48×40 with breathing room for the
+ * state ring + wedge pulse) so it stays legible at any zoom level. The
+ * vehicle body itself stays at 36×24 within that canvas.
+ *
+ * "Robot vivo" detail — the icon now reads as a character with mood:
+ *   - State-aware glow ring around the body (accent/warn/crit tone)
+ *   - Subtle wobble when the robot is actively moving (CSS @keyframes)
+ *   - Heading wedge pulses outward while navigating
+ *   - Low-battery red blinking dot when battery_pct < 15
  *
  * Coloring is state-aware:
- *   - default → accent (forest green) stroke
- *   - blocked → warn (warm tan) stroke
- *   - e_stop, fault → crit (deep red) stroke
+ *   - default / idle / ready / mapping / navigating → accent (forest green)
+ *   - blocked → warn (warm tan)
+ *   - e_stop, fault → crit (deep red)
  *
- * This is a pure factory of `L.divIcon`; it does NOT mount React inside
- * Leaflet. The SVG is rendered as an inline HTML string, with theta
- * applied via CSS transform so updates are cheap.
+ * This is still a pure factory of `L.divIcon`; it does NOT mount React inside
+ * Leaflet. SVG is rendered as an inline HTML string with CSS data-attributes
+ * driving animations, so updates only re-key the divIcon (~cheap).
  *
  * Heading convention (preserved from the original robotIcon):
  *   ROS theta=0 → robot faces world +X (east in CRS.Simple).
@@ -51,43 +57,85 @@ const FILL_HEX: Record<StrokeTone, string> = {
   crit:   '#f5d8d2',   // crit-soft
 };
 
-export function robotIcon(theta: number, state: RobotState = 'idle'): L.DivIcon {
+export interface RobotIconOptions {
+  /** Triggers low-battery red dot blinking on top of the robot. */
+  lowBattery?: boolean;
+}
+
+const MOVING_STATES: ReadonlyArray<RobotState> = [
+  'navigating', 'executing_mission', 'mapping',
+];
+
+export function robotIcon(
+  theta: number,
+  state: RobotState = 'idle',
+  opts: RobotIconOptions = {},
+): L.DivIcon {
   const deg = -(theta * 180 / Math.PI) + 90;
   const tone = STROKE_BY_STATE[state] ?? 'accent';
   const stroke = STROKE_HEX[tone];
   const fill   = FILL_HEX[tone];
 
-  // SVG with the body horizontal (long axis along +X). The container is
-  // rotated as a whole, so the body always points in the heading direction.
-  // 4 wheels visible as small dark rectangles at the corners.
+  const moving = MOVING_STATES.includes(state);
+  const halted = state === 'e_stop' || state === 'fault';
+
+  // Outer canvas leaves room for the glow ring + wedge pulse without
+  // clipping. The body still occupies the centre 36×24 area.
+  const W = 48, H = 40;
+  const CX = W / 2, CY = H / 2;
+  const BODY_X = CX - 18, BODY_Y = CY - 12;   // 36×24 centered
+
+  const ringStrokeOpacity = halted ? 0.85 : 0.55;
+  const ringDataState = halted ? 'halted' : (moving ? 'moving' : 'idle');
+
   const svg = `
-    <svg viewBox="0 0 36 24" width="36" height="24"
-         style="transform: rotate(${deg}deg); transform-origin: 18px 12px; overflow: visible;">
-      <defs>
-        <filter id="rs" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.18"/>
-        </filter>
-      </defs>
-      <g filter="url(#rs)">
-        <!-- Wheels (4 corners) — drawn first so the body sits over them -->
-        <rect x="2"  y="0"  width="7" height="4" rx="1" fill="#1a2421" />
-        <rect x="2"  y="20" width="7" height="4" rx="1" fill="#1a2421" />
-        <rect x="27" y="0"  width="7" height="4" rx="1" fill="#1a2421" />
-        <rect x="27" y="20" width="7" height="4" rx="1" fill="#1a2421" />
-        <!-- Body — rounded rectangle, tone-tinted -->
-        <rect x="3" y="4" width="30" height="16" rx="3"
-              fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
-        <!-- Heading wedge (front of vehicle) -->
-        <path d="M28 8 L34 12 L28 16 Z" fill="${stroke}" />
-        <!-- Center dot for base_link origin debugging -->
-        <circle cx="18" cy="12" r="1.2" fill="${stroke}" opacity="0.6" />
-      </g>
-    </svg>`;
+    <div class="robot-icon" data-state="${ringDataState}" data-tone="${tone}">
+      <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"
+           style="overflow: visible;">
+        <defs>
+          <filter id="rs" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.18"/>
+          </filter>
+        </defs>
+        <!-- State glow ring (drawn first, beneath everything) -->
+        <circle class="robot-icon__ring"
+                cx="${CX}" cy="${CY}" r="20"
+                fill="none"
+                stroke="${stroke}" stroke-width="1.2"
+                stroke-opacity="${ringStrokeOpacity}"
+                stroke-dasharray="2 3" />
+        <!-- Body group — rotated as a whole to align with heading. -->
+        <g filter="url(#rs)"
+           transform="rotate(${deg} ${CX} ${CY})"
+           class="robot-icon__body">
+          <!-- Wheels (4 corners) -->
+          <rect x="${BODY_X + 2}"  y="${BODY_Y + 0}"  width="7" height="4" rx="1" fill="#1a2421" />
+          <rect x="${BODY_X + 2}"  y="${BODY_Y + 20}" width="7" height="4" rx="1" fill="#1a2421" />
+          <rect x="${BODY_X + 27}" y="${BODY_Y + 0}"  width="7" height="4" rx="1" fill="#1a2421" />
+          <rect x="${BODY_X + 27}" y="${BODY_Y + 20}" width="7" height="4" rx="1" fill="#1a2421" />
+          <!-- Body chassis -->
+          <rect x="${BODY_X + 3}" y="${BODY_Y + 4}" width="30" height="16" rx="3"
+                fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+          <!-- Heading wedge -->
+          <path class="robot-icon__wedge"
+                d="M${BODY_X + 28} ${BODY_Y + 8} L${BODY_X + 34} ${BODY_Y + 12} L${BODY_X + 28} ${BODY_Y + 16} Z"
+                fill="${stroke}" />
+          <!-- base_link origin dot -->
+          <circle cx="${CX}" cy="${CY}" r="1.2" fill="${stroke}" opacity="0.6" />
+        </g>
+        ${opts.lowBattery ? `
+          <!-- Low-battery indicator: red dot top-right of canvas, blinking -->
+          <circle class="robot-icon__lowbat"
+                  cx="${W - 5}" cy="5" r="3.4"
+                  fill="#a8392a" stroke="#fefdfb" stroke-width="1.2" />
+        ` : ''}
+      </svg>
+    </div>`;
 
   return L.divIcon({
     className: 'robot-marker',
     html: svg,
-    iconSize: [36, 24],
-    iconAnchor: [18, 12],
+    iconSize: [W, H],
+    iconAnchor: [CX, CY],
   });
 }
