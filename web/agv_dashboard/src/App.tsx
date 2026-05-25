@@ -186,7 +186,35 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
   }
 
   return (
-    <div className="app">
+    <div className={`app app--immersive ${connected ? '' : 'is-disconnected'}`}>
+      {/* Capa 0 — mapa full-bleed (la identidad del producto). */}
+      <div className="map-bg">
+        <MapView
+          mapData={state === 'mapping' && accMapData ? accMapData : mapData}
+          pose={pose}
+          path={path}
+          scanPoints={scanPoints}
+          mode={capturingWaypoints ? 'nav' : mode}
+          onGoalClick={handleGoalClick}
+          waypoints={capturingWaypoints ? pendingWaypoints : undefined}
+          fleetRobots={fleetRobots}
+          selectedRobot={selectedRobot}
+          ghostPose={rail === 'analytics' ? ghostPose : null}
+          mappingCoverage={status?.mapping_coverage}
+          state={state}
+          homePoint={status?.home_point ?? null}
+        />
+        {/* Empty state overlay — visible cuando no hay SLAM map cargado.
+            Sigue mostrando el greenhouse template detrás. */}
+        {(state === 'mapping' ? !accMapData : !mapData) && (
+          <MapEmptyState
+            onStartMapping={() => handleModeChange('mapping')}
+            onOpenMapPanel={() => setRail('map')}
+          />
+        )}
+      </div>
+
+      {/* Capa 1 — chrome superior: banner de desconexión + topbar. */}
       <ConnectionBanner connected={connected} />
       <TopBar
         status={status}
@@ -199,70 +227,25 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         onLogout={onLogout}
       />
 
+      {/* Capa 2 — overlays flotantes (fleet, hero, replay, camera). */}
+      <FleetOverlay
+        robots={fleetRobots}
+        selectedRobot={selectedRobot}
+        onSelectRobot={selectRobot}
+        connected={fleetConnected}
+      />
       <HeroRow status={status} state={state} />
+      <ReplaySlider
+        visible={rail === 'analytics'}
+        onGhostPose={setGhostPose}
+      />
+      {state !== 'mapping' && <CameraFeed visible={true} expanded={false} />}
 
-      <div className="body">
-        <ModeRail active={rail} onChange={setRail} />
-
-        <div className={`map-area ${state === 'mapping' ? 'mapping-layout' : ''}`}>
-          <div className="map-section">
-          <MapView
-            mapData={state === 'mapping' && accMapData ? accMapData : mapData}
-            pose={pose}
-            path={path}
-            scanPoints={scanPoints}
-            mode={capturingWaypoints ? 'nav' : mode}
-            onGoalClick={handleGoalClick}
-            waypoints={capturingWaypoints ? pendingWaypoints : undefined}
-            fleetRobots={fleetRobots}
-            selectedRobot={selectedRobot}
-            ghostPose={rail === 'analytics' ? ghostPose : null}
-            mappingCoverage={status?.mapping_coverage}
-            state={state}
-            homePoint={status?.home_point ?? null}
-          />
-          {/* M6: empty state overlay sits on top of the greenhouse template
-              when no SLAM map is loaded yet. Operator sees the greenhouse
-              skeleton + a CTA card instead of a blank canvas.
-              Effective map is `state==='mapping' ? accMapData : mapData`,
-              so empty iff BOTH are null. */}
-          {(state === 'mapping' ? !accMapData : !mapData) && (
-            <MapEmptyState
-              onStartMapping={() => handleModeChange('mapping')}
-              onOpenMapPanel={() => setRail('map')}
-            />
-          )}
-          <FleetOverlay
-            robots={fleetRobots}
-            selectedRobot={selectedRobot}
-            onSelectRobot={selectRobot}
-            connected={fleetConnected}
-          />
-          {/* Block C — camera PIP is now always visible (corner-pinned at
-              bottom-left of the map). Previously it was only on operate/map;
-              now any rail can read camera context while the operator works.
-              The full-panel `mapping-camera-panel` below still owns the
-              expanded view during state='mapping'. */}
-          {state !== 'mapping' && <CameraFeed visible={true} expanded={false} />}
-          <ReplaySlider
-            visible={rail === 'analytics'}
-            onGhostPose={setGhostPose}
-          />
-          </div>
-
-          {/* Expanded camera panel during mapping */}
-          {state === 'mapping' && (
-            <div className="mapping-camera-panel">
-              <CameraFeed visible={true} expanded={true} />
-            </div>
-          )}
-        </div>
-
-        <div className="right-panel">
-          {renderPanel()}
-        </div>
+      {/* Capa 3 — rail izquierdo + cockpit derecho + strip inferior. */}
+      <ModeRail active={rail} onChange={setRail} />
+      <div className="cockpit-drawer">
+        {renderPanel()}
       </div>
-
       <MissionStrip
         events={events}
         missionProgress={status?.mission_progress || null}
@@ -270,6 +253,14 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         onClear={() => fetch(api.apiUrl('/api/events'), { method: 'DELETE' })}
       />
 
+      {/* Capa 4 — mapping mode camera takeover (sin cambios). */}
+      {state === 'mapping' && (
+        <div className="mapping-camera-panel">
+          <CameraFeed visible={true} expanded={true} />
+        </div>
+      )}
+
+      {/* Capa 5 — modales (z-index 9999). */}
       {pendingApriltag !== null && (
         <AprilTagAssignmentModal
           hardwareId={pendingApriltag}

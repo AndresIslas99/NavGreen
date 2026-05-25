@@ -122,6 +122,41 @@
   --hero-h:   112px;
   --log-h:    104px;
 
+  /* ── Immersive map layout (Phase 3) ─────────────────── */
+  --rail-w-floating:     56px;     /* icon-only column when floating */
+  --drawer-w-collapsed: 280px;     /* cockpit drawer collapsed (mode pill rail) */
+  --drawer-w-expanded:  360px;     /* cockpit drawer expanded */
+  --fab-size:            48px;     /* recenter FAB */
+  --strip-pill-w:       260px;     /* mission strip pull-tab pill */
+  --strip-card-max:     820px;     /* mission strip expanded max width */
+
+  /* Glass surfaces — light minimal cream over the live greenhouse map.
+     Higher alpha = more legible chrome, lower = map breathes through.
+     Tuned for tablet under polycarbonate roof daylight. */
+  --glass-bg-soft:    rgba(254, 253, 251, 0.78);
+  --glass-bg:         rgba(254, 253, 251, 0.85);
+  --glass-bg-strong:  rgba(254, 253, 251, 0.92);
+  --glass-bg-solid:   rgba(254, 253, 251, 0.96);
+  --glass-blur:        blur(10px);
+  --glass-blur-strong: blur(14px) saturate(140%);
+  --glass-blur-deep:   blur(16px) saturate(130%);
+
+  /* Z-index ladder — one source of truth so layer order can't drift. */
+  --z-map:       0;
+  --z-map-empty: 25;
+  --z-fleet:     30;
+  --z-hero:      30;
+  --z-replay:    30;
+  --z-recenter:  32;
+  --z-strip:     35;
+  --z-camera:    35;
+  --z-rail:      40;
+  --z-cockpit:   50;
+  --z-topbar:    70;
+  --z-banner:    80;
+  --z-modal:   9999;
+  --z-toast:  10000;
+
   /* ── Type scale ─────────────────────────────────────── */
   --font-2xs:  11px;
   --font-xs:   12px;
@@ -167,22 +202,69 @@ body {
 #root { height: 100%; }
 
 /* =========================================================================
-   App layout — 4 explicit rows (topbar | hero | body | mission strip).
-   No more `auto` row that could be stolen by the wrong child.
+   App layout — Phase 3 immersive (default ≥900px).
+   Map fills the entire viewport; every other surface floats on top.
+   At <900px we revert to the 4-row grid via the media query below.
    ========================================================================= */
 
 .app {
-  display: grid;
-  grid-template-rows: var(--topbar-h) var(--hero-h) 1fr var(--log-h);
-  height: 100%;
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--bg);
 }
 
-.body {
-  display: grid;
-  grid-template-columns: var(--rail-w) 1fr var(--panel-w);
-  overflow: hidden;
+/* The full-bleed map background layer. MapView's Leaflet container fills
+   this absolutely-positioned wrapper, so the map covers the whole viewport
+   even when chrome (topbar, hero, etc.) floats on top. */
+.map-bg {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-map);
   background: var(--bg);
+}
+.map-bg > .map-section,
+.map-bg .leaflet-container { width: 100%; height: 100%; }
+
+/* Pointer-events helpers — let clicks fall through to the map in the gaps
+   between floating cards. Wrappers carry pass-through; visible cards
+   re-enable pointer events on themselves. */
+.float-passthrough { pointer-events: none; }
+.float-passthrough > *,
+.float-surface     { pointer-events: auto; }
+
+/* Legacy .body — kept as a no-op for narrow viewports where the grid
+   fallback (below) still uses it. In immersive mode there is no .body. */
+.body {
+  display: contents;
+}
+
+/* ── Responsive fallback (<900px): restore the 4-row grid ─────────── */
+@media (max-width: 899px) {
+  .app {
+    display: grid;
+    grid-template-rows: var(--topbar-h) var(--hero-h) 1fr var(--log-h);
+    height: 100%;
+    width: 100%;
+    position: static;
+    overflow: hidden;
+  }
+  .map-bg {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+  }
+  .body {
+    display: grid;
+    grid-template-columns: var(--rail-w) 1fr var(--panel-w);
+    overflow: hidden;
+    background: var(--bg);
+  }
+  /* Cancel `position: fixed` on floating overlays so they flow back into
+     the grid. Specific overlay selectors are restored in their own blocks. */
+  .topbar, .hero-row, .mode-rail, .mission-strip,
+  .cockpit-drawer { position: static; }
 }
 
 /* =========================================================================
@@ -3524,3 +3606,189 @@ button.depth-pip:focus-visible {
   to   { transform: translateY(0); }
 }
 .connection-banner__text { letter-spacing: 0.2px; }
+
+/* =========================================================================
+   PHASE 3 — IMMERSIVE FLOATING CHROME (≥900px)
+   Each chrome surface gets position: fixed + glass treatment + explicit
+   z-index. At <900px the responsive guard above neutralizes these via
+   the legacy 4-row grid.
+   ========================================================================= */
+
+@media (min-width: 900px) {
+  /* ── TopBar — full-width translucent chrome ─────────────────────────── */
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--topbar-h);
+    z-index: var(--z-topbar);
+    background: var(--glass-bg-soft);
+    backdrop-filter: var(--glass-blur-strong);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .app.is-disconnected .topbar { top: 36px; }   /* banner pushes topbar down */
+
+  /* ── HeroRow — 3 floating tile cards centered below the topbar ──────── */
+  .hero-row {
+    position: fixed;
+    top: calc(var(--topbar-h) + var(--sp-3));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(900px, calc(100vw - 240px));
+    z-index: var(--z-hero);
+    background: transparent;
+    border-bottom: none;
+    padding: 0;
+    /* Wrapper passes pointer events through; individual Tiles capture them. */
+    pointer-events: none;
+  }
+  .app.is-disconnected .hero-row { top: calc(var(--topbar-h) + 36px + var(--sp-3)); }
+  /* Each Tile becomes a glass card */
+  .hero-row > .ui-tile {
+    pointer-events: auto;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--shadow-md);
+    /* Tighter padding so the longest label ("Localización perdida") fits. */
+    padding: var(--sp-3) var(--sp-4);
+    grid-template-columns: 40px 1fr;
+    gap: var(--sp-3);
+    min-height: 72px;
+  }
+  .hero-row > .ui-tile .ui-tile__icon { width: 40px; height: 40px; }
+  .hero-row > .ui-tile .ui-tile__value { font-size: var(--font-lg); }
+  .hero-row > .ui-tile .ui-tile__sub { font-size: var(--font-2xs); }
+
+  /* ── FleetOverlay — top-left below TopBar ───────────────────────────── */
+  .fleet-overlay {
+    position: fixed !important;
+    top: calc(var(--topbar-h) + var(--sp-3)) !important;
+    left: var(--sp-3) !important;
+    bottom: auto !important;
+    z-index: var(--z-fleet);
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+
+  /* ── ReplaySlider — bottom-center, only on analytics rail ───────────── */
+  .replay-panel {
+    position: fixed !important;
+    bottom: calc(var(--log-h) + var(--sp-3)) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: var(--z-replay);
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+
+  /* ── ModeRail — left floating column, icon-only ─────────────────────── */
+  .mode-rail {
+    position: fixed;
+    left: var(--sp-3);
+    top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3) * 2);
+    bottom: calc(var(--log-h) + var(--sp-3));
+    width: var(--rail-w-floating);
+    z-index: var(--z-rail);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--sp-2);
+    overflow-y: auto;
+  }
+  /* Icon-only in immersive mode: rail-w-floating is 56px, no room for labels.
+     Native `title` attribute on each button still provides the label on hover. */
+  .mode-rail .rail-btn__label { display: none; }
+  .mode-rail .rail-btn { padding: var(--sp-2); min-height: var(--tap-min); }
+
+  /* ── Cockpit drawer — right floating column ─────────────────────────── */
+  .cockpit-drawer {
+    position: fixed;
+    right: var(--sp-3);
+    top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3) * 2);
+    bottom: calc(var(--log-h) + var(--sp-3));
+    width: var(--drawer-w-expanded);
+    z-index: var(--z-cockpit);
+    background: var(--glass-bg-solid);
+    backdrop-filter: var(--glass-blur-deep);
+    -webkit-backdrop-filter: var(--glass-blur-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    transition: width var(--dur-slow) var(--ease);
+  }
+  /* The cockpit panel inside loses its old left-border + grid bg. */
+  .cockpit-drawer .context-panel.cockpit-panel {
+    background: transparent;
+    border-left: none;
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  /* ── MissionStrip — bottom centered floating card ───────────────────── */
+  .mission-strip {
+    position: fixed;
+    bottom: var(--sp-3);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(var(--strip-card-max), calc(100vw - var(--rail-w-floating) - var(--drawer-w-expanded) - var(--sp-3) * 4));
+    height: var(--log-h);
+    z-index: var(--z-strip);
+    background: var(--glass-bg-strong);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* ── CameraFeed PIP — bottom-left, above ModeRail's column ──────────── */
+  .camera-pip,
+  button.camera-pip {
+    position: fixed !important;
+    bottom: calc(var(--log-h) + var(--sp-3) * 2) !important;
+    left: calc(var(--rail-w-floating) + var(--sp-3) * 2) !important;
+    z-index: var(--z-camera);
+  }
+  .depth-pip,
+  button.depth-pip {
+    position: fixed !important;
+    bottom: calc(var(--log-h) + var(--sp-3) * 2) !important;
+    left: calc(var(--rail-w-floating) + var(--sp-3) * 3 + 240px) !important;
+    z-index: var(--z-camera);
+  }
+
+  /* ── Map empty state — sits OVER the map-bg, behind chrome ──────────── */
+  .map-empty-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: var(--z-map-empty);
+  }
+
+  /* ── ConnectionBanner — above topbar ────────────────────────────────── */
+  .connection-banner {
+    z-index: var(--z-banner);
+  }
+
+  /* ── Modal overlay z-index ──────────────────────────────────────────── */
+  .modal-overlay { z-index: var(--z-modal); }
+  .ui-toast-region { z-index: var(--z-toast); }
+}
