@@ -311,15 +311,32 @@ body {
   z-index: 10;
 }
 
-/* Brand lockup */
+/* Brand lockup — Ada Labs logo + AGV unit identifier separated by a
+   thin vertical divider so the two reading levels (company vs unit)
+   are visually distinct. */
 .topbar-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   flex-shrink: 0;
 }
-.topbar-brand__logo { display: block; }
-.topbar-brand__text { display: flex; flex-direction: column; line-height: 1.1; }
+.topbar-brand__logo {
+  display: block;
+  height: 34px;
+  width: auto;
+  /* PNG has a soft drop shadow baked in — let it breathe by NOT clipping. */
+  flex-shrink: 0;
+  user-select: none;
+}
+.topbar-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  /* Thin divider to the left visually separates "Ada Labs" (company)
+     from "AGV-01 / Greenhouse 1" (this unit's identity). */
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--border-strong);
+}
 .topbar-brand__name {
   font-size: var(--font-md);
   font-weight: 600;
@@ -884,6 +901,14 @@ body {
 .map-overlay-bl {
   position: absolute; bottom: 8px; left: 8px;
   pointer-events: none; z-index: 2;
+}
+/* In immersive mode the .map-overlay-tl pose chip sat at (8, 8) — fully
+   inside the topbar's bounds. Through the topbar's backdrop blur it
+   read as a smudge. Hide it in immersive; the compass chip carries
+   spatial reference, and precise pose lives in the cockpit's
+   "Detalles técnicos" RailStatus block when an operator needs it. */
+@media (min-width: 900px) {
+  .map-overlay-tl { display: none; }
 }
 .map-coord {
   font-size: 10px; color: var(--dim);
@@ -3753,8 +3778,13 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    Portal'd to body so it lives above Leaflet's compositor. */
 .compass-scale {
   position: fixed;
+  /* Sits just BELOW the hero row, to the LEFT of the cockpit drawer.
+     The cockpit (right: var(--sp-3); width: var(--drawer-w-expanded))
+     occupies the right edge — adding the drawer width to the offset keeps
+     the compass entirely outside the drawer's area and outside its
+     semi-transparent backdrop (otherwise the chip bleeds through). */
   top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3));
-  right: var(--sp-4);
+  right: calc(var(--drawer-w-expanded) + var(--sp-3) * 2);
   z-index: var(--z-recenter, 45);
   display: flex;
   flex-direction: column;

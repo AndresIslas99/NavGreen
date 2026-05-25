@@ -137,8 +137,10 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
     // is a no-op and we fall back to default Leaflet zoom (handled below).
     map.setView([0, 0], 4, { animate: false })
 
-    // Add zoom control in top-right
-    L.control.zoom({ position: 'topright' }).addTo(map)
+    // No Leaflet zoom control — it sat at z=1000 in the top-right and
+    // crossed the translucent topbar's edge. The operator zooms via
+    // pinch on touch, wheel on desktop, or the recenter FAB. The compass
+    // chip handles "what scale am I at" feedback.
 
     // ── Greenhouse "place" layer (bottommost) ──
     // Static structural geometry built once from the greenhouseGeometry constants.
