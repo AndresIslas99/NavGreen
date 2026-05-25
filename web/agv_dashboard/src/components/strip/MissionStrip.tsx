@@ -50,7 +50,6 @@ export function MissionStrip({ events, missionProgress, distanceRemaining, onCle
         distanceRemaining={distanceRemaining}
         startedAt={startedAtRef.current.t}
       />
-      <div className="mission-strip-divider" aria-hidden="true" />
       <EventTicker entries={events} onClear={onClear} maxRows={3} />
     </div>
   );

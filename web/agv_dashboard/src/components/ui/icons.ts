@@ -20,6 +20,7 @@ export {
   CheckCircle2,
   Check,
   Power,
+  Activity,
 
   // Battery
   Battery,
