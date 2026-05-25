@@ -27,8 +27,10 @@ import {
   activeRowBand,
   aisleSpanishLabel,
   AISLE_CENTERS,
+  REAR_X_START,
   REAR_X_END,
   FRONT_X_START,
+  FRONT_X_END,
   type RowBand,
 } from './map/greenhouseGeometry'
 
@@ -707,25 +709,42 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
         wallSlots.push({ between, section: 'front', x: FRONT_X_START, y, linkedTag: null, linkedDist: Infinity })
       }
 
+      // Wall linking is SECTION-BASED, not proximity-bounded in x. Wall
+      // references (cucumber-row-start markers + their attached charging
+      // docks / connectors) can live ANYWHERE along the length of their
+      // row — not necessarily right at the corridor edge. So we say:
+      // a wall tag that falls inside REAR section's x range is a
+      // candidate for the REAR corridor wall slot whose Y is closest.
+      // Same for FRONT. The visual slot represents "this wall reference
+      // belongs to the cucumber row between rails X-Y of section Z";
+      // the tooltip carries the tag's real label so the operator knows
+      // which one it is.
       const wallTags = tags.filter(t => t.type === 'wall')
       const wallClaimed = new Set<number>()
+      const WALL_Y_TOLERANCE = 1.5     // metres
       for (const t of wallTags) {
+        // Determine section by x range. If outside both sections, skip
+        // linking — the tag is somewhere else entirely.
+        let section: 'rear' | 'front' | null = null
+        if (t.x >= REAR_X_START && t.x <= REAR_X_END) section = 'rear'
+        else if (t.x >= FRONT_X_START && t.x <= FRONT_X_END) section = 'front'
+        if (!section) continue
+
         let bestSlot: WallSlot | null = null
-        let bestDist = Infinity
+        let bestDeltaY = Infinity
         for (const slot of wallSlots) {
-          if (Math.abs(t.x - slot.x) > SLOT_MATCH_X) continue
-          if (Math.abs(t.y - slot.y) > SLOT_MATCH_Y) continue
-          const dx = t.x - slot.x, dy = t.y - slot.y
-          const d = Math.sqrt(dx * dx + dy * dy)
-          if (d < bestDist && (!slot.linkedTag || d < slot.linkedDist)) {
+          if (slot.section !== section) continue
+          const dy = Math.abs(t.y - slot.y)
+          if (dy > WALL_Y_TOLERANCE) continue
+          if (dy < bestDeltaY && (!slot.linkedTag || dy < slot.linkedDist)) {
             bestSlot = slot
-            bestDist = d
+            bestDeltaY = dy
           }
         }
         if (bestSlot) {
           if (bestSlot.linkedTag) wallClaimed.delete(bestSlot.linkedTag.id)
           bestSlot.linkedTag = t
-          bestSlot.linkedDist = bestDist
+          bestSlot.linkedDist = bestDeltaY
           wallClaimed.add(t.id)
         }
       }
