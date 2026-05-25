@@ -99,7 +99,7 @@ export function OperatePanel({
           onMove={onCmdVel}
         />
         {mode === 'nav' && (
-          <p className="cockpit-hint">Click en el mapa para enviar un goal de navegación</p>
+          <p className="cockpit-hint">Haz clic en el mapa para enviar un goal de navegación</p>
         )}
       </Section>
     </div>

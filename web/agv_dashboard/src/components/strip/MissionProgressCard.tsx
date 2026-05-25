@@ -51,7 +51,7 @@ export function MissionProgressCard({ missionProgress, distanceRemaining, starte
         <EmptyState
           icon={Route}
           title="Sin misión activa"
-          description="Crea una misión desde el rail Misiones para arrancar."
+          description="Crea una misión en el panel Misiones para arrancar."
           compact
         />
       </Card>
