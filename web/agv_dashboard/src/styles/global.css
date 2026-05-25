@@ -32,7 +32,13 @@
   --text:           #1a2421;
   --text-secondary: #4a554d;
   --dim:            #7a847c;
+  /* On-color tokens — always-readable foregrounds for filled semantic
+     surfaces. Missing --on-crit / --on-warn previously caused the
+     E-STOP button's text to fall back to body color (dark on red,
+     contrast 2.93 — WCAG fail). */
   --on-accent:      #ffffff;
+  --on-warn:        #ffffff;
+  --on-crit:        #ffffff;
 
   /* ── Accent (forest green, growth identity) ─────────── */
   --accent:        #2f6f2a;
@@ -123,7 +129,9 @@
   --log-h:    104px;
 
   /* ── Immersive map layout (Phase 3) ─────────────────── */
-  --rail-w-floating:     56px;     /* icon-only column when floating */
+  /* 64 px wide so each rail button can be 44×44 (WCAG min touch) with
+     proper breathing room. Was 56 px which forced 38 px button width. */
+  --rail-w-floating:     64px;     /* icon-only column when floating */
   --drawer-w-collapsed: 280px;     /* cockpit drawer collapsed (mode pill rail) */
   --drawer-w-expanded:  360px;     /* cockpit drawer expanded */
   --fab-size:            48px;     /* recenter FAB */
@@ -345,8 +353,8 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .topbar-brand__sub {
-  font-size: var(--font-2xs);
-  color: var(--dim);
+  font-size: var(--font-xs);                   /* 12 px — minimum readable on tablet */
+  color: var(--text-secondary);                /* darker than --dim; passes AA at 11–12 px */
   letter-spacing: 0.4px;
 }
 
@@ -565,7 +573,7 @@ body {
 .hero-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--sp-3);
+  gap: var(--sp-4);            /* was --sp-3 (12 px); 16 px reads as a true triad */
   padding: var(--sp-3) var(--sp-5);
   background: var(--bg);
   align-items: stretch;
@@ -2596,7 +2604,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 .ui-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .ui-btn:active:not(:disabled) { transform: scale(0.98); }
-.ui-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Disabled treatment is per-variant below — keep cursor + accessibility
+   attributes here. We deliberately avoid a blanket opacity: 0.45 because
+   that left filled primary/destructive buttons looking colorful-but-faded,
+   easy to misread as still-enabled at a glance. */
+.ui-btn:disabled { cursor: not-allowed; }
 
 .ui-btn--sm { min-height: var(--tap-small); padding: 0 var(--sp-3); font-size: var(--font-sm); }
 .ui-btn--md { min-height: var(--tap-min);   padding: 0 var(--sp-4); font-size: var(--font-base); }
@@ -2612,6 +2624,15 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 .ui-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .ui-btn--primary:active:not(:disabled) { background: var(--accent-active); border-color: var(--accent-active); }
+/* Primary disabled — flat surface-2 + text-secondary, NOT a faded green.
+   A pale green button is easy to misread as "enabled but ghosted"; a
+   grey button reads as "not available right now". */
+.ui-btn--primary:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
 
 /* Secondary: surface bg, dark text */
 .ui-btn--secondary {
@@ -2620,6 +2641,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   border-color: var(--border-strong);
 }
 .ui-btn--secondary:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-strong); }
+.ui-btn--secondary:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
 
 /* Ghost: transparent, hover lights up */
 .ui-btn--ghost {
@@ -2628,6 +2654,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   border-color: transparent;
 }
 .ui-btn--ghost:hover:not(:disabled) { background: var(--surface-2); }
+.ui-btn--ghost:disabled { color: var(--dim); }
 
 /* Destructive: crit text on surface; the actual "danger" red bg is reserved
    for cases where the user should think twice (E-stop, mission cancel). */
@@ -2637,6 +2664,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   border-color: var(--crit-soft);
 }
 .ui-btn--destructive:hover:not(:disabled) { background: var(--crit-soft); border-color: var(--crit); }
+.ui-btn--destructive:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
 
 .ui-btn__icon { display: inline-flex; flex-shrink: 0; }
 .ui-btn__icon--spin {
@@ -2769,7 +2801,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .ui-section__description {
   margin: 0;
   font-size: var(--font-xs);
-  color: var(--dim);
+  color: var(--text-secondary);     /* was --dim (3.81:1 on surface) — now 7.66:1 */
 }
 .ui-section__actions {
   display: inline-flex;
@@ -3596,11 +3628,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    "HILERA A · FRENTE" / "HILERA A · ATRÁS". Subtle but legible at zoom-out;
    M3 flips this to .row-band-label--active when the robot enters the band. */
 .row-band-label {
-  background: rgba(254, 253, 251, 0.92) !important;
+  background: rgba(254, 253, 251, 0.94) !important;
   color: var(--text-secondary) !important;
-  border: 1px solid var(--border) !important;
+  border: 1px solid var(--border-strong) !important;
   box-shadow: var(--shadow-xs);
-  font-size: 10px;
+  font-size: 11px;                    /* was 10 — readable floor at tablet distance */
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -3630,10 +3662,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    Operator still sees the greenhouse skeleton with a clear "to be configured"
    visual hint. */
 .row-band-label--ghost {
-  color: var(--dim) !important;
+  color: var(--text-secondary) !important;    /* was --dim (3.81 ratio fail) */
   font-weight: 600;
   letter-spacing: 0.6px;
-  background: rgba(254, 253, 251, 0.85) !important;
+  background: rgba(254, 253, 251, 0.92) !important;
 }
 
 /* Door label — sits just outside the greenhouse wall at the operator
@@ -3642,11 +3674,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .greenhouse-door-label {
   background: transparent;
   border: none;
-  font-size: 9.5px;
+  font-size: 11px;                  /* was 9.5 — below readable floor */
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: #7c6e4f;
+  color: #6b5e44;                   /* slightly darker for AA at 11 px on cream */
   white-space: nowrap;
   pointer-events: none;
 }
@@ -3660,17 +3692,17 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 
 /* Rural context labels — neighbour greenhouse, water tank, distant
-   features. Tiny, dim, never compete with the active operating area. */
+   features. Small but readable; never compete with the active area. */
 .rural-distant-label {
   background: transparent;
   border: none;
-  font-size: 9px;
+  font-size: 10px;                  /* was 9 — sub-readable */
   font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: #7c6e4f;
+  color: #6b5e44;                   /* darker tan, AA on the soil wash */
   text-align: center;
-  opacity: 0.7;
+  opacity: 0.85;
   pointer-events: none;
   white-space: nowrap;
 }
@@ -4203,8 +4235,15 @@ button.depth-pip:focus-visible {
     min-height: 72px;
   }
   .hero-row > .ui-tile .ui-tile__icon { width: 40px; height: 40px; }
-  .hero-row > .ui-tile .ui-tile__value { font-size: var(--font-lg); }
-  .hero-row > .ui-tile .ui-tile__sub { font-size: var(--font-2xs); }
+  /* Hero values stay at --font-lg (20 px) because longer status strings
+     like "Localización perdida" need to fit in a single line at the
+     292 px tile width. We get "more presence" via a slightly heavier
+     weight (700) instead of a bigger size. */
+  .hero-row > .ui-tile .ui-tile__value {
+    font-size: var(--font-lg);
+    font-weight: 700;
+  }
+  .hero-row > .ui-tile .ui-tile__sub { font-size: var(--font-xs); }   /* was --font-2xs (11) — 12 px reads better */
 
   /* ── FleetOverlay — top-left below TopBar ───────────────────────────── */
   .fleet-overlay {
@@ -4256,10 +4295,17 @@ button.depth-pip:focus-visible {
     padding: var(--sp-2);
     overflow-y: auto;
   }
-  /* Icon-only in immersive mode: rail-w-floating is 56px, no room for labels.
-     Native `title` attribute on each button still provides the label on hover. */
+  /* Icon-only in immersive mode: rail-w-floating is 64 px so a 44×44
+     button fits comfortably with 2 px of breathing room on each side.
+     Native `title` attribute on each button still provides the label
+     on hover, and we also surface a flyout label below. */
   .mode-rail .rail-btn__label { display: none; }
-  .mode-rail .rail-btn { padding: var(--sp-2); min-height: var(--tap-min); }
+  .mode-rail .rail-btn {
+    padding: var(--sp-2) 0;
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+    width: 100%;
+  }
 
   /* ── Cockpit drawer — right floating column ─────────────────────────── */
   .cockpit-drawer {
