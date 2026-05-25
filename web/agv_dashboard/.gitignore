@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Dev login helper for local Playwright screenshots — never commit
+public/.devlogin.html
