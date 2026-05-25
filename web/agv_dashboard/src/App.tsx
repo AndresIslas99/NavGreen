@@ -219,7 +219,12 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             onSelectRobot={selectRobot}
             connected={fleetConnected}
           />
-          {state !== 'mapping' && <CameraFeed visible={rail === 'operate' || rail === 'map'} expanded={false} />}
+          {/* Block C — camera PIP is now always visible (corner-pinned at
+              bottom-left of the map). Previously it was only on operate/map;
+              now any rail can read camera context while the operator works.
+              The full-panel `mapping-camera-panel` below still owns the
+              expanded view during state='mapping'. */}
+          {state !== 'mapping' && <CameraFeed visible={true} expanded={false} />}
           <ReplaySlider
             visible={rail === 'analytics'}
             onGhostPose={setGhostPose}

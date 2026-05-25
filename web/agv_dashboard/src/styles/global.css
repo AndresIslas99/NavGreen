@@ -1377,6 +1377,39 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   border-radius: 3px;
 }
 
+/* Block C — Semantic zone label (permanent tooltip centered inside polygon).
+   Used by ZoneOverlay (BASE DE CARGA, ZONA DE TRABAJO A, ESTACIONAMIENTO).
+   Leaflet wraps tooltips in .leaflet-tooltip — the !important overrides are
+   needed because Leaflet's built-in styles win specificity otherwise. */
+.zone-label-tooltip {
+  background: rgba(20, 28, 22, 0.78) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 3px 8px !important;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.zone-label-tooltip::before { display: none !important; } /* hide arrow */
+
+/* Block C — Rail label (RIEL A, RIEL B, …) attached to rail-start markers
+   from /api/rails. Same treatment as zone labels but smaller and offset
+   to the right of the marker. */
+.rail-label-tooltip {
+  background: rgba(20, 28, 22, 0.85) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  padding: 1px 5px !important;
+  border-radius: 3px;
+}
+.rail-label-tooltip::before { display: none !important; }
+
 /* Map button active state */
 .map-btn-active {
   background: var(--active-blue) !important;
