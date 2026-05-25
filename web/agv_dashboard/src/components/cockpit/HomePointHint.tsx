@@ -72,7 +72,7 @@ export function HomePointHint({ homePoint, currentPose, onSet }: Props) {
           action={
             <Button
               variant="primary"
-              size="sm"
+              size="md"
               disabled={!currentPose}
               onClick={() => setModalOpen(true)}
             >
