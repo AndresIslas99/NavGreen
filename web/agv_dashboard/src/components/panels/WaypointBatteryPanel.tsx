@@ -196,40 +196,41 @@ export function WaypointBatteryPanel({ status, onSendGoal, onCancel }: Props) {
   return (
     <div className="context-panel">
       <div className="panel-section">
-        <div className="section-title">Waypoint battery</div>
-        <div style={{ fontSize: '12px', color: 'var(--dim)', marginBottom: '6px' }}>
-          5 aisles × 4 stages = 20 validations. Dispatches nav_goal; backend
-          auto-triggers rail_approach when the target maps to a rail_start tag.
+        <div className="section-title">Batería de waypoints</div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+          5 pasillos × 4 etapas = 20 validaciones. Envía nav_goal; el backend
+          dispara rail_approach automáticamente cuando el destino mapea a una
+          etiqueta rail_start.
         </div>
         <div className="btn-row">
-          <button className="full-width" onClick={handleReset}>Reset</button>
-          <button className="full-width" onClick={handleExportCsv}>Export CSV</button>
-          <button className="full-width" onClick={onCancel}>Cancel nav</button>
+          <button className="full-width" onClick={handleReset}>Resetear</button>
+          <button className="full-width" onClick={handleExportCsv}>Exportar CSV</button>
+          <button className="full-width" onClick={onCancel}>Cancelar nav</button>
         </div>
       </div>
 
       <div className="panel-section">
         <div className="section-title">
-          Progress — {doneCount}/{battery.length} done
-          {abortedCount > 0 ? ` · ${abortedCount} aborted` : ''}
+          Progreso — {doneCount}/{battery.length} completados
+          {abortedCount > 0 ? ` · ${abortedCount} abortados` : ''}
         </div>
         {doneErrors.length > 0 && (
-          <div style={{ fontSize: '12px', color: 'var(--dim)' }}>
-            err_xy — avg {avgErr!.toFixed(3)}m · p95 {p95Err!.toFixed(3)}m · max {maxErr!.toFixed(3)}m
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            err_xy — prom {avgErr!.toFixed(3)} m · p95 {p95Err!.toFixed(3)} m · máx {maxErr!.toFixed(3)} m
           </div>
         )}
       </div>
 
       <div className="panel-section">
-        <div className="section-title">Battery</div>
+        <div className="section-title">Batería</div>
         <div style={{ maxHeight: '50vh', overflowY: 'auto', fontSize: '12px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--dim)' }}>
-                <th>stage</th>
+              <tr style={{ textAlign: 'left', color: 'var(--text-secondary)' }}>
+                <th>etapa</th>
                 <th>y</th>
                 <th>err</th>
-                <th>status</th>
+                <th>estado</th>
                 <th></th>
               </tr>
             </thead>
@@ -237,22 +238,26 @@ export function WaypointBatteryPanel({ status, onSendGoal, onCancel }: Props) {
               {battery.map(wp => {
                 const r = results[wp.id]
                 const statusColor =
-                  r.status === 'done' ? 'var(--normal)' :
-                  r.status === 'aborted' ? 'var(--red)' :
-                  r.status === 'running' ? 'var(--blue)' : 'var(--dim)'
+                  r.status === 'done' ? 'var(--accent)' :
+                  r.status === 'aborted' ? 'var(--crit)' :
+                  r.status === 'running' ? 'var(--info)' : 'var(--text-secondary)'
+                const statusLabel =
+                  r.status === 'done' ? 'completado' :
+                  r.status === 'aborted' ? 'abortado' :
+                  r.status === 'running' ? 'en curso' : 'pendiente'
                 return (
-                  <tr key={wp.id} style={{ borderTop: '1px solid #2a2a2a' }}>
+                  <tr key={wp.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td>{wp.stage}</td>
                     <td>{wp.aisle_y.toFixed(1)}</td>
                     <td>{r.err_xy != null ? r.err_xy.toFixed(3) : '—'}</td>
-                    <td style={{ color: statusColor }}>{r.status}</td>
+                    <td style={{ color: statusColor }}>{statusLabel}</td>
                     <td>
                       <button
                         className="small-btn"
                         disabled={r.status === 'running' || runningRef.current !== null}
                         onClick={() => handleSend(wp)}
                       >
-                        Send
+                        Enviar
                       </button>
                     </td>
                   </tr>
