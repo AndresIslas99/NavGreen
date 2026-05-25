@@ -3798,8 +3798,17 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 .home-landmark-tooltip::before { display: none !important; }
 
-/* AprilTag marker labels — styled tooltip for the new divIcon glyphs. */
+/* AprilTag marker labels — styled tooltip for the new divIcon glyphs.
+   Three rail-entry variants + one wall variant:
+   - rail        → linked structural slot (live tag configured)
+   - rail-empty  → structural slot with no tag yet (faint dashed outline)
+   - rail-loose  → tag at irregular pose (amber warning glyph)
+   - wall        → precise floor reference (grey square at raw pose) */
 .apriltag-marker { background: transparent !important; border: none !important; }
+.apriltag-marker--rail-empty { opacity: 0.85; }
+.apriltag-marker--rail-empty:hover { opacity: 1; }
+.apriltag-marker--rail-loose { /* keeps full opacity — the warning glyph
+                                   already telegraphs the issue */ }
 
 /* Map empty state overlay — visible when no occupancy grid is loaded.
    Sits on top of the greenhouse template (rendered behind via Leaflet),
