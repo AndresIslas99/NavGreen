@@ -503,6 +503,42 @@ rest_endpoints:
       from the y-bucket of each rail entry pose. Replaces the hardcoded
       RAIL_AISLE_Y constants previously inlined in MapView.tsx.
 
+  # ── Greenhouse geometry (SSOT for the physical layout) ────────────────
+  - path: "/api/greenhouse/geometry"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/greenhouse_geometry.ts"
+    response: |
+      {
+        aisles:   {count: int, spacing_m: float, half_width_m: float},
+        sections: {rear: {x_start, x_end}, front: {x_start, x_end}},
+        corridor: {x_start, x_end},
+        rail:     {gauge_m: float}
+      }
+    persistence: "AGV_DATA_DIR/greenhouse_geometry.yaml (see specs/persistence.yaml#greenhouse_geometry_yaml)"
+    note: |
+      Returns the parsed YAML. If file absent, returns the same defaults the
+      ROS nodes use as fallback (5 aisles, 2.2 m spacing, 4 m corridor, 0.57 m
+      gauge, REAR x∈[-16.5, 3.5], FRONT x∈[7.5, 27.5]) so the dashboard always
+      renders coherent geometry. Polled every 30 s by the dashboard's
+      useGreenhouseGeometry() hook.
+
+  - path: "/api/greenhouse/geometry"
+    method: "PUT"
+    role: "engineer"
+    request: "<same shape as GET response>"
+    response_200: "{success: true, geometry: <as written>}"
+    response_400: "{success: false, message: 'Schema validation failed', detail: string}"
+    note: |
+      Atomic tmp+rename to AGV_DATA_DIR/greenhouse_geometry.yaml. Engineer
+      role required (geometry changes affect navigation correctness). Backend
+      enforces sane ranges (count ∈ [3, 9]; spacing_m ∈ [1.5, 3.5];
+      half_width_m ∈ [0.20, 0.60]; corridor width ∈ [2.0, 6.0]; section
+      length ∈ [10, 40]; gauge_m ∈ [0.30, 1.00]). ROS consumers (zone_detector,
+      rail_driver, mode_arbiter) load at boot — edits take effect on next
+      systemctl restart of those services. The dashboard's mapa visual updates
+      live on the next poll.
+
 # ─────────────────────────────────────────────────────────────────────────────
 # WebSocket Protocol
 # ─────────────────────────────────────────────────────────────────────────────
