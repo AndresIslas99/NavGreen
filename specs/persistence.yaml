@@ -263,6 +263,26 @@ global_artifacts:
     required: false
     note: "Distinct from zones_json above (Nav2 costmap traffic zones). This is the operator-facing labeled overlay: BASE DE CARGA, ZONA DE TRABAJO A, ESTACIONAMIENTO. If file absent, GET returns {zones: []} with 200 (graceful degradation — frontend draws nothing)."
 
+  greenhouse_geometry_yaml:
+    path: "${AGV_DATA_DIR}/greenhouse_geometry.yaml"
+    format: 'YAML {aisles: {count, spacing_m, half_width_m}, sections: {rear: {x_start, x_end}, front: {x_start, x_end}}, corridor: {x_start, x_end}, rail: {gauge_m}}'
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/routes/greenhouse_geometry.ts"
+      mechanism: "PUT /api/greenhouse/geometry, atomic tmp+rename"
+    readers:
+      - package: "agv_ui_backend"
+        role: "GET /api/greenhouse/geometry for dashboard reactive geometry"
+      - package: "agv_zone_detector"
+        code_ref: "src/agv_zone_detector/src/zone_detector_node.cpp"
+      - package: "agv_rail_driver"
+        code_ref: "src/agv_rail_driver/src/rail_driver_node.cpp"
+      - package: "agv_mode_arbiter"
+        code_ref: "src/agv_mode_arbiter/src/mode_arbiter_node.cpp"
+    lifecycle: "persistent"
+    required: false
+    note: "SSOT for the greenhouse's physical layout — aisle count, aisle spacing in Y, half-width of the rail centerline band, X-bounds of REAR/CORRIDOR/FRONT sections, rail gauge. Previously hardcoded constants lived in zone_classifier_impl.hpp and mirrored in the dashboard's greenhouseGeometry.ts; this artifact unifies them. Each ROS consumer loads at boot (not hot-reload — requires service restart). If the file is absent, each consumer falls back to its hardcoded defaults so the system never breaks; the dashboard's GET returns the defaults too. Edits via dashboard apply visually immediately; navigation picks them up on next restart."
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HIL validation artifacts (not iterated by verify_persistence.py)
 # ─────────────────────────────────────────────────────────────────────────────
