@@ -18,6 +18,7 @@ import * as apriltagRoutes from './apriltags';
 import * as homePointRoutes from './home_point';
 import * as zonesRoutes from './zones';
 import * as railsRoutes from './rails';
+import * as greenhouseGeometryRoutes from './greenhouse_geometry';
 
 export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): void {
   statusRoutes.register(app, deps);
@@ -34,4 +35,5 @@ export function registerAllRoutes(app: Express, deps: AppDeps, _rosNode: any): v
   homePointRoutes.register(app, deps);
   zonesRoutes.register(app, deps);
   railsRoutes.register(app, deps);
+  greenhouseGeometryRoutes.register(app, deps);
 }

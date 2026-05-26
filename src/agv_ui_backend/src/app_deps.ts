@@ -180,6 +180,7 @@ export interface AppDeps {
     // dataDir (AGV_DATA_DIR) so verify_no_hardcoded_paths.sh stays green.
     homePointPath: string;     // ${AGV_DATA_DIR}/home_point.json
     zonesYamlPath: string;     // ${AGV_DATA_DIR}/zones.yaml
+    greenhouseGeometryYamlPath: string;  // ${AGV_DATA_DIR}/greenhouse_geometry.yaml
   };
   // Functions that modify state
   updateState(): void;

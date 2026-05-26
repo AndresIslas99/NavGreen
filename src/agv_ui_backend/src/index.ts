@@ -973,6 +973,7 @@ async function main() {
   // --- Build AppDeps ---
   const HOME_POINT_PATH = path.join(DATA_DIR, 'home_point.json');
   const ZONES_YAML_PATH = path.join(DATA_DIR, 'zones.yaml');
+  const GREENHOUSE_GEOMETRY_YAML_PATH = path.join(DATA_DIR, 'greenhouse_geometry.yaml');
   // Load persisted home point at boot. If absent/malformed, state.homePoint
   // stays null — the dashboard's IR A BASE button stays disabled, no default.
   state.homePoint = readHomePoint(HOME_POINT_PATH);
@@ -983,6 +984,7 @@ async function main() {
       port: PORT, dataDir: DATA_DIR, namespace: NAMESPACE,
       mapsDir: MAPS_DIR, missionsFile: MISSIONS_FILE,
       homePointPath: HOME_POINT_PATH, zonesYamlPath: ZONES_YAML_PATH,
+      greenhouseGeometryYamlPath: GREENHOUSE_GEOMETRY_YAML_PATH,
     },
     updateState,
     async setMode(mode: string): Promise<{ok: boolean; reason?: string}> {
