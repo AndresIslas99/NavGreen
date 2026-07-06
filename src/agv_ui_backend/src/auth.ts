@@ -1,9 +1,13 @@
 /**
  * Lightweight user management with JWT auth.
  *
- * Users stored in YAML config (not DB — 2-3 users on local network).
+ * Users stored in JSON config (not DB — 2-3 users on local network).
  * Roles: operator, engineer, viewer.
  * No OAuth/LDAP/SSO — local network only.
+ *
+ * No default accounts are shipped: create users with
+ * `npm run adduser -- <username> <password> <role>` (writes to
+ * $AGV_DATA_DIR/users.json), then set `"enabled": true` in that file.
  */
 
 import * as fs from 'fs';
@@ -33,6 +37,14 @@ const ROLE_HIERARCHY: Record<Role, number> = {
   engineer: 2,
 };
 
+// Unsalted SHA-256 digests of the default credentials seeded by earlier
+// versions (engineer/agv2026, operator/agv). Kept only to detect and warn
+// about users.json files that still carry these publicly-known passwords.
+const LEGACY_DEFAULT_HASHES = new Set([
+  '1e99803af2dbb6c3a1d4c23b21434e378f125cac3b174606554496517ba9eaac', // 'agv2026'
+  'cce9d0b77372ab4671e4ddff3c40775e344039e39ee99fc37494d15e50576743', // 'agv'
+]);
+
 /** Role-based permission for allowed actions */
 export function filterActionsForRole(actions: Record<string, boolean>, role: Role): Record<string, boolean> {
   if (role === 'engineer') return actions;
@@ -45,8 +57,31 @@ export function filterActionsForRole(actions: Record<string, boolean>, role: Rol
   return filtered;
 }
 
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
+const SCRYPT_KEYLEN = 32;
+
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, SCRYPT_KEYLEN).toString('hex');
+  return `scrypt:${salt}:${hash}`;
+}
+
+function safeEqualHex(a: string, b: string): boolean {
+  const ba = Buffer.from(a, 'hex');
+  const bb = Buffer.from(b, 'hex');
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  if (stored.startsWith('scrypt:')) {
+    const [, salt, hash] = stored.split(':');
+    if (!salt || !hash) return false;
+    const candidate = crypto.scryptSync(password, salt, SCRYPT_KEYLEN).toString('hex');
+    return safeEqualHex(candidate, hash);
+  }
+  // Legacy unsalted SHA-256 (users.json written by pre-0.1 versions).
+  // Verified for backward compatibility; upgraded to scrypt on next login.
+  const legacy = crypto.createHash('sha256').update(password).digest('hex');
+  return /^[0-9a-f]{64}$/.test(stored) && safeEqualHex(legacy, stored);
 }
 
 export class AuthManager {
@@ -59,15 +94,13 @@ export class AuthManager {
   }
 
   private loadConfig(): AuthConfig {
-    const defaultSecret = crypto.randomBytes(32).toString('hex');
     const defaults: AuthConfig = {
       enabled: false,
-      jwt_secret: defaultSecret,
+      jwt_secret: crypto.randomBytes(32).toString('hex'),
       token_expiry: '24h',
-      users: [
-        { username: 'engineer', password_hash: hashPassword('agv2026'), role: 'engineer' },
-        { username: 'operator', password_hash: hashPassword('agv'), role: 'operator' },
-      ],
+      // No default users. Create them with `npm run adduser` — shipping
+      // well-known credentials in a public repo defeats auth entirely.
+      users: [],
     };
 
     try {
@@ -78,7 +111,7 @@ export class AuthManager {
     } catch { /* ignore */ }
 
     // Write defaults on first run
-    fs.writeFileSync(this.configPath, JSON.stringify(defaults, null, 2));
+    fs.writeFileSync(this.configPath, JSON.stringify(defaults, null, 2), { mode: 0o600 });
     return defaults;
   }
 
@@ -86,11 +119,40 @@ export class AuthManager {
     return this.config.enabled;
   }
 
+  /**
+   * Startup security posture warnings — printed by index.ts so a weak
+   * configuration is loud in the logs rather than silent.
+   */
+  securityWarnings(): string[] {
+    const warnings: string[] = [];
+    if (!this.config.enabled) {
+      warnings.push(
+        'Authentication is DISABLED — anyone who can reach this backend can command the robot. ' +
+        `Enable it by setting "enabled": true in ${this.configPath} ` +
+        '(create users first: npm run adduser -- <user> <pass> <role>).');
+    } else if (this.config.users.length === 0) {
+      warnings.push(
+        `Authentication is enabled but ${this.configPath} has no users — all logins will fail. ` +
+        'Create one with: npm run adduser -- <user> <pass> <role>.');
+    }
+    if (this.config.users.some(u => LEGACY_DEFAULT_HASHES.has(u.password_hash))) {
+      warnings.push(
+        `${this.configPath} still contains the publicly-known default credentials ` +
+        'shipped by earlier versions. Change them: they are documented in the public repo.');
+    }
+    return warnings;
+  }
+
   /** Authenticate user, return JWT token or null */
   login(username: string, password: string): { token: string; role: Role; username: string } | null {
-    const hash = hashPassword(password);
-    const user = this.config.users.find(u => u.username === username && u.password_hash === hash);
-    if (!user) return null;
+    const user = this.config.users.find(u => u.username === username);
+    if (!user || !verifyPassword(password, user.password_hash)) return null;
+
+    // Transparent upgrade of legacy unsalted SHA-256 hashes to scrypt.
+    if (!user.password_hash.startsWith('scrypt:')) {
+      user.password_hash = hashPassword(password);
+      this.saveConfig();
+    }
 
     const token = jwt.sign(
       { username: user.username, role: user.role },
@@ -168,6 +230,6 @@ export class AuthManager {
   }
 
   private saveConfig(): void {
-    fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
+    fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), { mode: 0o600 });
   }
 }

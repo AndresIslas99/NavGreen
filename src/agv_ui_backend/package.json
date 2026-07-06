@@ -1,17 +1,22 @@
 {
   "name": "agv_ui_backend",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.1.0",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "test": "echo \"Tests pending\" && exit 0"
+    "adduser": "node dist/tools/adduser.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "agv",
+    "ros2",
+    "rclnodejs",
+    "dashboard"
+  ],
+  "author": "Andres Islas <andresislas2107@gmail.com>",
+  "license": "MIT",
+  "description": "AGV operator backend: Express + rclnodejs bridge (REST + WebSocket) for the greenhouse AGV dashboard",
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "express": "^5.2.1",
