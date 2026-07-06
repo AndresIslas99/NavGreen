@@ -16,11 +16,13 @@ import type { AppDeps } from '../app_deps';
 
 export function register(app: Express, deps: AppDeps): void {
   const { ros, eventLog } = deps;
+  const requireOperator = deps.authManager.requireAuth('operator');
 
   // POST /api/recovery/clear_estop
   // Clears state.eStopActive in the backend AND publishes /agv/e_stop=false.
   // Idempotent: safe to call when e-stop is already cleared.
-  app.post('/api/recovery/clear_estop', (_req, res) => {
+  // Clearing a safety latch re-enables motion → operator role required.
+  app.post('/api/recovery/clear_estop', requireOperator, (_req, res) => {
     ros.sendEStop(false);
     eventLog.emit('info', 'SAFETY', 'E-stop cleared via /api/recovery/clear_estop');
     res.json({ success: true, message: 'E-stop cleared' });
@@ -28,6 +30,7 @@ export function register(app: Express, deps: AppDeps): void {
 
   // POST /api/recovery/trigger_estop
   // Mirrors the dashboard E-Stop button. Provided for CLI / automation.
+  // Intentionally unauthenticated: stopping the robot must always be possible.
   app.post('/api/recovery/trigger_estop', (_req, res) => {
     ros.sendEStop(true);
     eventLog.emit('crit', 'SAFETY', 'E-stop triggered via /api/recovery/trigger_estop');

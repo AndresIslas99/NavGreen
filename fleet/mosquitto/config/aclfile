@@ -1,15 +1,20 @@
 # Mosquitto ACL — AGV Fleet
-# Pattern: topic access per client type
+#
+# NOT ACTIVE BY DEFAULT: this file only takes effect once mosquitto.conf
+# enables the `password_file` and `acl_file` directives (see the
+# Authentication section there). ACL `user`/`pattern` rules match the MQTT
+# *username*, so every client must authenticate for these rules to apply.
 
-# Fleet manager can read/write all topics
+# Fleet manager (username: fleet-manager) can read/write all VDA 5050 topics
 user fleet-manager
 topic readwrite uagv/v2/#
 
-# Each robot can only publish to its own topics
-# Pattern uses %c (client ID) which maps to vda5050-{serial}
-pattern readwrite uagv/v2/+/%c/#
+# Each robot adapter authenticates with its VDA serial number as its
+# username (VDA_MQTT_USERNAME=<serial>) and may only touch its own subtree:
+# uagv/v2/{manufacturer}/{serialNumber}/...  (%u = username)
+pattern readwrite uagv/v2/+/%u/#
 
 # All clients can read connection topics (for monitoring)
 topic read uagv/v2/+/+/connection
 
-# Default: deny
+# Everything not matched above is denied.
