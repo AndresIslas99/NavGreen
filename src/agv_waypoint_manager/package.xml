@@ -14,6 +14,7 @@
   <depend>agv_interfaces</depend>
   <depend>nav2_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
 

@@ -30,6 +30,7 @@ and robot-centered grid initialization.
 | `resolution` | `0.025` | Meters per cell (2.5cm for fine detail) |
 | `initial_width` / `initial_height` | `400` | Starting grid size in cells (10m × 10m) |
 | `expand_margin_cells` | `80` | Cells of margin per grid expansion (2m) |
+| `max_width_cells` / `max_height_cells` | `6000` | Auto-expansion cap per axis (150m at 0.025 res); scans implying a larger extent are dropped |
 | `publish_rate_hz` | `2.0` | Map publish rate (lower for large grids) |
 | `map_frame` | `"map"` | Frame ID for output |
 | `l_occupied` | `1.2` | Log-odds increment for occupied (stronger per-hit) |
@@ -51,7 +52,7 @@ and robot-centered grid initialization.
 - **Warm-up gate**: Skips first N seconds of scans after cuVSLAM starts to avoid noisy initial poses contaminating the map. After warm-up, resets grid centered on robot position.
 - **Grid centering**: On warm-up completion and clear_map, grid origin is centered on current robot position (via TF lookup), not (0,0). Prevents offset between grid and robot.
 - **Force publish on clear**: Immediately publishes empty grid after clear to replace transient_local cache, ensuring dashboard shows cleared map.
-- **Dynamic grid expansion**: Auto-expands grid when scan endpoints fall outside bounds, copying existing data to new grid with correct offset.
+- **Dynamic grid expansion**: Auto-expands grid when scan endpoints fall outside bounds, copying existing data to new grid with correct offset. Expansion is capped at `max_width_cells`/`max_height_cells`; a scan whose endpoints imply a larger extent (upstream EKF/cuVSLAM pose jump) is dropped with a throttled error instead of allocating an unbounded grid.
 
 ## Configuration
 

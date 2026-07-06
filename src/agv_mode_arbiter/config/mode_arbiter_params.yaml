@@ -7,7 +7,12 @@
     zone_topic: /agv/zone/state
     rail_approach_state_topic: /agv/rail_approach/state
     rail_driver_state_topic: /agv/rail_driver/state
+    # String side-channel ("stop"/"slowdown"/"clear"). Only the HIL
+    # sim_obstacle_relay publishes this type; production Nav2 does not.
     collision_topic: /agv/collision_monitor_state
+    # Typed production source (nav2_msgs/CollisionMonitorState) published
+    # by Nav2's collision_monitor. Both sources are OR-ed; "" disables.
+    collision_monitor_state_topic: /agv/collision_monitor_state
     operator_mode_topic: /agv/mode/set
     state_topic: /agv/mode/state
     odom_topic: /agv/odometry/global

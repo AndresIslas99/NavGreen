@@ -7,6 +7,8 @@ install(DIRECTORY test/ DESTINATION share/${PROJECT_NAME}/test)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  # Stack-required tests — skip themselves unless AGV_STACK_TEST=1 is set
+  # with the full stack running (agv_full.launch.py); assert hard otherwise.
   ament_add_pytest_test(test_service_availability test/test_service_availability.py)
   ament_add_pytest_test(test_topic_availability test/test_topic_availability.py)
   ament_add_pytest_test(test_e_stop test/test_e_stop.py)

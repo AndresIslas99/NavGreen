@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ODrive OpenGL GUI - Dear ImGui interface for motor control.
 Provides sliders, buttons, and real-time feedback visualization.

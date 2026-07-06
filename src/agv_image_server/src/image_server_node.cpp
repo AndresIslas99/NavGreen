@@ -20,6 +20,8 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <memory>
+#include <string>
 #include <vector>
 #include <set>
 #include <cstring>
@@ -44,11 +46,22 @@ public:
     // HTTP 503; the browser typically retries, which lets the cap recover
     // gracefully when an existing stream closes.
     declare_parameter("max_concurrent_streams", 4);
+    // Origin allowed to read streams/snapshots cross-origin from a
+    // browser. The dashboard consumes the MJPEG streams via <img> tags
+    // (no CORS involved), but its snapshot-download button fetch()es
+    // /camera/snapshot cross-origin (dashboard and image server listen
+    // on different ports). Default "*" keeps that button working on any
+    // deployment host; restrict to the dashboard origin per site (e.g.
+    // "http://<jetson-ip>:8080"), or set "" to send no CORS header —
+    // any webpage open in a LAN browser can read the imagery while the
+    // wildcard is in effect.
+    declare_parameter("cors_allowed_origin", "*");
 
     port_ = get_parameter("port").as_int();
     jpeg_quality_ = get_parameter("jpeg_quality").as_int();
     max_width_ = get_parameter("max_width").as_int();
     max_concurrent_streams_ = get_parameter("max_concurrent_streams").as_int();
+    cors_allowed_origin_ = get_parameter("cors_allowed_origin").as_string();
 
     auto cam_topic = get_parameter("camera_topic").as_string();
     auto depth_topic = get_parameter("depth_topic").as_string();
@@ -71,8 +84,23 @@ public:
   ~ImageServerNode() override
   {
     running_ = false;
-    if (server_fd_ >= 0) close(server_fd_);
+    if (server_fd_ >= 0) {
+      // shutdown() unblocks a blocked accept(); close() alone does not.
+      shutdown(server_fd_, SHUT_RDWR);
+      close(server_fd_);
+    }
     if (server_thread_.joinable()) server_thread_.join();
+    // The accept thread is joined, so stream_workers_/stream_fds_ can no
+    // longer grow. Unblock any worker stuck in send() on a stalled
+    // client, then join them all — a worker must never outlive the node
+    // members (cam_jpeg_, mutexes, active_streams_) it references.
+    {
+      std::lock_guard<std::mutex> lock(streams_mutex_);
+      for (int fd : stream_fds_) shutdown(fd, SHUT_RDWR);
+    }
+    for (auto& w : stream_workers_) {
+      if (w.thread.joinable()) w.thread.join();
+    }
   }
 
 private:
@@ -202,10 +230,10 @@ private:
 
   // Spawn a streaming worker if the active-stream cap allows it. Excess
   // clients are rejected with HTTP 503 so the front-end can decide to back
-  // off or retry. The worker is detached but tracked by active_streams_ so
-  // the cap is respected; the destructor blocks until streams drain via
-  // running_=false (each stream's inner loop checks running_ before each
-  // frame and exits within delay_ms).
+  // off or retry. Workers are joinable (not detached): they reference node
+  // members, so the destructor shuts their sockets down and joins them
+  // before member destruction. Finished workers are reaped on the next
+  // spawn so the list stays bounded.
   void spawn_stream(int client_fd, std::vector<uchar>& jpeg_ref,
                     std::mutex& mtx, int delay_ms)
   {
@@ -223,19 +251,43 @@ private:
         current, max_concurrent_streams_);
       return;
     }
-    std::thread([this, client_fd, &jpeg_ref, &mtx, delay_ms]() {
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    std::lock_guard<std::mutex> lock(streams_mutex_);
+    for (auto it = stream_workers_.begin(); it != stream_workers_.end();) {
+      if (it->done->load()) {
+        it->thread.join();  // already finished — join returns immediately
+        it = stream_workers_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    stream_fds_.insert(client_fd);
+    StreamWorker worker;
+    worker.done = done;
+    worker.thread = std::thread([this, client_fd, &jpeg_ref, &mtx, delay_ms, done]() {
       serve_mjpeg(client_fd, jpeg_ref, mtx, delay_ms);
+      {
+        // Erase + close under the lock so the destructor never calls
+        // shutdown() on an fd number that was already closed and reused.
+        std::lock_guard<std::mutex> l(streams_mutex_);
+        stream_fds_.erase(client_fd);
+        close(client_fd);
+      }
       active_streams_.fetch_sub(1, std::memory_order_relaxed);
-    }).detach();
+      done->store(true);
+    });
+    stream_workers_.push_back(std::move(worker));
   }
 
+  // Note: does NOT close fd — the spawn_stream worker wrapper owns the
+  // socket cleanup (erase from stream_fds_ + close under streams_mutex_).
   void serve_mjpeg(int fd, std::vector<uchar>& jpeg_ref, std::mutex& mtx, int delay_ms)
   {
-    const char* header = "HTTP/1.1 200 OK\r\n"
+    const std::string header = "HTTP/1.1 200 OK\r\n"
       "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
       "Cache-Control: no-cache\r\n"
-      "Access-Control-Allow-Origin: *\r\n\r\n";
-    if (send(fd, header, strlen(header), MSG_NOSIGNAL) < 0) { close(fd); return; }
+      + cors_header() + "\r\n";
+    if (send(fd, header.c_str(), header.size(), MSG_NOSIGNAL) < 0) return;
 
     while (running_) {
       std::vector<uchar> frame;
@@ -254,7 +306,6 @@ private:
 
       std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
     }
-    close(fd);
   }
 
   void serve_snapshot(int fd, std::vector<uchar>& jpeg_ref, std::mutex& mtx)
@@ -271,12 +322,19 @@ private:
     } else {
       std::string header = "HTTP/1.1 200 OK\r\n"
         "Content-Type: image/jpeg\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
+        + cors_header() +
         "Content-Length: " + std::to_string(frame.size()) + "\r\n\r\n";
       send(fd, header.c_str(), header.size(), MSG_NOSIGNAL);
       send(fd, frame.data(), frame.size(), MSG_NOSIGNAL);
     }
     close(fd);
+  }
+
+  // "Access-Control-Allow-Origin: <origin>\r\n", or "" when disabled.
+  std::string cors_header() const
+  {
+    if (cors_allowed_origin_.empty()) return "";
+    return "Access-Control-Allow-Origin: " + cors_allowed_origin_ + "\r\n";
   }
 
   // State
@@ -294,10 +352,22 @@ private:
   int jpeg_quality_;
   int max_width_;
   int max_concurrent_streams_;
+  std::string cors_allowed_origin_;
   std::atomic<int> active_streams_{0};
   int server_fd_{-1};
   std::atomic<bool> running_{true};
   std::thread server_thread_;
+
+  // MJPEG stream workers. Joinable threads tracked together with their
+  // client fds; `done` marks a worker safe to reap (it no longer touches
+  // node members). streams_mutex_ guards stream_workers_ and stream_fds_.
+  struct StreamWorker {
+    std::thread thread;
+    std::shared_ptr<std::atomic<bool>> done;
+  };
+  std::mutex streams_mutex_;
+  std::set<int> stream_fds_;
+  std::vector<StreamWorker> stream_workers_;
 };
 
 int main(int argc, char** argv)

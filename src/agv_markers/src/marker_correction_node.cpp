@@ -54,6 +54,13 @@ public:
     declare_parameter("min_confidence", 50.0);            // decision_margin minimum for reloc
     declare_parameter("relocalization_cooldown_ms", 500); // pause corrections after set_pose
     declare_parameter("camera_frame", std::string("zed_left_camera_frame"));
+    // Set true when camera_frame names an optical-convention frame (x right,
+    // y down, z forward — e.g. the ZED wrapper's zed_left_camera_optical_frame
+    // or the HIL TF tree's zed_left_camera_frame_optical). When false
+    // (default), camera_frame is a body-convention frame (x forward, y left,
+    // z up) and the fixed optical->body rotation is applied to the solvePnP
+    // tvec before the TF transform. See on_detection().
+    declare_parameter("camera_frame_is_optical", false);
     declare_parameter("base_frame", std::string("base_link"));
     declare_parameter("map_frame", std::string("map"));
     declare_parameter("camera_info_topic", std::string("/zed/zed_node/left/camera_info"));
@@ -67,6 +74,7 @@ public:
     min_confidence_ = get_parameter("min_confidence").as_double();
     reloc_cooldown_ms_ = get_parameter("relocalization_cooldown_ms").as_int();
     camera_frame_ = get_parameter("camera_frame").as_string();
+    camera_frame_is_optical_ = get_parameter("camera_frame_is_optical").as_bool();
     base_frame_ = get_parameter("base_frame").as_string();
     map_frame_ = get_parameter("map_frame").as_string();
     auto camera_info_topic = get_parameter("camera_info_topic").as_string();
@@ -212,7 +220,10 @@ private:
       return;
     }
 
-    // Simple YAML parser for our specific format
+    // Simple YAML parser for our specific format. The runtime registry is
+    // rewritten by ui_backend and hot-reloaded from a subscription callback,
+    // so a truncated or hand-edited line must never throw out of here —
+    // malformed lines are skipped with a warning instead.
     int current_id = -1;
     MarkerPose current{0, 0, 0, 0};
     std::string line;
@@ -222,18 +233,27 @@ private:
       if (start == std::string::npos || line[start] == '#') continue;
       std::string trimmed = line.substr(start);
 
-      if (trimmed.substr(0, 3) == "id:") {
-        if (current_id >= 0) registry_[current_id] = current;
-        current_id = std::stoi(trimmed.substr(3));
-        current = {0, 0, 0, 0};
-      } else if (trimmed.substr(0, 2) == "x:") {
-        current.x = std::stod(trimmed.substr(2));
-      } else if (trimmed.substr(0, 2) == "y:") {
-        current.y = std::stod(trimmed.substr(2));
-      } else if (trimmed.substr(0, 2) == "z:") {
-        current.z = std::stod(trimmed.substr(2));
-      } else if (trimmed.substr(0, 4) == "yaw:") {
-        current.yaw = std::stod(trimmed.substr(4));
+      try {
+        if (trimmed.substr(0, 3) == "id:") {
+          if (current_id >= 0) registry_[current_id] = current;
+          current = {0, 0, 0, 0};
+          // Reset BEFORE parsing: if stoi throws, fields that follow the
+          // bad id line are dropped instead of overwriting a valid marker.
+          current_id = -1;
+          current_id = std::stoi(trimmed.substr(3));
+        } else if (trimmed.substr(0, 2) == "x:") {
+          current.x = std::stod(trimmed.substr(2));
+        } else if (trimmed.substr(0, 2) == "y:") {
+          current.y = std::stod(trimmed.substr(2));
+        } else if (trimmed.substr(0, 2) == "z:") {
+          current.z = std::stod(trimmed.substr(2));
+        } else if (trimmed.substr(0, 4) == "yaw:") {
+          current.yaw = std::stod(trimmed.substr(4));
+        }
+      } catch (const std::exception& e) {
+        RCLCPP_WARN(get_logger(),
+          "Skipping malformed registry line in %s: '%s' (%s)",
+          path.c_str(), line.c_str(), e.what());
       }
     }
     if (current_id >= 0) registry_[current_id] = current;
@@ -344,10 +364,18 @@ private:
 
       const auto& marker = it->second;
 
-      // tvec is in camera optical frame (x_right, y_down, z_forward).
-      // Transform tag position from camera frame to base_link frame using the full
-      // cam_to_base transform, which accounts for the camera mounting offset (e.g. 700mm forward).
-      tf2::Vector3 tag_in_cam(tvec[0], tvec[1], tvec[2]);
+      // tvec from solvePnP is in the camera OPTICAL convention (x_right,
+      // y_down, z_forward). The default camera_frame (zed_left_camera_frame)
+      // is a BODY-convention frame (x_forward, y_left, z_up) whose TF does
+      // NOT contain the optical rotation, so convert optical -> body first:
+      //   x_body = z_opt, y_body = -x_opt, z_body = -y_opt
+      // (same mapping as fine_servo_controller.hpp in agv_rail_approach).
+      // Then cam_to_base applies the camera mounting offset (e.g. 700mm
+      // forward). With camera_frame_is_optical=true the TF already carries
+      // the optical rotation and tvec is used as-is.
+      const tf2::Vector3 tag_in_cam = camera_frame_is_optical_
+        ? tf2::Vector3(tvec[0], tvec[1], tvec[2])
+        : tf2::Vector3(tvec[2], -tvec[0], -tvec[1]);
       tf2::Vector3 tag_in_base = cam_to_base * tag_in_cam;
       double tag_fwd  = tag_in_base.x();  // forward in base_link
       double tag_left = tag_in_base.y();   // left in base_link (ROS base_link Y = left)
@@ -356,38 +384,21 @@ private:
       // rvec from solvePnP gives tag orientation in camera frame. Combined with
       // the tag's known yaw in the map (marker.yaw), we get an independent heading
       // estimate that can actually correct heading drift.
-      double robot_yaw = 0.0;
-      bool yaw_from_tag = false;
-      {
-        cv::Mat R_ct;
-        cv::Rodrigues(rvec, R_ct);
-        // Extract yaw of the tag as seen in the camera frame
-        // R_ct columns: tag X/Y/Z axes in camera coords (optical: X-right, Y-down, Z-forward)
-        // Tag yaw in camera = atan2(R_ct[0][0], R_ct[2][0]) projected onto camera XZ plane
-        double tag_yaw_in_camera = std::atan2(R_ct.at<double>(0, 0), R_ct.at<double>(2, 0));
-        // Robot heading = tag's known map yaw - observed yaw in camera + PI
-        // The +PI accounts for the tag facing toward the approaching robot
-        robot_yaw = marker.yaw - tag_yaw_in_camera + M_PI;
-        // Normalize to [-PI, PI]
-        while (robot_yaw > M_PI) robot_yaw -= 2.0 * M_PI;
-        while (robot_yaw < -M_PI) robot_yaw += 2.0 * M_PI;
-        yaw_from_tag = true;
-      }
-
-      // Fallback: use map→base_link TF heading if rvec extraction failed
-      if (!yaw_from_tag) {
-        geometry_msgs::msg::TransformStamped map_to_base;
-        try {
-          map_to_base = tf_buffer_->lookupTransform(map_frame_, base_frame_,
-            rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.5));
-          robot_yaw = std::atan2(
-            2.0 * (map_to_base.transform.rotation.w * map_to_base.transform.rotation.z +
-                   map_to_base.transform.rotation.x * map_to_base.transform.rotation.y),
-            1.0 - 2.0 * (map_to_base.transform.rotation.y * map_to_base.transform.rotation.y +
-                          map_to_base.transform.rotation.z * map_to_base.transform.rotation.z));
-          RCLCPP_WARN(get_logger(), "Tag %d: rvec yaw extraction failed, falling back to map TF heading", det.id);
-        } catch (...) { continue; }
-      }
+      // NOTE: derived directly from rvec in the camera OPTICAL convention
+      // (no TF involved); assumes the camera is mounted facing forward with
+      // no yaw relative to base_link (true for the AGV's fixed ZED mount).
+      cv::Mat R_ct;
+      cv::Rodrigues(rvec, R_ct);
+      // Extract yaw of the tag as seen in the camera frame
+      // R_ct columns: tag X/Y/Z axes in camera coords (optical: X-right, Y-down, Z-forward)
+      // Tag yaw in camera = atan2(R_ct[0][0], R_ct[2][0]) projected onto camera XZ plane
+      double tag_yaw_in_camera = std::atan2(R_ct.at<double>(0, 0), R_ct.at<double>(2, 0));
+      // Robot heading = tag's known map yaw - observed yaw in camera + PI
+      // The +PI accounts for the tag facing toward the approaching robot
+      double robot_yaw = marker.yaw - tag_yaw_in_camera + M_PI;
+      // Normalize to [-PI, PI]
+      while (robot_yaw > M_PI) robot_yaw -= 2.0 * M_PI;
+      while (robot_yaw < -M_PI) robot_yaw += 2.0 * M_PI;
 
       // Robot position = tag position - offset rotated by robot heading
       // (tag is at known map position, robot sees it at angle relative to heading)
@@ -480,8 +491,10 @@ private:
 
     // Build correction message
     geometry_msgs::msg::PoseWithCovarianceStamped correction;
+    // Stamped with receipt time, not the detection stamp — switching to the
+    // detection stamp changes EKF time alignment and needs runtime validation.
     correction.header.stamp = now();
-    correction.header.frame_id = "map";
+    correction.header.frame_id = map_frame_;
     correction.pose.pose.position.x = final_x;
     correction.pose.pose.position.y = final_y;
 
@@ -489,9 +502,11 @@ private:
     correction.pose.pose.orientation.z = std::sin(half_yaw);
     correction.pose.pose.orientation.w = std::cos(half_yaw);
 
-    correction.pose.covariance[0] = 0.02 * final_range_factor;
-    correction.pose.covariance[7] = 0.02 * final_range_factor;
-    correction.pose.covariance[35] = 0.05 * final_range_factor;
+    // Base covariance from covariance_xy / covariance_yaw parameters,
+    // scaled quadratically with range (range_factor = 1 + (range/2)^2).
+    correction.pose.covariance[0] = cov_xy_ * final_range_factor;
+    correction.pose.covariance[7] = cov_xy_ * final_range_factor;
+    correction.pose.covariance[35] = cov_yaw_ * final_range_factor;
 
     // Check if relocalization needed
     double drift = 0.0;
@@ -571,6 +586,7 @@ private:
   double reloc_threshold_, min_confidence_;
   int64_t reloc_cooldown_ms_;
   std::string camera_frame_, base_frame_, map_frame_;
+  bool camera_frame_is_optical_{false};
 
   // Relocalization cooldown state
   bool relocalization_pending_{false};
