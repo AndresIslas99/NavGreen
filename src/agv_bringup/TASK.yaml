@@ -1,27 +1,47 @@
-task_version: "1.1"
+task_version: "1.2"
 package: "agv_bringup"
 owner_role: "architect_agent"
 language: "Python launch files only, no runtime robot node"
 
-objective: "Provide launch entrypoints for teleop, mapping, navigation, and full-stack bringup using parameterized namespaces, paths, and flags."
+objective: "Provide the three launch entry points (production full stack, commissioning mapping, HIL validation) using parameterized namespaces, paths, and flags."
 
 inputs:
   config_files:
-    - "config/robot.yaml"
-    - "config/agv_params.yaml"
+    - "config/common/qos_profiles.yaml"
+    - "config/robot/agv_geometry.yaml"
+    - "config/sites/<site>/site.yaml"
+    - "config/hil/hil_overlay.yaml"
+    - "config/simulation/sim_overlay.yaml"
+    - "config/cuvslam_greenhouse.yaml"
+    - "config/cuvslam_no_tf.yaml"
+    - "config/cyclonedds_hil.xml"
+    - "config/cyclonedds_production.xml"
   dependencies:
-    - "all runtime packages"
+    - "all runtime packages (see package.xml exec_depend list)"
+    - "agv_slam (external overlay, cloned separately — no rosdep key)"
 
+# Only these three launch files ship. Older entry points
+# (agv_navigation.launch.py, agv_teleop.launch.py, ...) were deleted in the
+# 2026-04-13 audit — see specs/launch_sequence.yaml and the package CLAUDE.md.
 outputs:
   launch_files:
     - "agv_full.launch.py"
     - "agv_mapping.launch.py"
-    - "agv_navigation.launch.py"
-    - "agv_teleop.launch.py"
+    - "agv_hil_full.launch.py"
+
+# The package itself is production (launch orchestration), but these helper
+# scripts are dev/commissioning-only tools, never part of the robot runtime
+# stack. verify_no_hardcoded_paths.sh whitelists them on this basis.
+dev_only: false
+dev_only_scripts:
+  - "scripts/field_test.py"
+  - "scripts/caster_tuning.py"
+  - "scripts/setup_production_network.sh"
 
 rules:
   - "Use LaunchConfiguration for namespace, paths, modes, and feature flags"
   - "Do not hardcode package share paths or namespaces"
+  - "Resolve AGV_DATA_DIR from the environment exactly once per launch file; all data-root consumers derive from it"
   - "Bringup must support partial modes for debugging"
   - "Mapping bringup and localization bringup must be separable"
   - "Launch composition must preserve dual-EKF frame responsibilities"

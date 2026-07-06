@@ -13,10 +13,11 @@ find_package(rclcpp_action REQUIRED)
 find_package(agv_interfaces REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(waypoint_manager_node src/waypoint_manager_node.cpp)
 ament_target_dependencies(waypoint_manager_node
-  rclcpp rclcpp_action agv_interfaces nav2_msgs geometry_msgs)
+  rclcpp rclcpp_action agv_interfaces nav2_msgs geometry_msgs std_msgs)
 
 install(TARGETS waypoint_manager_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)

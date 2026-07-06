@@ -13,7 +13,8 @@ config/
   robot/               # this physical AGV's calibrated identity
   sites/               # per-site overlays (one subdir per greenhouse)
     _template/         # blank starter — copy this when adding a new site
-    chada/             # Chada Farms greenhouse
+    example/           # generic placeholder site (default) — real site
+                       # overlays belong in a private overlay repo
   simulation/          # simulation-only overrides
   hil/                 # hardware-in-the-loop overrides
 
@@ -33,9 +34,10 @@ Launch files should compose parameters in this order, **last writer wins**:
 3. `sites/<site>/*.yaml`        — site-specific overrides
 4. one of `simulation/` or `hil/` — only when running in those modes
 
-The `site` launch argument selects step 3. Default is `chada`. To deploy at a
-new site, copy `sites/_template/` to `sites/<your_site>/`, edit, and pass
-`site:=<your_site>` on the command line.
+The `site` launch argument selects step 3. Default is `example`. To deploy at
+a new site, copy `sites/_template/` to `sites/<your_site>/`, edit, and pass
+`site:=<your_site>` on the command line. Keep customer-identifying site
+overlays out of this public repository (private overlay repo).
 
 ## Adding a new site
 

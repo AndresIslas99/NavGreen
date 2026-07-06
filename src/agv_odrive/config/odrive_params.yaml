@@ -11,6 +11,10 @@
     base_frame_id: "base_link"
     publish_rate_hz: 50
     cmd_vel_timeout_ms: 200    # stop motors if no cmd_vel for this long (was 500 — faster stop)
+    # Feedback watchdog: fault (report disarmed, zero twist, inflate odom
+    # covariance) if no heartbeat/encoder frame arrives within this window.
+    # ODrive heartbeat period is 100 ms → 300 = 3 missed. 0 disables.
+    feedback_timeout_ms: 300
     # Motor direction inversion (differential drive: one side faces opposite)
     # Set to true for the motor that needs its CAN velocity negated
     invert_left: true          # CAN 0

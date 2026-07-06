@@ -33,10 +33,13 @@ SlipDecision WheelSlipDetector::step(const SlipObservation& obs) {
   // accumulates). We trust the structural signal: while DWELLING is
   // active, declare slip regardless of residuals.
   if (obs.dwell_active) {
-    state_ = SlipState::ActiveHold;
-    if (slip_started_t_ == 0.0 || state_ != SlipState::ActiveHold) {
+    // Record the entry time BEFORE mutating state_: refreshing only on the
+    // transition into ActiveHold keeps min_active_s counting from THIS
+    // dwell event, not from a stale timestamp of an earlier slip.
+    if (state_ != SlipState::ActiveHold) {
       slip_started_t_ = obs.t_now;
     }
+    state_ = SlipState::ActiveHold;
     dec.state = state_;
     dec.inflate_covariance = true;
     dec.reason = "dwell_structural";

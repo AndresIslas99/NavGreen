@@ -1,30 +1,47 @@
-task_version: "1.1"
+task_version: "1.2"
 package: "agv_odrive"
 owner_role: "architect_agent"
-status: "in_progress"
+status: "mvp"
 
-# Current state: Python dev tooling (working)
-# Target state: C++17 production node
-current_language: "Python (ament_python, dev tooling)"
+# Production driver: C++17 odrive_can_node (launched by agv_full.launch.py and
+# agv_mapping.launch.py via launch/odrive.launch.py). The Python files under
+# scripts/ are commissioning/diagnostic tools only — never part of the robot
+# runtime stack.
+current_language: "C++17"
 target_language: "C++17"
-dev_only: true
+dev_only: false
 
 dev_tools:
-  - name: "odrive_can_node.py"
-    purpose: "CAN communication node for commissioning and validation"
+  - name: "scripts/odrive_can_node.py"
+    purpose: "Python CAN node for commissioning and validation (superseded in production by the C++ node)"
     status: "working"
-  - name: "odrive_gui.py"
+    classification: "dev_tool"
+  - name: "scripts/odrive_gui.py"
     purpose: "ImGui diagnostic GUI for real-time motor tuning"
     status: "working"
     classification: "dev_tool"
-  - name: "validate.py"
+  - name: "scripts/validate.py"
     purpose: "Hardware validation script (CAN, OpenGL, ROS2, ODrive)"
     status: "working"
-  - name: "simple_test.py"
+    classification: "dev_tool"
+  - name: "scripts/simple_test.py"
     purpose: "Basic CAN connectivity test"
     status: "working"
+    classification: "dev_tool"
+  - name: "scripts/calibrate_odom.py"
+    purpose: "Two-step wheel_radius / track_width calibration procedure"
+    status: "working"
+    classification: "dev_tool"
+  - name: "scripts/check_odrive_config.py"
+    purpose: "ODrive S1 low-speed tuning config checker (USB)"
+    status: "working"
+    classification: "dev_tool"
+  - name: "scripts/auto_calibrate.py"
+    purpose: "Automated ODrive calibration helper"
+    status: "working"
+    classification: "dev_tool"
 
-objective: "Implement production ROS2 C++17 driver for ODrive S1 over SocketCAN, publish wheel odometry, and convert cmd_vel to motor commands. The current Python package provides working dev tooling for commissioning. The C++17 production node will replace the Python CAN node but the GUI and validation tools may remain as Python dev utilities."
+objective: "Production ROS2 C++17 driver for ODrive S1 over SocketCAN: publish wheel odometry, convert cmd_vel to motor commands, watchdog the CAN feedback. Python tools under scripts/ remain as commissioning utilities."
 
 inputs:
   config_files:
@@ -32,6 +49,7 @@ inputs:
   runtime_interfaces:
     - "/{robot_namespace}/cmd_vel"
     - "/{robot_namespace}/e_stop"
+    - "/{robot_namespace}/motor_enable"
   hardware_dependencies:
     - "can0 available (see docs/hardware_setup.md — not trivial)"
     - "ODrive heartbeats visible"
@@ -45,29 +63,37 @@ outputs:
     - name: "/{robot_namespace}/joint_states"
       type: "sensor_msgs/JointState"
       min_rate_hz: 50
+    - name: "/{robot_namespace}/motor_state"
+      type: "std_msgs/String"
+      min_rate_hz: 10
+    - name: "/{robot_namespace}/drive_debug"
+      type: "std_msgs/String"
+      min_rate_hz: 10
 
 parameters:
   required:
     - "can_interface"
     - "left_axis_id"
     - "right_axis_id"
-    - "wheel_radius"
-    - "track_width"
-    - "encoder_ticks_per_rev"
+    - "wheel_radius"    # no in-code default — must come from YAML (calibrated)
+    - "track_width"     # no in-code default — must come from YAML (calibrated)
+    - "gear_ratio"      # no in-code default — must come from YAML
   validation:
     wheel_radius: "> 0"
     track_width: "> 0"
-    encoder_ticks_per_rev: "> 0"
-    odom_publish_rate: ">= 10"
+    gear_ratio: "> 0"
+    publish_rate_hz: "1 to 1000"
+    feedback_timeout_ms: ">= 0 (0 disables the feedback watchdog)"
 
 logic:
   - "open CAN socket"
   - "verify both ODrive axes heartbeat"
-  - "enter closed-loop control"
-  - "read encoder estimates at target loop rate"
-  - "integrate differential odometry"
+  - "enter closed-loop control on motor_enable"
+  - "read encoder estimates at target loop rate (RTR polls, ignore looped-back RTR frames)"
+  - "watchdog heartbeat/encoder freshness; on loss report disarmed, zero twist, inflate covariance"
+  - "integrate differential odometry (first-sample gate per axis before latching baseline)"
   - "publish odom and joint states"
-  - "convert cmd_vel to left and right wheel targets"
+  - "convert cmd_vel to left and right wheel targets (accel-limit with measured dt)"
   - "on e_stop true, command zero velocity immediately and persist until false"
 
 tests:
