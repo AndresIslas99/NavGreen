@@ -8,6 +8,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  spec-verification:
+    # The specs in specs/*.yaml are the repo's single source of truth;
+    # tools/verify_specs/all.sh is the same BLOCKING suite the pre-commit
+    # hook runs. Verifiers are stdlib-only Python/bash.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run SSOT verifiers
+        run: bash tools/verify_specs/all.sh
+
   build-and-test:
     runs-on: ubuntu-22.04
     container:
@@ -27,14 +37,14 @@ jobs:
           # GTSAM); the packages that require them are not built in CI — see
           # the build step below.
           rosdep install --from-paths src --ignore-src -y \
-            --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam OpenCV"
+            --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam"
 
       - name: Build AGV packages
-        # Not built in CI (compile-time deps unavailable without vendor repos):
+        # Every first-party package builds in CI except the three whose
+        # compile-time deps need vendor repos:
         #   agv_map_manager       — isaac_ros_visual_slam_interfaces (Isaac ROS)
         #   agv_localization_init — zed_msgs (ZED ROS2 wrapper)
         #   agv_factor_graph      — gtsam
-        # Remaining packages are pending CI enablement, one at a time.
         run: |
           source /opt/ros/humble/setup.bash
           colcon build \
@@ -43,6 +53,8 @@ jobs:
               agv_sensor_fusion agv_navigation agv_bringup \
               agv_description agv_mode_arbiter agv_integration_tests \
               agv_hil_bridges agv_rail_driver agv_ui_backend agv_zone_detector \
+              agv_safety agv_scan_mapper agv_image_server agv_rail_detector \
+              agv_rail_approach agv_hw_interface \
             --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Werror" \
             --event-handlers console_direct+
         shell: bash
@@ -55,6 +67,8 @@ jobs:
             --packages-select agv_odrive agv_interfaces \
               agv_waypoint_manager agv_markers agv_behaviors agv_mode_arbiter \
               agv_rail_driver agv_zone_detector agv_sensor_fusion \
+              agv_safety agv_scan_mapper agv_image_server agv_rail_detector \
+              agv_rail_approach agv_hw_interface \
             --event-handlers console_direct+
           colcon test-result --all --verbose
         shell: bash
