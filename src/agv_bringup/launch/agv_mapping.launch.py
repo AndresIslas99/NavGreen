@@ -16,12 +16,34 @@ Usage:
   Then open http://agv.local from tablet
 """
 
+import os
+
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+
+
+def _require_agv_slam(context):  # context required by the OpaqueFunction signature
+    # agv_slam (cuVSLAM pipeline) is an external overlay package — it is NOT
+    # in this repository (.gitignore: "Third-party ROS packages (clone
+    # separately)"). Mapping mode cannot run without it (cuVSLAM owns TF
+    # here), so fail fast at t=0 with an actionable message instead of an
+    # opaque PackageNotFoundError at t=3s.
+    try:
+        get_package_share_directory('agv_slam')
+    except PackageNotFoundError:
+        raise RuntimeError(
+            "agv_mapping.launch.py needs the 'agv_slam' package (cuVSLAM "
+            "pipeline), which is external to this repository and must be "
+            "cloned and built in the workspace separately (see "
+            "'# Third-party ROS packages (clone separately)' in .gitignore).")
+    return []
 
 
 def generate_launch_description():
@@ -29,6 +51,9 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value='agv'),
+
+        # Fail fast (t=0) when the external agv_slam overlay is missing.
+        OpaqueFunction(function=_require_agv_slam),
 
         # Robot description (URDF → TF)
         IncludeLaunchDescription(
@@ -135,7 +160,10 @@ def generate_launch_description():
                     additional_env={
                         'AGV_PORT': '8090',
                         'AGV_NAMESPACE': 'agv',
-                        'AGV_DATA_DIR': '/home/orza/agv_data',
+                        # Pass the operator's AGV_DATA_DIR through; the
+                        # literal is only the canonical default
+                        # (specs/project.yaml#deployment.default_data_dir).
+                        'AGV_DATA_DIR': os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data'),
                     },
                     output='log',
                 ),

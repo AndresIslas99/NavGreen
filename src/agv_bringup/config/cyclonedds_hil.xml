@@ -24,8 +24,9 @@
       <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
       <Peers>
         <Peer address="localhost"/>
-        <!-- Set this to the PC running the simulation -->
-        <Peer address="192.168.15.79"/>
+        <!-- EXAMPLE placeholder — set this to the IP of the PC running the
+             simulation on your LAN before launching HIL. -->
+        <Peer address="192.168.0.100"/>
       </Peers>
     </Discovery>
     <Internal>

@@ -1,0 +1,23 @@
+# Example greenhouse site — generic placeholder deployment.
+#
+# This is the default site (default value of the `site:=` launch argument —
+# see config/README.md). Real deployments copy sites/_template/ to
+# sites/<your_site>/, edit, and pass site:=<your_site>; the schema here is
+# identical so a real site drops in unchanged. Keep customer-identifying
+# names and coordinates OUT of this public repository — put real site
+# overlays in a private overlay repo.
+
+site:
+  name: "Example Greenhouse"
+  country: "MX"
+  timezone: "America/Mexico_City"
+
+  maps_dir: "/home/orza/agv_data/maps"
+  marker_registry: "/home/orza/agv_data/runtime_markers_registry.yaml"
+
+  # This site uses the cuVSLAM tuning currently in
+  # agv_bringup/config/cuvslam_greenhouse.yaml. When the migration in
+  # config/README.md happens, that file moves under
+  # config/sites/<site>/perception/cuvslam.yaml and the path here changes.
+  perception:
+    cuvslam_params: "config/cuvslam_greenhouse.yaml"

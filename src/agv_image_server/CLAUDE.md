@@ -31,14 +31,18 @@ than Python PIL equivalent.
 | `jpeg_quality` | `70` | JPEG compression quality (1-100) |
 | `max_width` | `640` | Maximum output width (pixels) |
 | `max_concurrent_streams` | `4` | Cap on simultaneous MJPEG streams. Excess clients receive HTTP 503 Retry-After:2. Snapshots are not capped (synchronous, fast). Sprint 1 Fase A1 (2026-04-24). |
+| `cors_allowed_origin` | `*` | Value of the `Access-Control-Allow-Origin` response header; `""` disables the header. The dashboard streams via `<img>` (no CORS needed) but its snapshot button `fetch()`es `/camera/snapshot` cross-origin, so the wildcard default keeps it working. Restrict to the dashboard origin per deployment — the server is unauthenticated, and `*` lets any webpage in a LAN browser read imagery. |
 
 ## Key Implementation Details
 
 - Raw TCP socket HTTP server (no HTTP library dependency)
 - MJPEG clients are bounded by `max_concurrent_streams` (default 4). Each
-  active stream runs in a detached thread; an `std::atomic<int>
-  active_streams_` counter enforces the cap before spawning. Excess clients
-  get HTTP 503 + `Retry-After: 2` so the browser/UI backs off cleanly.
+  active stream runs in a joinable worker thread tracked by the node; an
+  `std::atomic<int> active_streams_` counter enforces the cap before
+  spawning, and the destructor shuts down every client socket and joins
+  all workers so no thread outlives the node's buffers/mutexes. Excess
+  clients get HTTP 503 + `Retry-After: 2` so the browser/UI backs off
+  cleanly.
 - Depth processing: 4x downsampling -> normalize 0.3-10m -> inverted JET colormap (red=near, blue=far)
 - NaN depth values mapped to 10m (max range)
 - MJPEG framing: HTTP multipart/x-mixed-replace with boundary markers

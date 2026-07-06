@@ -46,6 +46,10 @@ public:
     declare_parameter("max_range", 8.0);
     declare_parameter("min_range", 0.3);
     declare_parameter("expand_margin_cells", 40);
+    // Hard cap on auto-expansion (cells per axis). Extent in meters is
+    // cap * resolution (6000 * 0.025 = 150m — well above any greenhouse).
+    declare_parameter("max_width_cells", 6000);
+    declare_parameter("max_height_cells", 6000);
     declare_parameter("ray_subsample", 2);
     declare_parameter("min_travel_distance", 0.025);
     declare_parameter("warmup_seconds", 5.0);
@@ -64,6 +68,8 @@ public:
     max_range_  = static_cast<float>(get_parameter("max_range").as_double());
     min_range_  = static_cast<float>(get_parameter("min_range").as_double());
     expand_margin_     = get_parameter("expand_margin_cells").as_int();
+    max_width_cells_   = static_cast<int>(get_parameter("max_width_cells").as_int());
+    max_height_cells_  = static_cast<int>(get_parameter("max_height_cells").as_int());
     ray_subsample_     = std::max(1, static_cast<int>(get_parameter("ray_subsample").as_int()));
     min_travel_dist_sq_= get_parameter("min_travel_distance").as_double();
     min_travel_dist_sq_ *= min_travel_dist_sq_; // store squared to avoid sqrt
@@ -288,8 +294,13 @@ private:
       wy_max = std::max(wy_max, ey);
     }
 
-    // Expand grid if any scan endpoint falls outside current bounds
-    ensure_bounds(wx_min, wy_min, wx_max, wy_max);
+    // Expand grid if any scan endpoint falls outside current bounds.
+    // Rejected (whole scan dropped) when the implied extent exceeds the
+    // cap — that signature is an upstream pose jump, not real geometry,
+    // and raycasting from a phantom pose would corrupt the map anyway.
+    if (!ensure_bounds(wx_min, wy_min, wx_max, wy_max)) {
+      return;
+    }
 
     // Robot grid position
     int gx0 = world_to_grid_x(rx);
@@ -322,7 +333,9 @@ private:
   }
 
   /// Expand the grid so that world rectangle [wx_min,wy_min]-[wx_max,wy_max] fits.
-  void ensure_bounds(double wx_min, double wy_min, double wx_max, double wy_max)
+  /// Returns false (grid untouched) when the required size would exceed
+  /// max_width_cells/max_height_cells — the caller must drop the scan.
+  bool ensure_bounds(double wx_min, double wy_min, double wx_max, double wy_max)
   {
     // Current world-space extent of the grid
     double cur_wx_min = origin_x_;
@@ -332,7 +345,7 @@ private:
 
     if (wx_min >= cur_wx_min && wx_max <= cur_wx_max &&
         wy_min >= cur_wy_min && wy_max <= cur_wy_max) {
-      return;  // everything fits
+      return true;  // everything fits
     }
 
     // New world extent with margin
@@ -344,6 +357,19 @@ private:
 
     int new_width  = static_cast<int>(std::ceil((new_wx_max - new_wx_min) / res_));
     int new_height = static_cast<int>(std::ceil((new_wy_max - new_wy_min) / res_));
+
+    // Cap auto-expansion: without this, a single EKF/cuVSLAM pose jump makes
+    // the grid arbitrarily large, republished at full size at every publish
+    // tick over reliable transient_local QoS — the backend-OOM incident the
+    // >200m plausibility guard in agv_localization_init defends against.
+    if (new_width > max_width_cells_ || new_height > max_height_cells_) {
+      RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
+        "Grid expansion to %dx%d rejected (cap %dx%d cells): scan endpoints "
+        "imply an implausible map extent — likely an upstream pose jump. "
+        "Scan dropped.",
+        new_width, new_height, max_width_cells_, max_height_cells_);
+      return false;
+    }
 
     // Offset of old origin in the new grid
     int dx = static_cast<int>(std::round((origin_x_ - new_wx_min) / res_));
@@ -386,6 +412,7 @@ private:
     pub_data_.assign(grid_.size(), -1);
     full_rebuild_needed_ = true;
     reset_dirty_rect();
+    return true;
   }
 
   void bresenham_free(int x0, int y0, int x1, int y1)
@@ -481,6 +508,8 @@ private:
   float occ_thresh_, free_thresh_;
   float max_range_, min_range_;
   int expand_margin_;
+  int max_width_cells_;
+  int max_height_cells_;
   int ray_subsample_;
   double min_travel_dist_sq_;
 

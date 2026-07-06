@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ODrive CAN Node - Simple driver for ODrive over CAN bus.
 Publishes encoder feedback, subscribes to velocity commands.
