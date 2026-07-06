@@ -1,8 +1,22 @@
 # Dual EKF Validation Procedure
 
+> **HISTORICAL — DO NOT RUN AS WRITTEN.** Four of the five launch files this
+> procedure scripts against (`agv_robot_core.launch.py`, `agv_teleop.launch.py`,
+> `agv_ekf_local_test.launch.py`, `agv_fusion.launch.py`) were deleted in the
+> 2026-04-13 audit — see `deleted_files` in
+> [specs/launch_sequence.yaml](../specs/launch_sequence.yaml). The surviving
+> entry points are `agv_full.launch.py` (production; runs ekf_local + ekf_global),
+> `agv_mapping.launch.py` (commissioning / map creation), and
+> `agv_hil_full.launch.py` (HIL). The dual-EKF TF ownership rule remains
+> canonical (ekf_local owns `odom → base_link`, ekf_global owns `map → odom`),
+> but the step-by-step commands below must be re-derived against
+> `agv_full.launch.py` before use. For the current HIL validation loop see
+> [docs/validation/RUNBOOK_lan_hil.md](validation/RUNBOOK_lan_hil.md).
+
 ## TF Ownership Authority Table
 
-This is the single source of truth for which node publishes each transform.
+Historical table — launch modes as they existed before the 2026-04-13 audit.
+The authoritative launch inventory is `specs/launch_sequence.yaml`.
 
 | Launch mode | `odom → base_link` | `map → odom` | cuVSLAM TF | Notes |
 |---|---|---|---|---|
