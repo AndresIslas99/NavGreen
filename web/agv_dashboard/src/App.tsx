@@ -44,6 +44,18 @@ export default function App() {
     })
   }, [])
 
+  // Session expiry: a 401 from any non-auth endpoint clears the token
+  // (api/client.ts) and lands back on the login page without a page reload.
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => {
+      setAuthRequired(true)
+      setLoggedIn(false)
+      setUsername('')
+      setUserRole('')
+    })
+    return () => api.setUnauthorizedHandler(null)
+  }, [])
+
   const handleLogin = (user: string, role: string) => {
     setLoggedIn(true)
     setUsername(user)

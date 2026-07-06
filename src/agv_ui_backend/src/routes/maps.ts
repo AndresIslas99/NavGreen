@@ -5,6 +5,7 @@ import type { AppDeps } from '../app_deps';
 
 export function register(app: Express, deps: AppDeps): void {
   const { config, eventLog, ros, state } = deps;
+  const requireOperator = deps.authManager.requireAuth('operator');
 
   function listMapFiles() {
     try {
@@ -45,14 +46,14 @@ export function register(app: Express, deps: AppDeps): void {
       .catch((err: any) => res.status(500).json({ error: err?.message || 'Conversion failed' }));
   });
 
-  app.post('/api/maps/save', async (req, res) => {
+  app.post('/api/maps/save', requireOperator, async (req, res) => {
     const name = (req.body?.name || '').trim();
     const result = await ros.saveMap(name, config.mapsDir, `/${config.namespace}/live_map`);
     if (result.success) res.json(result);
     else res.status(500).json(result);
   });
 
-  app.post('/api/maps/load', async (req, res) => {
+  app.post('/api/maps/load', requireOperator, async (req, res) => {
     const name = (req.body?.name || '').trim();
     const yamlPath = path.join(config.mapsDir, `${name}.yaml`);
     if (!fs.existsSync(yamlPath)) return res.status(404).json({ error: 'Map not found' });
@@ -86,7 +87,7 @@ export function register(app: Express, deps: AppDeps): void {
     }
   });
 
-  app.delete('/api/acc_map', (_req, res) => {
+  app.delete('/api/acc_map', requireOperator, (_req, res) => {
     // Clear the ROS scan_grid_mapper via topic
     const { execFile } = require('child_process');
     execFile('ros2', ['topic', 'pub', '--once',

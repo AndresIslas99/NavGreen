@@ -12,7 +12,10 @@ export function register(app: Express, deps: AppDeps): void {
     else if (period.endsWith('m')) seconds = parseInt(period) * 60;
     try {
       res.json(telemetryStore.getSummary(seconds));
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[analytics] query failed:', e?.message || e);
+      res.status(500).json({ error: 'Query failed' });
+    }
   });
 
   app.get('/api/analytics/timeseries', (req, res) => {
@@ -27,7 +30,10 @@ export function register(app: Express, deps: AppDeps): void {
     const resolution = parseInt(req.query.resolution as string) || 60;
     try {
       res.json(telemetryStore.getTimeseries(metric as any, from, to, resolution));
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[analytics] query failed:', e?.message || e);
+      res.status(500).json({ error: 'Query failed' });
+    }
   });
 
   app.get('/api/analytics/missions', (req, res) => {
@@ -36,7 +42,10 @@ export function register(app: Express, deps: AppDeps): void {
     const to = parseFloat(req.query.to as string) || now;
     try {
       res.json(telemetryStore.getMissionRuns(from, to));
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[analytics] query failed:', e?.message || e);
+      res.status(500).json({ error: 'Query failed' });
+    }
   });
 
   app.get('/api/replay/samples', (req, res) => {
@@ -44,7 +53,10 @@ export function register(app: Express, deps: AppDeps): void {
     const to = parseFloat(req.query.to as string) || (Date.now() / 1000);
     try {
       res.json(telemetryStore.getReplaySamples(from, to));
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[analytics] query failed:', e?.message || e);
+      res.status(500).json({ error: 'Query failed' });
+    }
   });
 
   app.get('/api/replay/events', (req, res) => {
@@ -53,6 +65,9 @@ export function register(app: Express, deps: AppDeps): void {
     const limit = parseInt(req.query.limit as string) || 500;
     try {
       res.json(telemetryStore.getEvents(from, to, limit));
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[analytics] query failed:', e?.message || e);
+      res.status(500).json({ error: 'Query failed' });
+    }
   });
 }
