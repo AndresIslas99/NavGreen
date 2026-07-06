@@ -195,13 +195,16 @@ cd web/agv_dashboard   && npm ci && npm run build   # dashboard
 ### Vendor SDK dependencies
 
 Three packages need vendor stacks that are not on public apt and are therefore
-skipped in CI:
+skipped in CI (CI builds the other 20 of 24 with `-Werror`):
 
 | Package | Compile-time dependency | Source |
 |---------|------------------------|--------|
 | `agv_map_manager` | `isaac_ros_visual_slam_interfaces` | [NVIDIA Isaac ROS](https://nvidia-isaac-ros.github.io/) |
 | `agv_localization_init` | `zed_msgs` | [ZED ROS 2 wrapper](https://github.com/stereolabs/zed-ros2-wrapper) (ZED SDK) |
 | `agv_factor_graph` | GTSAM | [borglab/gtsam](https://github.com/borglab/gtsam) |
+
+`agv_bringup` is also skipped in CI because it declares all three packages
+above as runtime dependencies; with a full vendor install it builds normally.
 
 The `.gitignore` also lists third-party ROS packages (Isaac ROS, ZED wrapper,
 etc.) that are cloned separately into `src/` on the Jetson.
