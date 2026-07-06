@@ -1,0 +1,44 @@
+task_version: "1.0"
+package: "agv_fleet_manager"
+owner_role: "architect_agent"
+language: "TypeScript"
+
+objective: "VDA 5050 master: aggregate fleet state over MQTT and expose REST/WebSocket control for the fleet dashboard."
+
+# Not a ROS2 package (no package.xml); runs as a Node.js service on one
+# host, started by fleet/start_fleet.sh or the systemd unit.
+runtime: "node dist/index.js"
+
+environment:
+  required_env:
+    - "VDA_MQTT_BROKER"
+    - "FLEET_PORT"          # default 8092 — 8091 belongs to agv_image_server
+  optional_env:
+    - "FLEET_BIND_ADDR"     # default 0.0.0.0
+    - "FLEET_API_TOKEN"     # shared secret; unset = open API (isolated LAN only)
+    - "VDA_MQTT_USERNAME"   # defaults to 'fleet-manager' when password set
+    - "VDA_MQTT_PASSWORD"
+
+rules:
+  - "VDA 5050 pause semantics: startPause pauses, stopPause resumes"
+  - "Fleet e-stop uses the emergencyStop action, never a pause action"
+  - "All /api routes and /ws/fleet honor FLEET_API_TOKEN when set"
+  - "No hardcoded broker address, ports, or robot IDs — env only"
+  - "Stale robots (>60s) marked CONNECTIONBROKEN and removed from traffic zones"
+
+outputs:
+  capabilities:
+    - "fleet overview, per-robot state, KPIs"
+    - "navigation order dispatch per robot"
+    - "fleet-wide emergency stop and resume"
+    - "traffic zones with pause-based mutual exclusion and deadlock resolution"
+    - "2Hz WebSocket fleet stream"
+
+known_gaps:
+  - "REST/WS surface not yet registered in specs/interfaces.yaml; fleet still out_of_scope in specs/project.yaml"
+
+done_definition:
+  - "npm run build passes (strict tsc)"
+  - "robot appears in /api/fleet within 2s of adapter start"
+  - "/api/fleet/estop halts every discovered robot"
+  - "401 on /api/* and /ws/fleet without token when FLEET_API_TOKEN is set"

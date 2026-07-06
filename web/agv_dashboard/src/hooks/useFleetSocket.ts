@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { fleetWsUrl, getToken } from '../api/client'
 
 export interface FleetRobot {
   id: string
@@ -40,14 +41,15 @@ export function useFleetSocket() {
     let timer: ReturnType<typeof setTimeout>
     let alive = true
 
-    // Fleet manager runs on port 8091
-    const fleetHost = location.hostname
-    const fleetPort = '8091'
-
     function connect() {
       if (!alive) return
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const ws = new WebSocket(`${proto}://${fleetHost}:${fleetPort}/ws/fleet`)
+      // fleetWsUrl honors VITE_FLEET_BASE / VITE_API_BASE (fleet manager on
+      // :8091 by default) so the fleet stream can be relocated off-host.
+      // The token is appended for parity with the control socket; the fleet
+      // manager does not enforce it yet.
+      const token = getToken()
+      const base = fleetWsUrl('/ws/fleet')
+      const ws = new WebSocket(token ? `${base}?token=${encodeURIComponent(token)}` : base)
       wsRef.current = ws
 
       ws.onopen = () => {

@@ -24,12 +24,13 @@ function normalizeMission(m: any): any {
 export function register(app: Express, deps: AppDeps): void {
   const { config, eventLog, state } = deps;
   const file = config.missionsFile;
+  const requireOperator = deps.authManager.requireAuth('operator');
 
   app.get('/api/missions', (_req, res) => {
     res.json(readMissions(file).map(normalizeMission));
   });
 
-  app.post('/api/missions', (req, res) => {
+  app.post('/api/missions', requireOperator, (req, res) => {
     try {
       const missions = readMissions(file);
       let nodes = req.body.nodes || [];
@@ -51,10 +52,13 @@ export function register(app: Express, deps: AppDeps): void {
       writeMissions(file, missions);
       eventLog.emit('info', 'MISSION', `Mission "${mission.name}" created (${nodes.length} nodes)`);
       res.json(mission);
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[missions] create failed:', e?.message || e);
+      res.status(500).json({ error: 'Failed to save mission' });
+    }
   });
 
-  app.delete('/api/missions/:id', (req, res) => {
+  app.delete('/api/missions/:id', requireOperator, (req, res) => {
     try {
       let missions = readMissions(file);
       const name = missions.find((m: any) => m.id === req.params.id)?.name || '?';
@@ -62,22 +66,26 @@ export function register(app: Express, deps: AppDeps): void {
       writeMissions(file, missions);
       eventLog.emit('info', 'MISSION', `Mission "${name}" deleted`);
       res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      console.warn('[missions] delete failed:', e?.message || e);
+      res.status(500).json({ error: 'Failed to delete mission' });
+    }
   });
 
-  app.post('/api/missions/:id/execute', async (req, res) => {
-    const result = await deps.executeMission(req.params.id);
+  app.post('/api/missions/:id/execute', requireOperator, async (req, res) => {
+    const result = await deps.executeMission(String(req.params.id));
     if (result.success) res.json(result);
     else res.status(400).json(result);
   });
 
+  // Stop-type action — intentionally unauthenticated (pausing halts motion).
   app.post('/api/missions/pause', (_req, res) => {
     state.missionPause = true;
     eventLog.emit('info', 'MISSION', 'Mission paused');
     res.json({ success: true });
   });
 
-  app.post('/api/missions/resume', (_req, res) => {
+  app.post('/api/missions/resume', requireOperator, (_req, res) => {
     state.missionPause = false;
     eventLog.emit('info', 'MISSION', 'Mission resumed');
     res.json({ success: true });
