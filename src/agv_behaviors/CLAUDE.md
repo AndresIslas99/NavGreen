@@ -20,11 +20,17 @@ skeleton — full BT execution is post-MVP.
 
 ## Behavior Trees (XML)
 
-Three trees provided in `trees/`:
+One tree shipped in `trees/`:
 
 1. **single_waypoint.xml** (MVP): Direct Nav2 call for single goal
-2. **navigate_with_recovery.xml**: Full Nav2 recovery pattern (6 retries, costmap clear, spin, backup, wait)
-3. **waypoint_patrol.xml**: Multi-goal patrol with per-waypoint recovery
+
+Two earlier trees (`navigate_with_recovery.xml`, `waypoint_patrol.xml`,
+see git history) were removed 2026-07-06: they referenced node types this
+executor never registers (Nav2 BT plugins plus two nodes that exist in no
+library), so they could never load, and their `BackUp` recoveries
+contradicted the forward-only constraint (`vx_min: 0.0` — no rear sensor).
+Any future recovery tree must load through `test_bt_loading` (which loads
+every XML in `trees/`) and must not command reverse outside a rail.
 
 ## Parameters
 

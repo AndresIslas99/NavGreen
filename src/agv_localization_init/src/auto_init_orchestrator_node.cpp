@@ -53,6 +53,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <cmath>
 
 #include <rclcpp/rclcpp.hpp>
@@ -263,7 +264,66 @@ public:
                 map_dir_.c_str());
   }
 
+  // Join the worker on destruction — destroying a joinable std::thread calls
+  // std::terminate, so without this a Ctrl-C mid-cascade aborted the process.
+  // stop_requested_ makes the worker's sliced waits return promptly (worst
+  // case ~100ms per pending wait slice) instead of riding out full service
+  // timeouts.
+  ~AutoInitOrchestratorNode() override {
+    stop_requested_.store(true);
+    if (worker_.joinable()) worker_.join();
+  }
+
 private:
+  // ── Worker lifecycle ────────────────────────────────────────────────────
+
+  // Spawn the init cascade in a worker thread WITHOUT ever blocking the
+  // executor. The previous code did `worker_.join()` inside executor
+  // callbacks; with a single-threaded spin, a re-trigger arriving mid-cascade
+  // blocked the only executor thread for the remaining cascade time, which
+  // also starved the running worker's own service responses (guaranteeing
+  // their timeouts). A cascade already in progress now rejects re-triggers.
+  bool start_cascade(const std::string& map_name) {
+    bool expected = false;
+    if (!worker_busy_.compare_exchange_strong(expected, true)) {
+      RCLCPP_WARN(get_logger(),
+        "Init cascade already running — ignoring re-trigger for map '%s'",
+        map_name.c_str());
+      return false;
+    }
+    // Not busy: any previous worker has finished; reclaiming it is instant.
+    if (worker_.joinable()) worker_.join();
+    worker_ = std::thread([this, map_name]() {
+      run_init_sequence(map_name);
+      worker_busy_.store(false);
+    });
+    return true;
+  }
+
+  // Sliced future wait for the worker thread: interruptible by node
+  // destruction (stop_requested_) and rclcpp shutdown. Returns true when the
+  // future is ready, false on timeout or interruption.
+  template <typename FutureT>
+  bool wait_future_interruptible(FutureT& future, std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (rclcpp::ok() && !stop_requested_.load()) {
+      if (future.wait_for(100ms) == std::future_status::ready) return true;
+      if (std::chrono::steady_clock::now() >= deadline) break;
+    }
+    return false;
+  }
+
+  // Sliced service-availability wait, same interruption semantics.
+  template <typename ClientT>
+  bool wait_service_interruptible(const ClientT& client, std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (rclcpp::ok() && !stop_requested_.load()) {
+      if (client->wait_for_service(100ms)) return true;
+      if (std::chrono::steady_clock::now() >= deadline) break;
+    }
+    return false;
+  }
+
   // ── Event handlers ──────────────────────────────────────────────────────
 
   void on_map_loaded(const std_msgs::msg::String::SharedPtr msg) {
@@ -276,8 +336,7 @@ private:
     }
     // Run the sequence in a short-lived worker thread so we don't block the
     // executor callback loop (the marker-wait + retries can take seconds).
-    if (worker_.joinable()) worker_.join();
-    worker_ = std::thread(&AutoInitOrchestratorNode::run_init_sequence, this, map_name);
+    start_cascade(map_name);
   }
 
   void on_marker_pose(
@@ -394,9 +453,7 @@ private:
     RCLCPP_INFO(get_logger(),
       "Auto-init triggered by mode transition to 'nav' for map '%s'",
       map_name.c_str());
-    if (worker_.joinable()) worker_.join();
-    worker_ = std::thread(&AutoInitOrchestratorNode::run_init_sequence,
-                          this, map_name);
+    start_cascade(map_name);
   }
 
   void on_reinitialize(
@@ -415,9 +472,11 @@ private:
     }
     RCLCPP_INFO(get_logger(), "Manual reinitialize requested for map '%s'",
                 map_name.c_str());
-    if (worker_.joinable()) worker_.join();
-    worker_ = std::thread(&AutoInitOrchestratorNode::run_init_sequence,
-                          this, map_name);
+    if (!start_cascade(map_name)) {
+      res->success = false;
+      res->message = "Initialization already in progress";
+      return;
+    }
     res->success = true;
     res->message = "Reinitialization started";
   }
@@ -595,7 +654,7 @@ private:
 
     const auto deadline =
       this->now() + rclcpp::Duration::from_seconds(zed_area_timeout_s_);
-    while (rclcpp::ok() && this->now() < deadline) {
+    while (rclcpp::ok() && !stop_requested_.load() && this->now() < deadline) {
       Pose2D snapshot_pose;
       bool ready = false;
       {
@@ -664,7 +723,9 @@ private:
       hint_source.c_str(), pose.x, pose.y, pose.theta * 180.0 / M_PI);
 
     set_state(STATE_INITIALIZING, "Path A: calling localize_in_map");
-    for (int attempt = 1; attempt <= localize_retries_ && rclcpp::ok(); ++attempt) {
+    for (int attempt = 1;
+         attempt <= localize_retries_ && rclcpp::ok() && !stop_requested_.load();
+         ++attempt) {
       if (call_localize_in_map(cuvslam_folder, pose)) {
         // Seed ekf_global with the hint pose so its map→odom TF snaps to
         // the loaded map immediately. Without this, cuVSLAM's differential
@@ -704,7 +765,7 @@ private:
     }
 
     const auto deadline = this->now() + rclcpp::Duration::from_seconds(marker_timeout_s_);
-    while (rclcpp::ok() && this->now() < deadline) {
+    while (rclcpp::ok() && !stop_requested_.load() && this->now() < deadline) {
       {
         std::lock_guard<std::mutex> lock(marker_mutex_);
         if (has_marker_) {
@@ -796,7 +857,7 @@ private:
   // ── Service calls ───────────────────────────────────────────────────────
 
   bool call_load_map(const std::string& cuvslam_folder) {
-    if (!load_map_client_->wait_for_service(5s)) {
+    if (!wait_service_interruptible(load_map_client_, 5s)) {
       RCLCPP_ERROR(get_logger(), "/visual_slam/load_map not available");
       return false;
     }
@@ -804,7 +865,7 @@ private:
       isaac_ros_visual_slam_interfaces::srv::FilePath::Request>();
     req->file_path = cuvslam_folder;
     auto future = load_map_client_->async_send_request(req);
-    if (future.wait_for(15s) != std::future_status::ready) {
+    if (!wait_future_interruptible(future, 15s)) {
       RCLCPP_ERROR(get_logger(), "/visual_slam/load_map timed out");
       return false;
     }
@@ -826,7 +887,7 @@ private:
   // pose fallback) when cuVSLAM is not available or fails. Covariance is tight
   // because the caller has an authoritative hint.
   bool call_set_pose(const Pose2D& hint) {
-    if (!set_pose_client_->wait_for_service(5s)) {
+    if (!wait_service_interruptible(set_pose_client_, 5s)) {
       RCLCPP_ERROR(get_logger(), "set_pose service not available");
       return false;
     }
@@ -850,7 +911,7 @@ private:
     req->pose.pose.covariance[35] = 0.10;   // yaw variance (rad²)
 
     auto future = set_pose_client_->async_send_request(req);
-    if (future.wait_for(5s) != std::future_status::ready) {
+    if (!wait_future_interruptible(future, 5s)) {
       RCLCPP_ERROR(get_logger(), "set_pose service call timed out");
       return false;
     }
@@ -871,7 +932,7 @@ private:
   }
 
   bool call_localize_in_map(const std::string& cuvslam_folder, const Pose2D& hint) {
-    if (!localize_client_->wait_for_service(5s)) {
+    if (!wait_service_interruptible(localize_client_, 5s)) {
       RCLCPP_ERROR(get_logger(), "/visual_slam/localize_in_map not available");
       return false;
     }
@@ -886,7 +947,7 @@ private:
     req->pose_hint.orientation.z = std::sin(hint.theta / 2.0);
     req->pose_hint.orientation.w = std::cos(hint.theta / 2.0);
     auto future = localize_client_->async_send_request(req);
-    if (future.wait_for(30s) != std::future_status::ready) {
+    if (!wait_future_interruptible(future, 30s)) {
       RCLCPP_ERROR(get_logger(), "/visual_slam/localize_in_map timed out");
       return false;
     }
@@ -1041,6 +1102,11 @@ private:
   std::string current_state_;
   std::string last_seen_mode_{"unknown"};  // last value seen on /agv/mode
   std::thread worker_;
+  // true while a cascade runs; re-triggers are rejected instead of joining
+  // the running worker from an executor callback (see start_cascade).
+  std::atomic<bool> worker_busy_{false};
+  // set by the destructor so the worker's sliced waits return promptly.
+  std::atomic<bool> stop_requested_{false};
 
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr map_loaded_sub_;

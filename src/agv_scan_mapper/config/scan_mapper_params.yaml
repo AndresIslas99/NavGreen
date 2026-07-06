@@ -10,6 +10,8 @@
     initial_width: 400        # starting cells (400 × 0.025 = 10m), grows dynamically
     initial_height: 400       # starting cells, grows dynamically
     expand_margin_cells: 80   # cells of margin added on each expansion (80 × 0.025 = 2m)
+    max_width_cells: 6000     # expansion cap per axis (6000 × 0.025 = 150m); scans implying
+    max_height_cells: 6000    # a larger extent (upstream pose jump) are dropped, not mapped
 
     # Publishing
     publish_rate_hz: 2.0      # OccupancyGrid publish rate (lower for finer grid)
