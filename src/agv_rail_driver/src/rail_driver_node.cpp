@@ -173,7 +173,11 @@ class RailDriverNode : public rclcpp::Node {
       if (pos == std::string::npos) return std::nan("");
       size_t p = pos + needle.size();
       if (p < d.size() && d[p] == 'n') return std::nan("");  // null
-      return std::stod(d.substr(p));
+      try {
+        return std::stod(d.substr(p));
+      } catch (...) {
+        return std::nan("");  // malformed/truncated value — not available
+      }
     };
     auto extract_string = [&](const std::string &key) -> std::string {
       const std::string needle = "\"" + key + "\":\"";

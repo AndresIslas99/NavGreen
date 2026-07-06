@@ -28,14 +28,21 @@ relays its Twist downstream and publishes the current mode.
   (geometry_msgs/Twist) — one of these is relayed.
 - `/agv/zone/state` (std_msgs/String) — from `agv_zone_detector`.
 - `/agv/rail_approach/state`, `/agv/rail_driver/state` (std_msgs/String).
-- `/agv/collision_monitor_state` (std_msgs/String) — Nav2 safety chain.
+- `/agv/collision_monitor_state` — subscribed **twice**, with two types:
+  - `nav2_msgs/CollisionMonitorState` — Nav2's collision_monitor
+    (production safety chain; `action_type == STOP` forces the stop).
+  - `std_msgs/String` (`"stop"/"slowdown"/"clear"`) — HIL-only
+    side-channel from `agv_hil_bridges/sim_obstacle_relay`.
+  The two sources are OR-ed each tick; either one saying stop forces
+  `BLOCKED_HANDOFF`.
 - `/agv/mode/set` (std_msgs/String) — `nav | teleop | idle`.
 
 ## Invariantes
 
 - The FSM lives in `include/agv_mode_arbiter/mode_fsm.hpp` (header-only,
   ROS-free). 22 unit tests cover every valid transition.
-- Safety stop (`collision_monitor_state == "stop"`) overrides every state
+- Safety stop (Nav2 `CollisionMonitorState.action_type == STOP`, or the
+  HIL String channel saying `"stop"`) overrides every state
   → `BLOCKED_HANDOFF` with `source=NONE` (zero cmd_vel).
 - Operator `idle` / `teleop` override the FSM before zone-based logic.
 - **RAIL_EXIT hard-lock**: once inside a rail (RAIL_DRIVE or RAIL_EXIT), the

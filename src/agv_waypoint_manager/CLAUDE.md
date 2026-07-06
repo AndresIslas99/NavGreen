@@ -28,7 +28,11 @@ Persists missions as line-delimited JSON and dispatches goals via Nav2's
 ## Key Implementation Details
 
 - Missions serialized as line-delimited JSON (one mission per line, no external JSON lib)
-- Sequential execution: blocks entire service call for duration of mission
+- Non-blocking execution: `execute` responds immediately; goals run in a worker
+  thread that waits on action futures completed by the main executor (the
+  worker never spins the node itself)
+- `waypoint_manager/cancel` (std_msgs/Bool) preempts the in-flight
+  `/navigate_to_pose` goal via `async_cancel_goal`, not just between waypoints
 - Quaternion from yaw: `z = sin(theta/2)`, `w = cos(theta/2)`
 - Auto-generated mission IDs use timestamp-based scheme
 - Creates missions directory on startup if it doesn't exist
@@ -45,6 +49,5 @@ Persists missions as line-delimited JSON and dispatches goals via Nav2's
 
 - Replace manual JSON parsing with nlohmann::json or similar library
 - Add waypoint pose validation (NaN, out-of-map-bounds)
-- Make execution non-blocking (currently blocks service caller for entire mission)
 - Add pause/resume capability for running missions
 - Add waypoint action support beyond navigation (pause, signal, custom actions)
