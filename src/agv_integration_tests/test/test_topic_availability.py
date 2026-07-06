@@ -1,22 +1,33 @@
 #!/usr/bin/env python3
+"""Integration test: verify all required ROS2 topics are being published.
+
+Skips unless AGV_STACK_TEST=1 is set with the full stack running
+(agv_full.launch.py); asserts hard when it is.
 """
-Integration test: verify all required ROS2 topics are being published.
-"""
+import os
 import subprocess
 
+import pytest
+
+if os.environ.get("AGV_STACK_TEST") != "1":
+    pytest.skip(
+        "stack-required test: set AGV_STACK_TEST=1 with the full stack "
+        "running (agv_full.launch.py)", allow_module_level=True)
+
+NS = os.environ.get("AGV_NAMESPACE", "agv")
 
 REQUIRED_TOPICS = [
-    '/agv/wheel_odom',
-    '/agv/joint_states',
-    '/agv/motor_state',
-    '/agv/drive_debug',
-    '/agv/cmd_vel',
-    '/agv/e_stop',
-    '/agv/scan',
-    '/agv/odometry/local',
-    '/agv/odometry/global',
-    '/agv/map',
-    '/agv/plan',
+    f'/{NS}/wheel_odom',
+    f'/{NS}/joint_states',
+    f'/{NS}/motor_state',
+    f'/{NS}/drive_debug',
+    f'/{NS}/cmd_vel',
+    f'/{NS}/e_stop',
+    f'/{NS}/scan',
+    f'/{NS}/odometry/local',
+    f'/{NS}/odometry/global',
+    f'/{NS}/map',
+    f'/{NS}/plan',
     '/tf',
     '/tf_static',
     '/visual_slam/tracking/odometry',
@@ -30,19 +41,14 @@ def test_topics_available():
         capture_output=True, text=True, timeout=10)
 
     available = set(result.stdout.strip().splitlines())
-    missing = []
-
-    for topic in REQUIRED_TOPICS:
-        if topic not in available:
-            missing.append(topic)
+    missing = [topic for topic in REQUIRED_TOPICS if topic not in available]
 
     if missing:
         print(f"MISSING topics ({len(missing)}/{len(REQUIRED_TOPICS)}):")
         for t in missing:
             print(f"  - {t}")
-        print("NOTE: This test requires the full stack to be running.")
-    else:
-        print(f"All {len(REQUIRED_TOPICS)} topics available.")
+    assert not missing, f"required topics missing from ROS graph: {missing}"
+    print(f"All {len(REQUIRED_TOPICS)} topics available.")
 
 
 if __name__ == '__main__':

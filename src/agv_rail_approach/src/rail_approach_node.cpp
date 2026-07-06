@@ -51,6 +51,11 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   // `state=aborted` with last_reject_reason='fine_servo_timeout' so
   // operators see the failure specifically, not a generic NAV_TIMEOUT.
   declare_parameter("max_fine_duration_s", 120.0);
+  // Deadline for the Nav2-delegated coarse phase. If neither the goal
+  // response nor the result arrives within this budget (Nav2 died, goal
+  // silently dropped), the node aborts instead of staying in
+  // COARSE_APPROACH forever. ≤ 0 disables.
+  declare_parameter("coarse_timeout_s", 180.0);
   // Iter-15: robot-to-tag distance threshold (m) below which the node
   // skips Nav2 coarse_approach entirely. See start_coarse_approach for
   // rationale (floor tags carry yaw=0, Nav2 would get a wrong-direction
@@ -86,6 +91,7 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   tag_reacquire_timeout_ = get_parameter("tag_reacquire_timeout_s").as_double();
   acquisition_timeout_ = get_parameter("acquisition_timeout_s").as_double();
   max_fine_duration_ = get_parameter("max_fine_duration_s").as_double();
+  coarse_timeout_ = get_parameter("coarse_timeout_s").as_double();
   coarse_skip_radius_ = get_parameter("coarse_skip_radius").as_double();
   camera_frame_ = get_parameter("camera_frame").as_string();
   base_frame_ = get_parameter("base_frame").as_string();
@@ -141,9 +147,12 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
 
   // Status timer — 10 Hz so the mode_arbiter (ticking at 20 Hz) sees
   // transitions within one tick. 2 Hz was too slow for FSM pickup.
+  // Also drives check_deadlines(): the tag-loss / acquisition timeouts
+  // must fire even when the detection stream itself goes silent (a dead
+  // detector never invokes on_detection).
   status_timer_ = create_wall_timer(
     std::chrono::milliseconds(100),
-    std::bind(&RailApproachNode::publish_status, this));
+    std::bind(&RailApproachNode::on_status_timer, this));
 
   // Hot reload trigger from ui_backend (when operator assigns/removes tags)
   auto reload_qos = rclcpp::QoS(1).transient_local().reliable();
@@ -423,6 +432,10 @@ void RailApproachNode::on_list(
 
 void RailApproachNode::start_coarse_approach(const RailStart& rail) {
   state_ = State::COARSE_APPROACH;
+  // Fresh attempt — drop any goal handle from a prior run and arm the
+  // coarse deadline (checked by check_deadlines on the status timer).
+  nav_goal_handle_.reset();
+  coarse_start_ = now();
   // Iter-11 / Option B: fresh approach attempt — clear any stale
   // reject reason so the state topic reflects this run only.
   last_reject_reason_ = "none";
@@ -513,12 +526,33 @@ void RailApproachNode::start_coarse_approach(const RailStart& rail) {
               goal_msg.pose.pose.position.x, goal_msg.pose.pose.position.y, rail.yaw);
 
   auto send_opts = rclcpp_action::Client<NavAction>::SendGoalOptions();
+  // Capture the goal handle so finish() can cancel an in-flight Nav2
+  // goal on abort. Without this, /agv/rail_approach/abort reported
+  // success while Nav2 kept driving the robot to the standoff pose.
+  // A rejected goal never reaches on_nav_result, so it must abort here.
+  send_opts.goal_response_callback =
+    [this](NavGoalHandle::SharedPtr goal_handle) {
+      if (state_ != State::COARSE_APPROACH) {
+        // Aborted/finished while the goal response was in flight — cancel
+        // the now-orphaned goal instead of letting Nav2 keep driving.
+        if (goal_handle) nav_client_->async_cancel_goal(goal_handle);
+        return;
+      }
+      if (!goal_handle) {
+        RCLCPP_ERROR(get_logger(), "Nav2 rejected coarse approach goal");
+        finish(false, "Nav2 rejected coarse approach goal");
+        return;
+      }
+      nav_goal_handle_ = goal_handle;
+    };
   send_opts.result_callback = std::bind(&RailApproachNode::on_nav_result, this, std::placeholders::_1);
 
   nav_client_->async_send_goal(goal_msg, send_opts);
 }
 
 void RailApproachNode::on_nav_result(const NavGoalHandle::WrappedResult& result) {
+  // Terminal result — nothing left to cancel.
+  nav_goal_handle_.reset();
   if (state_ != State::COARSE_APPROACH) return;
 
   if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
@@ -574,14 +608,38 @@ void RailApproachNode::on_detection(
     return;
   }
 
-  // Target tag not found in this frame
-  if (state_ == State::TAG_ACQUISITION) {
-    double elapsed = (now() - acquisition_start_).seconds();
+  // Target tag not found in this frame — evaluate the same deadlines the
+  // status timer enforces (kept here too so a tag-less frame reacts
+  // without waiting for the next 100 ms tick).
+  check_deadlines();
+}
+
+// Deadline watchdog, driven by the 10 Hz status timer AND by tag-less
+// detection frames. Living on the timer is what makes it a real
+// watchdog: if the detector/camera dies entirely, on_detection never
+// fires again, and before this check moved here the node stayed in
+// FINE_SERVOING with the mode_arbiter re-publishing the last non-zero
+// approach Twist every tick — the robot kept driving blind on a stale
+// command.
+void RailApproachNode::check_deadlines() {
+  if (state_ == State::COARSE_APPROACH) {
+    if (coarse_timeout_ > 0.0 && coarse_start_.nanoseconds() > 0) {
+      const double elapsed = (now() - coarse_start_).seconds();
+      if (elapsed > coarse_timeout_) {
+        RCLCPP_WARN(get_logger(),
+            "coarse_approach timeout after %.1f s — aborting", elapsed);
+        last_reject_reason_ = "coarse_timeout";
+        last_reject_stamp_ = now();
+        finish(false, "coarse_approach timeout");
+      }
+    }
+  } else if (state_ == State::TAG_ACQUISITION) {
+    const double elapsed = (now() - acquisition_start_).seconds();
     if (elapsed > acquisition_timeout_) {
       finish(false, "Tag " + std::to_string(target_tag_id_) + " not found within timeout");
     }
   } else if (state_ == State::FINE_SERVOING) {
-    double since_last = (now() - tag_last_seen_).seconds();
+    const double since_last = (now() - tag_last_seen_).seconds();
     if (since_last > tag_loss_timeout_) {
       stop_robot();
       if (since_last > tag_reacquire_timeout_) {
@@ -839,6 +897,11 @@ void RailApproachNode::stop_robot() {
 }
 
 // ── Status publishing ──
+
+void RailApproachNode::on_status_timer() {
+  check_deadlines();
+  publish_status();
+}
 
 void RailApproachNode::publish_status() {
   // Dual label: `state` carries the mode_arbiter-compatible bucket and
