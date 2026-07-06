@@ -1,6 +1,6 @@
-spec_version: "2.0"
-last_updated: "2026-04-13"
-generated_from: "docs/audit/2026-04-13-full-audit.md#section-3"
+spec_version: "2.1"
+last_updated: "2026-07-06"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-3 (+ 2026-07-06 SSOT reconciliation)"
 verified_by: "tools/verify_specs/verify_persistence.py"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -132,19 +132,27 @@ global_artifacts:
     path: "${AGV_DATA_DIR}/maps/.current.area"
     format: "ZED SDK binary Area Memory (same as per-map)"
     writers:
-      - package: "zed_components (ZED wrapper)"
-        code_ref: "src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp::callback_saveAreaMemory"
+      - package: "zed_components (ZED wrapper — EXTERNAL, patched fork)"
+        external: true
+        external_ref: "zed-ros2-wrapper fork (deploy-time package, NOT in this workspace): zed_components/src/zed_camera/src/zed_camera_component.cpp::callback_saveAreaMemory"
         mechanism: "service /agv/zed/save_area_memory (operator-triggered or periodic auto-save)"
       - package: "agv_map_manager"
         code_ref: "src/agv_map_manager/src/map_manager_node.cpp::swap_area_memory_for_map"
         mechanism: "cp <X>.area → .current.area on Load Map"
     readers:
-      - package: "zed_components (ZED wrapper)"
-        code_ref: "src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp::startPosTracking"
+      - package: "zed_components (ZED wrapper — EXTERNAL, patched fork)"
+        external: true
+        external_ref: "zed-ros2-wrapper fork (deploy-time package, NOT in this workspace): zed_components/src/zed_camera/src/zed_camera_component.cpp::startPosTracking"
         role: "re-read on each reset_pos_tracking to hot-swap landmarks"
     lifecycle: "session (overwritten on every map load)"
     required: false
-    note: "This is the ZED wrapper's view of the landmark DB. The wrapper has been patched to re-read the param live so file swaps via reset_pos_tracking take effect."
+    note: |
+      This is the ZED wrapper's view of the landmark DB. The wrapper fork is
+      patched to re-read pos_tracking.area_memory_db_path live so file swaps
+      via reset_pos_tracking take effect. The wrapper source tree is
+      installed on the Jetson at deploy time and is not part of this repo —
+      writer/reader refs are marked external:true so verify_persistence.py
+      does not expect the files here.
 
   zones_json:
     path: "${AGV_DATA_DIR}/maps/zones.json"
@@ -152,11 +160,43 @@ global_artifacts:
     writer:
       package: "agv_map_manager"
       code_ref: "src/agv_map_manager/src/map_manager_node.cpp::on_update_zone"
+      mechanism: "atomic tmp+rename (writes zones.json.tmp, then fs::rename) — R4-atomicity compliant"
+    validation: "zone_id must be 1-64 chars of [A-Za-z0-9_-] (agv_map_manager::is_safe_name); rejected with 'Invalid zone_id (allowed: 1-64 chars of [A-Za-z0-9_-])'"
     readers:
       - package: "agv_map_manager (self, for CRUD)"
       - package: "Nav2 costmap filters (future integration)"
     lifecycle: "persistent"
     required: false
+
+  dashboard_missions_json:
+    path: "${AGV_DATA_DIR}/missions/missions.json"
+    format: "JSON array of Mission objects (seeded with '[]' on first run)"
+    writer:
+      package: "agv_ui_backend"
+      code_ref: "src/agv_ui_backend/src/routes/missions.ts"
+    readers:
+      - package: "agv_ui_backend"
+        role: "REST /api/missions CRUD + executeMission"
+    lifecycle: "persistent"
+    required: false
+    note: "This is the dashboard's mission store — the one operators actually use."
+
+  waypoint_manager_missions_store:
+    path: "<agv_navigation install share>/missions/missions.json (NOT under AGV_DATA_DIR — see known_issues)"
+    format: "line-delimited JSON (one mission object per line); seeded as an EMPTY file, not '[]' — a '[]' stub would be neither a JSON array nor valid JSONL"
+    writer:
+      package: "agv_waypoint_manager"
+      code_ref: "src/agv_waypoint_manager/src/waypoint_manager_node.cpp"
+      mechanism: "creates parent dir + zero-byte seed at startup if missing; appends one JSON object per saved mission"
+    readers:
+      - package: "agv_waypoint_manager"
+        role: "list/execute services (exercised only by integration tests today)"
+    lifecycle: "persistent (but lives in the colcon install share — wiped on clean rebuild)"
+    required: false
+    note: |
+      Separate from dashboard_missions_json and format-incompatible with it
+      (JSONL vs JSON array). Do NOT point both writers at one file. The
+      install-share location violates R1-location; tracked in known_issues.
 
   last_map_marker:
     path: "${HOME}/.agv/last_map"
@@ -199,13 +239,19 @@ global_artifacts:
 
   users_json:
     path: "${AGV_DATA_DIR}/users.json"
-    format: "JSON array of {username, role, password_hash}"
+    format: |
+      JSON object {enabled: bool, jwt_secret: string, token_expiry: string,
+      users: [{username, role, password_hash}]}. password_hash is
+      "scrypt:<salt>:<hash>" (legacy unsalted sha256 accepted and upgraded
+      transparently on login). Auto-created on first run with
+      enabled=false, users=[] and file mode 0600. No default users ship.
     writer:
       package: "agv_ui_backend"
-      code_ref: "src/agv_ui_backend/src/auth.ts::AuthManager"
+      code_ref: "src/agv_ui_backend/src/auth.ts"
+      also: "src/agv_ui_backend/src/tools/adduser.ts (npm run adduser -- <user> <pass> <role>)"
     readers:
       - package: "agv_ui_backend"
-        role: "JWT validation"
+        role: "auth enable flag + JWT validation"
     lifecycle: "persistent"
     required: false
 
@@ -308,19 +354,25 @@ hil_artifacts:
 # Session artifacts (non-canonical, scheduled for cleanup in Fase 5)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# NOTE 2026-07-06: the agv_slam package was extracted from this workspace —
+# it is now an external deploy-time package installed on the Jetson (its
+# greenhouse override config ships here as
+# src/agv_bringup/config/cuvslam_greenhouse.yaml). The writers below live in
+# that external tree; the migration item follows the package.
+
 session_artifacts_to_migrate:
 
   session_recordings:
     current_path: "/mnt/ssd/sessions/"
     target_path: "${AGV_DATA_DIR}/sessions/"
-    writer: "src/agv_slam/scripts/session_recorder.py"
+    writer: "agv_slam/scripts/session_recorder.py (EXTERNAL — agv_slam is a deploy-time package, not in this repo)"
     format: "rosbag2 + SVO2 + TUM trajectory"
-    migration: "Fase 5 item 8 — change src/agv_slam/config/recording.yaml:11"
+    migration: "Fase 5 item 8 — change agv_slam/config/recording.yaml in the external package"
 
   slam_logs:
     current_path: "/mnt/ssd/slam_logs/"
     target_path: "${AGV_DATA_DIR}/slam_logs/"
-    writer: "src/agv_slam/src/pipeline_watchdog_node.cpp"
+    writer: "agv_slam/src/pipeline_watchdog_node.cpp (EXTERNAL — agv_slam is a deploy-time package, not in this repo)"
     migration: "Fase 5 item 8"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -356,12 +408,12 @@ rules:
 # Known issues (reported in audit, tracked for Fase 5/6)
 # ─────────────────────────────────────────────────────────────────────────────
 known_issues:
-  - issue: "Hardcoded /home/orza/agv_data/maps/.current.area in 4 places"
+  - issue: "Hardcoded /home/orza/agv_data/maps/.current.area default in 3 in-repo places"
     locations:
-      - "src/agv_map_manager/src/map_manager_node.cpp:45 (ROS param default)"
-      - "src/agv_slam/config/zed2i_override.yaml:38 (ZED wrapper pos_tracking.area_memory_db_path)"
-      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp:131 (declare_parameter default)"
-      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp:1001 (member initializer)"
+      - "src/agv_map_manager/src/map_manager_node.cpp (ROS param default, ~line 47)"
+      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp (declare_parameter default, ~line 132)"
+      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp (member initializer, ~line 1098)"
+      - "(external) agv_slam config zed2i_override.yaml pos_tracking.area_memory_db_path — follows the external package"
     current_status: "Whitelisted in verify_no_hardcoded_paths.sh pending a proper refactor."
     fix: "Read AGV_DATA_DIR env var at construction and build the path programmatically. Tracked as Fase 6 follow-up (not critical-path but desirable for portability)."
 
@@ -373,6 +425,17 @@ known_issues:
 
   - issue: "/mnt/ssd is a bare directory, not a real mount — fake SSD"
     fix: "Fase 5 item 8: move session/log artifacts under AGV_DATA_DIR"
+
+  - issue: "waypoint_manager missions store lives in the agv_navigation install share"
+    status: "OPEN (documented 2026-07-06)"
+    detail: |
+      agv_full.launch.py points waypoint_manager's missions_file at
+      <agv_navigation share>/missions/missions.json — the same
+      write-to-install bug class fixed for maps_dir in Fase 7 F3. The
+      dashboard's mission store is separately under
+      ${AGV_DATA_DIR}/missions/missions.json and the two formats are
+      incompatible (JSONL vs JSON array) — do NOT unify the paths without
+      unifying the executor (Fase 8 refactor).
 
   - issue: "_meta.json asymmetry: written on shutdown only"
     status: "FIXED 2026-04-13 Fase 6 bug #2"
