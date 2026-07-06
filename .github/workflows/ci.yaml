@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -12,29 +13,35 @@ jobs:
     container:
       image: ros:humble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install dependencies
         run: |
           apt-get update
           apt-get install -y python3-colcon-common-extensions python3-rosdep
-          rosdep init || true
+          rosdep init || true  # base image already ships a default sources list
           rosdep update
-          # Install only our package dependencies (skip Isaac ROS which needs GPU)
-          rosdep install --from-paths src/agv_odrive src/agv_interfaces src/agv_map_manager \
-            src/agv_waypoint_manager src/agv_markers src/agv_behaviors \
-            src/agv_sensor_fusion src/agv_navigation src/agv_bringup \
-            src/agv_description src/agv_integration_tests \
-            --ignore-src -y --skip-keys="isaac_ros_visual_slam isaac_ros_nvblox isaac_ros_apriltag_interfaces" || true
+          # Resolve the whole workspace so cross-package depends
+          # (e.g. agv_bringup -> agv_mode_arbiter) count as local packages.
+          # Skipped keys need vendor installs (NVIDIA Isaac ROS, ZED SDK,
+          # GTSAM); the packages that require them are not built in CI — see
+          # the build step below.
+          rosdep install --from-paths src --ignore-src -y \
+            --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam OpenCV"
 
       - name: Build AGV packages
+        # Not built in CI (compile-time deps unavailable without vendor repos):
+        #   agv_map_manager       — isaac_ros_visual_slam_interfaces (Isaac ROS)
+        #   agv_localization_init — zed_msgs (ZED ROS2 wrapper)
+        #   agv_factor_graph      — gtsam
+        # Remaining packages are pending CI enablement, one at a time.
         run: |
           source /opt/ros/humble/setup.bash
           colcon build \
-            --packages-select agv_interfaces agv_odrive agv_map_manager \
+            --packages-select agv_interfaces agv_odrive \
               agv_waypoint_manager agv_markers agv_behaviors \
               agv_sensor_fusion agv_navigation agv_bringup \
-              agv_description agv_integration_tests \
+              agv_description agv_mode_arbiter agv_integration_tests \
             --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Werror" \
             --event-handlers console_direct+
         shell: bash
@@ -44,29 +51,43 @@ jobs:
           source /opt/ros/humble/setup.bash
           source install/setup.bash
           colcon test \
-            --packages-select agv_odrive agv_interfaces agv_map_manager \
-              agv_waypoint_manager agv_markers agv_behaviors \
+            --packages-select agv_odrive agv_interfaces \
+              agv_waypoint_manager agv_markers agv_behaviors agv_mode_arbiter \
             --event-handlers console_direct+
           colcon test-result --all --verbose
         shell: bash
 
-  typescript-lint:
+  typescript-build:
     runs-on: ubuntu-22.04
+    # rclnodejs compiles native bindings against a sourced ROS 2 install,
+    # so the Node packages that depend on it must build inside ros:humble.
+    container:
+      image: ros:humble
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
 
       - name: Build UI backend
         working-directory: src/agv_ui_backend
-        run: npm ci && npm run build
+        run: |
+          source /opt/ros/humble/setup.bash
+          npm ci
+          npm run build
+        shell: bash
 
       - name: Build dashboard
         working-directory: web/agv_dashboard
-        run: npm ci && npx tsc --noEmit && npx vite build
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vite build
+        shell: bash
 
       - name: Build fleet packages
         run: |
+          source /opt/ros/humble/setup.bash
           cd fleet/agv_vda5050_adapter && npm ci && npm run build && cd ../..
           cd fleet/agv_fleet_manager && npm ci && npm run build
+        shell: bash
