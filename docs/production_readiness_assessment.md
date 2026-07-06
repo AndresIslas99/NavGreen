@@ -2,6 +2,15 @@
 **Date**: 2026-03-31 (updated post-WP7)
 **Git**: 00ebba5 (main)
 
+> **HISTORICAL SNAPSHOT — superseded by the 2026-04-13 audit. Do not use for
+> current status.** This assessment predates the 2026-04-13 audit and the
+> Phase-2 rail/arbiter work: the package count (14 vs 24+ today), the launch
+> files it cites (e.g. `agv_fusion.launch.py`, deleted per
+> [specs/launch_sequence.yaml](../specs/launch_sequence.yaml)), and the
+> readiness percentages no longer match the tree. For current status see
+> [STATUS.yaml](../STATUS.yaml), the specs under [specs/](../specs/), and
+> [docs/audit/2026-04-13-full-audit.md](audit/2026-04-13-full-audit.md).
+
 ## Executive Verdict
 
 **Status: PRODUCTION CODE COMPLETE — PENDING FIELD VALIDATION**
