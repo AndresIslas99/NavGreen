@@ -61,6 +61,18 @@ def check_artifact(art: dict, name: str) -> list[str]:
     if not isinstance(art, dict):
         return errors
     for writer in _iter_writers(art):
+        # `external: true` marks a writer/reader living in a deploy-time
+        # package outside this workspace (e.g. the patched zed-ros2-wrapper
+        # fork). Such entries carry an `external_ref` description instead of
+        # a workspace code_ref and are exempt from the existence check —
+        # but an external entry that still claims a code_ref is an error.
+        if writer.get("external") is True:
+            if writer.get("code_ref"):
+                errors.append(
+                    f"WARN: artifact '{name}' writer is external:true but also has a code_ref "
+                    "— use external_ref for out-of-repo sources"
+                )
+            continue
         code_ref = writer.get("code_ref")
         if not code_ref:
             continue
@@ -69,6 +81,13 @@ def check_artifact(art: dict, name: str) -> list[str]:
             errors.append(f"WARN: artifact '{name}' writer.code_ref points to missing file: {code_ref}")
     for reader in art.get("readers", []) or []:
         if not isinstance(reader, dict):
+            continue
+        if reader.get("external") is True:
+            if reader.get("code_ref"):
+                errors.append(
+                    f"WARN: artifact '{name}' reader is external:true but also has a code_ref "
+                    "— use external_ref for out-of-repo sources"
+                )
             continue
         rref = reader.get("code_ref")
         if rref:

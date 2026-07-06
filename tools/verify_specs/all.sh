@@ -1,8 +1,12 @@
 #!/bin/bash
 # all.sh — run every verify_* script in order.
 #
-# Exit code is 0 only if every BLOCKING script returned 0. WARNING scripts
-# print their issues but do not cause a non-zero exit.
+# Exit code is 0 only if every BLOCKING script returned 0 AND no script
+# (of either tier) printed a `FAIL:` line. WARNING-tier scripts may print
+# `WARN:` lines without blocking, but structural errors (`FAIL:`) block
+# the commit regardless of tier — a gutted spec must never pass green.
+# A missing BLOCKING script is itself a blocking failure (deleting or
+# renaming a gate script must not silently disable the gate).
 
 set -e
 
@@ -40,7 +44,14 @@ run_one() {
   local script="$1"
   local severity="$2"  # BLOCKING or WARNING
   if [ ! -r "$script" ]; then
-    echo "$(yellow SKIP): $script not found"
+    if [ "$severity" = "BLOCKING" ]; then
+      # A missing gate script must fail the suite, not skip it.
+      echo "$(red "FAIL"): BLOCKING script $script not found"
+      blocking_failures=$((blocking_failures + 1))
+      return 0
+    fi
+    echo "$(yellow WARN): WARNING script $script not found"
+    warning_hits=$((warning_hits + 1))
     return 0
   fi
   echo
@@ -57,8 +68,15 @@ run_one() {
 
   echo "$output"
 
-  if [ "$rc" -ne 0 ]; then
-    if [ "$severity" = "BLOCKING" ]; then
+  # A `FAIL:` line is a structural error and blocks regardless of tier —
+  # this catches WARNING-tier scripts that detect a broken/missing spec.
+  local has_fail=0
+  if echo "$output" | grep -qE '^FAIL:'; then
+    has_fail=1
+  fi
+
+  if [ "$rc" -ne 0 ] || [ "$has_fail" -eq 1 ]; then
+    if [ "$severity" = "BLOCKING" ] || [ "$has_fail" -eq 1 ]; then
       blocking_failures=$((blocking_failures + 1))
       echo "$(red "RESULT: BLOCKING FAIL")"
     else

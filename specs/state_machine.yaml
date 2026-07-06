@@ -1,17 +1,20 @@
-spec_version: "2.0"
-last_updated: "2026-04-13"
-generated_from: "docs/audit/2026-04-13-full-audit.md#section-1"
+spec_version: "2.1"
+last_updated: "2026-07-06"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-1 (+ 2026-07-06 SSOT reconciliation)"
 verified_by: "tools/verify_specs/verify_state_machine.py"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AGV Operation Modes — canonical matrix
 #
-# The running state of the robot is the product of FOUR independent layers.
+# The running state of the robot is the product of FIVE independent layers.
 # Nothing in the codebase captures this matrix; this file is the single source
 # of truth for what combinations are valid and what they mean.
 #
 # A runtime observer can answer "what is the current mode?" by sampling the
-# four layer values at the same instant.
+# five layer values at the same instant. Layer 5 (the Phase-2 mode arbiter
+# FSM, the node that actually owns /agv/cmd_vel in production) is
+# cross-checked against src/agv_mode_arbiter mode_fsm.hpp by
+# verify_state_machine.py — the enum and this spec must not drift.
 # ─────────────────────────────────────────────────────────────────────────────
 
 layers:
@@ -36,8 +39,12 @@ layers:
         map_resolution: "no initial map (SLAM builds from scratch)"
       hil:
         launch_file: "agv_hil_full.launch.py"
-        purpose: "Hardware-in-the-loop simulation. Simulated sensor inputs drive the real stack."
+        purpose: "Hardware-in-the-loop simulation (minimal HIL stack with Jetson-side bridges). Simulated sensor inputs drive the real stack."
         map_resolution: "AGV_MAP required (fails if missing)"
+      hil_full:
+        launch_file: "agv_full.launch.py (with hil_mode:=true)"
+        purpose: "Full-brain HIL validation: the PRODUCTION launch file with hardware-only nodes (ODrive, ZED/cuVSLAM, imu_filter, pointcloud_to_laserscan, image_server) skipped. Used during PR validation sprints."
+        map_resolution: "AGV_MAP required (agv_start.sh errors if missing)"
 
   # Layer 2 — launch file condition. Computed inside the launch file as
   # `has_map = map_yaml != ''`. Gates Nav2 and safety chain inclusion.
@@ -67,7 +74,7 @@ layers:
   # Layer 3 — runtime mode published by the dashboard backend. Changes live
   # via WebSocket message or REST. Does NOT change TF ownership or launch
   # topology — it only gates dashboard buttons and cmd_vel limits.
-  # Source: src/agv_ui_backend/src/index.ts:810-821
+  # Source: src/agv_ui_backend/src/index.ts (deps.setMode)
   layer_3_runtime_mode:
     variable: "currentMode"
     source: "agv_ui_backend state + /agv/mode topic"
@@ -114,6 +121,60 @@ layers:
       - "navigating: Nav2 active goal"
       - "ready: motors armed, odometry flowing"
     used_for: "Dashboard UI badges and button enable/disable. NOT for transitioning other layers."
+
+  # Layer 5 — Phase-2 runtime mode arbiter FSM. In production (has_map=true)
+  # the mode_arbiter node is the SOLE publisher of /agv/cmd_vel: it selects
+  # exactly one upstream source (cmd_vel_nav | cmd_vel_approach |
+  # cmd_vel_rail) per FSM state and relays it. Operator overrides arrive on
+  # /agv/mode/set with vocabulary nav|teleop|idle — PARALLEL to layer 3's
+  # teleop|mapping|nav on /agv/mode. The backend translates: layer-3
+  # 'mapping' is published to the arbiter as 'teleop' (the arbiter has no
+  # mapping concept). FSM state is broadcast as JSON on /agv/mode/state.
+  #
+  # The `values` keys below MUST mirror `enum class Mode` in
+  # src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp, in enum
+  # order — verify_state_machine.py FAILS the suite on any mismatch.
+  layer_5_runtime_arbiter:
+    variable: "Mode (mode_fsm.hpp enum class)"
+    source: "src/agv_mode_arbiter/src/mode_arbiter_node.cpp + include/agv_mode_arbiter/mode_fsm.hpp"
+    authority: "derived from zone + rail state + collision inputs; operator override via /agv/mode/set"
+    switchable_live: true
+    observable_on: "/agv/mode/state (20 Hz JSON: mode, source, zone, operator_mode, transitions)"
+    cmd_vel_ownership: "sole /agv/cmd_vel publisher when running (production has_map=true); teleop_server publishes directly only when arbiter source == NONE and operator_mode == teleop"
+    values:
+      corridor_nav:
+        relays: "cmd_vel_nav (Nav2 MPPI output)"
+        meaning: "normal Nav2 corridor navigation"
+      rail_approach_pend:
+        relays: "cmd_vel_nav (Nav2 keeps authority during coarse approach / tag acquisition)"
+        meaning: "rail-start zone reached; rail_approach/execute fired, waiting for it to reach fine-servoing ('driving')"
+      rail_approach_active:
+        relays: "cmd_vel_approach"
+        meaning: "AprilTag fine-servoing onto the rail head"
+      rail_drive:
+        relays: "cmd_vel_rail"
+        meaning: "longitudinal-only drive on rails (wz hard-zeroed)"
+      rail_exit:
+        relays: "cmd_vel_rail (exit push goal)"
+        meaning: "controlled push off the rail back to the corridor"
+      blocked_handoff:
+        relays: "nothing (zero cmd_vel)"
+        meaning: "collision monitor STOP or unresolvable state — holds until clear"
+      teleop:
+        relays: "nothing (arbiter silent; teleop_server publishes /agv/cmd_vel directly)"
+        meaning: "operator override via /agv/mode/set='teleop' (also used for layer-3 mapping)"
+      idle:
+        relays: "nothing (zero cmd_vel)"
+        meaning: "operator override via /agv/mode/set='idle'"
+    interaction_with_layer_3: |
+      Layer 3 gates WHAT the dashboard lets the operator do; layer 5 gates
+      WHICH controller's twist reaches the motors. setMode() publishes the
+      translated operator mode to /agv/mode/set, so layer-3 'nav' puts the
+      arbiter in autonomous selection (CORRIDOR_NAV/RAIL_*), and layer-3
+      'teleop'/'mapping' force the arbiter to TELEOP (silent).
+      Exception (2026-04-25 carve-out): cmd_vel_approach from an explicit
+      /api/apriltags/:hw_id/align call reaches the motors even when
+      operator_mode=teleop.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Valid combinations
@@ -178,7 +239,7 @@ invariants:
   - id: "tf_map_odom_single_owner"
     description: "Exactly one node publishes map→odom transform at any time."
     owner: "ekf_global in real/hil modes; cuVSLAM in mapping mode"
-    enforced_by: "YAML overrides with /**: key — see src/agv_slam/config/cuvslam_greenhouse.yaml"
+    enforced_by: "YAML overrides with /**: key — see src/agv_bringup/config/cuvslam_greenhouse.yaml (the agv_slam package is external/deploy-time; its greenhouse override config ships in agv_bringup)"
     failure_mode: "Two publishers → TF jitter → localization divergence → navigation failures"
 
   - id: "tf_odom_base_single_owner"
@@ -189,7 +250,7 @@ invariants:
   - id: "odrive_cmd_vel_source"
     description: "agv_odrive_node subscribes to exactly one cmd_vel topic."
     rule: "layer_2_has_map=with_map → /agv/cmd_vel_safe; without_map → /agv/cmd_vel"
-    enforced_by: "src/agv_bringup/launch/agv_full.launch.py:84-115 with IfCondition/UnlessCondition"
+    enforced_by: "src/agv_bringup/launch/agv_full.launch.py — two odrive.launch.py includes gated IfCondition(has_map_real)/IfCondition(no_map_real), passing cmd_vel_topic:='cmd_vel_safe' or 'cmd_vel'"
 
   - id: "safety_chain_never_silent_on_idle"
     description: "The topics monitored by safety_supervisor must publish continuously at a predictable rate. Event-driven topics (such as Nav2 collision_monitor_state, which only publishes when cmd_vel_smoothed flows) must NOT be in the monitored list, otherwise teleop-at-rest falsely marks them silent and blocks cmd_vel."
@@ -248,7 +309,7 @@ transitions:
       - "collision_monitor_state fresh (<2s old)"
       - "motors armed"
       - "localization state != FAILED"
-      - "(future) lifecycle_manager_navigation reports active — see invariant mode_coherence, currently NOT ENFORCED"
+      - "lifecycle_manager_navigation reports active — ENFORCED (index.ts deps.setMode calls /agv/lifecycle_manager_navigation/is_active; see invariant mode_coherence, FIXED 2026-04-13 Fase 6 bug #3)"
 
   - from: "real_nav_ready"
     to: "real_nav_goal"
@@ -293,5 +354,3 @@ gaps:
     description: "hil mode transition matrix is underspecified — HIL is not exercised as a regular workflow."
   - id: "unused_robot_states"
     description: "Layer 4 RobotState enum has 9 values but several ('offline', 'blocked') are never observed in practice. Should be pruned or documented as reserved for future features."
-  - id: "nav2_liveness_feedback"
-    description: "Invariant mode_coherence is currently NOT ENFORCED — setMode('nav') does not verify that Nav2 lifecycle reached 'active'. See docs/audit/2026-04-13-full-audit.md bug #3. Fix tracked in Fase 6."
