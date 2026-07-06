@@ -31,7 +31,11 @@ interfaces:
     - topic: /agv/rail_driver/state
       type: std_msgs/String
     - topic: /agv/collision_monitor_state
+      type: nav2_msgs/CollisionMonitorState
+      notes: Production Nav2 safety chain; action_type == STOP forces BLOCKED_HANDOFF.
+    - topic: /agv/collision_monitor_state
       type: std_msgs/String
+      notes: HIL-only side-channel from agv_hil_bridges/sim_obstacle_relay; OR-ed with the typed source.
     - topic: /agv/mode/set
       type: std_msgs/String
 

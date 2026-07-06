@@ -19,6 +19,10 @@
   <xacro:arg name="gear_ratio" default="10.0"/>
   <xacro:arg name="invert_left" default="true"/>
   <xacro:arg name="invert_right" default="false"/>
+  <!-- Fault thresholds: consecutive cycles at the controller update rate
+       before read()/write() report ERROR to controller_manager -->
+  <xacro:arg name="max_send_failures" default="10"/>
+  <xacro:arg name="encoder_timeout_cycles" default="100"/>
 
   <!-- Pull in the geometry already defined in agv_description -->
   <xacro:include filename="$(find agv_description)/urdf/agv_full.urdf.xacro"/>
@@ -37,6 +41,8 @@
         <param name="gear_ratio">$(arg gear_ratio)</param>
         <param name="invert_left">$(arg invert_left)</param>
         <param name="invert_right">$(arg invert_right)</param>
+        <param name="max_send_failures">$(arg max_send_failures)</param>
+        <param name="encoder_timeout_cycles">$(arg encoder_timeout_cycles)</param>
       </xacro:unless>
     </hardware>
 
