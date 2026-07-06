@@ -7,6 +7,7 @@ import type { AppDeps } from '../app_deps';
 
 export function register(app: Express, deps: AppDeps): void {
   const { apriltagManager, eventLog, ros, state } = deps;
+  const requireOperator = deps.authManager.requireAuth('operator');
 
   // GET full state: defined tags + assignments + pending detections
   app.get('/api/apriltags', (_req, res) => {
@@ -18,7 +19,7 @@ export function register(app: Express, deps: AppDeps): void {
   });
 
   // POST create a new defined tag
-  app.post('/api/apriltags/defined', (req, res) => {
+  app.post('/api/apriltags/defined', requireOperator, (req, res) => {
     const { label, description, x, y, yaw, z, type } = req.body || {};
     if (typeof label !== 'string' || !label.trim()) {
       return res.status(400).json({ error: 'label required' });
@@ -39,8 +40,8 @@ export function register(app: Express, deps: AppDeps): void {
   });
 
   // PUT update existing defined tag
-  app.put('/api/apriltags/defined/:id', (req, res) => {
-    const id = parseInt(req.params.id, 10);
+  app.put('/api/apriltags/defined/:id', requireOperator, (req, res) => {
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return res.status(400).json({ error: 'invalid id' });
     const fields: Record<string, unknown> = {};
     for (const k of ['label', 'description', 'x', 'y', 'z', 'yaw']) {
@@ -52,8 +53,8 @@ export function register(app: Express, deps: AppDeps): void {
   });
 
   // DELETE defined tag (also removes any hardware assignments)
-  app.delete('/api/apriltags/defined/:id', (req, res) => {
-    const id = parseInt(req.params.id, 10);
+  app.delete('/api/apriltags/defined/:id', requireOperator, (req, res) => {
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return res.status(400).json({ error: 'invalid id' });
     const ok = apriltagManager.deleteDefinedTag(id);
     if (!ok) return res.status(404).json({ error: 'tag not found' });
@@ -62,7 +63,7 @@ export function register(app: Express, deps: AppDeps): void {
   });
 
   // POST assign a hardware ID to a defined tag
-  app.post('/api/apriltags/assign', (req, res) => {
+  app.post('/api/apriltags/assign', requireOperator, (req, res) => {
     const { hardware_id, defined_id } = req.body || {};
     if (typeof hardware_id !== 'number' || typeof defined_id !== 'number') {
       return res.status(400).json({ error: 'hardware_id and defined_id required (numbers)' });
@@ -74,8 +75,8 @@ export function register(app: Express, deps: AppDeps): void {
   });
 
   // DELETE remove a hardware assignment
-  app.delete('/api/apriltags/assignment/:hardware_id', (req, res) => {
-    const id = parseInt(req.params.hardware_id, 10);
+  app.delete('/api/apriltags/assignment/:hardware_id', requireOperator, (req, res) => {
+    const id = parseInt(String(req.params.hardware_id), 10);
     if (isNaN(id)) return res.status(400).json({ error: 'invalid hardware_id' });
     const ok = apriltagManager.unassignHardware(id);
     if (!ok) return res.status(404).json({ error: 'assignment not found' });
@@ -83,8 +84,8 @@ export function register(app: Express, deps: AppDeps): void {
   });
 
   // POST dismiss pending detection (until next time it's seen)
-  app.post('/api/apriltags/dismiss/:hardware_id', (req, res) => {
-    const id = parseInt(req.params.hardware_id, 10);
+  app.post('/api/apriltags/dismiss/:hardware_id', requireOperator, (req, res) => {
+    const id = parseInt(String(req.params.hardware_id), 10);
     if (isNaN(id)) return res.status(400).json({ error: 'invalid hardware_id' });
     apriltagManager.dismissPending(id);
     res.json({ success: true });
@@ -93,8 +94,8 @@ export function register(app: Express, deps: AppDeps): void {
   // POST send nav goal to a defined tag's coordinates.
   // If the tag is rail_start, the backend will auto-trigger rail_approach
   // after Nav2 succeeds (handled in index.ts via pendingRailApproach).
-  app.post('/api/apriltags/:id/navigate', (req, res) => {
-    const id = parseInt(req.params.id, 10);
+  app.post('/api/apriltags/:id/navigate', requireOperator, (req, res) => {
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) return res.status(400).json({ error: 'invalid id' });
     const tag = apriltagManager.getDefinedTag(id);
     if (!tag) return res.status(404).json({ error: 'tag not found' });
@@ -152,8 +153,8 @@ export function register(app: Express, deps: AppDeps): void {
   // The mode_arbiter has a carve-out (2026-04-25) that allows
   // Source::APPROACH even when operator_mode=teleop, so this endpoint
   // works without first switching the dashboard mode pill to 'nav'.
-  app.post('/api/apriltags/:hw_id/align', async (req, res) => {
-    const hw_id = parseInt(req.params.hw_id, 10);
+  app.post('/api/apriltags/:hw_id/align', requireOperator, async (req, res) => {
+    const hw_id = parseInt(String(req.params.hw_id), 10);
     if (isNaN(hw_id)) return res.status(400).json({ error: 'invalid hw_id' });
 
     if (!apriltagManager.hasRecentDetection(hw_id, 2.0)) {
@@ -171,8 +172,11 @@ export function register(app: Express, deps: AppDeps): void {
       });
     }
 
-    const offset_x = parseFloat(req.body?.offset_x ?? '0.30');
-    const offset_y = parseFloat(req.body?.offset_y ?? '0.0');
+    const offset_x = Number(req.body?.offset_x ?? 0.30);
+    const offset_y = Number(req.body?.offset_y ?? 0.0);
+    if (!Number.isFinite(offset_x) || !Number.isFinite(offset_y)) {
+      return res.status(400).json({ error: 'offset_x and offset_y must be finite numbers' });
+    }
 
     eventLog.emit('info', 'NAV',
       `Aligning to tag ${hw_id} (skip_coarse, offset_x=${offset_x.toFixed(2)})`);
