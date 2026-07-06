@@ -40,17 +40,19 @@ jobs:
             --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam"
 
       - name: Build AGV packages
-        # Every first-party package builds in CI except the three whose
-        # compile-time deps need vendor repos:
+        # 20 of 24 first-party packages build in CI. Excluded, all traceable
+        # to three vendor SDKs unavailable on the public apt index:
         #   agv_map_manager       — isaac_ros_visual_slam_interfaces (Isaac ROS)
         #   agv_localization_init — zed_msgs (ZED ROS2 wrapper)
         #   agv_factor_graph      — gtsam
+        #   agv_bringup           — declares all three above as runtime deps,
+        #                           so colcon cannot resolve it without them
         run: |
           source /opt/ros/humble/setup.bash
           colcon build \
             --packages-select agv_interfaces agv_odrive \
               agv_waypoint_manager agv_markers agv_behaviors \
-              agv_sensor_fusion agv_navigation agv_bringup \
+              agv_sensor_fusion agv_navigation \
               agv_description agv_mode_arbiter agv_integration_tests \
               agv_hil_bridges agv_rail_driver agv_ui_backend agv_zone_detector \
               agv_safety agv_scan_mapper agv_image_server agv_rail_detector \
