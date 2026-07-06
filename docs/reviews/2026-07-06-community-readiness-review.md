@@ -17,10 +17,11 @@ code, the specs, and CI — if they disagree with this file, they win.
 
 ## Headline outcomes
 
-- **CI was red on every recorded run and is now green**, building 21 of 24
+- **CI was red on every recorded run and is now green**, building 20 of 24
   packages with `-Werror` plus tests, all four Node packages, and the SSOT
-  verification suite. The three CI-excluded packages need vendor SDKs
-  (Isaac ROS, ZED, GTSAM).
+  verification suite. The four CI-excluded packages all trace to three vendor
+  SDKs (Isaac ROS, ZED, GTSAM): `agv_map_manager`, `agv_localization_init`,
+  `agv_factor_graph`, and `agv_bringup` (which depends on all three).
 - **A committed plaintext SSH password and the maintainer's home-lab
   topology were scrubbed** from the docs tree (see the mandatory owner
   actions below — the git history still contains them).
