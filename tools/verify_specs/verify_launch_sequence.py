@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""verify_launch_sequence — sanity checks on specs/launch_sequence.yaml.
+"""verify_launch_sequence — checks on specs/launch_sequence.yaml.
 
-Validates schema and that each `source:` file:line reference actually points
-to an existing file in the workspace.
+`source:` convention: "<path>" or "<path> (<anchor>)" or "<path>:<line>".
+- The path must exist in the workspace (FAIL — a spec pointing at a deleted
+  launch file is structural drift and blocks the suite via all.sh).
+- If an anchor is given, it must appear as a literal substring of the file
+  (WARN — anchors replace brittle line numbers; a vanished anchor means the
+  entry needs a refresh but the file still exists).
 """
 
 from __future__ import annotations
@@ -20,6 +24,16 @@ WS_ROOT = Path(__file__).resolve().parents[2]
 SPEC = WS_ROOT / "specs/launch_sequence.yaml"
 
 
+def parse_source(src: str) -> tuple[str, str | None]:
+    """Split "<path> (<anchor>)" / "<path>:<line>" into (path, anchor)."""
+    anchor = None
+    if " (" in src and src.rstrip().endswith(")"):
+        path_part, anchor_part = src.split(" (", 1)
+        anchor = anchor_part.rstrip()[:-1].strip() or None
+        src = path_part
+    return src.split(":")[0].strip(), anchor
+
+
 def main() -> int:
     if not SPEC.exists():
         print(f"FAIL: {SPEC} does not exist")
@@ -27,10 +41,11 @@ def main() -> int:
     with SPEC.open() as f:
         data = yaml.safe_load(f) or {}
 
-    errors: list[str] = []
+    failures: list[str] = []
+    warnings: list[str] = []
 
     if "sequence" not in data:
-        errors.append("FAIL: missing top-level 'sequence' key")
+        failures.append("FAIL: missing top-level 'sequence' key")
     else:
         for entry in data["sequence"]:
             if not isinstance(entry, dict):
@@ -38,23 +53,33 @@ def main() -> int:
             name = entry.get("name", "<unknown>")
             src = entry.get("source")
             if not src:
-                errors.append(f"WARN: entry '{name}' missing 'source'")
+                warnings.append(f"WARN: entry '{name}' missing 'source'")
                 continue
-            # Skip free-form references that are not real paths. If it does
-            # not look like a path (no '/' and no '.launch.py', etc), assume
-            # it is a human note referring to a previous entry.
+            # Free-form references without a path are human notes.
             if "/" not in src:
                 continue
-            path = src.split(":")[0]
+            path, anchor = parse_source(src)
             p = WS_ROOT / path
             if not p.exists():
-                errors.append(f"WARN: entry '{name}' source file missing: {src}")
+                failures.append(f"FAIL: entry '{name}' source file missing: {src}")
+                continue
+            if anchor:
+                try:
+                    text = p.read_text(errors="ignore")
+                except OSError:
+                    text = ""
+                if anchor not in text:
+                    warnings.append(f"WARN: entry '{name}' anchor '{anchor}' not found in {path}")
 
-    if errors:
-        for e in errors:
-            print(e)
-        print(f"verify_launch_sequence: {len(errors)} issue(s)")
-        return 0  # WARNING severity
+    for line in failures + warnings:
+        print(line)
+
+    if failures:
+        print(f"verify_launch_sequence: {len(failures)} failure(s), {len(warnings)} warning(s)")
+        return 1
+    if warnings:
+        print(f"verify_launch_sequence: {len(warnings)} warning(s)")
+        return 0
 
     print("verify_launch_sequence: OK")
     return 0
