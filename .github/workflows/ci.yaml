@@ -42,6 +42,7 @@ jobs:
               agv_waypoint_manager agv_markers agv_behaviors \
               agv_sensor_fusion agv_navigation agv_bringup \
               agv_description agv_mode_arbiter agv_integration_tests \
+              agv_hil_bridges agv_rail_driver agv_ui_backend agv_zone_detector \
             --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Werror" \
             --event-handlers console_direct+
         shell: bash
@@ -53,6 +54,7 @@ jobs:
           colcon test \
             --packages-select agv_odrive agv_interfaces \
               agv_waypoint_manager agv_markers agv_behaviors agv_mode_arbiter \
+              agv_rail_driver agv_zone_detector agv_sensor_fusion \
             --event-handlers console_direct+
           colcon test-result --all --verbose
         shell: bash
