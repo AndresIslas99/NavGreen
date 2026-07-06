@@ -69,10 +69,23 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install ROS interface dependencies
+        # rclnodejs generates its TypeScript bindings at npm-install time
+        # from the interfaces available in the sourced ROS environment, so
+        # nav2_msgs and the workspace's agv_interfaces must be present
+        # before `npm ci` runs.
+        run: |
+          apt-get update
+          apt-get install -y ros-humble-nav2-msgs python3-colcon-common-extensions
+          source /opt/ros/humble/setup.bash
+          colcon build --packages-select agv_interfaces
+        shell: bash
+
       - name: Build UI backend
         working-directory: src/agv_ui_backend
         run: |
           source /opt/ros/humble/setup.bash
+          source "$GITHUB_WORKSPACE/install/setup.bash"
           npm ci
           npm run build
         shell: bash
