@@ -1,12 +1,12 @@
-spec_version: "2.0"
-last_updated: "2026-04-13"
-last_audit: "2026-04-13"
-audit_document: "docs/audit/2026-04-13-full-audit.md"
+spec_version: "2.1"
+last_updated: "2026-07-06"
+last_audit: "2026-05-13"
+audit_document: "docs/audit/2026-04-13-full-audit.md (full) + docs/audit/2026-05-13-greenhouse-hardening/ (hardening)"
 
 project:
   id: "agv-greenhouse-mvp"
   name: "AGV Greenhouse MVP for First Site Visit"
-  status: "in_progress_audit_phase"
+  status: "post_audit_hardening — core stack implemented and HIL-validated; field validation on physical robot pending"
   primary_goal: "Deliver a field-ready AGV that can be teleoperated from a local tablet, build and load a map, execute waypoint missions, and show live status during the first greenhouse visit."
   success_definition:
     - "Operator can control robot from browser over local WiFi"
@@ -41,9 +41,10 @@ deployment:
   default_data_dir: "/home/orza/agv_data"
   default_dashboard_port: 8090
   default_image_server_port: 8091
+  default_fleet_manager_port: 8092
   default_namespace: "agv"
   can_interface: "can0"
-  cyclonedds_uri: "file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml"
+  cyclonedds_uri: "file:///tmp/agv_cyclonedds_runtime.xml (generated at boot by agv_start.sh from src/agv_bringup/config/cyclonedds_production.xml)"
 
 environment:
   site_type: "commercial greenhouse"
@@ -89,7 +90,7 @@ robot:
     # Previous entries (Smac Hybrid-A* / Regulated Pure Pursuit) were stale
     # from before commit a8180b7 (collision_monitor hardening + MPPI).
     planner: "SmacPlanner2D"
-    controller: "MPPI (nav2_mppi_controller::MPPIController)"
+    controller: "RotationShim wrapping MPPI (nav2_rotation_shim_controller::RotationShimController, primary_controller nav2_mppi_controller::MPPIController)"
     behavior_tree: "custom forward-only (src/agv_navigation/behavior_trees/navigate_to_pose_forward_only.xml)"
     dynamic_obstacle_handling:
       - "Nav2 Collision Monitor (two-source: scan + pointcloud)"
@@ -145,11 +146,18 @@ scope:
       package: "agv_odrive"
       outcome: "Wheel odometry published at required rate"
 
+  experimental_opt_in:
+    # Shipped in the repo but NOT part of the robot runtime stack or the
+    # MVP acceptance surface. Started manually (fleet/start_fleet.sh or the
+    # fleet/systemd units); interfaces registered in specs/interfaces.yaml.
+    - id: "fleet_management"
+      location: "fleet/agv_fleet_manager (REST/WS :8092, VDA 5050 master over MQTT)"
+    - id: "vda5050_interoperability"
+      location: "fleet/agv_vda5050_adapter (VDA 5050 2.0 adapter bridging MQTT ↔ ROS 2)"
+
   out_of_scope:
     - "full simulation and virtual commissioning"
-    - "fleet management"
     - "battery automation"
-    - "VDA 5050 interoperability"
     - "Open-RMF integration"
     - "certified functional safety"
     - "automatic docking and charging"
@@ -182,9 +190,12 @@ canonical_terms:
     default: "agv"
 
 phases:
+  # Statuses refreshed 2026-07-06 to match the tree. "done" = implemented
+  # and exercised (HIL and/or bench); field validation on the physical robot
+  # is tracked separately by phase_6_integration.
   - id: "phase_1_foundation"
     sequence: 1
-    status: "in_progress"
+    status: "done"
     depends_on: []
     packages:
       - "agv_description"
@@ -192,68 +203,84 @@ phases:
       - "agv_bringup"
     gate: "wheel_odom published coherently at 50Hz and robot moves under CLI teleop"
     notes: |
-      CAN bus working (devmem pinmux + systemd service).
-      ODrive S1 communication validated via CAN and USB.
-      Motor actuation working via Python dev tooling.
-      Pending: C++17 production node, URDF/TF, wheel odom at 50Hz.
+      CAN bus working (devmem pinmux + systemd service). ODrive S1 C++17
+      production node in place (odrive_can_node: 50 Hz wheel_odom,
+      motor_state with feedback_ok watchdog, drive_debug). URDF/TF via
+      agv_description. Python odrive tooling retained as dev_only.
 
   - id: "phase_2_perception"
     sequence: 2
-    status: "in_progress"
+    status: "done"
     depends_on: ["phase_1_foundation"]
     packages:
-      - "agv_slam"
+      - "agv_slam (external deploy-time package; greenhouse config in agv_bringup)"
       - "agv_sensor_fusion"
     gate: "2D map visible and robot relocalizes after save/load"
     notes: |
-      cuVSLAM + nvblox pipeline operational (agv_slam v3.0.0).
-      ZED 2i stereo-inertial mapping working.
-      Pending: dual EKF sensor fusion (agv_sensor_fusion not yet created).
+      cuVSLAM pipeline operational (nvblox removed Fase 7 F2 for resource
+      reasons). Dual EKF implemented in agv_sensor_fusion (ekf_local
+      odom→base_link, ekf_global map→odom) plus imu_filter,
+      wheel_slip_detector, caster_dwell_advisor, fusion_monitor.
 
   - id: "phase_3_navigation"
     sequence: 3
-    status: "blocked"
+    status: "done"
     depends_on: ["phase_2_perception"]
     packages:
       - "agv_navigation"
       - "agv_behaviors"
       - "agv_map_manager"
     gate: "robot navigates from A to B and stops or reroutes around obstacle"
-    notes: "Blocked by: wheel odom + TF tree + dual EKF must be stable first."
+    notes: "Nav2 (SmacPlanner2D + RotationShim/MPPI, collision monitor, forward-only BT) configured and exercised in HIL waypoint-precision runs."
 
   - id: "phase_4_markers"
     sequence: 4
-    status: "todo"
-    priority: "post_mvp_stretch"
+    status: "done"
     depends_on: ["phase_3_navigation"]
     packages:
       - "agv_markers"
+      - "agv_localization_init"
     gate: "AprilTag correction yields pose error under 5 cm"
-    notes: "De-prioritized per retro. Not required for first field visit if visual SLAM + wheel odom fusion is stable."
+    notes: "marker_correction + runtime registry + auto_init cascade (Paths A0/A/B/C) implemented; gate measured in HIL, field measurement pending."
 
   - id: "phase_5_dashboard"
     sequence: 5
-    status: "todo"
+    status: "done"
     depends_on: ["phase_3_navigation"]
     packages:
       - "agv_ui_backend"
       - "agv_waypoint_manager"
       - "web/agv_dashboard"
     gate: "full operator workflow works from tablet without terminal"
-    notes: "Can be developed in parallel with Phase 3 once interfaces are stable."
+    notes: "REST/WS backend + React dashboard + auth (scrypt users.json). Mission execution runs through the backend's TS executor; the C++ waypoint_manager unification is Fase 8 follow-up."
 
   - id: "phase_6_integration"
     sequence: 6
-    status: "todo"
+    status: "in_progress"
     depends_on:
       - "phase_4_markers"
       - "phase_5_dashboard"
     packages: ["all"]
     gate: "30-minute end-to-end demo passes without technical intervention"
+    notes: "HIL full-flow gate green (specs/acceptance.yaml#hil_validation); the on-site 30-minute demo on the physical robot has not been performed yet."
+
+  - id: "phase_7_rail_navigation"
+    sequence: 7
+    status: "done"
+    depends_on: ["phase_3_navigation", "phase_4_markers"]
+    packages:
+      - "agv_mode_arbiter"
+      - "agv_zone_detector"
+      - "agv_rail_approach"
+      - "agv_rail_detector"
+      - "agv_rail_driver"
+      - "agv_safety"
+    gate: "arbiter-owned cmd_vel: corridor Nav2 → rail approach → rail drive → exit, with collision BLOCKED_HANDOFF"
+    notes: "Phase-2 rail stack (see specs/state_machine.yaml layer_5_runtime_arbiter) integrated into agv_full.launch.py at t=7s. Safety chain (supervisor + cmd_vel_gate) active in has_map mode."
 
   - id: "phase_audit_2026_04_13"
     sequence: 99
-    status: "in_progress"
+    status: "done"
     depends_on: []
     packages: ["all"]
     gate: "All verify_specs checks pass + teleop works end-to-end post-audit"
@@ -262,7 +289,8 @@ phases:
       the reboot-to-production / Area Memory / safety chain iterations. Six
       sub-phases: Fase 0 (freeze), 1 (audit doc), 2 (specs as SSOT),
       3 (enforcement scripts), 4 (documentation restructure), 5 (fix violators),
-      6 (resolve latent bugs). Tracked in plan file and in docs/audit/.
+      6 (resolve latent bugs). Completed; followed by the 2026-05-13
+      greenhouse-hardening audit and the 2026-07-06 SSOT reconciliation.
 
 post_audit_invariants:
   - "Every persistent artifact under AGV_DATA_DIR (no hardcoded /home/orza/ in src/)"
