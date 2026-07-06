@@ -1,0 +1,45 @@
+task_version: "1.0"
+package: "agv_vda5050_adapter"
+owner_role: "architect_agent"
+language: "TypeScript"
+
+objective: "Bridge the robot's ROS2 graph to VDA 5050 2.0 MQTT (state/visualization/connection out; order/instantActions in)."
+
+# Not a ROS2 package (no package.xml); runs as a Node.js service on each
+# robot, started by fleet/start_fleet.sh or the systemd unit.
+runtime: "node dist/index.js"
+
+environment:
+  required_env:
+    - "VDA_MQTT_BROKER"
+    - "VDA_MANUFACTURER"
+    - "VDA_SERIAL_NUMBER"
+    - "AGV_NAMESPACE"
+  optional_env:
+    - "VDA_MQTT_USERNAME"   # defaults to VDA_SERIAL_NUMBER when password set
+    - "VDA_MQTT_PASSWORD"
+
+rules:
+  - "VDA 5050 pause (startPause/stopPause) must never write /agv/e_stop"
+  - "Only emergencyStop/clearEmergencyStop may publish /agv/e_stop"
+  - "No nav goal dispatch while paused or e-stop active"
+  - "Validate orders (orderId/orderUpdateId/nodes) before mutating state"
+  - "headerId monotonic per MQTT topic"
+  - "Unknown instant actions report actionStatus FAILED"
+  - "No hardcoded broker address, serial, or namespace — env only"
+
+outputs:
+  capabilities:
+    - "publish VDA 5050 state/visualization/connection"
+    - "execute multi-node VDA 5050 orders via /agv/navigate_to_pose"
+    - "pause/resume order execution"
+    - "fleet-commanded emergency stop via /agv/e_stop"
+
+known_gaps:
+  - "navigate_to_pose dispatch bypasses agv_ui_backend's mode/motors/localization gates (same class as agv_waypoint_manager known_gap in specs/interfaces.yaml)"
+  - "interfaces not yet registered in specs/interfaces.yaml; fleet still out_of_scope in specs/project.yaml"
+
+done_definition:
+  - "npx tsc --noEmit passes (strict)"
+  - "state visible in fleet manager within 2s of adapter start"
+  - "order round-trip: dispatch → driving → lastNodeId advances"

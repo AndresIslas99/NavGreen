@@ -1,73 +1,54 @@
-# React + TypeScript + Vite
+# AGV Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Operator HMI for the greenhouse AGV (React + TypeScript + Vite, ISA-101-inspired
+industrial design). It provides:
 
-Currently, two official plugins are available:
+- Live occupancy-grid map with robot pose, planned path, and laser scan overlay
+- Teleop joystick and motor arm/disarm controls
+- Mapping workflow (start/stop recording, save/load maps)
+- Mission creation and execution (waypoint capture on the map)
+- Recovery panel with E-stop, health, and nav-cancel
+- Analytics (mission history, pose replay), AprilTag management
+- Multi-robot fleet overlay fed by the fleet manager
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Relationship to the backend
 
-## React Compiler
+The dashboard is a pure frontend. All robot state and commands flow through
+[`src/agv_ui_backend`](../../src/agv_ui_backend/) (Express + rclnodejs, port
+8090 by default):
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- REST under `/api/*` (auth, status, mode, maps, missions, nav, analytics)
+- WebSocket `/ws/control` for live status, map updates, teleop, and E-stop
+- The fleet manager / image server (port 8091 by default) serves the
+  `/ws/fleet` stream and the traffic-zone API
 
-## Expanding the ESLint configuration
+In production the build output in `dist/` is served by the backend itself at
+`http://<jetson>:8090/dashboard`.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Development
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev      # Vite dev server on :5173, proxies /api and /ws to :8090
+npm run build    # type-check + production bundle in dist/
+npm run lint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The dev-server proxy targets `http://localhost:8090`; set
+`VITE_DEV_PROXY_TARGET` to develop against a backend on another host (e.g. the
+Jetson).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Configuration
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+All configuration is via Vite environment variables read at **build time** —
+see [.env.example](.env.example) for the full list:
+
+- `VITE_API_BASE` — backend HTTP/WS origin (empty = same-origin)
+- `VITE_FLEET_BASE` — fleet manager / image server origin (default `:8091`)
+- `VITE_BASE_PATH` — public path (default `/dashboard/` for the Express mount)
+
+When the backend has authentication enabled, the dashboard shows a login page
+and sends the session token as a `Bearer` header on REST calls and as
+`?token=` on WebSocket connections.
+
+Package contract: see [TASK.yaml](TASK.yaml).
