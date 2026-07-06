@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """verify_dev_only — Rule 0 enforcement.
 
-Every `.py` file that is launched as a ROS 2 node in a production launch file
-must have `dev_only: true` in its package's TASK.yaml.
+Every Python ROS 2 node launched by a production launch file must belong to
+a package whose TASK.yaml declares `dev_only: true` (interim dev tooling) —
+otherwise it must be ported to C++17.
 
-Scans launch files for `Node(...executable=...).py...)` or direct
-`executable="something.py"` references.
+A node counts as Python if EITHER:
+  - its `executable` ends in `.py` (script installed by any package), OR
+  - its owning package is an ament_python package (entry-point console
+    scripts have no `.py` suffix, so the suffix test alone is blind to them).
+
+Node(...) calls are parsed with a balanced-parenthesis scan and
+order-independent kwarg extraction, so `Node(condition=IfCondition(x),
+executable=..., package=...)` is not silently skipped.
 """
 
 from __future__ import annotations
@@ -23,93 +30,155 @@ except ImportError:
 WS_ROOT = Path(__file__).resolve().parents[2]
 SRC = WS_ROOT / "src"
 
-# Launch files under this package are considered "production" if they are
-# reachable from agv_start.sh. This list is conservative — if a launch file
-# is not used in production, operators can mark it in a future exclusion file.
+# Launch files reachable from agv_start.sh in production modes (real,
+# mapping, hil_full). agv_hil_full.launch.py (AGV_MODE=hil) is HIL-only and
+# excluded. The cuVSLAM stack (agv_slam) is an external deploy-time package
+# not present in this workspace, so it has no launch file to scan here.
 PRODUCTION_LAUNCH_PATTERNS = [
     "agv_full.launch.py",
-    "agv_slam.launch.py",
     "agv_mapping.launch.py",
-    # agv_hil_full.launch.py is HIL, excluded from production
-    # agv_teleop.launch.py is commissioning
 ]
 
-# A `.py` in these packages is exempt (dev tooling, not runtime).
-EXEMPT_PACKAGES = set()  # populated from TASK.yaml dev_only flags
 
-
-def read_task_yaml(pkg_dir: Path) -> dict | None:
+def read_task_yaml(pkg_dir: Path) -> tuple[dict | None, str | None]:
+    """Return (data, error). A parse error is returned, never swallowed."""
     task_file = pkg_dir / "TASK.yaml"
     if not task_file.exists():
-        return None
+        return None, None
     try:
         with task_file.open() as f:
-            return yaml.safe_load(f) or {}
-    except Exception:
-        return None
+            return (yaml.safe_load(f) or {}), None
+    except Exception as exc:  # noqa: BLE001 — report any parse failure loudly
+        return None, f"FAIL: cannot parse {task_file.relative_to(WS_ROOT)}: {exc}"
 
 
-def collect_dev_only_packages() -> set[str]:
-    out = set()
-    for pkg_dir in SRC.iterdir():
+def collect_dev_only_packages() -> tuple[set[str], list[str]]:
+    out: set[str] = set()
+    errors: list[str] = []
+    for pkg_dir in sorted(SRC.iterdir()):
         if not pkg_dir.is_dir():
             continue
-        data = read_task_yaml(pkg_dir)
+        data, err = read_task_yaml(pkg_dir)
+        if err:
+            errors.append(err)
+            continue
         if data and data.get("dev_only") is True:
             out.add(pkg_dir.name)
-    return out
+    return out, errors
 
 
-def find_production_launches() -> list[Path]:
+def is_ament_python_pkg(pkg_name: str) -> bool:
+    """True if src/<pkg> is an ament_python package (entry-point nodes)."""
+    pkg_dir = SRC / pkg_name
+    if not pkg_dir.is_dir():
+        return False
+    if (pkg_dir / "setup.py").exists() or (pkg_dir / "setup.cfg").exists():
+        return True
+    pkg_xml = pkg_dir / "package.xml"
+    if pkg_xml.exists():
+        try:
+            if "ament_python" in pkg_xml.read_text(errors="ignore"):
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def find_production_launches() -> tuple[list[Path], list[str]]:
     launches: list[Path] = []
-    for pkg_dir in SRC.iterdir():
+    matched: set[str] = set()
+    errors: list[str] = []
+    for pkg_dir in sorted(SRC.iterdir()):
         launch_dir = pkg_dir / "launch"
         if not launch_dir.is_dir():
             continue
-        for lf in launch_dir.iterdir():
+        for lf in sorted(launch_dir.iterdir()):
             if any(lf.name == p for p in PRODUCTION_LAUNCH_PATTERNS):
                 launches.append(lf)
-    return launches
+                matched.add(lf.name)
+    for pattern in PRODUCTION_LAUNCH_PATTERNS:
+        if pattern not in matched:
+            errors.append(
+                f"FAIL: production launch pattern '{pattern}' matches no file under src/*/launch/ "
+                "— update PRODUCTION_LAUNCH_PATTERNS in verify_dev_only.py"
+            )
+    return launches, errors
 
 
-# Match `Node(package='pkg_name', executable='something.py', ...)` or
-# equivalent `executable="something.py"`.
-NODE_RE = re.compile(
-    r"Node\s*\([^)]*?"
-    r"package\s*=\s*['\"](?P<pkg>[^'\"]+)['\"]"
-    r"[^)]*?"
-    r"executable\s*=\s*['\"](?P<exe>[^'\"]+)['\"]",
-    re.DOTALL,
-)
+NODE_CALL_RE = re.compile(r"\b(?:Node|ComposableNode)\s*\(")
+KWARG_STR_RE = {
+    "package": re.compile(r"\bpackage\s*=\s*['\"](?P<v>[^'\"]+)['\"]"),
+    "executable": re.compile(r"\bexecutable\s*=\s*['\"](?P<v>[^'\"]+)['\"]"),
+    "plugin": re.compile(r"\bplugin\s*=\s*['\"](?P<v>[^'\"]+)['\"]"),
+}
 
 
-def find_python_executables(launch_file: Path) -> list[tuple[str, str]]:
-    """Return list of (package, executable) pairs that look like Python scripts."""
-    text = launch_file.read_text()
-    out: list[tuple[str, str]] = []
-    for m in NODE_RE.finditer(text):
-        pkg = m.group("pkg")
-        exe = m.group("exe")
+def extract_call_bodies(text: str) -> list[str]:
+    """Return the balanced-paren argument text of every Node(...) call."""
+    bodies: list[str] = []
+    for m in NODE_CALL_RE.finditer(text):
+        depth = 1
+        i = m.end()
+        start = i
+        in_str: str | None = None
+        while i < len(text) and depth > 0:
+            c = text[i]
+            if in_str:
+                if c == "\\":
+                    i += 2
+                    continue
+                if c == in_str:
+                    in_str = None
+            elif c in "'\"":
+                in_str = c
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            i += 1
+        if depth == 0:
+            bodies.append(text[start:i - 1])
+    return bodies
+
+
+def find_python_executables(launch_file: Path) -> list[tuple[str, str, str]]:
+    """Return (package, executable, reason) for Python-looking nodes.
+
+    Nodes whose package/executable are non-literal (LaunchConfiguration etc.)
+    cannot be resolved statically and are skipped — production launches use
+    literals for both today.
+    """
+    text = launch_file.read_text(errors="ignore")
+    out: list[tuple[str, str, str]] = []
+    for body in extract_call_bodies(text):
+        pm = KWARG_STR_RE["package"].search(body)
+        em = KWARG_STR_RE["executable"].search(body)
+        if not pm or not em:
+            continue
+        pkg, exe = pm.group("v"), em.group("v")
         if exe.endswith(".py"):
-            out.append((pkg, exe))
+            out.append((pkg, exe, "executable ends in .py"))
+        elif is_ament_python_pkg(pkg):
+            out.append((pkg, exe, f"package {pkg} is ament_python (entry-point node)"))
     return out
 
 
 def main() -> int:
-    dev_only_pkgs = collect_dev_only_packages()
-    launches = find_production_launches()
-    violations = []
+    dev_only_pkgs, task_errors = collect_dev_only_packages()
+    launches, launch_errors = find_production_launches()
+    violations: list[str] = list(task_errors) + list(launch_errors)
 
     for lf in launches:
-        py_execs = find_python_executables(lf)
-        for pkg, exe in py_execs:
+        for pkg, exe, reason in find_python_executables(lf):
             if pkg not in dev_only_pkgs:
-                violations.append((lf, pkg, exe))
+                violations.append(
+                    f"FAIL: {lf.relative_to(WS_ROOT)} launches Python node {exe} from package {pkg} "
+                    f"({reason}) which does NOT have dev_only: true in TASK.yaml"
+                )
 
     if violations:
-        for lf, pkg, exe in violations:
-            print(f"FAIL: {lf} launches Python node {exe} from package {pkg} "
-                  f"which does NOT have dev_only: true in TASK.yaml")
+        for v in violations:
+            print(v)
         print(f"verify_dev_only: {len(violations)} violation(s)")
         print("Fix: add `dev_only: true` to src/<pkg>/TASK.yaml OR port the script to C++17.")
         return 1
