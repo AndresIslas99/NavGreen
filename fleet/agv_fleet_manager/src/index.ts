@@ -7,6 +7,7 @@
  * Publishes orders and instant actions to individual robots.
  */
 
+import * as crypto from 'crypto';
 import * as http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -17,8 +18,19 @@ import { TrafficManager } from './traffic';
 // Configuration
 // ---------------------------------------------------------------------------
 
-const PORT = parseInt(process.env.FLEET_PORT || '8091');
+// 8091 belongs to agv_image_server (specs/project.yaml default_image_server_port)
+// — both services run on the same Jetson, so the fleet manager defaults to 8092.
+const PORT = parseInt(process.env.FLEET_PORT || '8092');
+const BIND_ADDR = process.env.FLEET_BIND_ADDR || '0.0.0.0';
 const MQTT_BROKER = process.env.VDA_MQTT_BROKER || 'mqtt://localhost:1883';
+// Broker credentials — required once the broker enables password_file/acl_file
+// (see fleet/mosquitto/config/mosquitto.conf). The shipped ACL grants the
+// username 'fleet-manager' fleet-wide access.
+const MQTT_USERNAME = process.env.VDA_MQTT_USERNAME || (process.env.VDA_MQTT_PASSWORD ? 'fleet-manager' : '');
+const MQTT_PASSWORD = process.env.VDA_MQTT_PASSWORD || '';
+// Shared secret for the REST + WebSocket control surface. When unset the API
+// is open — acceptable only on an isolated greenhouse LAN (see SECURITY.md).
+const API_TOKEN = process.env.FLEET_API_TOKEN || '';
 const VDA_VERSION = '2.0.0';
 
 // ---------------------------------------------------------------------------
@@ -44,22 +56,25 @@ const fleet = new Map<string, RobotState>();
 let headerId = 0;
 
 // Traffic management (P3.4)
+// VDA 5050 pause semantics: startPause ACTIVATES pause mode, stopPause
+// DEACTIVATES it (the adapter used to have these swapped and aliased to the
+// e-stop; keep master and adapter in lockstep).
 const trafficManager = new TrafficManager(
-  // onPause: send stopPause instant action
+  // onPause: activate pause mode
   (robotId: string) => {
     const robot = fleet.get(robotId);
     if (robot) {
       sendInstantAction(robot.manufacturer, robot.serialNumber, [
-        { actionId: `traffic_pause_${Date.now()}`, actionType: 'stopPause', blockingType: 'HARD' },
+        { actionId: `traffic_pause_${Date.now()}`, actionType: 'startPause', blockingType: 'HARD' },
       ]);
     }
   },
-  // onResume: send startPause instant action
+  // onResume: deactivate pause mode
   (robotId: string) => {
     const robot = fleet.get(robotId);
     if (robot) {
       sendInstantAction(robot.manufacturer, robot.serialNumber, [
-        { actionId: `traffic_resume_${Date.now()}`, actionType: 'startPause', blockingType: 'HARD' },
+        { actionId: `traffic_resume_${Date.now()}`, actionType: 'stopPause', blockingType: 'HARD' },
       ]);
     }
   },
@@ -86,6 +101,7 @@ function nextHeader(manufacturer: string, serialNumber: string) {
 const mqttClient = mqtt.connect(MQTT_BROKER, {
   clientId: 'agv-fleet-manager',
   clean: true,
+  ...(MQTT_USERNAME ? { username: MQTT_USERNAME, password: MQTT_PASSWORD } : {}),
 });
 
 mqttClient.on('connect', () => {
@@ -265,6 +281,23 @@ function sendNavigateOrder(
 const app = express();
 app.use(express.json());
 
+// Shared-secret auth. Every /api route (fleet e-stop, navigate, traffic
+// zones, ...) commands physical robots, so when FLEET_API_TOKEN is set all
+// of them — and the WebSocket — require it.
+function tokenMatches(provided: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(API_TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+app.use('/api', (req, res, next) => {
+  if (!API_TOKEN) return next();
+  const auth = String(req.headers.authorization || '');
+  const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (tokenMatches(provided)) return next();
+  res.status(401).json({ error: 'unauthorized: send Authorization: Bearer <FLEET_API_TOKEN>' });
+});
+
 // Fleet overview
 app.get('/api/fleet', (_req, res) => {
   const robots = Array.from(fleet.values()).map(r => ({
@@ -312,21 +345,25 @@ app.post('/api/fleet/:manufacturer/:serial/action', (req, res) => {
   res.json({ success: true });
 });
 
-// Fleet-wide e-stop
+// Fleet-wide e-stop. emergencyStop is a manufacturer-specific instant action
+// that latches the robot's /agv/e_stop topic — a real stop, not a VDA 5050
+// pause (see fleet/README.md).
 app.post('/api/fleet/estop', (_req, res) => {
   for (const [, robot] of fleet) {
     sendInstantAction(robot.manufacturer, robot.serialNumber, [
-      { actionId: `estop_${Date.now()}`, actionType: 'stopPause', blockingType: 'HARD' },
+      { actionId: `estop_${Date.now()}`, actionType: 'emergencyStop', blockingType: 'HARD' },
     ]);
   }
   res.json({ success: true, robotCount: fleet.size });
 });
 
-// Fleet-wide resume
+// Fleet-wide resume: release the latched e-stop, then deactivate pause mode
+// so suspended orders continue.
 app.post('/api/fleet/resume', (_req, res) => {
   for (const [, robot] of fleet) {
     sendInstantAction(robot.manufacturer, robot.serialNumber, [
-      { actionId: `resume_${Date.now()}`, actionType: 'startPause', blockingType: 'HARD' },
+      { actionId: `estop_clear_${Date.now()}`, actionType: 'clearEmergencyStop', blockingType: 'HARD' },
+      { actionId: `resume_${Date.now()}`, actionType: 'stopPause', blockingType: 'HARD' },
     ]);
   }
   res.json({ success: true, robotCount: fleet.size });
@@ -399,7 +436,15 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws/fleet' });
 const wsClients = new Set<WebSocket>();
 
-wss.on('connection', (ws: WebSocket) => {
+wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  if (API_TOKEN) {
+    // Browsers cannot set headers on WebSocket upgrades — accept ?token=.
+    const token = new URL(req.url || '/', 'http://internal').searchParams.get('token') || '';
+    if (!tokenMatches(token)) {
+      ws.close(1008, 'unauthorized');
+      return;
+    }
+  }
   wsClients.add(ws);
   console.log(`Fleet dashboard connected (${wsClients.size})`);
 
@@ -458,6 +503,13 @@ function broadcastFleetUpdate() {
 }
 
 // Start
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`AGV Fleet Manager listening on http://0.0.0.0:${PORT}`);
+server.listen(PORT, BIND_ADDR, () => {
+  console.log(`AGV Fleet Manager listening on http://${BIND_ADDR}:${PORT}`);
+  if (!API_TOKEN) {
+    console.warn(
+      '[SECURITY] FLEET_API_TOKEN is not set: the fleet control API (e-stop, ' +
+      'navigate, traffic zones) and /ws/fleet are UNAUTHENTICATED. Run only ' +
+      'on an isolated LAN, or set FLEET_API_TOKEN (see SECURITY.md).'
+    );
+  }
 });

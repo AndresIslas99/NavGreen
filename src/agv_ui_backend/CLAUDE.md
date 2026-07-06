@@ -74,6 +74,7 @@ No Python subprocess, no file-based bridge, no ScanAccumulator. Single source of
 - `/{ns}/zed/imu/data` (Imu) — IMU heartbeat tracking
 - `/slam/quality` (String/JSON) — SLAM tracking confidence
 - `/{ns}/motor_state` (String/JSON, 10 Hz) — Motor arm state, errors, temps. Native rclnodejs subscription; the previous `ros2 topic echo` subprocess workaround was removed because it caused arm/disarm transitions to only reach the UI after a page reload (stdout buffering delayed the first messages by seconds).
+- `/{ns}/rail_approach/state` (String/JSON) — rail_approach FSM state for mission waypoint gating and the dashboard rail panel. NOTE: the topic is `state`, not the pre-arbiter `status` name (see `specs/interfaces.yaml`).
 
 ## ROS2 Publishers
 
@@ -108,7 +109,7 @@ No Python subprocess, no file-based bridge, no ScanAccumulator. Single source of
 
 **Removed:**
 - `scan_accumulator.ts` — Deleted. Was a JavaScript approximation of scan_grid_mapper that caused duplicate map overlays with different coordinates/resolution.
-- `live_map_bridge.py` — No longer launched. Was a Python subprocess that bridged OccupancyGrid to file-based PNG. Replaced by direct rclnodejs subscription.
+- `scripts/teleop_server.py`, `scripts/live_map_bridge.py`, `launch/teleop_web.launch.py` — Deleted (superseded Python backend). `teleop_server.py` imported `py_*` modules that no longer existed and was never installed by CMakeLists, so the launch file failed on every machine. The TypeScript backend (`teleop_backend`) is the only entry point; git history preserves the Python originals.
 
 ## Frontend (web/agv_dashboard/)
 
@@ -132,8 +133,22 @@ No Python subprocess, no file-based bridge, no ScanAccumulator. Single source of
 
 - rclnodejs, express, ws, sharp, nav2_msgs, agv_interfaces
 
+## Authentication
+
+- No default accounts ship with the repo. Create users with
+  `npm run adduser -- <username> <password> [viewer|operator|engineer]`
+  (writes scrypt-hashed credentials to `$AGV_DATA_DIR/users.json`), then set
+  `"enabled": true` in that file.
+- Legacy unsalted SHA-256 hashes in an existing `users.json` still verify and
+  are transparently upgraded to scrypt on the next successful login.
+- Mutating REST endpoints (nav goal, missions, maps, mode, e-stop clear, tags,
+  recording) require the `operator` role when auth is enabled. Stop-type
+  endpoints (`/api/nav/cancel`, `/api/recovery/trigger_estop`,
+  `/api/missions/pause`) stay unauthenticated so the robot can always be stopped.
+- The backend logs a loud `[SECURITY]` banner at startup when auth is disabled
+  or when publicly-known default credentials are still present.
+
 ## Improvement Opportunities
 
-- Remove Python legacy modules (py_*.py files still in package, superseded by TypeScript)
 - Add rate limiting on REST endpoints
 - Add TypeScript unit tests for state machine logic

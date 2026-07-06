@@ -16,6 +16,10 @@ Environment="VDA_MQTT_BROKER=mqtt://localhost:1883"
 Environment="VDA_MANUFACTURER=agv-greenhouse"
 Environment="VDA_SERIAL_NUMBER=agv-001"
 Environment="AGV_NAMESPACE=agv"
+# Broker credentials, once mosquitto auth is enabled (see mosquitto.conf).
+# The shipped ACL expects the username to equal VDA_SERIAL_NUMBER.
+#Environment="VDA_MQTT_USERNAME=agv-001"
+#Environment="VDA_MQTT_PASSWORD=change-me"
 Restart=on-failure
 RestartSec=10
 

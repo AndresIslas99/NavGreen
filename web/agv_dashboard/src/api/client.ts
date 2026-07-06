@@ -37,6 +37,13 @@ export function fleetBase(): string {
   return `${location.protocol}//${location.hostname}:8091`
 }
 
+/** WebSocket URL on the fleet manager origin, honoring VITE_FLEET_BASE. */
+export function fleetWsUrl(path: string): string {
+  if (!path.startsWith('/')) path = '/' + path
+  // http(s)://host:port → ws(s)://host:port
+  return fleetBase().replace(/^http/, 'ws') + path
+}
+
 // Auth token management
 let authToken: string | null = localStorage.getItem('agv_token')
 
@@ -54,14 +61,26 @@ function authHeaders(): Record<string, string> {
   return h
 }
 
+// Invoked when a non-auth endpoint returns 401 (expired or revoked token).
+// App registers a handler that routes to the login view via React state —
+// never reload the page here, or a persistent 401 becomes a reload loop.
+let unauthorizedHandler: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler
+}
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(apiUrl(url), {
     ...init,
     headers: { ...authHeaders(), ...(init?.headers || {}) },
   })
-  if (res.status === 401) {
+  // Auth endpoints are excluded: a 401 there means bad credentials, which
+  // the login form reports inline rather than tearing down the session.
+  if (res.status === 401 && !url.startsWith('/api/auth/')) {
     setToken(null)
-    window.location.reload()
+    unauthorizedHandler?.()
+    throw new Error(`Unauthorized: ${url}`)
   }
   return res.json()
 }

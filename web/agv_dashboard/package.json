@@ -1,7 +1,8 @@
 {
-  "name": "agv_dash_init",
+  "name": "agv_dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Operator dashboard (HMI) for the greenhouse AGV — live map, teleop, mapping, missions, recovery",
   "type": "module",
   "scripts": {
     "dev": "vite",
