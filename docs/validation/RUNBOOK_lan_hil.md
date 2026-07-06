@@ -13,8 +13,14 @@ peer list configured on the sim side.
 
 | Host | Role | ROS distro | Interfaces |
 |---|---|---|---|
-| Jetson Orin (this host) | brain: Nav2, EKF, map_manager, waypoint_manager | Jazzy | USB eth `192.168.55.1` / WiFi `192.168.15.241` |
-| Sim host (PC Linux + GPU) | Isaac Sim, overlay, sim_api, foxglove | Humble | USB eth `192.168.55.100` / WiFi `192.168.15.79` |
+| Jetson Orin (this host) | brain: Nav2, EKF, map_manager, waypoint_manager | Jazzy | USB eth `192.168.55.1` / WiFi `<jetson-wifi-ip>` |
+| Sim host (PC Linux + GPU) | Isaac Sim, overlay, sim_api, foxglove | Humble | USB eth `192.168.55.100` / WiFi `<sim-host-wifi-ip>` |
+
+The `192.168.55.x` addresses are the standard NVIDIA Jetson USB-ethernet
+gadget defaults (Jetson = `.1`, host PC = `.100`) — the same on every
+deployment. The WiFi addresses are site-specific: substitute your LAN's
+values wherever `<jetson-wifi-ip>` / `<sim-host-wifi-ip>` appear below,
+and `<sim-user>` with your login on the sim host.
 
 **Prefer the USB connection** (`192.168.55.x`). It is stable, not affected
 by the greenhouse WiFi, and already wired into the sim repo's
@@ -23,11 +29,12 @@ by the greenhouse WiFi, and already wired into the sim repo's
 **SSH to the sim host from the Jetson:**
 
 ```bash
-ssh orza@192.168.55.100   # USB — preferred
-ssh orza@192.168.15.79    # WiFi — fallback
+ssh <sim-user>@192.168.55.100      # USB — preferred
+ssh <sim-user>@<sim-host-wifi-ip>  # WiFi — fallback
 ```
 
-Password: `1001` if key auth is not set up.
+SSH key authentication is required on these hosts — install your key once
+with `ssh-copy-id` during machine setup. Do not enable password auth.
 
 ## 2. Cross-distro DDS boundary — the rules
 
@@ -57,11 +64,11 @@ Run these once per day or after any sim host restart:
 ping -c 2 192.168.55.100                    # expect <1 ms RTT
 
 # B. Verify the sim host's Cyclone knows this Jetson
-ssh orza@192.168.55.100 'grep -c "192.168.55.1\|192.168.15.241" \
-    /home/orza/agv-sim/cyclonedds.xml'       # expect >= 1
+ssh <sim-user>@192.168.55.100 'grep -c "192.168.55.1\|<jetson-wifi-ip>" \
+    ~/agv-sim/cyclonedds.xml'       # expect >= 1
 
 # C. Verify the sim host's USD is not stale (see sim RUNBOOK §2 note)
-ssh orza@192.168.55.100 'ls -la /home/orza/agv-sim/src/agv_isaac_sim/worlds/greenhouse_with_robot.usd'
+ssh <sim-user>@192.168.55.100 'ls -la ~/agv-sim/src/agv_isaac_sim/worlds/greenhouse_with_robot.usd'
 # If mtime is older than the last build_greenhouse_usd.py change, regenerate
 # on the sim host:
 #   isaacsim --exec src/agv_isaac_sim/scripts/build_greenhouse_usd.py
@@ -76,7 +83,7 @@ waiting for sim time and never recovers.
 **Sim host T1 — Isaac Sim + in-Kit handler (auto-play, supervised):**
 
 ```bash
-ssh orza@192.168.55.100
+ssh <sim-user>@192.168.55.100
 cd ~/agv-sim
 ./run_isaac_supervised.sh     # default since 2026-04-16: auto-play + crash-restart
 # Expected console lines (auto-play — no manual Play needed):
@@ -99,7 +106,7 @@ poll `GET /state` until `gt_pose` is non-null before resuming a test run
 **Sim host T2 — overlay + sim_api + foxglove:**
 
 ```bash
-ssh orza@192.168.55.100
+ssh <sim-user>@192.168.55.100
 cd ~/agv-sim && source /opt/ros/humble/setup.bash && source install/setup.bash
 export ROS_DOMAIN_ID=42
 ros2 launch agv_isaac_sim isaac_hil.launch.py validation:=true enable_api:=true
@@ -300,7 +307,7 @@ live on the sim host at `/tmp/agv_runs/`. For a postmortem of a failed
 run, grab the bag before the sim host reboots (that path is volatile):
 
 ```bash
-ssh orza@192.168.55.100 'rsync -av /tmp/agv_runs/ ~/agv_runs_archive/$(date +%F)/'
+ssh <sim-user>@192.168.55.100 'rsync -av /tmp/agv_runs/ ~/agv_runs_archive/$(date +%F)/'
 ```
 
 ## 7. Apagado limpio

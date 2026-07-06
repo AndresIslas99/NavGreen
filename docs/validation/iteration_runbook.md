@@ -14,7 +14,7 @@ that tells you exactly what to fix next. Two consecutive clean iterations
 Jetson:
 
 ```bash
-cd /home/orza/ros2_ws
+cd ~/ros2_ws
 colcon build --packages-select \
   agv_mode_arbiter agv_rail_driver agv_rail_detector agv_integration_tests
 source install/setup.bash

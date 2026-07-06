@@ -185,7 +185,7 @@ Escalation payload:
   for the current session.
 - `restart_events` lists from each report (if any).
 - Diff of `nav2_hil_overrides.yaml` vs the committed version.
-- The last sim-host log: `ssh orza@$SIM_HOST 'tail -500 ~/.ros/log/latest/*.log'`
+- The last sim-host log: `ssh <sim-user>@$SIM_HOST 'tail -500 ~/.ros/log/latest/*.log'`
   (useful if `physics_corrupted` fired — reveals what crashed Isaac).
 
 ## What the loop does NOT fix
