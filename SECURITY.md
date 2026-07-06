@@ -18,14 +18,16 @@ deploy:
 
 | Surface | Posture |
 |---------|---------|
-| Operator dashboard / REST / WebSocket (`agv_ui_backend`) | JWT auth with `viewer` / `operator` / `engineer` roles, users stored locally |
-| MQTT broker (`fleet/mosquitto`) | Ships with `allow_anonymous true` — intended for a trusted local network only |
-| Camera streaming (`agv_image_server`) | Plain HTTP MJPEG, no authentication |
+| Operator dashboard / REST / WebSocket (`agv_ui_backend`, port 8090) | JWT auth with `viewer` / `operator` / `engineer` roles is available but **DISABLED by default**, and no default accounts ship. While disabled, **any client that can reach the port gets full operator control** (teleop, nav goals, e-stop, motor enable); the backend prints a loud `[SECURITY]` warning at startup. Enable before any field deployment: `npm run adduser -- <user> <pass> <role>`, then set `"enabled": true` in `$AGV_DATA_DIR/users.json`. Stop-type endpoints (`/api/nav/cancel`, `/api/recovery/trigger_estop`, `/api/missions/pause`) intentionally stay unauthenticated so the robot can always be stopped. |
+| Fleet manager REST / WebSocket (`fleet/agv_fleet_manager`, port 8092) | Unauthenticated by default (logs a `[SECURITY]` warning). Set `FLEET_API_TOKEN` to require `Authorization: Bearer <token>` on `/api/*` and `?token=` on the WebSocket; bind with `FLEET_BIND_ADDR`. |
+| MQTT broker (`fleet/mosquitto`, ports 1883/9001) | Ships with `allow_anonymous true`; the per-robot topic ACL in `fleet/mosquitto/config/aclfile` is **inactive** until authentication is enabled. The enable procedure (`mosquitto_passwd` + swapping the commented directives) is documented in `fleet/mosquitto/config/mosquitto.conf`. |
+| Camera streaming (`agv_image_server`, port 8091) | Plain HTTP MJPEG, no authentication |
 | ROS 2 DDS traffic | Unencrypted by default (no SROS2 configuration in this repo) |
 
 **Never expose any of these ports beyond the robot's isolated network.** If
-your deployment requires remote access, put the network behind a VPN and
-enable broker authentication before doing anything else.
+your deployment requires remote access, put the network behind a VPN, enable
+dashboard authentication, and enable broker authentication before doing
+anything else.
 
 ## Safety boundary
 
