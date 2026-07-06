@@ -25,7 +25,9 @@ target_link_libraries(marker_correction_node ${OpenCV_LIBS})
 
 install(TARGETS marker_correction_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
-install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
+# launch/ exists only on commissioned robots (untracked); OPTIONAL keeps
+# fresh clones and CI building.
+install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch OPTIONAL)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

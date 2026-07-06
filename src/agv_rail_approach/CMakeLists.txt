@@ -48,8 +48,11 @@ install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config
 )
 
+# launch/ exists only on commissioned robots (untracked); OPTIONAL keeps
+# fresh clones and CI building.
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
+  OPTIONAL
 )
 
 if(BUILD_TESTING)

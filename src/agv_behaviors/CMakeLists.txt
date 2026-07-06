@@ -23,7 +23,9 @@ ament_target_dependencies(behavior_executor_node
 install(TARGETS behavior_executor_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY trees/ DESTINATION share/${PROJECT_NAME}/trees)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
-install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
+# launch/ exists only on commissioned robots (untracked); OPTIONAL keeps
+# fresh clones and CI building.
+install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch OPTIONAL)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
