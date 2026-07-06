@@ -170,7 +170,7 @@ not empty, not the literal `default_empty`.
 ## Step 5 — Verify all four sidecars
 
 ```bash
-ls -la /home/orza/agv_data/maps/ | grep corridor_v1
+ls -la $AGV_DATA_DIR/maps/ | grep corridor_v1
 ```
 
 Expected output:
@@ -187,22 +187,22 @@ Quick sanity checks:
 
 ```bash
 # .pgm should render cleanly (no double walls, no drift trails)
-file /home/orza/agv_data/maps/corridor_v1.pgm
-xdg-open /home/orza/agv_data/maps/corridor_v1.pgm  # optional, requires DE
+file $AGV_DATA_DIR/maps/corridor_v1.pgm
+xdg-open $AGV_DATA_DIR/maps/corridor_v1.pgm  # optional, requires DE
 
 # .yaml has resolution: 0.05 and a sane origin
-cat /home/orza/agv_data/maps/corridor_v1.yaml
+cat $AGV_DATA_DIR/maps/corridor_v1.yaml
 
 # cuVSLAM directory is not empty
-ls -la /home/orza/agv_data/maps/corridor_v1_cuvslam/
+ls -la $AGV_DATA_DIR/maps/corridor_v1_cuvslam/
 # Expected: keyframe files, graph data — at minimum 100 KB total
 
 # .area file is non-trivial size — empty means SDK rejected the save
-du -b /home/orza/agv_data/maps/corridor_v1.area
+du -b $AGV_DATA_DIR/maps/corridor_v1.area
 # Expected: > 500 KB for a reasonable office
 
 # _meta.json has a valid pose
-cat /home/orza/agv_data/maps/corridor_v1_meta.json
+cat $AGV_DATA_DIR/maps/corridor_v1_meta.json
 # Expected: JSON with position (x, y, z) and orientation (quaternion)
 ```
 
@@ -225,7 +225,7 @@ and without AprilTags.
 ```bash
 # Test A: with AprilTags enabled (default) — exercises Path A (tag hint)
 ros2 launch agv_bringup agv_full.launch.py \
-  map:=/home/orza/agv_data/maps/corridor_v1.yaml
+  map:=$AGV_DATA_DIR/maps/corridor_v1.yaml
 
 # In another terminal, within 30 s:
 ros2 topic echo /agv/localization/state --once
@@ -235,7 +235,7 @@ ros2 topic echo /agv/localization/state --once
 ```bash
 # Test B: with AprilTags DISABLED — exercises Path A0 then Path B
 ros2 launch agv_bringup agv_full.launch.py \
-  map:=/home/orza/agv_data/maps/corridor_v1.yaml \
+  map:=$AGV_DATA_DIR/maps/corridor_v1.yaml \
   enable_markers:=false
 
 ros2 topic echo /agv/localization/state --once
@@ -264,10 +264,10 @@ The map_manager save chain:
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `map_dir` | `/home/orza/agv_data/maps` (launch arg) | Directory for all sidecars |
+| `map_dir` | `$AGV_DATA_DIR/maps` (launch arg) | Directory for all sidecars |
 | `cuvslam_enabled` | `true` | Gates the `_cuvslam/` save step |
 | `zed_area_save_enabled` | `true` | Gates the `.area` save step |
-| `zed_area_landing_path` | `/home/orza/agv_data/maps/.current.area` | Transient path the ZED wrapper reads on reload |
+| `zed_area_landing_path` | `$AGV_DATA_DIR/maps/.current.area` | Transient path the ZED wrapper reads on reload |
 | `area_memory_autosave_period_s` | `180` | Background auto-save interval |
 
 ## Troubleshooting
