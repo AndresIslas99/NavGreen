@@ -147,7 +147,7 @@ navigation core (it predates the rail/arbiter stack shown above).
 | Package | Purpose | Notes |
 |---------|---------|-------|
 | `agv_hil_bridges` | Hardware-in-the-loop (HIL) simulation bridges | `dev_only` |
-| `agv_sim` | Gazebo Classic simulation — drive the AGV with no hardware | `dev_only`; headless smoke test in CI |
+| `agv_sim` | Gazebo Classic simulation — drive the AGV with no hardware | `dev_only`; built + URDF-validated in CI |
 | `agv_integration_tests` | System-level integration tests | |
 
 **Fleet layer** (optional — not part of the default robot runtime; see [`fleet/README.md`](fleet/README.md))
@@ -223,12 +223,16 @@ etc.) that are cloned separately into `src/` on the Jetson.
   ```bash
   ros2 launch agv_sim teleop_sim.launch.py   # GUI + keyboard teleop
   ros2 launch agv_sim sim.launch.py gui:=true rviz:=true
-  ros2 launch agv_sim sim.launch.py          # headless (what CI runs)
+  ros2 launch agv_sim sim.launch.py          # headless
   ```
   It reuses the real robot geometry and the production `diff_drive_controller`
   gains; drive it by publishing `geometry_msgs/Twist` on `/cmd_vel` and watch
   `/odom`. It is drivetrain-only (no cameras or lidar yet — see the roadmap
-  issues for adding sensors + Nav2 in sim). The headless smoke test runs in CI.
+  issues for adding sensors + Nav2 in sim). CI builds the package and validates
+  the URDF; the identical controller stack is smoke-tested headless via
+  `ros2_control` mock components, and the Gazebo world-load + robot-spawn run
+  as a best-effort check (a full physics drive works locally with a display —
+  see the tracking issue on headless `gazebo_ros2_control`).
 - **Mock drivetrain (even lighter)**: `ros2 launch agv_hw_interface
   agv_ros2control_mock.launch.py` runs the `ros2_control` stack with mock
   components — no Gazebo, drive it with `ros2 topic pub`, watch `/joint_states`.
