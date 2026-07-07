@@ -92,7 +92,7 @@ navigation core (it predates the rail/arbiter stack shown above).
 
 ## Packages
 
-24 first-party packages in `src/`, plus the fleet layer and the web dashboard.
+25 first-party packages in `src/`, plus the fleet layer and the web dashboard.
 
 **Drivetrain & safety chain**
 
@@ -147,6 +147,7 @@ navigation core (it predates the rail/arbiter stack shown above).
 | Package | Purpose | Notes |
 |---------|---------|-------|
 | `agv_hil_bridges` | Hardware-in-the-loop (HIL) simulation bridges | `dev_only` |
+| `agv_sim` | Gazebo Classic simulation — drive the AGV with no hardware | `dev_only`; headless smoke test in CI |
 | `agv_integration_tests` | System-level integration tests | |
 
 **Fleet layer** (optional — not part of the default robot runtime; see [`fleet/README.md`](fleet/README.md))
@@ -195,7 +196,8 @@ cd web/agv_dashboard   && npm ci && npm run build   # dashboard
 ### Vendor SDK dependencies
 
 Three packages need vendor stacks that are not on public apt and are therefore
-skipped in CI (CI builds the other 20 of 24 with `-Werror`):
+skipped in CI (CI builds 20 packages with `-Werror` in the `build-and-test`
+job, and `agv_sim` in a dedicated headless-Gazebo job):
 
 | Package | Compile-time dependency | Source |
 |---------|------------------------|--------|
@@ -209,25 +211,34 @@ above as runtime dependencies; with a full vendor install it builds normally.
 The `.gitignore` also lists third-party ROS packages (Isaac ROS, ZED wrapper,
 etc.) that are cloned separately into `src/` on the Jetson.
 
-### Honest limitations for contributors without the robot
+### Running without the robot
 
 - **Fastest start**: open the repo in the provided dev container
   ([`.devcontainer/`](.devcontainer/), VS Code "Reopen in Container" or any
   devcontainer-compatible tool). It matches CI (ROS 2 Humble + colcon +
   Node 20) and resolves workspace dependencies on first launch, so
   `colcon build` and the TypeScript builds work with no host setup.
-- **You can**: build the workspace, run the unit tests, run the spec
-  verifiers, and bring up a mock drivetrain with zero hardware:
-  `ros2 launch agv_hw_interface agv_ros2control_mock.launch.py`
-  (`ros2_control` mock components — drive it with `ros2 topic pub`, watch
-  `/joint_states`).
-- **You currently cannot**: run the full stack in simulation. The robot launch
-  files require the external `agv_slam` overlay (cuVSLAM pipeline), which is
-  not published, and they fail fast at `t=0` with an explanatory error if it
-  is missing. HIL (hardware-in-the-loop) runs additionally require an Isaac
-  Sim world that lives in the maintainer's unpublished sim workspace plus a
-  physical Jetson (see [`docs/validation/RUNBOOK_lan_hil.md`](docs/validation/RUNBOOK_lan_hil.md)).
-  Publishing a runnable sim story is a known gap.
+- **Drive the robot in simulation (no hardware)** — the `agv_sim` package runs
+  the AGV in Gazebo Classic with physics:
+  ```bash
+  ros2 launch agv_sim teleop_sim.launch.py   # GUI + keyboard teleop
+  ros2 launch agv_sim sim.launch.py gui:=true rviz:=true
+  ros2 launch agv_sim sim.launch.py          # headless (what CI runs)
+  ```
+  It reuses the real robot geometry and the production `diff_drive_controller`
+  gains; drive it by publishing `geometry_msgs/Twist` on `/cmd_vel` and watch
+  `/odom`. It is drivetrain-only (no cameras or lidar yet — see the roadmap
+  issues for adding sensors + Nav2 in sim). The headless smoke test runs in CI.
+- **Mock drivetrain (even lighter)**: `ros2 launch agv_hw_interface
+  agv_ros2control_mock.launch.py` runs the `ros2_control` stack with mock
+  components — no Gazebo, drive it with `ros2 topic pub`, watch `/joint_states`.
+- **You currently cannot**: run the *full autonomy* stack in simulation. The
+  production robot launch files require the external `agv_slam` overlay
+  (cuVSLAM pipeline), which is not published, and the Isaac-Sim HIL loop needs
+  the maintainer's unpublished sim workspace plus a physical Jetson (see
+  [`docs/validation/RUNBOOK_lan_hil.md`](docs/validation/RUNBOOK_lan_hil.md)).
+  `agv_sim` is the hardware-free way to work on the drivetrain and, as it
+  grows sensors, navigation.
 
 ### ROS 2 distributions
 
@@ -249,6 +260,7 @@ audit):
 | Full stack, HIL sensors | `ros2 launch agv_bringup agv_full.launch.py hil_mode:=true map:=<map.yaml>` | Same brain stack; skips hardware-bound nodes (ZED+cuVSLAM, ODrive CAN, image server) in favor of simulated sensor inputs. |
 | Mapping commissioning | `ros2 launch agv_bringup agv_mapping.launch.py` | Teleop mapping run (0.3–0.5 m/s protocol, see [`docs/mapping_commissioning.md`](docs/mapping_commissioning.md)). Requires `agv_slam`. |
 | LAN HIL validation | `ros2 launch agv_bringup agv_hil_full.launch.py map:=<map.yaml>` | Brain stack against a simulator on the LAN (`map` required). Sim infrastructure is not included in this repo. |
+| Gazebo simulation (no hardware) | `ros2 launch agv_sim teleop_sim.launch.py` | Drive the AGV in Gazebo Classic with physics — the hardware-free entry point. Headless variant (`sim.launch.py`) runs in CI. |
 | Mock drivetrain (no hardware) | `ros2 launch agv_hw_interface agv_ros2control_mock.launch.py` | `ros2_control` with mock components — navigation/behaviors development without the robot. |
 
 ## Hardware
