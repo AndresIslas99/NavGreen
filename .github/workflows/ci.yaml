@@ -37,7 +37,7 @@ jobs:
           # GTSAM); the packages that require them are not built in CI — see
           # the build step below.
           rosdep install --from-paths src --ignore-src -y \
-            --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam"
+            --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam gazebo_ros gazebo_ros2_control gazebo_ros_pkgs teleop_twist_keyboard"
 
       - name: Build AGV packages
         # 20 of 24 first-party packages build in CI. Excluded, all traceable
@@ -122,4 +122,74 @@ jobs:
           source /opt/ros/humble/setup.bash
           cd fleet/agv_vda5050_adapter && npm ci && npm run build && cd ../..
           cd fleet/agv_fleet_manager && npm ci && npm run build && npm test
+        shell: bash
+
+  simulation:
+    # Hardware-free Gazebo Classic sim (agv_sim). Proves a contributor with no
+    # robot can spawn and drive the AGV. Two gates:
+    #   1. deterministic: build + xacro-expand the sim URDF.
+    #   2. runtime smoke: headless gzserver spawns the robot and the
+    #      diff_drive_controller reaches 'active' and /odom publishes.
+    # The sim is sensor-free (no camera/lidar), so headless gzserver needs no
+    # GPU — that is what makes it CI-runnable.
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:humble
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install simulation dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            ros-humble-gazebo-ros-pkgs \
+            ros-humble-gazebo-ros2-control \
+            ros-humble-ros2-controllers \
+            ros-humble-ros2-control \
+            ros-humble-xacro
+        shell: bash
+
+      - name: Build agv_description + agv_sim
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --packages-select agv_description agv_sim \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Expand sim URDF (deterministic gate)
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          xacro "$(ros2 pkg prefix agv_sim)/share/agv_sim/urdf/agv_sim.urdf.xacro" > /tmp/agv_sim.urdf
+          test -s /tmp/agv_sim.urdf
+          grep -q 'gazebo_ros2_control' /tmp/agv_sim.urdf
+          echo "URDF expands cleanly and includes the Gazebo ros2_control plugin."
+        shell: bash
+
+      - name: Headless Gazebo smoke test
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          export GAZEBO_MODEL_DATABASE_URI=""   # no network model fetch in CI
+          ros2 launch agv_sim sim.launch.py gui:=false rviz:=false > /tmp/sim.log 2>&1 &
+          LAUNCH_PID=$!
+          ok=0
+          for i in $(seq 1 40); do
+            sleep 3
+            if ros2 control list_controllers 2>/dev/null | grep -qE 'diff_drive_controller[[:space:]].*active'; then
+              ok=1; break
+            fi
+          done
+          if [ "$ok" = 1 ]; then
+            timeout 15 ros2 topic echo --once /odom >/dev/null 2>&1 && echo "odom publishing OK" || ok=0
+          fi
+          kill "$LAUNCH_PID" 2>/dev/null || true
+          pkill -f gzserver 2>/dev/null || true
+          if [ "$ok" != 1 ]; then
+            echo "::group::sim.launch.py log"; cat /tmp/sim.log; echo "::endgroup::"
+            echo "Simulation smoke test failed: diff_drive_controller did not reach active / no /odom."
+            exit 1
+          fi
+          echo "Simulation smoke test passed."
         shell: bash
