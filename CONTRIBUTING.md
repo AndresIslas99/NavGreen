@@ -94,6 +94,34 @@ Copilot, Cursor, or similar, point your agent at
 The same spec-sync rules apply to humans and machines alike, and the
 pre-commit verifiers enforce them for both.
 
+## Maintainership and decisions
+
+The project currently has one maintainer, [@AndresIslas99](https://github.com/AndresIslas99),
+who reviews PRs and makes final calls on architecture and scope (the open
+architectural questions live in
+[`docs/reviews/2026-07-06-community-readiness-review.md`](docs/reviews/2026-07-06-community-readiness-review.md)
+and the issue tracker). Practical expectations:
+
+- **Review turnaround**: best effort within a week. This is a working robot
+  deployed in a commercial greenhouse — field weeks happen; a quiet spell is
+  not abandonment.
+- **What merges**: green CI (all three jobs), spec sync honored, and a diff
+  the maintainer can reason about. Large changes go smoother if you open an
+  issue first and agree on the approach.
+- **Becoming a co-maintainer**: a track record of good PRs and reviews in a
+  subsystem is the path; ask once you have a few merged. `CODEOWNERS` is
+  split by subsystem as co-maintainers join.
+- **Hardware-dependent claims**: if your change affects robot behavior and
+  you don't have hardware, say so in the PR — the maintainer validates on
+  the robot or in HIL before merging. Never claim field validation you
+  didn't do.
+
+## Releases
+
+Versions are tagged from `main` (`v0.x.y`, SemVer) with notes in
+[`CHANGELOG.md`](CHANGELOG.md). Add a line to the `Unreleased` section of
+the changelog when your change is user-visible.
+
 ## Code of conduct
 
 Be excellent to each other — see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
