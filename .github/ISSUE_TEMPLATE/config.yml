@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/AndresIslas99/agv-greenhouse/discussions
+    about: For open-ended questions, design discussion, and help — keep the issue tracker for actionable bugs and features.
+  - name: Security vulnerability
+    url: https://github.com/AndresIslas99/agv-greenhouse/security/advisories/new
+    about: Report a security issue privately. Do not open a public issue — see SECURITY.md.
