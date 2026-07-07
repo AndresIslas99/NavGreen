@@ -1,0 +1,19 @@
+{
+  "name": "AGV Greenhouse (ROS 2 Humble)",
+  "build": { "dockerfile": "Dockerfile" },
+  "postCreateCommand": "bash .devcontainer/post_create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-python.python",
+        "ms-iot.vscode-ros",
+        "redhat.vscode-yaml",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "AGV_DATA_DIR": "${containerWorkspaceFolder}/.agv_data"
+  }
+}

@@ -1,0 +1,4 @@
+# Reviews route automatically to the code owners listed here.
+# With a single maintainer today this is one line; split by subsystem
+# (e.g. /web/ or /fleet/) as co-maintainers join.
+* @AndresIslas99
