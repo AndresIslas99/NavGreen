@@ -22,7 +22,9 @@ settling.
 - CAN feedback-loss watchdog and frame validation in the ODrive driver;
   `feedback_ok` field on `/agv/motor_state`.
 - `camera_frame_is_optical` parameter on the marker correction node.
-- First TypeScript unit tests (dashboard + fleet manager, vitest).
+- First TypeScript unit tests: 30 vitest cases across the fleet manager
+  (traffic mutual-exclusion, FIFO grants, deadlock detection) and the
+  dashboard API client, wired into CI.
 
 ### Fixed
 - AprilTag corrections mixed optical- and body-frame conventions, biasing

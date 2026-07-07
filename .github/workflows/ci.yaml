@@ -108,17 +108,18 @@ jobs:
           npm run build
         shell: bash
 
-      - name: Build dashboard
+      - name: Build and test dashboard
         working-directory: web/agv_dashboard
         run: |
           npm ci
           npx tsc --noEmit
+          npm test
           npx vite build
         shell: bash
 
-      - name: Build fleet packages
+      - name: Build and test fleet packages
         run: |
           source /opt/ros/humble/setup.bash
           cd fleet/agv_vda5050_adapter && npm ci && npm run build && cd ../..
-          cd fleet/agv_fleet_manager && npm ci && npm run build
+          cd fleet/agv_fleet_manager && npm ci && npm run build && npm test
         shell: bash
