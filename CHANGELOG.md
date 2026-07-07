@@ -25,6 +25,10 @@ settling.
 - First TypeScript unit tests: 30 vitest cases across the fleet manager
   (traffic mutual-exclusion, FIFO grants, deadlock detection) and the
   dashboard API client, wired into CI.
+- `agv_sim` package: a hardware-free Gazebo Classic simulation. Contributors
+  with no robot can `ros2 launch agv_sim teleop_sim.launch.py` and drive the
+  AGV with physics, reusing the real geometry and `diff_drive_controller`
+  gains. A headless smoke test runs it in CI (`simulation` job).
 
 ### Fixed
 - AprilTag corrections mixed optical- and body-frame conventions, biasing
