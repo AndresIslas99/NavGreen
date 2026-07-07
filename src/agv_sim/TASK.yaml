@@ -1,0 +1,51 @@
+name: agv_sim
+status: active
+dev_only: true
+description: |
+  Hardware-free Gazebo Classic simulation of the AGV for ROS 2 Humble. Lets a
+  contributor with NO robot spawn the AGV, drive it by publishing
+  geometry_msgs/Twist on /cmd_vel, and watch odometry (/odom, /joint_states,
+  /tf). Sensor-free drivetrain only: Gazebo supplies the physics and the
+  two-wheel differential drive; there are no cameras or lidar, so headless
+  gzserver needs no GPU and runs in CI.
+
+  Reuses the existing robot geometry from agv_description
+  (agv_full.urdf.xacro) and the diff_drive_controller / joint_state_broadcaster
+  gains from agv_hw_interface/config/agv_controllers.yaml. The one intentional
+  difference from production is enable_odom_tf: true (this standalone demo
+  publishes its own odom -> base_link TF; production uses the dual-EKF with
+  enable_odom_tf: false).
+
+  This package NEVER runs production compute. It only provides simulated
+  inputs. It is not launched on the robot and is not part of the runtime
+  stack (dev_only: true).
+
+launch_entry_points:
+  - file: sim.launch.py
+    args: "gui:=false | world:=<pkg>/worlds/greenhouse.world | rviz:=false | x:=0.0 | y:=0.0 | yaw:=0.0"
+    example: "ros2 launch agv_sim sim.launch.py"
+    example_gui: "ros2 launch agv_sim sim.launch.py gui:=true rviz:=true"
+    brings_up:
+      - "gzserver (+ gzclient if gui:=true)"
+      - "robot_state_publisher (xacro-expanded agv_sim.urdf.xacro)"
+      - "spawn_entity.py (-topic robot_description)"
+      - "joint_state_broadcaster spawner"
+      - "diff_drive_controller spawner (remapped to /cmd_vel and /odom)"
+  - file: teleop_sim.launch.py
+    args: "gui:=true (forwarded to sim.launch.py)"
+    example: "ros2 launch agv_sim teleop_sim.launch.py"
+    note: "adds teleop_twist_keyboard in an xterm (requires the xterm package and an interactive terminal)."
+
+goals:
+  - headless gzserver + controllers come up in CI with no GPU and no network
+  - drives kinematically like the real robot (reuses agv_controllers gains)
+  - un-namespaced /cmd_vel and /odom so a newcomer can drive with one command
+
+out_of_scope:
+  - "any perception / sensor emulation (no cameras, lidar, IMU) -- this is a
+     drivetrain-only sim"
+  - "production compute of any kind (filtering, SLAM, EKF, Nav2) -- those run
+     on the Jetson, never here"
+  - "the /agv/ production namespace -- this demo is deliberately un-namespaced"
+  - "replacing agv-greenhouse-sim / HIL bridges -- this is a standalone
+     desktop sim, not the HIL host emulation"
