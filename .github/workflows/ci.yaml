@@ -133,6 +133,7 @@ jobs:
     # The sim is sensor-free (no camera/lidar), so headless gzserver needs no
     # GPU — that is what makes it CI-runnable.
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     container:
       image: ros:humble
     steps:
@@ -168,24 +169,40 @@ jobs:
         shell: bash
 
       - name: Headless Gazebo smoke test
+        # Backstop: even if every cleanup below failed, the step cannot hang
+        # the runner. gzserver is a background process tree, so we run it in
+        # its own session (setsid) and kill the whole process group.
+        timeout-minutes: 8
         run: |
           source /opt/ros/humble/setup.bash
           source install/setup.bash
           export GAZEBO_MODEL_DATABASE_URI=""   # no network model fetch in CI
-          ros2 launch agv_sim sim.launch.py gui:=false rviz:=false > /tmp/sim.log 2>&1 &
-          LAUNCH_PID=$!
+
+          setsid ros2 launch agv_sim sim.launch.py gui:=false rviz:=false \
+            > /tmp/sim.log 2>&1 &
+          LP=$!   # process-group leader (setsid)
+
           ok=0
           for i in $(seq 1 40); do
             sleep 3
-            if ros2 control list_controllers 2>/dev/null | grep -qE 'diff_drive_controller[[:space:]].*active'; then
+            if timeout 5 ros2 control list_controllers 2>/dev/null \
+                 | grep -qE 'diff_drive_controller[[:space:]].*active'; then
               ok=1; break
             fi
           done
           if [ "$ok" = 1 ]; then
-            timeout 15 ros2 topic echo --once /odom >/dev/null 2>&1 && echo "odom publishing OK" || ok=0
+            timeout 15 ros2 topic echo --once /odom >/dev/null 2>&1 \
+              && echo "odom publishing OK" || ok=0
           fi
-          kill "$LAUNCH_PID" 2>/dev/null || true
-          pkill -f gzserver 2>/dev/null || true
+
+          # Tear down the ENTIRE process group (negative PID), then belt-and-
+          # suspenders on any stragglers, so the step never waits on gzserver.
+          kill -TERM -"$LP" 2>/dev/null || true
+          sleep 3
+          kill -KILL -"$LP" 2>/dev/null || true
+          pkill -9 -f gzserver 2>/dev/null || true
+          pkill -9 -f 'ros2 launch' 2>/dev/null || true
+
           if [ "$ok" != 1 ]; then
             echo "::group::sim.launch.py log"; cat /tmp/sim.log; echo "::endgroup::"
             echo "Simulation smoke test failed: diff_drive_controller did not reach active / no /odom."
