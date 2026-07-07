@@ -1,0 +1,94 @@
+# Going-public checklist
+
+Steps to open this repository to outside contributors. The ones marked
+**owner-only** require repo-admin or shell access with the credentials and
+cannot be done from a pull request. Do them in order — the history rewrite
+must happen **before** the repo is made public.
+
+## 1. Scrub secrets from git history — owner-only, do first
+
+The working tree no longer contains the leaked SSH password or the home-lab
+topology, but **git history still does**. Making the repo public exposes the
+full history. A file deletion in a later commit does not remove it from
+earlier commits.
+
+```bash
+# Install git-filter-repo (https://github.com/newren/git-filter-repo)
+pip install git-filter-repo
+
+# From a FRESH clone (filter-repo refuses to run on a repo with a remote by
+# default and rewrites all history — never do this on your only copy):
+git clone --mirror git@github.com:AndresIslas99/agv-greenhouse.git
+cd agv-greenhouse.git
+
+# Redact the leaked strings everywhere they appear in history.
+# Put each secret on its own line in replacements.txt, e.g.:
+#   1001==>REDACTED
+#   orza==>sim-user
+cat > /tmp/replacements.txt <<'EOF'
+literal:1001==>REDACTED
+EOF
+git filter-repo --replace-text /tmp/replacements.txt
+
+# Review, then force-push the rewritten history:
+git push --force
+```
+
+Then, regardless of the rewrite:
+
+- **Rotate the exposed SSH credential** on the sim host and treat it as
+  compromised (it may already be scraped).
+- **Scrub the sibling `agv-greenhouse-sim` repo** the same way — this repo's
+  `docs/validation/RUNBOOK_lan_hil.md` cross-references it and it likely
+  carries the same credentials and LAN topology.
+- All collaborators must re-clone after the force-push (old clones keep the
+  secrets).
+
+## 2. Land the community-readiness work on `main` — owner-only
+
+PR #5 carries the green CI, the fixes, and this checklist. `main` is still
+the old red-CI state until it merges. Merge PR #5, then tag the release:
+
+```bash
+git checkout main && git pull
+git tag -a v0.1.0 -m "First public release"
+git push origin v0.1.0
+```
+
+Move the `Unreleased` entries in `CHANGELOG.md` under `v0.1.0`.
+
+## 3. Branch protection on `main` — owner-only (Settings → Branches)
+
+History shows merges landing with red CI; with outside contributors the gate
+must be mechanical, not habitual. Require:
+
+- Pull request before merging (at least 1 approving review).
+- Status checks to pass: **`spec-verification`**, **`build-and-test`**,
+  **`typescript-build`**.
+- Branches up to date before merging.
+- No force-pushes / no deletion of `main`.
+
+## 4. Repository metadata — owner-only (Settings → General, and the sidebar)
+
+- **Description**: e.g. "Autonomous differential-drive AGV for commercial
+  greenhouses — ROS 2, spec-driven, dual-EKF localization, Nav2."
+- **Topics**: `ros2`, `robotics`, `agv`, `nav2`, `autonomous-robots`,
+  `greenhouse`, `cpp`, `differential-drive`.
+- **Social preview image** (Settings → General → Social preview).
+- Enable **Issues** and **Discussions**; disable **Wiki** unless you'll use it.
+
+## 5. Make it public — owner-only
+
+Settings → General → Danger Zone → Change visibility → Public. Do this only
+after steps 1–3.
+
+## 6. First-day-of-public polish
+
+- Seeded issues are filed from the review roadmap (labels
+  `good-first-issue`, `help-wanted`, `hardware-required`) — triage and pin a
+  couple of good first issues.
+- Add a dashboard/HIL demo GIF to the README (the one thing text can't
+  convey; biggest single lift to first impressions).
+- Consider publishing `agv-greenhouse-sim` (scrubbed) so contributors can
+  run the HIL loop without your hardware — today this is the main blocker to
+  non-doc contributions.

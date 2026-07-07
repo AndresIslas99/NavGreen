@@ -211,6 +211,11 @@ etc.) that are cloned separately into `src/` on the Jetson.
 
 ### Honest limitations for contributors without the robot
 
+- **Fastest start**: open the repo in the provided dev container
+  ([`.devcontainer/`](.devcontainer/), VS Code "Reopen in Container" or any
+  devcontainer-compatible tool). It matches CI (ROS 2 Humble + colcon +
+  Node 20) and resolves workspace dependencies on first launch, so
+  `colcon build` and the TypeScript builds work with no host setup.
 - **You can**: build the workspace, run the unit tests, run the spec
   verifiers, and bring up a mock drivetrain with zero hardware:
   `ros2 launch agv_hw_interface agv_ros2control_mock.launch.py`
@@ -283,13 +288,16 @@ Certified human safety requires external hardware-integrated scope.
 - [`docs/architectural_gaps.md`](docs/architectural_gaps.md) — known architecture debt, honestly documented
 - [`docs/production_readiness_assessment.md`](docs/production_readiness_assessment.md) — production readiness review
 - [`docs/audit/2026-04-13-full-audit.md`](docs/audit/2026-04-13-full-audit.md) — the audit that produced the spec system
+- [`docs/reviews/2026-07-06-community-readiness-review.md`](docs/reviews/2026-07-06-community-readiness-review.md) — full findings ledger from the pre-release review
 - [`specs/README.md`](specs/README.md) — how to read the specs, in order
 
 ## Contributing
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) (specs-first
-workflow, C++17 ground rules) and the [Code of Conduct](CODE_OF_CONDUCT.md).
-AI coding agents should start at [AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md).
+workflow, C++17 ground rules, maintainership) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). AI coding agents should start at
+[AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md). Changes worth noting go in
+[CHANGELOG.md](CHANGELOG.md).
 
 Before committing:
 
