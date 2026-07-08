@@ -64,25 +64,50 @@ must be mechanical, not habitual. Require:
 
 - Pull request before merging (at least 1 approving review).
 - Status checks to pass: **`spec-verification`**, **`build-and-test`**,
-  **`typescript-build`**.
+  **`typescript-build`**, **`simulation`**.
 - Branches up to date before merging.
 - No force-pushes / no deletion of `main`.
 
-## 4. Repository metadata — owner-only (Settings → General, and the sidebar)
+## 4. Rename the repository to `navgreen` — owner-only, optional but decided
 
-- **Description**: e.g. "Autonomous differential-drive AGV for commercial
-  greenhouses — ROS 2, spec-driven, dual-EKF localization, Nav2."
+Settings → General → Repository name → `navgreen`. GitHub redirects the old
+`agv-greenhouse` URLs (clones, links, badges keep working), but after
+renaming run this once so first-party links don't rely on redirects:
+
+```bash
+grep -rl 'AndresIslas99/agv-greenhouse' --include='*.md' --include='*.yml' \
+  --include='*.yaml' . | xargs sed -i 's#AndresIslas99/agv-greenhouse#AndresIslas99/navgreen#g'
+# also update site_url in mkdocs.yml (…github.io/navgreen/)
+```
+
+Package names keep the `agv_` prefix — NavGreen is the project brand, like
+Nav2's `nav2_*` packages.
+
+## 5. Enable the documentation site — owner-only
+
+The `Docs` workflow (`.github/workflows/docs.yaml`) builds the MkDocs Material
+site on every PR and deploys the `gh-pages` branch on pushes to `main`. After
+the first deploy: Settings → Pages → Source: **Deploy from a branch** →
+branch `gh-pages` / root. The site lands at
+`https://andresislas99.github.io/<repo-name>/`.
+
+## 6. Repository metadata — owner-only (Settings → General, and the sidebar)
+
+- **Description**: e.g. "NavGreen — autonomous navigation for greenhouse
+  robots. ROS 2, spec-driven, dual-EKF localization, Nav2."
+- **Website**: the GitHub Pages URL from step 5.
 - **Topics**: `ros2`, `robotics`, `agv`, `nav2`, `autonomous-robots`,
   `greenhouse`, `cpp`, `differential-drive`.
-- **Social preview image** (Settings → General → Social preview).
+- **Social preview image** (Settings → General → Social preview — the
+  wordmark at `docs/assets/navgreen-logo.svg` rendered on a light card works).
 - Enable **Issues** and **Discussions**; disable **Wiki** unless you'll use it.
 
-## 5. Make it public — owner-only
+## 7. Make it public — owner-only
 
 Settings → General → Danger Zone → Change visibility → Public. Do this only
 after steps 1–3.
 
-## 6. First-day-of-public polish
+## 8. First-day-of-public polish
 
 - Seeded issues are filed from the review roadmap (labels
   `good-first-issue`, `help-wanted`, `hardware-required`) — triage and pin a
