@@ -1,7 +1,8 @@
-# Contributing to AGV Greenhouse
+# Contributing to NavGreen
 
-Thanks for your interest! This is a working codebase for a differential-drive
-autonomous robot deployed in commercial greenhouses in Mexico. Contributions
+Thanks for your interest! NavGreen is a working codebase for a
+differential-drive autonomous robot deployed in commercial greenhouses in
+Mexico. Contributions
 of all sizes are welcome — code, tests, documentation, and field reports.
 
 ## The one rule that matters most: specs first
