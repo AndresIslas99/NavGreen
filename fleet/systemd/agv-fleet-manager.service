@@ -13,7 +13,14 @@ User=orza
 WorkingDirectory=/home/orza/ros2_ws/fleet/agv_fleet_manager
 ExecStart=/usr/bin/node dist/index.js
 Environment="VDA_MQTT_BROKER=mqtt://localhost:1883"
-Environment="FLEET_PORT=8091"
+# 8091 is taken by agv_image_server on the same Jetson (specs/project.yaml).
+Environment="FLEET_PORT=8092"
+# Shared secret for the REST/WebSocket control surface (fleet e-stop,
+# navigate, traffic zones). Unset = unauthenticated; isolated LAN only.
+#Environment="FLEET_API_TOKEN=change-me"
+# Broker credentials, once mosquitto auth is enabled (see mosquitto.conf):
+#Environment="VDA_MQTT_USERNAME=fleet-manager"
+#Environment="VDA_MQTT_PASSWORD=change-me"
 Restart=on-failure
 RestartSec=10
 

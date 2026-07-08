@@ -53,39 +53,23 @@ WHITELIST=(
   'src/agv_bringup/launch/|runtime_registry_file'
   'src/agv_bringup/launch/|map_dir'
   # DDS peers — IP addresses that are inherently deployment-specific
-  'src/agv_slam/config/cyclonedds|192.168.'
   'src/agv_bringup/config/cyclonedds|192.168.'
   # Dev scripts (marked dev_only in TASK.yaml)
   # These are allowed to hardcode paths/IPs because they run outside the
   # ROS stack and typically set up or document a fixed-location deployment.
   'src/agv_bringup/scripts/field_test.py|'
   'src/agv_bringup/scripts/setup_production_network.sh|'
-  'src/agv_slam/scripts/jetson_setup.sh|'
-  'src/agv_slam/scripts/run_slam.sh|'
-  'src/agv_slam/scripts/export_session.sh|'
-  'src/agv_slam/scripts/session_recorder.py|'
-  'src/agv_slam/scripts/slam_gui.py|'
   # systemd unit comment with reference IP for documentation
   'src/agv_bringup/systemd/agv.service|192.168.'
-  # ZED wrapper config and recording config — parametrized via launch
-  # substitutions in Fase 6. Whitelisted until then with known_issue tag.
-  'src/agv_slam/config/zed2i_override.yaml|/home/orza/'
-  'src/agv_slam/config/recording.yaml|/mnt/ssd/'
-  'src/agv_slam/launch/recording_only.launch.py|/mnt/ssd/'
-  'src/agv_slam/launch/playback.launch.py|/mnt/ssd/'
-  'src/agv_slam/src/slam_gui_node.cpp|/mnt/ssd/'
-  'src/agv_slam/src/pipeline_watchdog_node.cpp|/mnt/ssd/'
   # C++ defaults that will be parametrized via env var in Fase 5.c.3
   # Whitelisted for now so the rest of the verify suite passes;
   # tracked as known_issue in specs/persistence.yaml.
   'src/agv_map_manager/src/map_manager_node.cpp|/home/orza/agv_data/maps/.current.area'
   'src/agv_localization_init/src/auto_init_orchestrator_node.cpp|/home/orza/agv_data/maps/.current.area'
-  # agv_slam log messages include URLs
-  'src/agv_slam/launch/agv_slam.launch.py|192.168.'
-  # Legacy RTAB-Map config, scheduled for deletion
-  'src/agv_slam/config/rtabmap.yaml|/home/orza/'
-  # External submodule — not under AGV policy
-  'src/zed-ros2-wrapper/|'
+  # NOTE 2026-07-06: all src/agv_slam/* and src/zed-ros2-wrapper/* whitelist
+  # entries were removed — those trees are external deploy-time packages and
+  # no longer exist in this workspace. Dead whitelist entries are latent
+  # holes: a new file at a whitelisted path would silently pass the scan.
 )
 
 is_whitelisted() {

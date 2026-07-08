@@ -60,7 +60,8 @@ private:
   void request_encoders();
   void send_velocity(uint8_t node_id, float vel_turns_per_s);
   void send_velocity_with_ff(uint8_t node_id, float vel_turns_per_s, float torque_ff);
-  float apply_wheel_shaping(float target, float& prev_cmd, double scale);
+  void send_frame(uint32_t arb_id, const uint8_t* data);
+  float apply_wheel_shaping(float target, float& prev_cmd, double scale, float dt);
   void send_axis_state(uint8_t node_id, AxisState state);
   void stop_motors();
 
@@ -71,13 +72,20 @@ private:
     float prev_position = 0.0f; // for delta computation
     uint8_t state = 0;
     uint32_t errors = 0;
-    bool heartbeat_received = false;
+    bool encoder_seen = false;  // first real encoder frame received (gates odometry)
     float prev_cmd = 0.0f;  // previous commanded velocity for accel limiting
     float fet_temp = 0.0f;      // FET temperature °C
     float motor_temp = 0.0f;    // Motor temperature °C
+    int thermal_level = 0;      // 0=ok, 1=warning, 2=critical (latched until cool)
+    rclcpp::Time last_feedback{0, 0, RCL_ROS_TIME};  // last heartbeat/encoder frame
   };
   AxisData left_;
   AxisData right_;
+
+  // -- Feedback watchdog --
+  int feedback_timeout_ms_;   // 0 disables
+  bool feedback_ok_ = true;
+  int can_send_failures_ = 0;  // consecutive send() failures (bus-down signal)
 
   // -- Odometry state --
   double odom_x_ = 0.0;
@@ -128,7 +136,7 @@ private:
   bool   zero_cmd_active_   = false;
 
   // -- Temperature monitoring --
-  void check_temperature(const AxisData& axis);
+  void check_temperature(AxisData& axis);
   std::string thermal_state_{"ok"};
 
   // -- CAN retry backoff --

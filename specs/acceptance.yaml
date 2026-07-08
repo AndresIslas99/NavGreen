@@ -1,38 +1,54 @@
-spec_version: "1.1"
-status: "pending_revision_post_audit"
-pending_revision_note: |
-  This spec was NOT revised in the 2026-04-13 audit. It still describes the
-  quality gates from before the safety chain, Area Memory, and localization
-  orchestrator integrations. It references a nav2 stack config (planner +
-  controller) that no longer matches the code, and it does not include gates
-  for the verify_specs pre-commit hook or the end-to-end teleop → save →
-  reboot → load → localize cycle that Fase 6 delivers.
-
-  Scheduled rewrite: after Fase 6 closes (teleop works end-to-end, meta.json
-  symmetry fixed, mode feedback loop added). At that point the gates should
-  include:
-    - bash tools/verify_specs/all.sh → 0 blocking violations
-    - bash tools/verify_specs/install_git_hook.sh installed
-    - Reboot → healthcheck PASS within 60s
-    - Save → Reboot → Load → LOCALIZED within 10s (Area Memory Path A0)
-    - Dashboard teleop → ODrive wheels responding while has_map=true
-    - (new gates from Fase 6 bugs)
-
-  Until this rewrite lands, DO NOT treat the gates below as authoritative.
+spec_version: "2.0"
+last_updated: "2026-07-06"
+status: "active"
+revision_note: |
+  Rewritten 2026-07-06 (was status: pending_revision_post_audit since the
+  2026-04-13 audit). The gates below now include the verify_specs suite,
+  the reboot→healthcheck cycle, the save→reboot→load→localize cycle, and
+  end-to-end teleop — the Fase 6 deliverables the previous revision was
+  waiting on. This file is authoritative: CLAUDE.md's Definition of Done
+  points here.
 
 quality_gates:
+
+  # ── Static gates (every commit — enforced by the pre-commit hook) ──────
+  spec_sync:
+    pass_condition:
+      - "bash tools/verify_specs/all.sh → 0 blocking failures"
+      - "no FAIL: lines from any verifier (WARNING-tier included)"
+      - "pre-commit hook installed via bash tools/verify_specs/install_git_hook.sh"
+
+  build:
+    pass_condition:
+      - "colcon build succeeds with zero warnings (-Werror mandatory in every AGV C++ package — see tools/verify_specs/verify_werror.sh)"
+
   unit:
     pass_condition:
       - "0 failures"
       - "0 errors"
 
+  # ── Runtime gates (bench / robot) ──────────────────────────────────────
   integration:
     pass_condition:
       - "TF tree complete within 5 seconds"
-      - "/wheel_odom near 50Hz"
-      - "required services available"
-      - "Nav2 lifecycle active"
+      - "/agv/wheel_odom near 50Hz"
+      - "required services available (see specs/interfaces.yaml services section)"
+      - "Nav2 lifecycle active (/agv/lifecycle_manager_navigation/is_active)"
       - "dual EKF responsibilities respected: map->odom global, odom->base_link local"
+
+  reboot_to_healthcheck:
+    pass_condition:
+      - "systemctl reboot → agv.service up → agv_healthcheck PASS within 60s"
+
+  save_load_localize_cycle:
+    pass_condition:
+      - "dashboard Save Map → reboot → Load Map → /agv/localization/state reaches LOCALIZED within 10s (Area Memory Path A0)"
+      - "cascade falls through A0→A→B→C without operator intervention when a path's inputs are missing"
+
+  teleop_end_to_end:
+    pass_condition:
+      - "dashboard joystick → /agv/cmd_vel → arbiter → safety chain → ODrive wheels responding while has_map=true"
+      - "dashboard E-stop halts wheels and robot_state shows e_stop until cleared via /api/recovery/clear_estop"
 
   mapping_commissioning:
     pass_condition:
@@ -117,7 +133,8 @@ safety_boundary:
 
 task_completion_rule:
   must_satisfy_all:
-    - "build"
-    - "tests"
-    - "runtime interface compliance"
-    - "acceptance gate"
+    - "spec_sync (bash tools/verify_specs/all.sh — zero blocking failures)"
+    - "build (zero warnings)"
+    - "tests (colcon test for touched packages)"
+    - "runtime interface compliance (specs/interfaces.yaml: type, QoS, namespace)"
+    - "the acceptance gate relevant to the change (this file)"

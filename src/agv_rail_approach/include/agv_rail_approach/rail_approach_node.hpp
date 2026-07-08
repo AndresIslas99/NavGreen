@@ -109,6 +109,12 @@ private:
   // still applies).
   double max_fine_duration_{120.0};
   rclcpp::Time fine_servo_start_{0, 0, RCL_ROS_TIME};
+  // Max wall-time allowed in COARSE_APPROACH. Covers the case where the
+  // Nav2 goal response/result never arrives (server died mid-goal) —
+  // without a deadline the node would stay in COARSE_APPROACH forever.
+  // Zero or negative disables the check.
+  double coarse_timeout_{180.0};
+  rclcpp::Time coarse_start_{0, 0, RCL_ROS_TIME};
   // Iter-15: if robot is already within this radius of the target tag
   // (measured against map→base_link), skip Nav2 coarse_approach and
   // jump straight to TAG_ACQUISITION. Default 2.0 m covers every Round-44
@@ -173,6 +179,8 @@ private:
     const std::shared_ptr<rmw_request_id_t>,
     const agv_interfaces::srv::ListRailStarts::Request::SharedPtr,
     agv_interfaces::srv::ListRailStarts::Response::SharedPtr resp);
+  void on_status_timer();
+  void check_deadlines();
   void publish_status();
 
   // State machine transitions

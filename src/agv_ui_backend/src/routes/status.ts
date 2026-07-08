@@ -10,6 +10,7 @@ function calcHz(times: number[]): number {
 
 export function register(app: Express, deps: AppDeps): void {
   const { state, eventLog } = deps;
+  const requireOperator = deps.authManager.requireAuth('operator');
 
   app.get('/api/status', (_req, res) => {
     const s = state;
@@ -54,7 +55,7 @@ export function register(app: Express, deps: AppDeps): void {
   app.get('/api/mode/arbiter', (_req, res) => res.json(state.modeArbiterState));
   app.get('/api/rail_driver/state', (_req, res) => res.json(state.railDriverState));
 
-  app.put('/api/mode', async (req, res) => {
+  app.put('/api/mode', requireOperator, async (req, res) => {
     const mode = req.body?.mode;
     if (!['teleop', 'mapping', 'nav'].includes(mode)) {
       return res.status(400).json({ success: false, message: `Invalid mode: ${mode}` });

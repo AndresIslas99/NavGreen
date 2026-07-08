@@ -6,10 +6,17 @@ set -e
 
 FLEET_DIR="$(cd "$(dirname "$0")" && pwd)"
 VDA_MQTT_BROKER="${VDA_MQTT_BROKER:-mqtt://localhost:1883}"
-FLEET_PORT="${FLEET_PORT:-8091}"
+# 8091 is taken by agv_image_server on the same Jetson (specs/project.yaml).
+FLEET_PORT="${FLEET_PORT:-8092}"
 VDA_MANUFACTURER="${VDA_MANUFACTURER:-agv-greenhouse}"
 VDA_SERIAL_NUMBER="${VDA_SERIAL_NUMBER:-agv-001}"
 AGV_NAMESPACE="${AGV_NAMESPACE:-agv}"
+# Optional security knobs (empty = disabled; see fleet/README.md):
+#   FLEET_API_TOKEN     shared secret for the fleet REST/WebSocket API
+#   VDA_MQTT_USERNAME / VDA_MQTT_PASSWORD  broker credentials
+FLEET_API_TOKEN="${FLEET_API_TOKEN:-}"
+VDA_MQTT_USERNAME="${VDA_MQTT_USERNAME:-}"
+VDA_MQTT_PASSWORD="${VDA_MQTT_PASSWORD:-}"
 
 PID_DIR="/tmp/agv_fleet_pids"
 mkdir -p "$PID_DIR"
@@ -34,6 +41,8 @@ start() {
     echo "[2/3] Starting Fleet Manager on port $FLEET_PORT..."
     cd "$FLEET_DIR/agv_fleet_manager"
     VDA_MQTT_BROKER="$VDA_MQTT_BROKER" FLEET_PORT="$FLEET_PORT" \
+        FLEET_API_TOKEN="$FLEET_API_TOKEN" \
+        VDA_MQTT_USERNAME="$VDA_MQTT_USERNAME" VDA_MQTT_PASSWORD="$VDA_MQTT_PASSWORD" \
         node dist/index.js &
     echo $! > "$PID_DIR/fleet_manager.pid"
     echo "  Fleet Manager PID: $(cat "$PID_DIR/fleet_manager.pid")"
@@ -41,8 +50,12 @@ start() {
     # 3. Start VDA 5050 Adapter
     echo "[3/3] Starting VDA 5050 Adapter ($VDA_MANUFACTURER/$VDA_SERIAL_NUMBER)..."
     cd "$FLEET_DIR/agv_vda5050_adapter"
+    # Note: when broker auth is enabled, the adapter defaults its username to
+    # VDA_SERIAL_NUMBER (per the ACL) — do not export a fleet-wide
+    # VDA_MQTT_USERNAME here unless every service should share it.
     VDA_MQTT_BROKER="$VDA_MQTT_BROKER" VDA_MANUFACTURER="$VDA_MANUFACTURER" \
         VDA_SERIAL_NUMBER="$VDA_SERIAL_NUMBER" AGV_NAMESPACE="$AGV_NAMESPACE" \
+        VDA_MQTT_USERNAME="$VDA_MQTT_USERNAME" VDA_MQTT_PASSWORD="$VDA_MQTT_PASSWORD" \
         node dist/index.js &
     echo $! > "$PID_DIR/vda5050_adapter.pid"
     echo "  VDA Adapter PID: $(cat "$PID_DIR/vda5050_adapter.pid")"

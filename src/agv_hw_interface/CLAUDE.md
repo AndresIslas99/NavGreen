@@ -96,6 +96,13 @@ plugin's `read()`/`write()` methods are intentionally minimal — the goal of
 this package is to unblock parallel development with mock hardware, not to
 replace agv_odrive's tuned behavior on real hardware.
 
+The plugin does report bus faults to controller_manager: `on_activate` fails
+if the arming frames cannot be sent, `write()` returns ERROR after
+`max_send_failures` consecutive failed sends, and `read()` returns ERROR after
+`encoder_timeout_cycles` cycles without any encoder frame (RTR echoes and
+short frames are ignored, so another process polling the bus cannot corrupt
+the joint states).
+
 When the user is ready to fully migrate, the next steps are documented in
 [TASK.yaml#follow_up_work](TASK.yaml).
 
@@ -106,7 +113,10 @@ colcon test --packages-select agv_hw_interface --event-handlers console_direct+
 ```
 
 `test_kinematics` exercises the radians<->turns conversion math without a
-SystemInterface instance, so it runs in any environment.
+SystemInterface instance, so it runs in any environment. It includes
+[include/agv_hw_interface/wheel_conversion.hpp](include/agv_hw_interface/wheel_conversion.hpp)
+— the exact functions `send_velocity()` and `process_encoder_frame()` call —
+so a regression in the production math fails the test.
 
 ## Improvement opportunities
 

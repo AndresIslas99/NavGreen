@@ -82,11 +82,13 @@ public:
       throw std::runtime_error("missions_file not set");
     }
 
-    // Create parent directory if needed
+    // Create parent directory if needed. The store is line-delimited JSON
+    // (one mission object per line), so the seed is an empty file — a "[]"
+    // stub would make the file neither a JSON array nor valid JSONL.
     auto parent = fs::path(missions_file_).parent_path();
     if (!parent.empty()) fs::create_directories(parent);
     if (!fs::exists(missions_file_)) {
-      std::ofstream(missions_file_) << "[]";
+      std::ofstream seed(missions_file_);
     }
 
     // Services
@@ -219,22 +221,40 @@ private:
       return;
     }
 
-    // Parse waypoints
+    // Parse waypoints. The store is hand-written JSONL: guard against
+    // missing keys (find() == npos) and non-numeric values (std::stod
+    // throws) so one malformed line fails the service instead of throwing
+    // out of the callback and killing the node.
     std::vector<std::tuple<double, double, double>> waypoints;
     auto wp_pos = found_line.find("\"waypoints\":[");
     if (wp_pos != std::string::npos) {
       auto wp_str = found_line.substr(wp_pos);
       size_t search_pos = 0;
-      while (true) {
-        auto x_pos = wp_str.find("\"x\":", search_pos);
-        if (x_pos == std::string::npos) break;
-        double x = std::stod(wp_str.substr(x_pos + 4));
-        auto y_pos = wp_str.find("\"y\":", x_pos);
-        double y = std::stod(wp_str.substr(y_pos + 4));
-        auto t_pos = wp_str.find("\"theta\":", y_pos);
-        double theta = std::stod(wp_str.substr(t_pos + 8));
-        waypoints.emplace_back(x, y, theta);
-        search_pos = t_pos + 10;
+      try {
+        while (true) {
+          auto x_pos = wp_str.find("\"x\":", search_pos);
+          if (x_pos == std::string::npos) break;
+          auto y_pos = wp_str.find("\"y\":", x_pos);
+          auto t_pos = (y_pos == std::string::npos)
+                         ? std::string::npos
+                         : wp_str.find("\"theta\":", y_pos);
+          if (t_pos == std::string::npos) {
+            res->success = false;
+            res->message = "Malformed mission (waypoint missing y/theta): " +
+                           req->mission_id;
+            return;
+          }
+          double x = std::stod(wp_str.substr(x_pos + 4));
+          double y = std::stod(wp_str.substr(y_pos + 4));
+          double theta = std::stod(wp_str.substr(t_pos + 8));
+          waypoints.emplace_back(x, y, theta);
+          search_pos = t_pos + 8;
+        }
+      } catch (const std::exception&) {
+        res->success = false;
+        res->message = "Malformed mission (non-numeric waypoint value): " +
+                       req->mission_id;
+        return;
       }
     }
 
@@ -268,6 +288,34 @@ private:
       mission_id.c_str(), current, total, state.c_str());
     msg.data = buf;
     status_pub_->publish(msg);
+  }
+
+  // Outcome of waiting on a future from the worker thread.
+  enum class WaitResult { kReady, kCancelled, kTimeout };
+
+  // Wait for `future` while the MAIN executor (rclcpp::spin in main())
+  // services the action-client callbacks that complete it. Never spin the
+  // node here: it is already owned by the main executor, and
+  // rclcpp::spin_until_future_complete would throw "Node has already been
+  // added to an executor", terminating the process via the uncaught
+  // exception in this std::thread. Polls mission_cancel_ so a cancel
+  // request interrupts the wait within ~100 ms.
+  template <typename FutureT>
+  WaitResult wait_for_future(const FutureT& future,
+                             std::chrono::nanoseconds timeout)
+  {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (rclcpp::ok()) {
+      if (mission_cancel_.load()) return WaitResult::kCancelled;
+      if (future.wait_for(std::chrono::milliseconds(100)) ==
+          std::future_status::ready) {
+        return WaitResult::kReady;
+      }
+      if (std::chrono::steady_clock::now() >= deadline) {
+        return WaitResult::kTimeout;
+      }
+    }
+    return WaitResult::kCancelled;  // rclcpp shutdown — stop the mission
   }
 
   void execute_mission_thread(
@@ -306,11 +354,14 @@ private:
       goal.pose.pose.orientation.w = std::cos(theta / 2.0);
 
       auto goal_handle_future = nav_client_->async_send_goal(goal);
-      if (rclcpp::spin_until_future_complete(this->get_node_base_interface(),
-                                              goal_handle_future, std::chrono::seconds(10)) !=
-          rclcpp::FutureReturnCode::SUCCESS) {
-        RCLCPP_ERROR(get_logger(), "Failed to send goal %zu", i + 1);
-        publish_status(mission_id, i + 1, waypoints.size(), "failed");
+      const auto send_wait =
+        wait_for_future(goal_handle_future, std::chrono::seconds(10));
+      if (send_wait != WaitResult::kReady) {
+        const bool cancelled = (send_wait == WaitResult::kCancelled);
+        RCLCPP_ERROR(get_logger(), "%s while sending goal %zu",
+                     cancelled ? "Cancelled" : "Timed out", i + 1);
+        publish_status(mission_id, i + 1, waypoints.size(),
+                       cancelled ? "cancelled" : "failed");
         mission_running_.store(false);
         return;
       }
@@ -324,11 +375,23 @@ private:
       }
 
       auto result_future = nav_client_->async_get_result(goal_handle);
-      if (rclcpp::spin_until_future_complete(this->get_node_base_interface(),
-                                              result_future, std::chrono::minutes(5)) !=
-          rclcpp::FutureReturnCode::SUCCESS) {
-        RCLCPP_ERROR(get_logger(), "Goal %zu timed out", i + 1);
-        publish_status(mission_id, i + 1, waypoints.size(), "failed");
+      const auto result_wait =
+        wait_for_future(result_future, std::chrono::minutes(5));
+      if (result_wait != WaitResult::kReady) {
+        // Preempt the in-flight Nav2 goal so the robot stops now instead
+        // of finishing a goal nobody wants (cancel used to only take
+        // effect between waypoints — up to 5 minutes later).
+        nav_client_->async_cancel_goal(goal_handle);
+        const bool cancelled = (result_wait == WaitResult::kCancelled);
+        if (cancelled) {
+          RCLCPP_WARN(get_logger(),
+                      "Mission %s cancelled during goal %zu — Nav2 goal preempted",
+                      mission_id.c_str(), i + 1);
+        } else {
+          RCLCPP_ERROR(get_logger(), "Goal %zu timed out", i + 1);
+        }
+        publish_status(mission_id, i + 1, waypoints.size(),
+                       cancelled ? "cancelled" : "failed");
         mission_running_.store(false);
         return;
       }

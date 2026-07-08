@@ -24,7 +24,7 @@ import { TelemetryStore } from './telemetry_store';
 import { AuthManager } from './auth';
 import { registerAllRoutes } from './routes';
 import { setupControlWs, setupTeleopWs } from './ws/control';
-import type { AppDeps, AppState, RosBridge } from './app_deps';
+import type { AppDeps, AppState, NavGoalSource, RosBridge } from './app_deps';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -242,6 +242,9 @@ async function main() {
   // --- ROS Bridge (passed to route modules via AppDeps) ---
   const ros: RosBridge = {
     sendCmdVel(linear: number, angular: number) {
+      // Reject non-finite input (NaN/Infinity from unvalidated JSON) — a NaN
+      // Twist on /agv/cmd_vel is undefined motion for the whole safety chain.
+      if (!Number.isFinite(linear) || !Number.isFinite(angular)) return;
       if (state.eStopActive) return;
       if (state.currentMode !== 'teleop' && state.currentMode !== 'mapping') return;
       const msg = rclnodejs.createMessageObject('geometry_msgs/msg/Twist') as any;
@@ -255,8 +258,17 @@ async function main() {
       lastCmdTime = Date.now() / 1000;
     },
 
-    sendNavGoal(x: number, y: number, theta: number = 0) {
+    sendNavGoal(x: number, y: number, theta: number = 0, source: NavGoalSource = 'operator') {
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(theta)) {
+        return { success: false, message: 'Goal coordinates must be finite numbers' };
+      }
       if (state.currentMode !== 'nav') return { success: false, message: 'Not in nav mode' };
+      // Serialize goal sources: while a mission owns the nav channel, reject
+      // operator goals (REST/WS) — a concurrent goal would overwrite the
+      // shared navState/goal handle and corrupt mission progress tracking.
+      if (source !== 'mission' && state.missionProgress?.status === 'running') {
+        return { success: false, message: 'Mission in progress — cancel it before sending manual goals' };
+      }
       if (!state.motorState.armed) {
         eventLog.emit('warn', 'NAV',
           'Goal rejected: motors not armed. Arm motors first (Recovery panel)');
@@ -324,6 +336,9 @@ async function main() {
         state.health.nav = { status: 'ok', detail: 'Navigating', updated: Date.now() / 1000 };
         updateState();
         gh.getResult().then(() => {
+          // A newer goal may have superseded this one (Nav2 preempts); its
+          // result must not stomp the state of the currently active goal.
+          if (navGoalHandle !== gh) return;
           const s = gh.status;
           const succeeded = s === 4;
           state.navState = { active: false, distance_remaining: 0,
@@ -354,7 +369,11 @@ async function main() {
             });
             void defined_id;  // available for future logging
           }
-        }).catch(() => { state.navState = { active: false, distance_remaining: 0, status: 'aborted' }; navGoalHandle = null; state.pendingRailApproach = null; updateState(); });
+        }).catch(() => {
+          if (navGoalHandle !== gh) return;
+          state.navState = { active: false, distance_remaining: 0, status: 'aborted' };
+          navGoalHandle = null; state.pendingRailApproach = null; updateState();
+        });
       }).catch(() => { state.navState = { active: false, distance_remaining: 0, status: 'aborted' }; updateState(); });
 
       state.navState = { active: true, distance_remaining: 0, status: 'sending' };
@@ -500,7 +519,7 @@ async function main() {
           }
         }
 
-        ros.sendNavGoal(parseFloat(nd.x || 0), parseFloat(nd.y || 0), parseFloat(nd.theta || 0));
+        ros.sendNavGoal(Number(nd.x) || 0, Number(nd.y) || 0, Number(nd.theta) || 0, 'mission');
         while (state.navState.active) { await new Promise(r => setTimeout(r, 500)); if (state.missionCancel) { ros.cancelNavGoal(); break; } }
         if (state.navState.status !== 'succeeded') { state.missionProgress!.status = 'failed'; completed = false; break; }
 
@@ -717,10 +736,13 @@ async function main() {
       apriltagManager.recordPendingDetection(id);
     });
 
-    // Rail approach status — subscribed to track state for waypoint action gating.
-    // Format: '{"state":"settled","target_tag":7}'
+    // Rail approach state — subscribed to track progress for waypoint action
+    // gating. Published by rail_approach_node on /agv/rail_approach/state
+    // (the pre-arbiter 'status' topic name no longer exists; see
+    // specs/interfaces.yaml). Format:
+    // '{"state":"settled","detail":"settled","target_tag":7,...}'
     node.createSubscription('std_msgs/msg/String',
-      `/${NAMESPACE}/rail_approach/status`, (msg: any) => {
+      `/${NAMESPACE}/rail_approach/state`, (msg: any) => {
       try {
         const parsed = JSON.parse(msg.data);
         state.railApproachState = parsed.state || 'unknown';
@@ -824,7 +846,7 @@ async function main() {
     sharp(flipped, { raw: { width: w, height: h, channels: 1 } }).png().toBuffer()
       .then((buf: Buffer) => { state.mapPng = buf; state.mapMeta = { resolution: msg.info.resolution,
         origin_x: msg.info.origin.position.x, origin_y: msg.info.origin.position.y, width: w, height: h }; state.mapChanged = true; state.mapVersion++; })
-      .catch(() => {});
+      .catch((e: any) => { console.warn('[map] PNG compression failed:', e?.message || e); });
   });
 
   // --- Live occupancy grid (direct rclnodejs subscription) ---
@@ -877,7 +899,10 @@ async function main() {
         state.liveMapPng = buf;
         state.liveMapMeta = meta;
         state.liveMapVersion++;
-      }).catch(() => { liveMapCompressing = false; });
+      }).catch((e: any) => {
+        liveMapCompressing = false;
+        console.warn('[live_map] PNG compression failed:', e?.message || e);
+      });
   });
 
   // --- Timers ---
@@ -1054,6 +1079,12 @@ async function main() {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`AGV Backend (TS) on http://0.0.0.0:${PORT}`);
     eventLog.emit('info', 'SYSTEM', 'Backend started');
+    // Loud security posture banner — the backend binds 0.0.0.0 and its REST/WS
+    // endpoints command a physical robot, so a weak auth config must not be silent.
+    for (const warning of authManager.securityWarnings()) {
+      console.warn(`[SECURITY] ${warning}`);
+      eventLog.emit('warn', 'SYSTEM', `Security: ${warning}`);
+    }
     if (bootMapName) {
       eventLog.emit('info', 'MAPPING',
         `Boot map detected: '${bootMapName}' — will auto-localize in 10s`);

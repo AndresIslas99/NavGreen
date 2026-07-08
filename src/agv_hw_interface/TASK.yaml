@@ -32,3 +32,4 @@ follow_up_work:
   - "Add launch_testing for the mock launch (Gap 4 of architectural_gaps.md)"
   - "Wire diff_drive_controller's /odom into ekf_local as a wheel odom source"
   - "Once field-validated, retire agv_odrive standalone node and update agv_full.launch.py"
+  - "Verify via heartbeat that axes actually entered CLOSED_LOOP_CONTROL after on_activate (needs hardware validation)"
