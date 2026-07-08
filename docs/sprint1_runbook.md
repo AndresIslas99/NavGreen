@@ -3,8 +3,8 @@
 **Status:** code complete 2026-04-24. Field validation pending (steps below).
 
 This sprint implements the HMI architecture changes from the retro analysis
-(`/home/orza/.claude/plans/recibi-la-siguiente-retro-quizzical-abelson.md`)
-without changing the stack technology. The backend stays as it was validated
+(internal planning note, not tracked in this repo) without changing the
+stack technology. The backend stays as it was validated
 (rclnodejs + state machine + gates); the frontend gains the option to live
 on a different host.
 

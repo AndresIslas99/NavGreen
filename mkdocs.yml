@@ -1,0 +1,100 @@
+site_name: NavGreen
+site_description: >-
+  Autonomous navigation for greenhouse robots — ROS 2, spec-driven,
+  dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.
+site_url: https://andresislas99.github.io/agv-greenhouse/
+repo_url: https://github.com/AndresIslas99/agv-greenhouse
+repo_name: AndresIslas99/agv-greenhouse
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  logo: assets/navgreen-mark.svg
+  favicon: assets/navgreen-mark.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+# Existing operational/historical docs stay buildable and searchable even
+# when they are not in the curated nav. Those pages (audit trail,
+# architectural_gaps, historical validation docs) link to source files with
+# repo-relative paths that resolve on GitHub but not inside the site —
+# downgraded to info so `--strict` gates only the curated pages, whose links
+# are all site-relative or absolute GitHub URLs.
+validation:
+  nav:
+    omitted_files: ignore
+  links:
+    absolute_links: ignore
+    unrecognized_links: info
+    not_found: info
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Tutorials:
+      - Drive the robot in simulation: tutorials/drive-in-simulation.md
+      - Run the operator dashboard: tutorials/operator-dashboard.md
+      - Map a greenhouse: tutorials/build-a-map.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Localization (dual EKF): architecture/localization.md
+      - Navigation & mode arbitration: architecture/navigation-and-modes.md
+      - The spec system (SSOT): architecture/spec-system.md
+      - Safety model: architecture/safety.md
+  - Hardware:
+      - Jetson & CAN setup: hardware_setup.md
+      - ODrive low-speed tuning: odrive_low_speed_tuning.md
+      - Drivetrain commissioning: low_speed_validation.md
+  - Operations:
+      - Operator runbook: operator_runbook.md
+      - Mapping commissioning: mapping_commissioning.md
+      - HIL validation runbook: validation/RUNBOOK_lan_hil.md
+  - Reference:
+      - Packages: reference/packages.md
+      - Interfaces & specs: reference/interfaces.md
+      - Community-readiness review: reviews/2026-07-06-community-readiness-review.md
+  - Community:
+      - Contributing: community/contributing.md
+      - Roadmap: community/roadmap.md
+      - Security: community/security.md

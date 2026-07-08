@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<!--
+  agv_sim — Gazebo Classic simulation URDF for the AGV.
+
+  This composes the EXISTING robot geometry from agv_description
+  (agv_full.urdf.xacro -> agv_base.xacro + wheel.xacro) and appends the
+  bits Gazebo needs to simulate a hardware-free, sensor-free differential
+  drive:
+
+    1. a <ros2_control> block whose hardware plugin is
+       gazebo_ros2_control/GazeboSystem, exposing the two wheel joints with a
+       velocity command interface and position+velocity state interfaces
+       (mirrors src/agv_hw_interface/urdf/agv_ros2control.urdf.xacro);
+    2. a <gazebo> block that loads libgazebo_ros2_control.so and points it at
+       config/sim_controllers.yaml;
+    3. <gazebo reference="..."> friction/material tags so the wheels grip the
+       ground and the robot drives instead of sliding.
+
+  Geometry, joint names (left_wheel_joint / right_wheel_joint, type
+  continuous), inertials and collisions all come from agv_description and are
+  NOT redefined here. base_link and both wheels already carry inertial +
+  collision (see agv_base.xacro / wheel.xacro), so no gazebo-only mass or
+  collision fixups are required — only surface/material tags are added below.
+
+  Expand with:
+    xacro $(find agv_sim)/urdf/agv_sim.urdf.xacro
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="agv_sim">
+
+  <!-- Pull in the exact geometry already defined in agv_description. -->
+  <xacro:include filename="$(find agv_description)/urdf/agv_full.urdf.xacro"/>
+
+  <!-- ros2_control hardware: Gazebo Classic simulated system.
+       Same two-wheel velocity-command / position+velocity-state layout as
+       src/agv_hw_interface/urdf/agv_ros2control.urdf.xacro, but the hardware
+       plugin is the Gazebo simulator instead of mock/real CAN. -->
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+
+    <joint name="left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-10.0</param>
+        <param name="max">10.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-10.0</param>
+        <param name="max">10.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <!-- Load the ros2_control Gazebo plugin. It hosts controller_manager
+       INSIDE gzserver and loads the controllers from sim_controllers.yaml.
+       robot_param/robot_param_node tell it where to read the URDF from. -->
+  <gazebo>
+    <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+      <parameters>$(find agv_sim)/config/sim_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+  <!-- Wheel surface: grip so the differential drive actually moves the
+       robot instead of spinning in place / sliding. mu1/mu2 are the ODE
+       friction coefficients along/across the contact. -->
+  <gazebo reference="left_wheel">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>1.0</kd>
+    <minDepth>0.001</minDepth>
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <gazebo reference="right_wheel">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>1.0</kd>
+    <minDepth>0.001</minDepth>
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <!-- Chassis: low friction (it never touches the ground in normal driving,
+       but keep it slippery so a tip/scrape does not grab the floor). -->
+  <gazebo reference="base_link">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+</robot>

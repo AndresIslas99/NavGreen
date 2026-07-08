@@ -55,6 +55,22 @@ A built-in watchdog also forces `safety_ok=false` if no `SafetyStatus` arrives
 within `safety_timeout_s` (default 0.5s) — this catches a crashed
 `safety_supervisor`.
 
+## QoS contract for E-stop inputs
+
+The `hardware_estop` subscription in `cmd_vel_gate_node` and the
+`software_estop` subscription in `safety_supervisor_node` both use
+`reliability: reliable` + `durability: transient_local`, so a late-joining
+node still receives a latched E-stop published before it started.
+
+DDS QoS matching **rejects** a `volatile` (default-durability) publisher
+against a `transient_local` subscription: a future E-stop bridge that
+publishes `std_msgs/Bool` with default QoS would never connect, and the
+E-stop would be silently ignored. Any publisher on `/agv/hardware_estop` or
+`/agv/software_estop` MUST use `reliability: reliable` +
+`durability: transient_local`. This durability requirement belongs in the
+`qos:` blocks of both topics in `specs/interfaces.yaml`, which currently
+records neither.
+
 ## Topology (wired into agv_full.launch.py as of 2026-04-13)
 
 ```

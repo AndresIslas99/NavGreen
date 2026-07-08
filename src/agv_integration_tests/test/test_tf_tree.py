@@ -1,7 +1,18 @@
-"""Validate that all required TF frames exist within 5 seconds (acceptance.yaml)."""
+"""Validate that all required TF frames exist within 5 seconds (acceptance.yaml).
+
+Skips unless AGV_STACK_TEST=1 is set with the full stack running
+(agv_full.launch.py); asserts hard when it is.
+"""
+import os
 import subprocess
 import time
+
 import pytest
+
+if os.environ.get("AGV_STACK_TEST") != "1":
+    pytest.skip(
+        "stack-required test: set AGV_STACK_TEST=1 with the full stack "
+        "running (agv_full.launch.py)", allow_module_level=True)
 
 REQUIRED_FRAMES = [
     'map', 'odom', 'base_link',
@@ -10,31 +21,24 @@ REQUIRED_FRAMES = [
 TIMEOUT_S = 5
 
 
-def get_frames():
-    result = subprocess.run(
-        ['ros2', 'run', 'tf2_tools', 'view_frames', '--no-wait'],
-        capture_output=True, text=True, timeout=10)
-    return result.stdout
-
-
 def test_tf_frames_exist():
     """All required TF frames must appear within 5 seconds."""
     deadline = time.time() + TIMEOUT_S
     found = set()
 
+    # No --no-arr: the transforms field is an array, so suppressing arrays
+    # would hide every frame_id from the echoed output.
     while time.time() < deadline and len(found) < len(REQUIRED_FRAMES):
-        result = subprocess.run(
-            ['ros2', 'topic', 'echo', '/tf', '--once', '--no-arr'],
-            capture_output=True, text=True, timeout=3)
-        for frame in REQUIRED_FRAMES:
-            if frame in result.stdout:
-                found.add(frame)
-        result = subprocess.run(
-            ['ros2', 'topic', 'echo', '/tf_static', '--once', '--no-arr'],
-            capture_output=True, text=True, timeout=3)
-        for frame in REQUIRED_FRAMES:
-            if frame in result.stdout:
-                found.add(frame)
+        for topic in ('/tf', '/tf_static'):
+            try:
+                result = subprocess.run(
+                    ['ros2', 'topic', 'echo', topic, '--once'],
+                    capture_output=True, text=True, timeout=3)
+            except subprocess.TimeoutExpired:
+                continue
+            for frame in REQUIRED_FRAMES:
+                if frame in result.stdout:
+                    found.add(frame)
 
     missing = set(REQUIRED_FRAMES) - found
     assert not missing, f"TF frames not found within {TIMEOUT_S}s: {missing}"

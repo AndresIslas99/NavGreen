@@ -1,6 +1,6 @@
-spec_version: "2.0"
-last_updated: "2026-04-13"
-generated_from: "docs/audit/2026-04-13-full-audit.md#section-2"
+spec_version: "2.1"
+last_updated: "2026-07-06"
+generated_from: "docs/audit/2026-04-13-full-audit.md#section-2 (+ 2026-07-06 regeneration from agv_full.launch.py)"
 verified_by: "tools/verify_specs/verify_launch_sequence.py"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -10,6 +10,10 @@ verified_by: "tools/verify_specs/verify_launch_sequence.py"
 # node declares its preconditions (what must be ready before it can function),
 # launch timing relative to launch_ros start, and failure mode (what depends
 # on this node being up).
+#
+# `source:` fields carry file paths + human anchors, NOT line numbers — line
+# numbers drift with every edit and verify_launch_sequence.py can only check
+# file existence. Use the anchor text to grep inside the file.
 #
 # This replaces the tables in src/agv_bringup/CLAUDE.md which drift from
 # the actual launch file.
@@ -21,11 +25,13 @@ entry_points:
     systemd_unit: "agv.service"
     shell_script: "src/agv_bringup/scripts/agv_start.sh"
     env_vars:
-      AGV_MODE: "real (default)"
-      AGV_MAP: "optional — resolved from ~/.agv/last_map if absent"
-      AGV_DATA_DIR: "/home/orza/agv_data (default)"
-      ROS_DOMAIN_ID: "42"
-      CYCLONEDDS_URI: "file:///home/orza/ros2_ws/install/agv_slam/share/agv_slam/config/cyclonedds.xml"
+      AGV_MODE: "real (default) | mapping | hil | hil_full"
+      AGV_MAP: "optional — resolved from ~/.agv/last_map if absent, falls back to default_empty.yaml"
+      AGV_DATA_DIR: "/home/orza/agv_data (default applied INSIDE agv_full.launch.py; agv_start.sh itself only mkdir-s the maps dir)"
+      ROS_DOMAIN_ID: "42 — set via Environment= in agv.service (specs/project.yaml#deployment.ros_domain_id); agv_start.sh does not set it"
+      RMW_IMPLEMENTATION: "rmw_cyclonedds_cpp (exported by agv_start.sh)"
+      CYCLONEDDS_URI: "file:///tmp/agv_cyclonedds_runtime.xml — agv_start.sh generates this at boot from config/cyclonedds_production.xml (template)"
+      AGV_ENABLE_FOXGLOVE: "optional; true appends enable_foxglove_bridge:=true"
     launch_file: "src/agv_bringup/launch/agv_full.launch.py"
 
   mapping_commissioning:
@@ -34,7 +40,14 @@ entry_points:
 
   hil_simulation:
     launch_file: "src/agv_bringup/launch/agv_hil_full.launch.py"
-    note: "Invoked by agv_start.sh when AGV_MODE=hil. Separate startup sequence, not covered by this spec."
+    note: |
+      Invoked by agv_start.sh when AGV_MODE=hil (map required). Minimal HIL
+      brain stack WITH Jetson-side bridges: joint_states_to_wheel_odom
+      produces /agv/wheel_odom from sim /agv/joint_states, and a Jetson-side
+      pointcloud_to_laserscan produces /agv/scan — per the 2026-04-17 sim
+      contract (agv-greenhouse-sim 3d44cec: sim stopped publishing anything
+      the Jetson handles in production). Separate startup sequence, not
+      covered by this spec.
     sim_host_companion:
       description: |
         HIL requires a second host (the sim host, a Linux PC with GPU) running
@@ -81,6 +94,18 @@ entry_points:
       usd_staleness:
         warning: "After brain-parity refactor on 2026-04-15, the USD in sim repo is stale. Regenerate on sim host with `isaacsim --exec src/agv_isaac_sim/scripts/build_greenhouse_usd.py && isaacsim --exec src/agv_isaac_sim/scripts/import_robot_usd.py` before first Play of the day."
 
+  hil_full_brain_validation:
+    launch_file: "src/agv_bringup/launch/agv_full.launch.py (hil_mode:=true)"
+    note: |
+      Invoked by agv_start.sh when AGV_MODE=hil_full (map required). The
+      PRODUCTION launch file with hardware-only nodes skipped (see
+      condition_hil fields below). Used during PR validation sprints.
+      CAUTION — known contract divergence: this file's comments expect the
+      sim to publish /agv/wheel_odom and /agv/scan directly (it starts no
+      Jetson-side bridges), while the 2026-04-17 sim contract in
+      agv_hil_full.launch.py's header says the sim stopped publishing them.
+      Reconciling the two HIL entry points is open follow-up work.
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Node-by-node startup (relative to launch_ros t=0)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -89,9 +114,18 @@ sequence:
 
   # ── t = 0 seconds — immediately on launch_ros start ──
 
+  - name: "agv_slam presence check (fail-fast)"
+    package: "agv_bringup (OpaqueFunction _require_agv_slam)"
+    source: "src/agv_bringup/launch/agv_full.launch.py (_require_agv_slam)"
+    start_time_s: 0.0
+    provides:
+      - "hard failure at launch if the external agv_slam package is not installed (real mode)"
+    condition_hil: "check skipped when hil_mode=true (cuVSLAM stack not started in HIL)"
+    note: "agv_slam is an EXTERNAL deploy-time package (not in this workspace). Its greenhouse config override ships here at src/agv_bringup/config/cuvslam_greenhouse.yaml."
+
   - name: "robot_description_launch"
     package: "agv_description (delegated via description.launch.py)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:73-82"
+    source: "src/agv_bringup/launch/agv_full.launch.py (description.launch.py)"
     delegates_to: "src/agv_description/launch/description.launch.py"
     start_time_s: 0.0
     preconditions:
@@ -100,68 +134,74 @@ sequence:
       - "robot_state_publisher node publishing TF base_link → wheel frames (static)"
       - "topic /robot_description"
     failure_impact: "No TF from base_link outward. Nav2 costmaps fail to compute footprint in world frame."
-    note: "agv_full.launch.py calls IncludeLaunchDescription(description.launch.py); the robot_state_publisher Node is instantiated inside that include, not directly in agv_full.launch.py."
 
   - name: "agv_odrive_node"
-    package: "agv_odrive"
-    source: "src/agv_bringup/launch/agv_full.launch.py:84-115"
+    package: "agv_odrive (delegated via odrive.launch.py — two conditional includes)"
+    source: "src/agv_bringup/launch/agv_full.launch.py (odrive.launch.py)"
     start_time_s: 0.0
     branch_logic:
-      has_map_true:
-        remap: "cmd_vel → cmd_vel_safe"
-      has_map_false:
-        remap: "cmd_vel → cmd_vel (no remap)"
+      has_map_real: "include passes cmd_vel_topic:='cmd_vel_safe' (full safety chain in front)"
+      no_map_real: "include passes cmd_vel_topic:='cmd_vel' (mapping-first, no safety chain)"
     preconditions:
-      - "CAN bus can0 UP (setup by can-setup.service)"
+      - "CAN bus can0 UP (setup by can-setup.service; agv_start.sh pre-flight checks it for real/mapping)"
       - "ODrive S1 firmware answering on CAN node IDs 0 and 1"
     provides:
       - "topic /agv/wheel_odom (50 Hz)"
-      - "topic /agv/motor_state"
+      - "topic /agv/motor_state (JSON, includes feedback_ok)"
+      - "topic /agv/drive_debug (JSON diagnostics)"
       - "cmd_vel → motor currents"
     failure_impact: "Robot cannot move. Wheel odometry missing → ekf_local degraded."
-    condition_hil: "SKIPPED when hil_mode=true (no CAN hardware). Sim PC publishes /agv/wheel_odom and subscribes /agv/cmd_vel_safe directly."
+    condition_hil: "SKIPPED when hil_mode=true (both includes require hil_mode!=true — no CAN hardware; the sim closes the cmd_vel loop and emulates motor_state/drive_debug)."
 
   - name: "pointcloud_to_laserscan"
     package: "pointcloud_to_laserscan (external)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:116-138"
+    source: "src/agv_bringup/launch/agv_full.launch.py (pointcloud_to_laserscan)"
     start_time_s: 0.0
     preconditions:
       - "zed wrapper publishing /agv/zed/point_cloud/cloud_registered"
     provides:
       - "topic /agv/scan (LaserScan from ZED depth)"
     failure_impact: "collision_monitor scan_source stops. slam_toolbox stops receiving scans."
-    condition_hil: "SKIPPED when hil_mode=true. Sim PC publishes /agv/scan directly (pre-filtered). Running the Jetson copy subscribes to the raw point cloud over WiFi and saturates the radio."
+    condition_hil: |
+      SKIPPED when hil_mode=true (UnlessCondition). Running the Jetson copy
+      would subscribe to the raw point cloud over WiFi and saturate the
+      radio. NOTE: this file then has NO /agv/scan producer of its own — see
+      entry_points.hil_full_brain_validation for the known divergence with
+      the 2026-04-17 sim contract (agv_hil_full.launch.py runs its own
+      Jetson-side pointcloud_to_laserscan instead).
 
   - name: "image_server"
     package: "agv_image_server"
-    source: "src/agv_bringup/launch/agv_full.launch.py:140-154"
+    source: "src/agv_bringup/launch/agv_full.launch.py (image_server)"
     start_time_s: 0.0
     provides:
       - "HTTP MJPEG stream on port 8091"
     failure_impact: "Dashboard camera view fails. Not safety-critical."
+    condition_hil: "SKIPPED when hil_mode=true (no physical camera)."
 
   - name: "scan_grid_mapper"
     package: "agv_scan_mapper"
-    source: "src/agv_bringup/launch/agv_full.launch.py:156-169"
+    source: "src/agv_bringup/launch/agv_full.launch.py (scan_grid_mapper)"
     start_time_s: 0.0
     provides:
       - "topic /agv/live_map (live occupancy grid while mapping)"
-    failure_impact: "Dashboard live map view fails during mapping. Not safety-critical."
+    failure_impact: "Dashboard live map view fails during mapping. Not safety-critical. Also feeds POST /api/maps/save (map_saver_cli reads /agv/live_map)."
 
   # ── t = 3.0 seconds ──
 
   - name: "zed_container + cuVSLAM (nvblox REMOVED Fase 7 F2)"
-    package: "agv_slam (includes Isaac ROS components)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:172-185"
+    package: "agv_slam (EXTERNAL deploy-time package; include of agv_slam.launch.py)"
+    source: "src/agv_bringup/launch/agv_full.launch.py (agv_slam.launch.py)"
     start_time_s: 3.0
-    condition_hil: "SKIPPED when hil_mode=true. ZED wrapper needs physical camera (dies with 'CAMERA NOT DETECTED' in sim). cuVSLAM is replaced by sim_global_odom shim publishing /visual_slam/tracking/odometry."
+    condition_hil: "SKIPPED when hil_mode=true. ZED wrapper needs physical camera (dies with 'CAMERA NOT DETECTED' in sim)."
     preconditions:
       - "ZED 2i camera connected and detected by SDK"
-      - "cuvslam_greenhouse.yaml present (TF disabled via /**: key)"
+      - "src/agv_bringup/config/cuvslam_greenhouse.yaml present (TF disabled via /**: key; passed as slam_params_override)"
     provides:
       - "topic /agv/zed/imu/data (200 Hz)"
       - "topic /agv/zed/depth/depth_registered"
       - "topic /agv/zed/point_cloud/cloud_registered"
+      - "topic /agv/zed/pose_with_covariance + /agv/zed/pose/status (Area Memory Path A0 inputs)"
       - "topic /visual_slam/tracking/odometry (for ekf_global)"
       - "service /agv/zed/save_area_memory"
       - "service /agv/zed/reset_pos_tracking"
@@ -170,7 +210,7 @@ sequence:
       - component: "nvblox_node"
         removed_date: "2026-04-13"
         removed_in: "Fase 7 F2"
-        reason: "9.6 GB RAM + 50% CPU during navigation. Not used in Nav2 costmap pipeline (see src/agv_navigation/CLAUDE.md — nvblox_layer removed from both costmaps). TimerAction definition remains in agv_slam.launch.py for offline use."
+        reason: "9.6 GB RAM + 50% CPU during navigation. Not used in Nav2 costmap pipeline (see src/agv_navigation/CLAUDE.md — nvblox_layer removed from both costmaps)."
       - component: "slam_web_gui_node"
         removed_date: "2026-04-13"
         removed_in: "Fase 7 F1"
@@ -180,29 +220,52 @@ sequence:
 
   - name: "imu_filter"
     package: "agv_sensor_fusion"
-    source: "src/agv_bringup/launch/agv_full.launch.py:188-209"
+    source: "src/agv_bringup/launch/agv_full.launch.py (imu_filter)"
     start_time_s: 3.5
     preconditions:
       - "ZED IMU publishing on /agv/zed/imu/data"
     provides:
-      - "topic /agv/imu/filtered (Butterworth-filtered IMU)"
+      - "topic /agv/imu/filtered (Butterworth-filtered IMU, SensorDataQoS)"
     failure_impact: "EKF filters ingest unfiltered vibration-contaminated IMU data. Pose estimate degraded at speed."
     note: "Must start BEFORE EKF or the filter has no history buffer."
-    condition_hil: "SKIPPED when hil_mode=true. Sim PC provides a pre-filtered IMU via isaac_ros_bridge on /agv/imu/data."
+    condition_hil: "SKIPPED when hil_mode=true (sim provides a pre-filtered IMU)."
+
+  # ── t = 3.8 seconds ──
+
+  - name: "wheel_slip_detector"
+    package: "agv_sensor_fusion"
+    source: "src/agv_bringup/launch/agv_full.launch.py (wheel_slip_detector)"
+    start_time_s: 3.8
+    preconditions:
+      - "agv_odrive_node publishing /agv/wheel_odom"
+      - "imu source publishing (yaw-rate residual input)"
+    provides:
+      - "topic /agv/wheel_odom_validated (covariance-inflated on caster slip — ekf_local odom0)"
+      - "topic /agv/wheel_slip/state (JSON diagnostics)"
+    failure_impact: "ekf_local loses its odom0 input (it consumes wheel_odom_validated, NOT wheel_odom directly) — local filter degraded to IMU only."
+
+  - name: "caster_dwell_advisor"
+    package: "agv_sensor_fusion"
+    source: "src/agv_bringup/launch/agv_full.launch.py (caster_dwell_advisor)"
+    start_time_s: 3.8
+    provides:
+      - "topic /agv/caster/dwell_state (advisory JSON — no runtime consumer yet)"
+    failure_impact: "None — advisory diagnostic stream only."
 
   # ── t = 4.0 seconds ──
 
   - name: "ekf_local"
     package: "robot_localization (via agv_sensor_fusion fusion.launch.py include)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:211-223"
+    source: "src/agv_sensor_fusion/launch/fusion.launch.py"
     start_time_s: 4.0
     preconditions:
       - "imu_filter publishing"
-      - "agv_odrive_node publishing /agv/wheel_odom"
+      - "wheel_slip_detector publishing /agv/wheel_odom_validated"
     provides:
       - "TF odom → base_link (SOLE OWNER)"
       - "topic /agv/odometry/local"
     failure_impact: "TF chain broken. All nodes that need odom→base_link fail: Nav2 local_costmap, safety chain."
+    note: "set_pose is remapped to ekf_local/set_pose so /agv/set_pose is served by ekf_global alone."
 
   - name: "ekf_global"
     package: "robot_localization (via agv_sensor_fusion fusion.launch.py include)"
@@ -214,6 +277,7 @@ sequence:
     provides:
       - "TF map → odom (SOLE OWNER)"
       - "topic /agv/odometry/global"
+      - "service /agv/set_pose (SOLE server — used by marker_correction RELOC and auto_init)"
     failure_impact: "TF map→odom missing. Navigation cannot localize robot in map frame."
 
   - name: "fusion_monitor"
@@ -221,14 +285,15 @@ sequence:
     source: "src/agv_sensor_fusion/launch/fusion.launch.py"
     start_time_s: 4.0
     provides:
-      - "topic /agv/pose (republished pose for dashboard)"
+      - "topic /agv/pose (PoseWithCovarianceStamped republish at 10 Hz)"
+      - "topic /agv/cuvslam_tracking_ok (Bool health flag)"
       - "diagnostic about EKF health"
 
   # ── t = 4.5 seconds ──
 
   - name: "factor_graph"
     package: "agv_factor_graph"
-    source: "src/agv_bringup/launch/agv_full.launch.py:225-243"
+    source: "src/agv_bringup/launch/agv_full.launch.py (factor_graph.launch.py)"
     start_time_s: 4.5
     mode: "parallel (publish_tf=false)"
     provides:
@@ -239,7 +304,7 @@ sequence:
 
   - name: "slam_toolbox_localization"
     package: "slam_toolbox (external)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:245-267"
+    source: "src/agv_bringup/launch/agv_full.launch.py (slam_toolbox)"
     start_time_s: 5.0
     condition: "IfCondition(enable_slam_localization), default=true"
     mode: "mapping mode with transform_publish_period=0.0 (TF disabled)"
@@ -250,34 +315,40 @@ sequence:
 
   - name: "map_manager"
     package: "agv_map_manager"
-    source: "src/agv_bringup/launch/agv_full.launch.py:269-296"
+    source: "src/agv_bringup/launch/agv_full.launch.py (map_manager)"
     start_time_s: 5.0
     preconditions:
       - "AGV_DATA_DIR/maps/ exists and is writable"
     provides:
-      - "service /agv/map_manager/save_map"
+      - "service /agv/map_manager/save_map (name charset 1-64 [A-Za-z0-9_-])"
       - "service /agv/map_manager/load_map"
-      - "service /agv/map_manager/update_zone"
-      - "topic /agv/maps/loaded (transient_local)"
+      - "service /agv/map_manager/update_zone (zone_id charset 1-64 [A-Za-z0-9_-])"
+      - "topic /agv/maps/loaded (transient_local, once per successful load)"
       - "topic /agv/current_map (transient_local)"
 
   - name: "waypoint_manager"
     package: "agv_waypoint_manager"
-    source: "src/agv_bringup/launch/agv_full.launch.py:269-296"
+    source: "src/agv_bringup/launch/agv_full.launch.py (waypoint_manager)"
     start_time_s: 5.0
-    preconditions:
-      - "missions_file exists"
+    preconditions: []
+    provides:
+      - "services /agv/waypoint_manager/* (save/list/execute — exercised only by integration tests today)"
+    note: |
+      Auto-seeds its missions store as an EMPTY JSONL file if missing.
+      KNOWN ISSUE: missions_file points into the agv_navigation install
+      share, not AGV_DATA_DIR — see specs/persistence.yaml#known_issues.
+      The dashboard uses its own executor + store instead.
 
   # ── t = 6.0 seconds ── (conditional)
 
   - name: "Nav2 stack"
     package: "agv_navigation (bundle)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:298-315"
+    source: "src/agv_bringup/launch/agv_full.launch.py (navigation.launch.py)"
     start_time_s: 6.0
     condition: "IfCondition(has_map)"
     includes:
       - "map_server"
-      - "controller_server (MPPI)"
+      - "controller_server (RotationShim wrapping MPPI)"
       - "planner_server (SmacPlanner2D)"
       - "behavior_server"
       - "bt_navigator"
@@ -289,17 +360,19 @@ sequence:
       - "ekf_global publishing /agv/odometry/global"
       - "map file at AGV_MAP path"
     provides:
+      - "topic /agv/cmd_vel_nav (controller output → mode_arbiter source)"
       - "topic /agv/cmd_vel_smoothed → /agv/cmd_vel_collision_safe (chain)"
       - "action /agv/navigate_to_pose"
       - "service /agv/map_server/load_map"
-    failure_impact: "Navigation disabled. Teleop still works (through the chain if gate is healthy; see bug #1)."
+      - "service /agv/lifecycle_manager_navigation/is_active (setMode('nav') gate)"
+    failure_impact: "Navigation disabled. Teleop still works through the arbiter/safety chain."
     condition_hil: "Active in hil_mode=true. hil_mode is forwarded to navigation.launch.py which layers collision_monitor_hil_overrides.yaml on top of the base config — drops collision_monitor.observation_sources.pointcloud_source so the Jetson does not try to consume /agv/zed/point_cloud over WiFi. scan_source stays active for HIL obstacle detection."
 
   # ── t = 6.5 seconds ── (conditional)
 
   - name: "agv_safety stack"
     package: "agv_safety (via safety.launch.py)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:317-335"
+    source: "src/agv_bringup/launch/agv_full.launch.py (safety.launch.py)"
     start_time_s: 6.5
     condition: "IfCondition(has_map)"
     includes:
@@ -310,14 +383,19 @@ sequence:
     provides:
       - "topic /agv/safety/status (10 Hz)"
       - "topic /agv/cmd_vel_safe (forwarded from gate)"
-    current_bug: "cmd_vel_gate watchdog fires at 0.5s before safety_supervisor has published. Blocks teleop. See audit bug #1."
-    failure_impact: "No cmd_vel reaches ODrive. Teleop broken even though chain exists."
+    failure_impact: "No cmd_vel reaches ODrive in has_map=true mode (gate is the last stage before the motor driver)."
+    note: |
+      Audit bug #1 ("gate watchdog fires before supervisor publishes,
+      blocking teleop") FIXED 2026-04-13: safety_params.yaml
+      startup_grace_ms=3000 covers the parallel start inside
+      safety.launch.py, and the event-driven collision_monitor_state topic
+      was removed from the supervisor's monitored list.
 
   # ── t = 7.0 seconds ── (conditional)
 
   - name: "apriltag_node + marker_correction + rail_approach"
-    package: "multiple (agv_markers, agv_rail_approach)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:441-530"
+    package: "multiple (apriltag_ros external, agv_markers, agv_rail_approach)"
+    source: "src/agv_bringup/launch/agv_full.launch.py (apriltag_node)"
     start_time_s: 7.0
     condition: "IfCondition(enable_markers), default=true"
     preconditions:
@@ -325,6 +403,8 @@ sequence:
     provides:
       - "topic /agv/marker_pose"
       - "topic /agv/marker_raw_detected"
+      - "service /agv/rail_approach/execute (+ abort, list_rail_starts)"
+      - "topic /agv/rail_approach/state; cmd_vel remapped → /agv/cmd_vel_approach"
 
   # Iter-37: Phase 2 rail stack ported from agv_hil_full.launch.py.
   # zone_detector / rail_detector / mode_arbiter / rail_driver share the
@@ -333,7 +413,7 @@ sequence:
   # (not enable_markers) because they are independent of AprilTags.
   - name: "zone_detector + rail_detector + mode_arbiter + rail_driver"
     package: "multiple (agv_zone_detector, agv_rail_detector, agv_mode_arbiter, agv_rail_driver)"
-    source: "src/agv_bringup/launch/agv_full.launch.py:500-580"
+    source: "src/agv_bringup/launch/agv_full.launch.py (zone_detector)"
     start_time_s: 7.0
     condition: "IfCondition(has_map)"
     preconditions:
@@ -342,12 +422,12 @@ sequence:
     provides:
       - "topic /agv/zone/state"
       - "topic /agv/rail_detections + /agv/rail_detector/state"
-      - "topic /agv/rail_driver/state + service /agv/rail_driver/cancel_goal"
-      - "topic /agv/mode/state (the arbiter owns /agv/cmd_vel)"
+      - "topic /agv/rail_driver/state + /agv/rail_driver/goal + service /agv/rail_driver/cancel_goal"
+      - "topic /agv/mode/state (the arbiter owns /agv/cmd_vel — see state_machine.yaml layer_5)"
 
   - name: "auto_init_orchestrator"
     package: "agv_localization_init"
-    source: "src/agv_bringup/launch/agv_full.launch.py:428-444"
+    source: "src/agv_bringup/launch/agv_full.launch.py (auto_init_orchestrator)"
     start_time_s: 7.0
     # PR1: decoupled from enable_markers. Gated on has_map so the
     # orchestrator still runs when AprilTags are disabled; the existing
@@ -358,56 +438,72 @@ sequence:
       - "cuVSLAM localize_in_map service available"
     provides:
       - "topic /agv/localization/state"
-      - "service /agv/localization/reinitialize"
+      - "service /agv/localization/reinitialize (returns 'Initialization already in progress' while a cascade runs)"
 
   - name: "behavior_executor (optional)"
     package: "agv_behaviors"
-    source: "src/agv_bringup/launch/agv_full.launch.py:411-425"
+    source: "src/agv_bringup/launch/agv_full.launch.py (behavior_executor)"
     start_time_s: 7.0
     condition: "IfCondition(enable_behaviors), default=false"
     status: "NEVER ENABLED in practice — dead launch branch"
+
+  # ── t = 7.5 seconds ── (conditional)
+
+  - name: "foxglove_bridge (optional diagnostics)"
+    package: "foxglove_bridge (external)"
+    source: "src/agv_bringup/launch/agv_full.launch.py (foxglove_bridge)"
+    start_time_s: 7.5
+    condition: "IfCondition(enable_foxglove_bridge), default=false (AGV_ENABLE_FOXGLOVE=true in agv_start.sh)"
+    provides:
+      - "WebSocket bridge on port 8765 (0.0.0.0)"
+    failure_impact: "None — engineering diagnostic surface only."
+    note: "Only node NOT under the robot namespace (no namespace=ns). Arg name deliberately distinct from agv_slam's enable_foxglove (Humble IncludeLaunchDescription scope mutation)."
 
   # ── t = 8.0 seconds ──
 
   - name: "teleop_server (agv_ui_backend)"
     package: "agv_ui_backend"
-    source: "src/agv_bringup/launch/agv_full.launch.py:427-455"
+    source: "src/agv_bringup/launch/agv_full.launch.py (_teleop_backend)"
     start_time_s: 8.0
     preconditions:
       - "Nav2 stack sufficiently discoverable over DDS (8s grace window)"
     env_vars_passed:
       - "AGV_PORT=8090"
-      - "AGV_NAMESPACE=agv"
-      - "AGV_DATA_DIR=/home/orza/agv_data"
+      - "AGV_NAMESPACE=agv (hardcoded literal — independent of the `namespace` launch arg)"
+      - "AGV_DATA_DIR=<data_dir> (from env, default /home/orza/agv_data)"
       - "AGV_BOOT_MAP_NAME=<resolved from map_yaml basename>"
     provides:
       - "HTTP REST on :8090"
-      - "WebSocket /ws/control"
+      - "WebSocket /ws/control + /ws/teleop"
       - "ROS publisher /agv/cmd_vel (teleop)"
       - "ROS publisher /agv/maps/loaded (boot-time event, ~10s after own start)"
     failure_impact: "Dashboard offline. Operator has no UI. Robot runs headless but cannot be controlled remotely."
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Known violations of launch ordering invariants (for Fase 6 fixing)
+# Known violations of launch ordering invariants
 # ─────────────────────────────────────────────────────────────────────────────
 
 known_issues:
   - issue: "safety_supervisor and cmd_vel_gate launch in parallel within safety.launch.py"
     location: "src/agv_safety/launch/safety.launch.py"
-    consequence: "cmd_vel_gate watchdog can fire before supervisor has published first SafetyStatus"
-    fix: "Add TimerAction to delay cmd_vel_gate until supervisor has been up N seconds, OR add startup grace window to the gate's watchdog logic."
+    status: "MITIGATED 2026-04-13 — safety_params.yaml startup_grace_ms=3000 gives the supervisor a publish window before the gate's watchdog can mark it silent."
+    residual: "Ordering is still parallel; the grace window is the guard, not an explicit TimerAction."
 
   - issue: "teleop_server publishes maps/loaded ~10s after own start using AGV_BOOT_MAP_NAME"
-    location: "src/agv_ui_backend/src/index.ts:833-848"
+    location: "src/agv_ui_backend/src/index.ts (bootMapName)"
     consequence: "If Nav2 map_server still configuring when this fires, orchestrator triggers before the map is actually loaded"
     fix: "Make teleop_server wait for /agv/map_server/load_map service to be ready before publishing."
 
   - issue: "No healthcheck that verifies lifecycle_manager_navigation reached active state"
-    consequence: "Silent partial Nav2 bringup — backend can enter nav mode with a broken stack"
+    consequence: "Silent partial Nav2 bringup at boot — setMode('nav') is gated on is_active (fixed 2026-04-13), but nothing at startup verifies the lifecycle converged"
     fix: "agv_healthcheck.sh already checks collision_monitor presence; extend to verify lifecycle state via lifecycle_manager service."
 
+  - issue: "agv_full.launch.py hil_mode contract diverges from agv_hil_full.launch.py"
+    consequence: "Under AGV_MODE=hil_full there is no in-repo producer for /agv/wheel_odom and /agv/scan; the launch comments assume the sim still publishes them, contradicting the 2026-04-17 sim contract."
+    fix: "Either port the agv_hil_bridges includes into agv_full.launch.py's hil branch, or update the sim contract. Tracked follow-up."
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Dead launch files (to be removed or clearly marked experimental in Fase 5)
+# Dead launch files (removed in the 2026-04-13 audit)
 # ─────────────────────────────────────────────────────────────────────────────
 
 unreachable_from_production:

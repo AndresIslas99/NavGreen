@@ -169,7 +169,7 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
           }));
         }
 
-        // Live map from scan_grid_mapper (proper Bayesian grid via live_map_bridge)
+        // Live map from scan_grid_mapper (direct rclnodejs subscription)
         if (clientLiveMapVersion < deps.state.liveMapVersion && deps.state.liveMapPng) {
           clientLiveMapVersion = deps.state.liveMapVersion;
           ws.send(JSON.stringify({
@@ -206,9 +206,15 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
     // Message handlers
     ws.on('message', (data: Buffer) => {
+      // Only the JSON.parse + shape check is allowed to fail silently —
+      // malformed frames from a flaky client are expected and benign.
+      let msg: any;
       try {
-        const msg = JSON.parse(data.toString());
+        msg = JSON.parse(data.toString());
+      } catch { /* ignore malformed frames */ return; }
+      if (typeof msg !== 'object' || msg === null || typeof msg.type !== 'string') return;
 
+      try {
         // Viewers can only receive status; reject commands
         if (!canCommand) {
           ws.send(JSON.stringify({ type: 'error', message: 'Viewer role cannot send commands' }));
@@ -217,7 +223,9 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
         switch (msg.type) {
           case 'cmd_vel':
-            deps.ros.sendCmdVel(msg.linear || 0, msg.angular || 0);
+            // Number() coercion: non-numeric input becomes NaN, which
+            // sendCmdVel rejects (never published as a Twist).
+            deps.ros.sendCmdVel(Number(msg.linear ?? 0), Number(msg.angular ?? 0));
             break;
           case 'e_stop':
             deps.ros.sendEStop(!!msg.active);
@@ -239,9 +247,9 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
           case 'nav_goal':
             if (deps.state.currentMode === 'nav') {
               deps.ros.sendNavGoal(
-                parseFloat(msg.x || 0),
-                parseFloat(msg.y || 0),
-                parseFloat(msg.theta || 0),
+                Number(msg.x ?? 0),
+                Number(msg.y ?? 0),
+                Number(msg.theta ?? 0),
               );
             }
             break;
@@ -268,7 +276,11 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
             break;
           }
         }
-      } catch { /* ignore parse errors */ }
+      } catch (e: any) {
+        // A failure while dispatching a command (e.g. an e-stop) must not be
+        // silent — it would be invisible in the field.
+        console.warn(`[ws/control] command '${msg.type}' failed:`, e?.message || e);
+      }
     });
 
     ws.on('close', () => {
@@ -304,11 +316,17 @@ export function setupTeleopWs(server: http.Server, deps: AppDeps): void {
 
     deps.state.activeClients++;
     ws.on('message', (data: Buffer) => {
+      let msg: any;
       try {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === 'cmd_vel') deps.ros.sendCmdVel(msg.linear || 0, msg.angular || 0);
+        msg = JSON.parse(data.toString());
+      } catch { /* ignore malformed frames */ return; }
+      if (typeof msg !== 'object' || msg === null || typeof msg.type !== 'string') return;
+      try {
+        if (msg.type === 'cmd_vel') deps.ros.sendCmdVel(Number(msg.linear ?? 0), Number(msg.angular ?? 0));
         else if (msg.type === 'e_stop') deps.ros.sendEStop(!!msg.active);
-      } catch { /* ignore */ }
+      } catch (e: any) {
+        console.warn(`[ws/teleop] command '${msg.type}' failed:`, e?.message || e);
+      }
     });
     ws.on('close', () => {
       deps.state.activeClients = Math.max(0, deps.state.activeClients - 1);

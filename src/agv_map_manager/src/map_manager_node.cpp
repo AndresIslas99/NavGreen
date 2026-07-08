@@ -20,6 +20,8 @@
 #include <nav2_msgs/srv/load_map.hpp>
 #include <isaac_ros_visual_slam_interfaces/srv/file_path.hpp>
 
+#include <agv_map_manager/name_validation.hpp>
+
 namespace fs = std::filesystem;
 
 class MapManagerNode : public rclcpp::Node {
@@ -79,9 +81,17 @@ public:
       std::bind(&MapManagerNode::on_update_zone, this,
                 std::placeholders::_1, std::placeholders::_2));
 
-    // Nav2 LoadMap client
+    // Nav2 LoadMap client. It lives in its own callback group, NOT added to
+    // the main executor, so load_map_internal can spin just this group on a
+    // local executor while the node itself is being spun by main() — calling
+    // rclcpp::spin_until_future_complete on the node from inside one of its
+    // own callbacks would throw "Node has already been added to an executor".
+    nav2_load_cb_group_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::MutuallyExclusive,
+      /*automatically_add_to_executor_with_node=*/false);
     nav2_load_client_ = this->create_client<nav2_msgs::srv::LoadMap>(
-      "map_server/load_map");
+      "map_server/load_map", rmw_qos_profile_services_default,
+      nav2_load_cb_group_);
 
     // cuVSLAM save/load map clients (live in the /visual_slam namespace, not ours)
     if (cuvslam_enabled_) {
@@ -135,16 +145,22 @@ public:
         on_maps_loaded_event(msg->data);
       });
 
-    // Load default map on startup
+    // Load default map on startup. The timer must be kept in a member —
+    // a local shared_ptr would destroy (and cancel) it when the
+    // constructor returns, so it would never fire.
     auto default_map = this->get_parameter("default_map").as_string();
     if (!default_map.empty()) {
       RCLCPP_INFO(get_logger(), "Loading default map: %s", default_map.c_str());
       // Defer to allow nav2 to start
-      auto timer = this->create_wall_timer(
+      startup_load_timer_ = this->create_wall_timer(
         std::chrono::seconds(2),
         [this, default_map]() {
-          load_map_internal(default_map);
-          // One-shot timer
+          startup_load_timer_->cancel();  // one-shot
+          std::string message;
+          if (!load_map_by_name(default_map, message)) {
+            RCLCPP_ERROR(get_logger(), "Default map load failed: %s",
+                         message.c_str());
+          }
         });
     }
 
@@ -169,16 +185,19 @@ private:
     agv_interfaces::srv::SaveMap::Response::SharedPtr res)
   {
     auto name = req->name;
-    if (name.empty() || name.find('/') != std::string::npos || name.find("..") != std::string::npos) {
+    // Strict whitelist — the name is interpolated into a shell command
+    // below, so anything outside [A-Za-z0-9_-] must be rejected (quotes
+    // and shell metacharacters would escape the popen quoting).
+    if (!agv_map_manager::is_safe_name(name)) {
       res->success = false;
-      res->message = "Invalid map name";
+      res->message = "Invalid map name (allowed: 1-64 chars of [A-Za-z0-9_-])";
       return;
     }
 
     auto out_path = map_dir_ + "/" + name;
     RCLCPP_INFO(get_logger(), "Saving map to %s", out_path.c_str());
 
-    // Use popen instead of system() — captures output, avoids shell injection
+    // popen captures output; the whitelist above keeps the command safe.
     std::string cmd = "ros2 run nav2_map_server map_saver_cli"
                       " -f '" + out_path + "'"
                       " -t '" + map_topic_ + "'"
@@ -222,19 +241,22 @@ private:
     const agv_interfaces::srv::LoadMap::Request::SharedPtr req,
     agv_interfaces::srv::LoadMap::Response::SharedPtr res)
   {
-    auto name = req->name;
-    if (name.empty() || name.find('/') != std::string::npos ||
-        name.find("..") != std::string::npos) {
+    if (!agv_map_manager::is_safe_name(req->name)) {
       res->success = false;
-      res->message = "Invalid map name";
+      res->message = "Invalid map name (allowed: 1-64 chars of [A-Za-z0-9_-])";
       return;
     }
+    res->success = load_map_by_name(req->name, res->message);
+  }
+
+  // Full load chain for a validated map name. Shared by the load_map
+  // service and the startup default_map loader.
+  bool load_map_by_name(const std::string& name, std::string& message) {
     auto yaml_path = map_dir_ + "/" + name + ".yaml";
 
     if (!fs::exists(yaml_path)) {
-      res->success = false;
-      res->message = "Map not found: " + yaml_path;
-      return;
+      message = "Map not found: " + yaml_path;
+      return false;
     }
 
     // Swap the per-map area memory file onto the wrapper's landing pad
@@ -243,20 +265,19 @@ private:
     // at the same time the orchestrator starts its Path A0 check.
     swap_area_memory_for_map(name);
 
-    if (load_map_internal(yaml_path)) {
-      res->success = true;
-      res->message = "Map loaded: " + name;
-      // Ask the ZED wrapper to re-enable pos tracking so the (patched)
-      // startPosTracking re-reads the param and the SDK re-loads the
-      // .area file we just swapped onto the landing pad.
-      reset_zed_pos_tracking();
-      // Fire the maps/loaded event so auto_init_orchestrator starts its
-      // relocalization sequence (load cuVSLAM DB + wait for tag + localize_in_map).
-      publish_map_loaded_event(name);
-    } else {
-      res->success = false;
-      res->message = "Failed to load map via nav2";
+    if (!load_map_internal(yaml_path)) {
+      message = "Failed to load map via nav2";
+      return false;
     }
+    // Ask the ZED wrapper to re-enable pos tracking so the (patched)
+    // startPosTracking re-reads the param and the SDK re-loads the
+    // .area file we just swapped onto the landing pad.
+    reset_zed_pos_tracking();
+    // Fire the maps/loaded event so auto_init_orchestrator starts its
+    // relocalization sequence (load cuVSLAM DB + wait for tag + localize_in_map).
+    publish_map_loaded_event(name);
+    message = "Map loaded: " + name;
+    return true;
   }
 
   // Copy `<map_dir>/<name>.area` onto the landing pad the ZED wrapper knows
@@ -349,13 +370,21 @@ private:
     request->map_url = yaml_path;
 
     auto future = nav2_load_client_->async_send_request(request);
-    if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), future,
-                                            std::chrono::seconds(10)) ==
+    // This runs inside a service/timer callback of a node that main() is
+    // already spinning, so we must not spin the node again. Spin ONLY the
+    // client's dedicated callback group on a local executor instead.
+    rclcpp::executors::SingleThreadedExecutor client_exec;
+    client_exec.add_callback_group(nav2_load_cb_group_,
+                                   this->get_node_base_interface());
+    if (client_exec.spin_until_future_complete(future,
+                                                std::chrono::seconds(10)) ==
         rclcpp::FutureReturnCode::SUCCESS) {
       auto result = future.get();
       if (result->result == 0) {
         RCLCPP_INFO(get_logger(), "Map loaded: %s", yaml_path.c_str());
-        publish_map_loaded_event(yaml_path);
+        // The maps/loaded event is published by the callers (load_map_by_name)
+        // AFTER reset_zed_pos_tracking, so the orchestrator cascade starts
+        // once — and only after the Area Memory swap took effect.
         return true;
       }
     }
@@ -367,6 +396,14 @@ private:
     const agv_interfaces::srv::UpdateZone::Request::SharedPtr req,
     agv_interfaces::srv::UpdateZone::Response::SharedPtr res)
   {
+    // zone_id is embedded into hand-built JSON and matched by substring —
+    // quotes/backslashes would corrupt the store. Same whitelist as maps.
+    if (!agv_map_manager::is_safe_name(req->zone_id)) {
+      res->success = false;
+      res->message = "Invalid zone_id (allowed: 1-64 chars of [A-Za-z0-9_-])";
+      return;
+    }
+
     // Zone persistence: store as simple JSON alongside maps
     auto zones_path = map_dir_ + "/zones.json";
 
@@ -424,10 +461,26 @@ private:
       lines.push_back(zone_json);
     }
 
-    // Write back
-    std::ofstream out(zones_path);
-    for (const auto& l : lines) {
-      out << l << "\n";
+    // Write back atomically (tmp + rename, same pattern as
+    // persist_last_map) so a crash mid-write cannot lose every zone.
+    const auto tmp_path = zones_path + ".tmp";
+    {
+      std::ofstream out(tmp_path, std::ios::trunc);
+      if (!out) {
+        res->success = false;
+        res->message = "Failed to open " + tmp_path + " for writing";
+        return;
+      }
+      for (const auto& l : lines) {
+        out << l << "\n";
+      }
+    }
+    std::error_code ec;
+    fs::rename(tmp_path, zones_path, ec);
+    if (ec) {
+      res->success = false;
+      res->message = "Failed to replace zones.json: " + ec.message();
+      return;
     }
 
     res->success = true;
@@ -644,6 +697,8 @@ private:
   std::string zed_area_landing_path_;
   int area_memory_autosave_period_s_{0};
   rclcpp::TimerBase::SharedPtr autosave_timer_;
+  rclcpp::TimerBase::SharedPtr startup_load_timer_;
+  rclcpp::CallbackGroup::SharedPtr nav2_load_cb_group_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr zed_reset_pt_client_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr orchestrator_save_pose_client_;
   rclcpp::Service<agv_interfaces::srv::SaveMap>::SharedPtr save_srv_;

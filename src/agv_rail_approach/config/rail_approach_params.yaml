@@ -71,10 +71,18 @@
     max_fine_linear_vel: 0.08   # m/s
     max_fine_angular_vel: 0.10  # rad/s
 
-    # Tag loss handling
+    # Tag loss handling. These deadlines are enforced by the 10 Hz status
+    # timer (not only by incoming detection frames), so they fire even if
+    # the detector/camera stream dies mid-approach.
     tag_loss_timeout_s: 0.5     # stop if no detection for this long
     tag_reacquire_timeout_s: 3.0  # abort if tag not reacquired
     acquisition_timeout_s: 3.0    # max time to find tag after coarse approach
+
+    # Max wall-time in COARSE_APPROACH before aborting. Covers a Nav2
+    # goal whose response/result never arrives (server death, dropped
+    # goal). Sized for the longest legitimate corridor traverse at
+    # commissioning speed (~44 m at 0.3 m/s). <= 0 disables.
+    coarse_timeout_s: 180.0
 
     # Frame names
     camera_frame: "zed_left_camera_optical_frame"

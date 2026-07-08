@@ -48,6 +48,7 @@ install(DIRECTORY launch/
 )
 
 install(PROGRAMS
+  scripts/odrive_can_node.py
   scripts/odrive_gui.py
   scripts/validate.py
   scripts/simple_test.py

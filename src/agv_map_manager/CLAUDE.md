@@ -77,9 +77,11 @@ trigger a reset to force a re-read.
 
 ## Key implementation details
 
-- Map names validated against path traversal (`/` and `..` rejected)
-- Shell-escaped `map_saver_cli` invocation to prevent command injection
-- Zones stored as line-delimited JSON in `{map_dir}/zones.json`
+- Map names and zone ids whitelist-validated (1-64 chars of `[A-Za-z0-9_-]`,
+  see `include/agv_map_manager/name_validation.hpp`) — closes path traversal
+  AND shell injection through the `map_saver_cli` popen invocation
+- Zones stored as line-delimited JSON in `{map_dir}/zones.json`, rewritten
+  atomically (tmp + rename) on every update
 - 2-second startup delay to allow nav2 initialization
 - Async steps 2–4 never block the service response; failures are logged
   and the chain continues
@@ -98,7 +100,6 @@ trigger a reset to force a re-read.
 - Add JSON schema validation for zone data (currently naive string parsing)
 - Add zone conflict detection (overlapping keepout zones)
 - Integrate zones with Nav2 costmap filters for runtime enforcement
-- Add unit test for path traversal validation
 - Replace line-delimited JSON with proper JSON array format
 - Add a "verify-all-sidecars" diagnostic service for operator-triggered
   integrity checks on a stored map

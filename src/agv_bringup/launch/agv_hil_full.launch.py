@@ -46,12 +46,12 @@ Usage:
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -59,6 +59,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     ns = LaunchConfiguration('namespace')
     map_yaml = LaunchConfiguration('map')
+    use_gt_odom = LaunchConfiguration('use_gt_odom')
 
     fusion_dir = get_package_share_directory('agv_sensor_fusion')
     nav_dir = get_package_share_directory('agv_navigation')
@@ -69,6 +70,27 @@ def generate_launch_description():
     nav2_params_base = os.path.join(nav_dir, 'config', 'nav2_params.yaml')
     nav2_hil_overrides = os.path.join(nav_dir, 'config', 'nav2_hil_overrides.yaml')
     slam_toolbox_config = os.path.join(nav_dir, 'config', 'slam_toolbox.yaml')
+
+    def _require_agv_slam(context):
+        # agv_slam (cuVSLAM pipeline) is an external overlay package — it is
+        # NOT in this repository (.gitignore: "Third-party ROS packages
+        # (clone separately)"). Fail fast at t=0 with an actionable message
+        # instead of an opaque PackageNotFoundError mid-startup. Only needed
+        # when cuvslam_in_hil:=true (the default); with false, the
+        # vslam_fallback_relay covers /visual_slam/tracking/odometry.
+        if LaunchConfiguration('cuvslam_in_hil').perform(context).lower() != 'true':
+            return []
+        try:
+            get_package_share_directory('agv_slam')
+        except PackageNotFoundError:
+            raise RuntimeError(
+                "agv_hil_full.launch.py needs the 'agv_slam' package (cuVSLAM "
+                "pipeline), which is external to this repository and must be "
+                "cloned and built in the workspace separately (see "
+                "'# Third-party ROS packages (clone separately)' in "
+                ".gitignore). Install it, or run with cuvslam_in_hil:=false "
+                "to use the wheel-odom fallback relay.")
+        return []
 
     return LaunchDescription([
         # ── Arguments ──
@@ -100,6 +122,9 @@ def generate_launch_description():
                 'Production-unsafe; never enable outside HIL.'
             ),
         ),
+
+        # Fail fast (t=0) when the external agv_slam overlay is missing.
+        OpaqueFunction(function=_require_agv_slam),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -206,9 +231,17 @@ def generate_launch_description():
                 ])),
             launch_arguments={
                 'namespace': ns,
-                'enable_wheel_odom_bridge': LaunchConfiguration('enable_wheel_odom_bridge'),
+                # hil_bridges.launch.py gates joint_states_to_wheel_odom on
+                # enable_wheel_odom_bridge alone (plain IfCondition, no boolean
+                # composition), so it must be forced to 'false' here whenever
+                # use_gt_odom:=true. Otherwise BOTH the integrator and the GT
+                # mirror publish /agv/wheel_odom and the EKF receives
+                # non-deterministic, conflicting odometry.
+                'enable_wheel_odom_bridge': PythonExpression([
+                    "'false' if '", use_gt_odom, "'.lower() == 'true' else '",
+                    LaunchConfiguration('enable_wheel_odom_bridge'), "'"]),
                 'cuvslam_in_hil': LaunchConfiguration('cuvslam_in_hil'),
-                'use_gt_odom': LaunchConfiguration('use_gt_odom'),
+                'use_gt_odom': use_gt_odom,
             }.items(),
         ),
 
@@ -673,7 +706,10 @@ def generate_launch_description():
             additional_env={
                 'AGV_PORT': '8090',
                 'AGV_NAMESPACE': 'agv',
-                'AGV_DATA_DIR': '/home/orza/agv_data',
+                # Pass the operator's AGV_DATA_DIR through; the literal is
+                # only the canonical default (specs/project.yaml
+                # #deployment.default_data_dir), never an override.
+                'AGV_DATA_DIR': os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data'),
             },
             output='log',
         ),

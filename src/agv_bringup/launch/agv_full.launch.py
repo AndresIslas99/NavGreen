@@ -27,10 +27,10 @@ Usage:
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, IncludeLaunchDescription, TimerAction,
+    DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction,
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -65,7 +65,16 @@ def generate_launch_description():
     # share while agv_ui_backend reads from AGV_DATA_DIR, causing save/load
     # asymmetry. All consumers now agree on AGV_DATA_DIR/maps — canonical
     # value in specs/project.yaml#deployment.default_data_dir.
-    maps_dir = os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data') + '/maps'
+    #
+    # data_dir is the ONLY place this file resolves the AGV_DATA_DIR default.
+    # Every data-root consumer below (map_manager, auto_init_orchestrator,
+    # runtime marker registries, teleop backend env) derives from it, so an
+    # operator override of AGV_DATA_DIR cannot split the data root.
+    data_dir = os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data')
+    maps_dir = data_dir + '/maps'
+    # Operator-defined AprilTags written by the dashboard — see
+    # specs/persistence.yaml (runtime_markers_registry).
+    runtime_registry_file = os.path.join(data_dir, 'runtime_markers_registry.yaml')
     missions_file = os.path.join(nav_dir, 'missions', 'missions.json')
     slam_loc_config = os.path.join(nav_dir, 'config', 'slam_toolbox_localization.yaml')
 
@@ -95,6 +104,58 @@ def generate_launch_description():
     # use_sim_time=true — verified that agv_ui_backend does not.
     use_sim_time = PythonExpression(
         ["'true' if '", hil_mode, "'.lower() == 'true' else 'false'"])
+
+    def _require_agv_slam(context):
+        # agv_slam (cuVSLAM pipeline) is an external overlay package — it is
+        # NOT in this repository (.gitignore: "Third-party ROS packages
+        # (clone separately)"). Without this check a fresh clone dies at
+        # t=3s with an opaque PackageNotFoundError after half the stack is
+        # already up. Fail fast at t=0 with an actionable message instead.
+        # HIL mode never includes agv_slam (the sim publishes
+        # /visual_slam/tracking/odometry), so the check is skipped there.
+        if LaunchConfiguration('hil_mode').perform(context).lower() == 'true':
+            return []
+        try:
+            get_package_share_directory('agv_slam')
+        except PackageNotFoundError:
+            raise RuntimeError(
+                "agv_full.launch.py needs the 'agv_slam' package (cuVSLAM "
+                "pipeline), which is external to this repository and must be "
+                "cloned and built in the workspace separately (see "
+                "'# Third-party ROS packages (clone separately)' in "
+                ".gitignore). Install it, or run with hil_mode:=true to use "
+                "sim-provided visual odometry.")
+        return []
+
+    def _teleop_backend(context):
+        # OpaqueFunction so the map basename is computed in plain Python.
+        # The previous inline PythonExpression built
+        # __import__('os').path.splitext(...basename('<map>'))[0] by string
+        # splicing, which raised a SyntaxError inside launch's eval at t=8s
+        # for any map path containing a quote.
+        map_yaml_str = map_yaml.perform(context)
+        return [
+            Node(
+                package='agv_ui_backend',
+                executable='teleop_backend',
+                name='teleop_server',
+                namespace=ns,
+                additional_env={
+                    'AGV_PORT': '8090',
+                    'AGV_NAMESPACE': 'agv',
+                    'AGV_DATA_DIR': data_dir,
+                    # Pass the map basename (without extension) so the backend
+                    # knows which map was loaded by Nav2's map_server at boot.
+                    # The backend publishes this to /agv/maps/loaded ~10s after
+                    # its own start to trigger the auto_init_orchestrator.
+                    # If map arg is empty, this resolves to an empty string and
+                    # the backend skips the boot-time publish.
+                    'AGV_BOOT_MAP_NAME': os.path.splitext(
+                        os.path.basename(map_yaml_str))[0],
+                },
+                output='log',
+            ),
+        ]
 
     return LaunchDescription([
         # ── Arguments ──
@@ -139,6 +200,9 @@ def generate_launch_description():
                 'diagnostic clients. Off by default; turn on per-session '
                 'with enable_foxglove_bridge:=true.'),
         ),
+
+        # Fail fast (t=0) when the external agv_slam overlay is missing.
+        OpaqueFunction(function=_require_agv_slam),
 
         # ── Robot description (URDF → static TF) ──
         IncludeLaunchDescription(
@@ -331,6 +395,14 @@ def generate_launch_description():
                     executable='wheel_slip_detector_node',
                     name='wheel_slip_detector',
                     namespace=ns,
+                    # Thresholds run on compiled defaults until the first
+                    # frozen tuning lands — see
+                    # docs/calibration/slip_detector_tuning.md. use_sim_time
+                    # must still be wired: without it hil_mode:=true ran this
+                    # node on wall clock against sim-stamped topics (the
+                    # TF_OLD_DATA / premature-STALE failure mode described in
+                    # the header comment above).
+                    parameters=[{'use_sim_time': use_sim_time}],
                     output='log',
                 ),
                 # Caster-aware dwell advisor (Phase 4, advisory variant).
@@ -344,6 +416,7 @@ def generate_launch_description():
                     executable='caster_dwell_advisor_node',
                     name='caster_dwell_advisor',
                     namespace=ns,
+                    parameters=[{'use_sim_time': use_sim_time}],
                     output='log',
                 ),
             ],
@@ -543,7 +616,7 @@ def generate_launch_description():
                         'markers_registry_file': os.path.join(
                             get_package_share_directory('agv_markers'), 'config', 'markers_registry.yaml'),
                         # Runtime registry — operator-defined tags from dashboard
-                        'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+                        'runtime_registry_file': runtime_registry_file,
                         'max_detection_range': 5.0,
                         'tag_size': 0.2,
                         'covariance_xy': 0.01,
@@ -582,7 +655,7 @@ def generate_launch_description():
                                 get_package_share_directory('agv_markers'),
                                 'config', 'markers_registry.yaml'),
                             # Runtime registry — operator-defined rail_start tags from dashboard
-                            'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml',
+                            'runtime_registry_file': runtime_registry_file,
                             'tag_size': 0.2,
                             'camera_info_topic': '/agv/zed/left/camera_info',
                             # Iter-46 transfer: tighten settle gate. The 12.7 cm plateau
@@ -698,7 +771,7 @@ def generate_launch_description():
                         os.path.join(
                             get_package_share_directory('agv_localization_init'),
                             'config', 'auto_init_params.yaml'),
-                        {'map_dir': '/home/orza/agv_data/maps'},
+                        {'map_dir': maps_dir},
                         {'use_sim_time': use_sim_time},
                     ],
                     output='screen',
@@ -756,31 +829,6 @@ def generate_launch_description():
         # ── Operator backend (TypeScript, t=8s — after all ROS nodes for DDS discovery) ──
         TimerAction(
             period=8.0,
-            actions=[
-                Node(
-                    package='agv_ui_backend',
-                    executable='teleop_backend',
-                    name='teleop_server',
-                    namespace=ns,
-                    additional_env={
-                        'AGV_PORT': '8090',
-                        'AGV_NAMESPACE': 'agv',
-                        'AGV_DATA_DIR': '/home/orza/agv_data',
-                        # Pass the map basename (without extension) so the backend
-                        # knows which map was loaded by Nav2's map_server at boot.
-                        # The backend publishes this to /agv/maps/loaded ~10s after
-                        # its own start to trigger the auto_init_orchestrator.
-                        # If map arg is empty, this resolves to an empty string and
-                        # the backend skips the boot-time publish.
-                        'AGV_BOOT_MAP_NAME': PythonExpression([
-                            "__import__('os').path.splitext("
-                            "__import__('os').path.basename('",
-                            map_yaml,
-                            "'))[0]"
-                        ]),
-                    },
-                    output='log',
-                ),
-            ],
+            actions=[OpaqueFunction(function=_teleop_backend)],
         ),
     ])

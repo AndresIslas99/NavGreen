@@ -24,6 +24,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "nav2_msgs/msg/collision_monitor_state.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "std_msgs/msg/string.hpp"
 
@@ -49,7 +50,14 @@ class ModeArbiterNode : public rclcpp::Node {
                                     "/agv/rail_approach/state");
     declare_parameter<std::string>("rail_driver_state_topic",
                                     "/agv/rail_driver/state");
+    // String side-channel ("stop"/"slowdown"/"clear") — published in HIL by
+    // agv_hil_bridges/sim_obstacle_relay. Nav2's real collision_monitor does
+    // NOT publish this type; see collision_monitor_state_topic below.
     declare_parameter<std::string>("collision_topic",
+                                    "/agv/collision_monitor_state");
+    // Typed production safety source: Nav2's collision_monitor publishes
+    // nav2_msgs/CollisionMonitorState here. Set to "" to disable.
+    declare_parameter<std::string>("collision_monitor_state_topic",
                                     "/agv/collision_monitor_state");
     declare_parameter<std::string>("operator_mode_topic", "/agv/mode/set");
     declare_parameter<std::string>("state_topic", "/agv/mode/state");
@@ -116,6 +124,8 @@ class ModeArbiterNode : public rclcpp::Node {
     const auto driver_state_topic =
         get_parameter("rail_driver_state_topic").as_string();
     const auto collision_topic  = get_parameter("collision_topic").as_string();
+    const auto collision_state_topic =
+        get_parameter("collision_monitor_state_topic").as_string();
     const auto operator_topic   = get_parameter("operator_mode_topic").as_string();
     const auto state_topic      = get_parameter("state_topic").as_string();
     const auto odom_topic       = get_parameter("odom_topic").as_string();
@@ -171,8 +181,22 @@ class ModeArbiterNode : public rclcpp::Node {
     sub_collision_ = create_subscription<std_msgs::msg::String>(
         collision_topic, rclcpp::QoS{10},
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
-          latest_inputs_.safety_stop = (msg->data.find("stop") != std::string::npos);
+          safety_stop_string_ = (msg->data.find("stop") != std::string::npos);
         });
+    // Nav2's collision_monitor publishes the typed CollisionMonitorState —
+    // a DDS type distinct from the String side-channel above, so the String
+    // subscription never matches it on the real robot. Subscribe to both and
+    // OR them each tick (either source saying STOP forces BLOCKED_HANDOFF).
+    if (!collision_state_topic.empty()) {
+      sub_collision_state_ =
+          create_subscription<nav2_msgs::msg::CollisionMonitorState>(
+              collision_state_topic, rclcpp::QoS{10},
+              [this](nav2_msgs::msg::CollisionMonitorState::ConstSharedPtr msg) {
+                safety_stop_nav2_ =
+                    (msg->action_type ==
+                     nav2_msgs::msg::CollisionMonitorState::STOP);
+              });
+    }
     sub_operator_ = create_subscription<std_msgs::msg::String>(
         operator_topic, rclcpp::QoS{10},
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
@@ -242,6 +266,10 @@ class ModeArbiterNode : public rclcpp::Node {
   }
 
   void on_tick() {
+    // Merge the two collision sources (String side-channel + typed Nav2
+    // state). Conservative OR: safety_stop clears only when both are clear.
+    latest_inputs_.safety_stop = safety_stop_string_ || safety_stop_nav2_;
+
     // Refresh RAIL_EXIT clearance from geometry (aisle-side, not cached
     // entry): outward distance from the nearest approach tag. Positive
     // past the tag. The FSM's release gate reads this on the next step.
@@ -483,6 +511,8 @@ class ModeArbiterNode : public rclcpp::Node {
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_approach_state_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_driver_state_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_collision_;
+  rclcpp::Subscription<nav2_msgs::msg::CollisionMonitorState>::SharedPtr
+      sub_collision_state_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr     sub_operator_;
   rclcpp::TimerBase::SharedPtr                               timer_;
 
@@ -493,6 +523,10 @@ class ModeArbiterNode : public rclcpp::Node {
   Mode   mode_ = Mode::CORRIDOR_NAV;
   Source active_source_ = Source::NAV;
   FsmInputs latest_inputs_;
+  // Last-seen stop flag per collision source; OR-ed into
+  // latest_inputs_.safety_stop at the top of every tick.
+  bool safety_stop_string_ = false;
+  bool safety_stop_nav2_ = false;
   size_t transition_count_ = 0;
   // Iter-22 brain 1.2 — anti-oscillation state.
   int64_t last_mode_change_ns_ = 0;       // 0 = no changes yet.
