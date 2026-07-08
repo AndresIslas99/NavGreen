@@ -115,17 +115,17 @@ describe('fleetBase / fleetWsUrl', () => {
     expect(client.fleetBase()).toBe('http://10.0.0.9:8092')
   })
 
-  it('derives the fleet origin from VITE_API_BASE, pinning port 8091', async () => {
+  it('derives the fleet origin from VITE_API_BASE, pinning port 8092', async () => {
     const { client } = await loadClient({ apiBase: 'https://192.168.1.50:8090' })
-    expect(client.fleetBase()).toBe('https://192.168.1.50:8091')
+    expect(client.fleetBase()).toBe('https://192.168.1.50:8092')
   })
 
-  it('falls back to the page hostname:8091 when VITE_API_BASE is not a valid URL', async () => {
+  it('falls back to the page hostname:8092 when VITE_API_BASE is not a valid URL', async () => {
     const { client } = await loadClient({
       apiBase: 'not-a-url',
       location: { protocol: 'http:', hostname: 'jetson.local' },
     })
-    expect(client.fleetBase()).toBe('http://jetson.local:8091')
+    expect(client.fleetBase()).toBe('http://jetson.local:8092')
   })
 
   it('fleetWsUrl builds a ws(s) URL on the fleet origin and adds the leading slash', async () => {
