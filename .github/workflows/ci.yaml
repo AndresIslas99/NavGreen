@@ -5,36 +5,58 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
+  spec-verification:
+    # The specs in specs/*.yaml are the repo's single source of truth;
+    # tools/verify_specs/all.sh is the same BLOCKING suite the pre-commit
+    # hook runs. Verifiers are stdlib-only Python/bash.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run SSOT verifiers
+        run: bash tools/verify_specs/all.sh
+
   build-and-test:
     runs-on: ubuntu-22.04
     container:
       image: ros:humble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install dependencies
         run: |
           apt-get update
           apt-get install -y python3-colcon-common-extensions python3-rosdep
-          rosdep init || true
+          rosdep init || true  # base image already ships a default sources list
           rosdep update
-          # Install only our package dependencies (skip Isaac ROS which needs GPU)
-          rosdep install --from-paths src/agv_odrive src/agv_interfaces src/agv_map_manager \
-            src/agv_waypoint_manager src/agv_markers src/agv_behaviors \
-            src/agv_sensor_fusion src/agv_navigation src/agv_bringup \
-            src/agv_description src/agv_integration_tests \
-            --ignore-src -y --skip-keys="isaac_ros_visual_slam isaac_ros_nvblox isaac_ros_apriltag_interfaces" || true
+          # Resolve the whole workspace so cross-package depends
+          # (e.g. agv_bringup -> agv_mode_arbiter) count as local packages.
+          # Skipped keys need vendor installs (NVIDIA Isaac ROS, ZED SDK,
+          # GTSAM); the packages that require them are not built in CI — see
+          # the build step below.
+          rosdep install --from-paths src --ignore-src -y \
+            --skip-keys="isaac_ros_visual_slam isaac_ros_visual_slam_interfaces isaac_ros_nvblox isaac_ros_apriltag_interfaces zed_msgs gtsam gazebo_ros gazebo_ros2_control gazebo_ros_pkgs teleop_twist_keyboard"
 
       - name: Build AGV packages
+        # 20 of 24 first-party packages build in CI. Excluded, all traceable
+        # to three vendor SDKs unavailable on the public apt index:
+        #   agv_map_manager       — isaac_ros_visual_slam_interfaces (Isaac ROS)
+        #   agv_localization_init — zed_msgs (ZED ROS2 wrapper)
+        #   agv_factor_graph      — gtsam
+        #   agv_bringup           — declares all three above as runtime deps,
+        #                           so colcon cannot resolve it without them
         run: |
           source /opt/ros/humble/setup.bash
           colcon build \
-            --packages-select agv_interfaces agv_odrive agv_map_manager \
+            --packages-select agv_interfaces agv_odrive \
               agv_waypoint_manager agv_markers agv_behaviors \
-              agv_sensor_fusion agv_navigation agv_bringup \
-              agv_description agv_integration_tests \
+              agv_sensor_fusion agv_navigation \
+              agv_description agv_mode_arbiter agv_integration_tests \
+              agv_hil_bridges agv_rail_driver agv_ui_backend agv_zone_detector \
+              agv_safety agv_scan_mapper agv_image_server agv_rail_detector \
+              agv_rail_approach agv_hw_interface \
             --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Werror" \
             --event-handlers console_direct+
         shell: bash
@@ -44,29 +66,192 @@ jobs:
           source /opt/ros/humble/setup.bash
           source install/setup.bash
           colcon test \
-            --packages-select agv_odrive agv_interfaces agv_map_manager \
-              agv_waypoint_manager agv_markers agv_behaviors \
+            --packages-select agv_odrive agv_interfaces \
+              agv_waypoint_manager agv_markers agv_behaviors agv_mode_arbiter \
+              agv_rail_driver agv_zone_detector agv_sensor_fusion \
+              agv_safety agv_scan_mapper agv_image_server agv_rail_detector \
+              agv_rail_approach agv_hw_interface \
             --event-handlers console_direct+
           colcon test-result --all --verbose
         shell: bash
 
-  typescript-lint:
+  typescript-build:
     runs-on: ubuntu-22.04
+    # rclnodejs compiles native bindings against a sourced ROS 2 install,
+    # so the Node packages that depend on it must build inside ros:humble.
+    container:
+      image: ros:humble
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
 
+      - name: Install ROS interface dependencies
+        # rclnodejs generates its TypeScript bindings at npm-install time
+        # from the interfaces available in the sourced ROS environment, so
+        # nav2_msgs and the workspace's agv_interfaces must be present
+        # before `npm ci` runs.
+        run: |
+          apt-get update
+          apt-get install -y ros-humble-nav2-msgs python3-colcon-common-extensions
+          source /opt/ros/humble/setup.bash
+          colcon build --packages-select agv_interfaces
+        shell: bash
+
       - name: Build UI backend
         working-directory: src/agv_ui_backend
-        run: npm ci && npm run build
-
-      - name: Build dashboard
-        working-directory: web/agv_dashboard
-        run: npm ci && npx tsc --noEmit && npx vite build
-
-      - name: Build fleet packages
         run: |
+          source /opt/ros/humble/setup.bash
+          source "$GITHUB_WORKSPACE/install/setup.bash"
+          npm ci
+          npm run build
+        shell: bash
+
+      - name: Build and test dashboard
+        working-directory: web/agv_dashboard
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm test
+          npx vite build
+        shell: bash
+
+      - name: Build and test fleet packages
+        run: |
+          source /opt/ros/humble/setup.bash
           cd fleet/agv_vda5050_adapter && npm ci && npm run build && cd ../..
-          cd fleet/agv_fleet_manager && npm ci && npm run build
+          cd fleet/agv_fleet_manager && npm ci && npm run build && npm test
+        shell: bash
+
+  simulation:
+    # Verifies the no-hardware simulation story. Gates:
+    #   1. build the sim + mock-hardware packages (blocking).
+    #   2. xacro-expand the Gazebo sim URDF (blocking, deterministic).
+    #   3. controller stack drives with no hardware via ros2_control
+    #      mock_components (blocking, reliable — no Gazebo/display/GPU).
+    #   4. headless Gazebo world-load + robot-spawn (best-effort; see the
+    #      step for why the controller_manager can't start headless yet).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: ros:humble
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install simulation dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            ros-humble-gazebo-ros-pkgs \
+            ros-humble-gazebo-ros2-control \
+            ros-humble-ros2-controllers \
+            ros-humble-ros2-control \
+            ros-humble-xacro
+        shell: bash
+
+      - name: Build sim + mock-hardware packages
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --packages-select agv_description agv_hw_interface agv_sim \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Expand sim URDF (deterministic gate)
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          xacro "$(ros2 pkg prefix agv_sim)/share/agv_sim/urdf/agv_sim.urdf.xacro" > /tmp/agv_sim.urdf
+          test -s /tmp/agv_sim.urdf
+          grep -q 'gazebo_ros2_control' /tmp/agv_sim.urdf
+          echo "URDF expands cleanly and includes the Gazebo ros2_control plugin."
+        shell: bash
+
+      - name: Controller stack smoke test (mock hardware, no Gazebo)
+        # The reliable, blocking "it drives without hardware" gate. Runs the
+        # SAME diff_drive_controller + joint_state_broadcaster stack as the
+        # robot, backed by ros2_control mock_components (no Gazebo, no display,
+        # no GPU). ros2_control_node takes robot_description as a parameter, so
+        # it is immune to the gazebo_ros2_control CLI-param issue below.
+        timeout-minutes: 6
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+
+          setsid ros2 launch agv_hw_interface agv_ros2control_mock.launch.py \
+            > /tmp/mock.log 2>&1 &
+          LP=$!
+
+          # Core guarantee: both controllers reach 'active'. Grep is namespace-
+          # agnostic so it holds whether or not the stack runs under /agv.
+          ok=0
+          for i in $(seq 1 30); do
+            sleep 2
+            cm=$(timeout 5 ros2 control list_controllers 2>/dev/null || true)
+            if echo "$cm" | grep -qE 'diff_drive_controller.*active' \
+               && echo "$cm" | grep -qE 'joint_state_broadcaster.*active'; then
+              ok=1; break
+            fi
+          done
+
+          # An active diff_drive_controller advertises its odom topic; check
+          # presence (namespace-agnostic), informational only.
+          odom=0
+          if [ "$ok" = 1 ]; then
+            timeout 10 ros2 topic list 2>/dev/null \
+              | grep -q 'diff_drive_controller/odom' && odom=1 || true
+          fi
+
+          kill -TERM -"$LP" 2>/dev/null || true
+          sleep 2
+          kill -KILL -"$LP" 2>/dev/null || true
+          pkill -9 -f ros2_control_node 2>/dev/null || true
+          pkill -9 -f 'ros2 launch' 2>/dev/null || true
+
+          if [ "$ok" != 1 ]; then
+            echo "::group::mock.log"; cat /tmp/mock.log; echo "::endgroup::"
+            echo "FAILED: controllers did not reach active."
+            exit 1
+          fi
+          [ "$odom" = 1 ] && echo "odom topic advertised" \
+            || echo "note: odom topic not listed in time (controllers are active)"
+          echo "Controller stack reaches active with no hardware."
+        shell: bash
+
+      - name: Headless Gazebo bringup (best-effort)
+        # Best-effort: exercises the real world load + robot spawn + plugin
+        # load headless. NOT blocking because gazebo_ros2_control on Humble
+        # cannot start the controller_manager headless — it forwards the URDF
+        # to the CM as a '--param robot_description:=<xml>' CLI rule, which rcl
+        # rejects (multi-line value). The Gazebo world/spawn/plugin are still
+        # validated here; a full physics drive works locally with a display.
+        # Tracked to become blocking once resolved.
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          export GAZEBO_MODEL_DATABASE_URI=""
+
+          setsid ros2 launch agv_sim sim.launch.py gui:=false rviz:=false \
+            > /tmp/sim.log 2>&1 &
+          LP=$!
+          spawned=0
+          for i in $(seq 1 25); do
+            sleep 3
+            if grep -q 'Successfully spawned entity' /tmp/sim.log 2>/dev/null; then
+              spawned=1; break
+            fi
+          done
+
+          kill -TERM -"$LP" 2>/dev/null || true
+          sleep 3
+          kill -KILL -"$LP" 2>/dev/null || true
+          pkill -9 -f gzserver 2>/dev/null || true
+          pkill -9 -f 'ros2 launch' 2>/dev/null || true
+
+          echo "::group::sim.launch.py log"; cat /tmp/sim.log; echo "::endgroup::"
+          test "$spawned" = 1 && echo "Gazebo loaded the world and spawned the robot." \
+            || echo "Gazebo did not reach spawn (best-effort step)."
+        shell: bash

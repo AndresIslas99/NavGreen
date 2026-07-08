@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>agv_sim</name>
+  <version>0.1.0</version>
+  <description>Hardware-free Gazebo Classic simulation of the AGV differential-drive robot (ROS 2 Humble). Reuses the agv_description geometry and the agv_hw_interface controller gains to let a contributor with no robot spawn the AGV, drive it via /cmd_vel and watch odometry. Development / simulation tool only (dev_only) -- it provides physics + a sensor-free drivetrain, never production compute.</description>
+  <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>agv_description</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>gazebo_ros2_control</exec_depend>
+  <exec_depend>gazebo_ros_pkgs</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>diff_drive_controller</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>teleop_twist_keyboard</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

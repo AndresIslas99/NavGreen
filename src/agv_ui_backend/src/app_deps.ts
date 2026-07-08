@@ -15,6 +15,22 @@ export interface RobotPose {
   theta: number;
 }
 
+/** Occupancy-grid metadata attached to map PNGs sent to the dashboard. */
+export interface MapMeta {
+  resolution: number;   // m/cell
+  origin_x: number;     // map frame, meters
+  origin_y: number;     // map frame, meters
+  width: number;        // cells
+  height: number;       // cells
+}
+
+export interface HealthEntry {
+  status: string;       // ok | warn | error | unknown
+  detail: string;
+  updated: number;      // wall-clock seconds
+  action?: string;      // operator hint shown by the dashboard
+}
+
 export interface AppState {
   eStopActive: boolean;
   currentMode: string;
@@ -35,13 +51,13 @@ export interface AppState {
   batteryPct: number;
   lastImuTime: number;
   mapPng: Buffer | null;
-  mapMeta: any;
+  mapMeta: MapMeta | null;
   mapChanged: boolean;
   mapVersion: number;
   liveMapPng: Buffer | null;
-  liveMapMeta: any;
+  liveMapMeta: MapMeta | null;
   liveMapVersion: number;
-  health: Record<string, any>;
+  health: Record<string, HealthEntry>;
   // Set when a nav goal is sent to a rail_start tag — backend triggers
   // rail_approach/execute when Nav2 succeeds.
   pendingRailApproach: { hardware_id: number; defined_id: number } | null;
@@ -107,9 +123,16 @@ export interface AppState {
   currentMapName: string | null;
 }
 
+/**
+ * Who is dispatching a nav goal. While a mission is running, only the
+ * mission executor may send goals — operator goals (REST/WS) are rejected
+ * so they cannot corrupt the mission's shared navState/goal handle.
+ */
+export type NavGoalSource = 'operator' | 'mission';
+
 export interface RosBridge {
   sendCmdVel(linear: number, angular: number): void;
-  sendNavGoal(x: number, y: number, theta: number): { success: boolean; message: string };
+  sendNavGoal(x: number, y: number, theta: number, source?: NavGoalSource): { success: boolean; message: string };
   cancelNavGoal(): void;
   sendEStop(active: boolean): void;
   sendMotorEnable(active: boolean): void;

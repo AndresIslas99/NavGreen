@@ -180,3 +180,40 @@ TEST(WheelSlipDetector, StructuralDwellOverridesCleanResiduals) {
   // After dwell ends, with min_active_s respected, we transition to Settling
   // and then to Inactive.
 }
+
+TEST(WheelSlipDetector, SecondDwellRefreshesHoldTimer) {
+  // Regression: slip_started_t_ used to refresh only on the FIRST-ever
+  // activation (the entry check ran after state_ was already assigned
+  // ActiveHold), so any dwell after a prior slip event inherited a stale
+  // timestamp and skipped the min_active_s hold entirely.
+  WheelSlipDetectorParams p{};
+  p.min_active_s = 0.30;
+  p.settle_s = 0.40;
+  WheelSlipDetector det(p);
+
+  // First slip event via residuals at t=0; ride it back to Inactive.
+  det.step(make_obs(0.00, 0.0, 0.0, 0.5, 0.0));
+  ASSERT_EQ(det.state(), SlipState::ActiveHold);
+  auto d = det.step(make_obs(0.35, 0.0, 0.0, 0.0, 0.34));
+  ASSERT_EQ(d.state, SlipState::Settling);
+  d = det.step(make_obs(0.80, 0.0, 0.0, 0.0, 0.79));
+  ASSERT_EQ(d.state, SlipState::Inactive);
+
+  // Much later, a caster dwell fires. The hold must count from t=5.0.
+  d = det.step(make_obs(5.00, 0.0, 0.0, 0.0, 4.99,
+                         /*visual=*/0.0, /*t_visual=*/-1.0,
+                         /*with_visual=*/false,
+                         /*dwell_active=*/true));
+  ASSERT_EQ(d.state, SlipState::ActiveHold);
+
+  // Dwell ends 0.1s later with clean residuals: still inside min_active_s,
+  // so the detector must keep holding (buggy code jumped to Settling here).
+  d = det.step(make_obs(5.10, 0.0, 0.0, 0.0, 5.09));
+  EXPECT_EQ(d.state, SlipState::ActiveHold);
+  EXPECT_TRUE(d.inflate_covariance);
+  EXPECT_EQ(d.reason, "active_min_hold");
+
+  // Once min_active_s has elapsed since the dwell entry, transition out.
+  d = det.step(make_obs(5.35, 0.0, 0.0, 0.0, 5.34));
+  EXPECT_EQ(d.state, SlipState::Settling);
+}

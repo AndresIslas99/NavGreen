@@ -37,6 +37,8 @@ Post-MVP priority — supplemental to visual SLAM + wheel odometry fusion.
 | `relocalization_threshold` | `2.0` | Drift threshold for EKF hard reset (m) |
 | `min_confidence` | `50.0` | Minimum decision_margin for relocalization |
 | `relocalization_cooldown_ms` | `500` | Cooldown after set_pose to let EKF settle |
+| `camera_frame` | `"zed_left_camera_frame"` | TF frame the solvePnP tvec is transformed through |
+| `camera_frame_is_optical` | `false` | Set true if `camera_frame` is an optical-convention frame (x right, y down, z forward); when false the fixed optical->body rotation is applied to tvec before the TF |
 
 ## Key Algorithms
 

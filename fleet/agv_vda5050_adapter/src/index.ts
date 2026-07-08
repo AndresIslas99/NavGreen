@@ -25,6 +25,11 @@ const MQTT_BROKER = process.env.VDA_MQTT_BROKER || 'mqtt://localhost:1883';
 const MANUFACTURER = process.env.VDA_MANUFACTURER || 'agv-greenhouse';
 const SERIAL_NUMBER = process.env.VDA_SERIAL_NUMBER || 'agv-001';
 const NAMESPACE = process.env.AGV_NAMESPACE || 'agv';
+// Broker credentials — required once the broker enables password_file/acl_file
+// (see fleet/mosquitto/config/mosquitto.conf). The shipped ACL expects the
+// adapter's username to equal the VDA serial number.
+const MQTT_USERNAME = process.env.VDA_MQTT_USERNAME || (process.env.VDA_MQTT_PASSWORD ? SERIAL_NUMBER : '');
+const MQTT_PASSWORD = process.env.VDA_MQTT_PASSWORD || '';
 const VDA_VERSION = '2.0.0';
 
 const TOPIC_PREFIX = `uagv/v2/${MANUFACTURER}/${SERIAL_NUMBER}`;
@@ -44,6 +49,9 @@ let robotPose: AgvPosition = {
 };
 let robotVelocity: Velocity = { vx: 0, vy: 0, omega: 0 };
 let eStopActive = false;
+// VDA 5050 pause mode — distinct from the e-stop. startPause/stopPause only
+// suspend/resume order execution; they never touch /agv/e_stop.
+let paused = false;
 let motorsArmed = false;
 let driving = false;
 let slamConfidence = 'unknown';
@@ -115,6 +123,7 @@ async function main() {
   const mqttClient = mqtt.connect(MQTT_BROKER, {
     clientId: `vda5050-${SERIAL_NUMBER}`,
     clean: true,
+    ...(MQTT_USERNAME ? { username: MQTT_USERNAME, password: MQTT_PASSWORD } : {}),
     will: {
       topic: `${TOPIC_PREFIX}/connection`,
       payload: JSON.stringify({
@@ -156,9 +165,10 @@ async function main() {
   await rclnodejs.init();
   const node = new rclnodejs.Node('vda5050_adapter');
 
-  // Publishers (for executing received orders)
+  // Publisher for the manufacturer-specific emergencyStop/clearEmergencyStop
+  // instant actions. /agv/e_stop is latching ("true persists until false"),
+  // so ONLY those two explicit actions may write it — never pause/resume.
   const eStopPub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/e_stop`);
-  const motorEnablePub = node.createPublisher('std_msgs/msg/Bool', `/${NAMESPACE}/motor_enable`);
 
   // Nav2 action client for executing VDA 5050 navigation orders
   const navActionClient = new rclnodejs.ActionClient(
@@ -198,6 +208,12 @@ async function main() {
     } catch { /* ignore */ }
   });
 
+  // Mirror the robot's actual e-stop state (the operator dashboard latches
+  // this topic too), so safetyState reflects reality, not just our own writes.
+  node.createSubscription('std_msgs/msg/Bool', `/${NAMESPACE}/e_stop`, (msg: any) => {
+    eStopActive = Boolean(msg.data);
+  });
+
   node.createSubscription('std_msgs/msg/String', '/slam/quality', (msg: any) => {
     try {
       const data = JSON.parse(msg.data);
@@ -224,8 +240,56 @@ async function main() {
     }
   });
 
+  // Reject an order per VDA 5050: report a WARNING orderUpdateError in the
+  // state message; the error is cleared when the next valid order is accepted.
+  function rejectOrder(order: Partial<Order> | null, description: string) {
+    console.warn(`Order rejected: ${description}`);
+    errors = errors.filter(e => e.errorType !== 'orderUpdateError');
+    errors.push({
+      errorType: 'orderUpdateError',
+      errorLevel: 'WARNING',
+      errorDescription: description,
+      errorReferences: [
+        { referenceKey: 'orderId', referenceValue: String(order?.orderId ?? '') },
+        { referenceKey: 'orderUpdateId', referenceValue: String(order?.orderUpdateId ?? '') },
+      ],
+    });
+  }
+
   function handleOrder(order: Order) {
+    // Validate before touching any state — a malformed order must not
+    // disturb the one currently executing.
+    if (!order || typeof order.orderId !== 'string' || order.orderId === '' ||
+        !Number.isInteger(order.orderUpdateId) ||
+        !Array.isArray(order.nodes) || !Array.isArray(order.edges)) {
+      rejectOrder(order, 'malformed order: orderId, orderUpdateId, nodes and edges are required');
+      return;
+    }
+    if (order.orderId === currentOrderId) {
+      if (order.orderUpdateId === currentOrderUpdateId) {
+        // Duplicate delivery (QoS 1) — ignore silently per VDA 5050.
+        console.log(`Ignoring duplicate order update: ${order.orderId} (update ${order.orderUpdateId})`);
+        return;
+      }
+      if (order.orderUpdateId < currentOrderUpdateId) {
+        rejectOrder(order, `stale orderUpdateId ${order.orderUpdateId} < current ${currentOrderUpdateId}`);
+        return;
+      }
+    }
+    const releasedNodes = order.nodes.filter(n => n.released);
+    const badNode = releasedNodes.find(n =>
+      !n.nodePosition || typeof n.nodePosition.x !== 'number' || typeof n.nodePosition.y !== 'number');
+    if (badNode) {
+      rejectOrder(order, `released node '${badNode.nodeId ?? '?'}' has no usable nodePosition`);
+      return;
+    }
+
     console.log(`Received order: ${order.orderId} (update ${order.orderUpdateId})`);
+    errors = errors.filter(e => e.errorType !== 'orderUpdateError');
+    // Replacing a running order: invalidate the in-flight goal's callbacks so
+    // its (canceled) result cannot wipe the new order's queue.
+    navGeneration++;
+    cancelCurrentNavGoal();
     currentOrderId = order.orderId;
     currentOrderUpdateId = order.orderUpdateId;
 
@@ -243,7 +307,6 @@ async function main() {
     }));
 
     // Build released node queue and execute sequentially (C3: multi-node)
-    const releasedNodes = order.nodes.filter(n => n.released);
     nodeQueue = releasedNodes.map(n => ({
       nodeId: n.nodeId,
       sequenceId: n.sequenceId,
@@ -257,42 +320,67 @@ async function main() {
   }
 
   function handleInstantActions(msg: InstantActions) {
+    if (!Array.isArray(msg.instantActions)) return;
     for (const action of msg.instantActions) {
       console.log(`Instant action: ${action.actionType} (${action.actionId})`);
+      let actionStatus: ActionState['actionStatus'] = 'FINISHED';
+      let resultDescription: string | undefined;
 
       switch (action.actionType) {
         case 'cancelOrder':
+          navGeneration++;
           cancelCurrentNavGoal();
+          nodeQueue = [];
           currentOrderId = '';
           nodeStates = [];
           edgeStates = [];
           break;
 
-        case 'stopPause': {
+        // VDA 5050 pause semantics: startPause ACTIVATES pause mode (stop
+        // driving, keep the order); stopPause DEACTIVATES it. Pause must not
+        // write /agv/e_stop — that topic latches an emergency stop.
+        case 'startPause':
+          paused = true;
+          cancelCurrentNavGoal();
+          break;
+
+        case 'stopPause':
+          paused = false;
+          executeNextInQueue();
+          break;
+
+        // Manufacturer-specific actions (documented in fleet/README.md):
+        // emergencyStop latches /agv/e_stop=true; clearEmergencyStop releases
+        // it. Clearing is deliberate and does NOT resume motion by itself —
+        // send stopPause afterwards to resume a suspended order.
+        case 'emergencyStop': {
           eStopActive = true;
+          cancelCurrentNavGoal();
           const stopMsg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
           stopMsg.data = true;
           eStopPub.publish(stopMsg);
           break;
         }
 
-        case 'startPause': {
-          // Resume from pause
+        case 'clearEmergencyStop': {
           eStopActive = false;
-          const resumeMsg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
-          resumeMsg.data = false;
-          eStopPub.publish(resumeMsg);
+          const clearMsg = rclnodejs.createMessageObject('std_msgs/msg/Bool') as any;
+          clearMsg.data = false;
+          eStopPub.publish(clearMsg);
           break;
         }
 
         default:
           console.warn(`Unknown instant action: ${action.actionType}`);
+          actionStatus = 'FAILED';
+          resultDescription = `unsupported actionType '${action.actionType}'`;
       }
 
       actionStates.push({
         actionId: action.actionId,
         actionType: action.actionType,
-        actionStatus: 'FINISHED',
+        actionStatus,
+        ...(resultDescription ? { resultDescription } : {}),
       });
     }
   }
@@ -303,8 +391,17 @@ async function main() {
 
   let currentGoalHandle: any = null;
   let nodeQueue: Array<{ nodeId: string; sequenceId: number; x: number; y: number; theta: number }> = [];
+  // Bumped whenever the running order is replaced or canceled; result
+  // callbacks of a superseded goal compare against it and bail out.
+  let navGeneration = 0;
 
   function executeNextInQueue() {
+    if (paused || eStopActive) {
+      if (nodeQueue.length > 0) {
+        console.log('Order execution deferred (pause or e-stop active)');
+      }
+      return;
+    }
     if (nodeQueue.length === 0) {
       driving = false;
       return;
@@ -335,6 +432,7 @@ async function main() {
       return;
     }
 
+    const gen = navGeneration;
     driving = true;
     navActive = true;
     navStatus = 'active';
@@ -352,6 +450,11 @@ async function main() {
     navActionClient.sendGoal(goal, () => {
       // feedback
     }).then((goalHandle: any) => {
+      if (gen !== navGeneration) {
+        // Superseded while in flight — make sure it does not keep driving.
+        if (goalHandle.isAccepted()) goalHandle.cancelGoal().catch(() => { /* ignore */ });
+        return;
+      }
       if (!goalHandle.isAccepted()) {
         driving = false;
         navActive = false;
@@ -360,6 +463,7 @@ async function main() {
       currentGoalHandle = goalHandle;
 
       goalHandle.getResult().then(() => {
+        if (gen !== navGeneration) return;
         const status = goalHandle.status;
         navActive = false;
         currentGoalHandle = null;
@@ -367,15 +471,20 @@ async function main() {
         if (status === 4) {
           // Succeeded — advance to next node in queue
           onNodeCompleted(true);
+        } else if (paused || eStopActive) {
+          // Canceled by pause/emergencyStop — keep the queue for resume.
+          driving = false;
         } else {
           onNodeCompleted(false);
         }
       }).catch(() => {
+        if (gen !== navGeneration) return;
         navActive = false;
         currentGoalHandle = null;
         onNodeCompleted(false);
       });
     }).catch(() => {
+      if (gen !== navGeneration) return;
       navActive = false;
       onNodeCompleted(false);
     });
@@ -402,7 +511,7 @@ async function main() {
       lastNodeId,
       lastNodeSequenceId,
       driving,
-      paused: eStopActive,
+      paused,
       newBaseRequest: false,
       distanceSinceLastNode: 0,
       operatingMode: deriveOperatingMode(),
@@ -432,10 +541,10 @@ async function main() {
     mqttClient.publish(`${TOPIC_PREFIX}/visualization`, JSON.stringify(viz), { qos: 0 });
   }, VIZ_INTERVAL_MS);
 
-  // Connection heartbeat
+  // Connection heartbeat (headerId must be monotonic per topic)
   setInterval(() => {
     mqttClient.publish(`${TOPIC_PREFIX}/connection`, JSON.stringify({
-      ...nextHeader('visualization'),
+      ...nextHeader('connection'),
       connectionState: 'ONLINE',
     } satisfies Connection), { qos: 1, retain: true });
   }, CONNECTION_INTERVAL_MS);

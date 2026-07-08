@@ -286,33 +286,54 @@ private:
 
   void apply_noise_multiplier(double multiplier)
   {
+    desired_noise_mult_ = multiplier;
+
     if (!ekf_param_client_->service_is_ready()) {
       RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
         "EKF global parameter service not ready — cannot adjust process noise");
       return;
     }
 
-    // Capture baseline on first call
+    // Capture baseline on first use — fully async. This method runs inside
+    // subscription/timer callbacks of a single-threaded executor: the
+    // parameter response can only be delivered by that same executor thread,
+    // so any blocking wait/get here would deadlock the node permanently.
     if (!has_baseline_noise_) {
-      auto future = ekf_param_client_->get_parameters(
-        {"process_noise_covariance"});
-      // Non-blocking: store baseline when result arrives
-      future.wait_for(std::chrono::milliseconds(500));
-      if (future.valid()) {
-        try {
-          auto results = future.get();
-          if (!results.empty()) {
-            baseline_process_noise_ = results[0].as_double_array();
-            has_baseline_noise_ = true;
-          }
-        } catch (const std::exception& e) {
-          RCLCPP_WARN(this->get_logger(),
-            "Failed to get baseline process noise: %s", e.what());
+      if (baseline_request_pending_) {
+        // Request in flight; its callback re-applies on arrival. Re-arm if
+        // the response never came (e.g. ekf_global restarted mid-request).
+        if ((this->now() - baseline_request_time_).seconds() < 10.0) {
           return;
         }
-      } else {
-        return;
+        RCLCPP_WARN(this->get_logger(),
+          "Baseline process-noise request unanswered for 10s — retrying");
       }
+      baseline_request_pending_ = true;
+      baseline_request_time_ = this->now();
+      ekf_param_client_->get_parameters(
+        {"process_noise_covariance"},
+        [this](std::shared_future<std::vector<rclcpp::Parameter>> future) {
+          baseline_request_pending_ = false;
+          try {
+            auto results = future.get();
+            if (results.empty()) {
+              RCLCPP_WARN(this->get_logger(),
+                "EKF global returned no process_noise_covariance — "
+                "adaptive noise disabled");
+              return;
+            }
+            baseline_process_noise_ = results[0].as_double_array();
+            has_baseline_noise_ = true;
+          } catch (const std::exception& e) {
+            RCLCPP_WARN(this->get_logger(),
+              "Failed to get baseline process noise: %s", e.what());
+            return;
+          }
+          // Apply the most recently requested multiplier (quality may have
+          // transitioned again while the request was in flight).
+          apply_noise_multiplier(desired_noise_mult_);
+        });
+      return;
     }
 
     // Apply multiplier to diagonal entries only
@@ -542,7 +563,10 @@ private:
   std::shared_ptr<rclcpp::AsyncParametersClient> ekf_param_client_;
   std::vector<double> baseline_process_noise_;
   bool has_baseline_noise_{false};
+  bool baseline_request_pending_{false};
+  rclcpp::Time baseline_request_time_{0, 0, RCL_ROS_TIME};
   double current_noise_mult_{1.0};
+  double desired_noise_mult_{1.0};
   rclcpp::TimerBase::SharedPtr recovery_timer_;
 
   // Parameters

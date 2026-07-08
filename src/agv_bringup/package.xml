@@ -3,21 +3,47 @@
 <package format="3">
   <name>agv_bringup</name>
   <version>1.0.0</version>
-  <description>AGV composite launch files for teleop, mapping, and fusion modes</description>
+  <description>AGV composite launch entry points: full production stack, commissioning mapping, and HIL validation</description>
   <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- Workspace packages launched by launch/*.py -->
+  <exec_depend>agv_behaviors</exec_depend>
   <exec_depend>agv_description</exec_depend>
-  <exec_depend>agv_odrive</exec_depend>
-  <exec_depend>agv_ui_backend</exec_depend>
+  <exec_depend>agv_factor_graph</exec_depend>
   <exec_depend>agv_hil_bridges</exec_depend>
-  <exec_depend>agv_zone_detector</exec_depend>
-  <exec_depend>agv_rail_driver</exec_depend>
+  <exec_depend>agv_image_server</exec_depend>
+  <exec_depend>agv_localization_init</exec_depend>
+  <exec_depend>agv_map_manager</exec_depend>
+  <exec_depend>agv_markers</exec_depend>
   <exec_depend>agv_mode_arbiter</exec_depend>
-  <exec_depend>pointcloud_to_laserscan</exec_depend>
+  <exec_depend>agv_navigation</exec_depend>
+  <exec_depend>agv_odrive</exec_depend>
+  <exec_depend>agv_rail_approach</exec_depend>
+  <exec_depend>agv_rail_detector</exec_depend>
+  <exec_depend>agv_rail_driver</exec_depend>
+  <exec_depend>agv_safety</exec_depend>
+  <exec_depend>agv_scan_mapper</exec_depend>
+  <exec_depend>agv_sensor_fusion</exec_depend>
+  <exec_depend>agv_ui_backend</exec_depend>
+  <exec_depend>agv_waypoint_manager</exec_depend>
+  <exec_depend>agv_zone_detector</exec_depend>
+
+  <!-- Released ROS packages launched by launch/*.py -->
+  <exec_depend>apriltag_ros</exec_depend>
   <exec_depend>foxglove_bridge</exec_depend>
+  <exec_depend>pointcloud_to_laserscan</exec_depend>
+  <exec_depend>robot_localization</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <!-- NOT declared: agv_slam (cuVSLAM pipeline). It is an external overlay
+       cloned separately onto the Jetson (.gitignore: "Third-party ROS
+       packages (clone separately)") and has no rosdep key, so declaring it
+       here would break `rosdep install` on a fresh clone. The launch files
+       fail fast at t=0 with an actionable error when it is missing. -->
 
   <export>
     <build_type>ament_cmake</build_type>
