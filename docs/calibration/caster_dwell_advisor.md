@@ -13,7 +13,7 @@ calibration plan. It is a passive observer: it does NOT mutate
 custom critic that consumes the advisory and adjusts the planned
 trajectory, or (b) a middleware node that gates `/agv/cmd_vel` during
 the dwell window before reaching `velocity_smoother`. Both are
-post-example work.
+post-deployment work.
 
 Reference: Arrizabalaga et al., "A caster-wheel-aware MPC-based
 motion planner for mobile robotics," arXiv:2110.05604, 2021. Their
