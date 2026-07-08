@@ -25,16 +25,16 @@ export function wsUrl(path: string): string {
   return `${proto}://${location.host}${path}`
 }
 
-/** Image/fleet manager origin (agv_image_server on :8091 by default). */
+/** Fleet manager origin (port 8092 by default; 8091 is agv_image_server). */
 export function fleetBase(): string {
   if (FLEET_BASE_ENV) return FLEET_BASE_ENV
   if (API_BASE) {
     try {
       const u = new URL(API_BASE)
-      return `${u.protocol}//${u.hostname}:8091`
+      return `${u.protocol}//${u.hostname}:8092`
     } catch { /* fall through */ }
   }
-  return `${location.protocol}//${location.hostname}:8091`
+  return `${location.protocol}//${location.hostname}:8092`
 }
 
 /** WebSocket URL on the fleet manager origin, honoring VITE_FLEET_BASE. */
@@ -142,7 +142,7 @@ export const getMissionRuns = (from?: number, to?: number) => {
   return json<MissionRun[]>(`/api/analytics/missions?${params}`)
 }
 
-// Traffic zones (fleet manager on port 8091)
+// Traffic zones (fleet manager, port 8092 by default)
 async function fleetJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(fleetBase() + url, init)
   return res.json()
