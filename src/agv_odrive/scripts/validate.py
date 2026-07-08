@@ -1,6 +1,6 @@
 """
 Validation script - checks all dependencies and subsystems before launch.
-Run: python3 -m agv_odrive.validate
+Run: ros2 run agv_odrive validate.py (or python3 src/agv_odrive/scripts/validate.py)
 """
 import sys
 import subprocess

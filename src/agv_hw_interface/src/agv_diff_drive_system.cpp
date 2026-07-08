@@ -1,18 +1,18 @@
 #include "agv_hw_interface/agv_diff_drive_system.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 
 #include "agv_hw_interface/odrive_protocol.hpp"
+#include "agv_hw_interface/wheel_conversion.hpp"
 #include "pluginlib/class_list_macros.hpp"
 
 namespace agv_hw_interface {
 
 namespace {
-constexpr double TWO_PI = 2.0 * M_PI;
-
 double parse_param(const hardware_interface::HardwareInfo& info,
                    const std::string& key,
                    double fallback) {
@@ -88,6 +88,10 @@ hardware_interface::CallbackReturn AgvDiffDriveSystem::on_init(
   invert_left_   = parse_param_bool(info, "invert_left", true);
   invert_right_  = parse_param_bool(info, "invert_right", false);
   recv_timeout_ms_ = parse_param_int(info, "recv_timeout_ms", 5);
+  // Fault thresholds: consecutive-cycle counts at the controller_manager
+  // update rate (50 Hz by default) before read()/write() report ERROR.
+  max_send_failures_ = std::max(1, parse_param_int(info, "max_send_failures", 10));
+  encoder_timeout_cycles_ = std::max(1, parse_param_int(info, "encoder_timeout_cycles", 100));
 
   if (gear_ratio_ <= 0.0) {
     RCLCPP_FATAL(logger_, "gear_ratio must be > 0 (got %.3f)", gear_ratio_);
@@ -133,12 +137,25 @@ hardware_interface::CallbackReturn AgvDiffDriveSystem::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // Arm both axes (CLOSED_LOOP_CONTROL)
+  // Arm both axes (CLOSED_LOOP_CONTROL). A failed send means the bus is
+  // already dead — refuse to activate instead of pretending the axes armed.
   for (uint8_t node_id : {left_axis_id_, right_axis_id_}) {
     uint8_t data[8] = {};
     pack_axis_state(data, AxisState::CLOSED_LOOP_CONTROL);
-    can_->send(make_arb_id(node_id, cmd::SET_AXIS_STATE), data, 8);
+    if (!can_->send(make_arb_id(node_id, cmd::SET_AXIS_STATE), data, 8)) {
+      RCLCPP_ERROR(logger_, "failed to send CLOSED_LOOP_CONTROL to axis %u on %s — staying inactive",
+                   node_id, can_interface_.c_str());
+      can_.reset();
+      return hardware_interface::CallbackReturn::ERROR;
+    }
   }
+
+  // Re-latch encoder baselines on every activation — motor positions may have
+  // moved (or the ODrive power-cycled) while the plugin was inactive.
+  send_fail_count_ = 0;
+  stale_read_cycles_ = 0;
+  left_.initialized = false;
+  right_.initialized = false;
 
   RCLCPP_INFO(logger_, "AgvDiffDriveSystem activated on %s", can_interface_.c_str());
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -173,15 +190,36 @@ hardware_interface::return_type AgvDiffDriveSystem::read(
   // Drain any pending CAN frames within the budget. The diff_drive_controller
   // typically runs at 50 Hz so we have ~20 ms; bound the work here so we never
   // starve the rest of the controller_manager loop.
+  bool got_encoder_frame = false;
   for (int i = 0; i < 8; ++i) {
     struct can_frame frame{};
     if (!can_->recv(frame, recv_timeout_ms_)) break;
+
+    // Skip RTR polls (our own requests looped back, or another local process
+    // polling the same bus) and short frames — they carry no valid payload
+    // and would parse as position/velocity 0.0.
+    if ((frame.can_id & CAN_RTR_FLAG) != 0 || frame.can_dlc < 8) continue;
 
     const uint8_t node_id = get_node_id(frame.can_id);
     const uint8_t cmd_id  = get_cmd_id(frame.can_id);
     if (cmd_id == cmd::GET_ENCODER_ESTIMATES) {
       process_encoder_frame(node_id, frame);
+      got_encoder_frame = true;
     }
+  }
+
+  // Encoder staleness: a SocketCAN fd stays "open" when the interface drops
+  // or the ODrive powers off, so frame freshness is the only dead-bus signal.
+  if (got_encoder_frame) {
+    stale_read_cycles_ = 0;
+  } else if (stale_read_cycles_ >= encoder_timeout_cycles_) {
+    return hardware_interface::return_type::ERROR;  // reported when first crossed
+  } else if (++stale_read_cycles_ >= encoder_timeout_cycles_) {
+    RCLCPP_ERROR(logger_,
+                 "no encoder frames for %d consecutive read() cycles on %s — "
+                 "CAN bus or ODrive unresponsive, reporting ERROR",
+                 stale_read_cycles_, can_interface_.c_str());
+    return hardware_interface::return_type::ERROR;
   }
 
   return hardware_interface::return_type::OK;
@@ -193,23 +231,35 @@ hardware_interface::return_type AgvDiffDriveSystem::write(
     return hardware_interface::return_type::ERROR;
   }
 
-  send_velocity(left_axis_id_, left_.command, invert_left_);
-  send_velocity(right_axis_id_, right_.command, invert_right_);
+  const bool left_ok  = send_velocity(left_axis_id_, left_.command, invert_left_);
+  const bool right_ok = send_velocity(right_axis_id_, right_.command, invert_right_);
+
+  // Consecutive send failures are a bus-down signal (ENETDOWN, or tx queue
+  // full because no node ACKs) — surface them so controller_manager can
+  // trigger its error handling instead of commanding a dead bus forever.
+  if (left_ok && right_ok) {
+    send_fail_count_ = 0;
+  } else if (send_fail_count_ >= max_send_failures_) {
+    return hardware_interface::return_type::ERROR;  // reported when first crossed
+  } else if (++send_fail_count_ >= max_send_failures_) {
+    RCLCPP_ERROR(logger_,
+                 "%d consecutive CAN send failures on %s — reporting ERROR",
+                 send_fail_count_, can_interface_.c_str());
+    return hardware_interface::return_type::ERROR;
+  }
 
   return hardware_interface::return_type::OK;
 }
 
-void AgvDiffDriveSystem::send_velocity(uint8_t node_id,
+bool AgvDiffDriveSystem::send_velocity(uint8_t node_id,
                                        double wheel_rad_per_s,
                                        bool invert) {
-  // wheel rad/s -> wheel turns/s -> motor turns/s
-  double wheel_turns_per_s = wheel_rad_per_s / TWO_PI;
-  if (invert) wheel_turns_per_s = -wheel_turns_per_s;
-  const double motor_turns_per_s = wheel_turns_per_s * gear_ratio_;
+  const double motor_turns_per_s =
+      wheel_rad_to_motor_turns(wheel_rad_per_s, gear_ratio_, invert);
 
   uint8_t data[8] = {};
   pack_velocity(data, static_cast<float>(motor_turns_per_s), 0.0f);
-  can_->send(make_arb_id(node_id, cmd::SET_INPUT_VEL), data, 8);
+  return can_->send(make_arb_id(node_id, cmd::SET_INPUT_VEL), data, 8);
 }
 
 void AgvDiffDriveSystem::request_encoders(uint8_t node_id) {
@@ -246,13 +296,8 @@ void AgvDiffDriveSystem::process_encoder_frame(uint8_t node_id,
   const double delta_motor_turns = motor_turns - wheel->last_motor_turns;
   wheel->last_motor_turns = motor_turns;
 
-  double delta_wheel_turns = delta_motor_turns / gear_ratio_;
-  if (invert) delta_wheel_turns = -delta_wheel_turns;
-  wheel->position += delta_wheel_turns * TWO_PI;
-
-  double wheel_vel = (motor_vel / gear_ratio_) * TWO_PI;
-  if (invert) wheel_vel = -wheel_vel;
-  wheel->velocity = wheel_vel;
+  wheel->position += motor_turns_to_wheel_rad(delta_motor_turns, gear_ratio_, invert);
+  wheel->velocity = motor_turns_to_wheel_rad(motor_vel, gear_ratio_, invert);
 }
 
 }  // namespace agv_hw_interface

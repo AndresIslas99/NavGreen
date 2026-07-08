@@ -1,13 +1,15 @@
 {
-  "name": "agv_dash_init",
+  "name": "agv_dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Operator dashboard (HMI) for the greenhouse AGV — live map, teleop, mapping, missions, recovery",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -28,6 +30,7 @@
     "globals": "^17.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^4.1.10"
   }
 }

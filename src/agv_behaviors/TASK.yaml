@@ -23,6 +23,8 @@ rules:
   - "Do not hardcode waypoint lists in source"
   - "Recovery behaviors must be configurable"
   - "Mission execution must consume external mission data"
+  - "Every XML shipped in trees/ must load through the executor's factory (enforced by test_bt_loading)"
+  - "No BackUp/reverse recoveries outside a rail — robot has no rear sensor (nav2 vx_min: 0.0)"
 
 done_definition:
   - "missions execute from persisted mission definitions"

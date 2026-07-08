@@ -1,5 +1,5 @@
-spec_version: "1.0"
-last_updated: "2026-04-24"
+spec_version: "1.1"
+last_updated: "2026-07-06"
 generated_from: "src/agv_ui_backend/src/{routes,ws,state_machine}.ts"
 verified_by: "TODO — tools/verify_specs/verify_hmi_api.py (post-Sprint-1)"
 
@@ -47,8 +47,11 @@ server:
       default: "agv"
       purpose: "ROS2 robot_namespace prefix for all topic/service paths"
     - name: "AGV_DATA_DIR"
-      default: "/home/orza/agv_data"
-      purpose: "Root for maps/, missions.json, events.jsonl, telemetry.db"
+      default: "/tmp/agv_data (code default; production sets /home/orza/agv_data via launch)"
+      purpose: "Root for maps/, missions/missions.json, events.jsonl, telemetry.db, users.json"
+    - name: "AGV_MAPS_DIR"
+      default: "${AGV_DATA_DIR}/maps"
+      purpose: "Override for the maps directory only"
     - name: "AGV_BOOT_MAP_NAME"
       default: ""
       purpose: "Name of map_yaml basename loaded at boot (sets /agv/maps/loaded latch)"
@@ -66,11 +69,35 @@ auth:
   header: "Authorization: Bearer <jwt>"
   ws_query_param: "token"
   optional: true
-  disabled_when: "auth/users.json is missing or empty"
+  enabled_by: |
+    The "enabled" boolean inside ${AGV_DATA_DIR}/users.json. Default is
+    false: on first run the backend auto-creates users.json (mode 0600)
+    with {enabled: false, users: []}. When enabled is false, ALL role
+    enforcement is bypassed (requireAuth short-circuits and WS clients
+    get operator capability).
+  bootstrap: |
+    NO default users ship (the old engineer/agv2026 + operator/agv seeds
+    were removed; their legacy hashes are only recognized to WARN if still
+    present). Create users with:
+      npm run adduser -- <username> <password> [viewer|operator|engineer]
+    (password >= 8 chars; role defaults to operator; writes
+    ${AGV_DATA_DIR}/users.json). Then set "enabled": true in users.json.
+  password_hashing: |
+    scrypt with a random 16-byte salt, stored as "scrypt:<salt>:<hash>"
+    (32-byte key). Legacy unsalted sha256 hashes are still accepted for
+    login and are upgraded to scrypt transparently on first successful
+    login (auth.ts::login rehash-on-verify).
   roles:
     - viewer    # read-only; WS receives status, REST GET only
     - operator  # full operational control; WS commands + REST CRUD
     - engineer  # operator + user management + dev endpoints
+  role_enforcement: "AuthManager.requireAuth(minRole) middleware — viewer < operator < engineer hierarchy; 401 without valid JWT, 403 below minRole"
+  always_anonymous: |
+    Stop-type actions are deliberately exempt from auth even when enabled:
+    POST /api/nav/cancel, POST /api/recovery/trigger_estop,
+    POST /api/missions/pause. Rationale: stopping the robot must always be
+    possible for anyone on the local network (mirrors a physical stop
+    control). Clearing/arming actions stay role-gated.
   enable_check: "GET /api/auth/status returns {enabled: bool}"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,10 +195,20 @@ rest_endpoints:
     request: "{name: string}"
     response: "{success: bool, message: string, ...}"
     action_gate: "save_map"
+    name_contract: |
+      Backend guard: name must be non-empty and contain no '/' or '..' —
+      otherwise rejected with message 'Invalid name'. The stricter canonical
+      charset (1-64 chars of [A-Za-z0-9_-]) is enforced by the C++
+      agv_map_manager services with message
+      'Invalid map name (allowed: 1-64 chars of [A-Za-z0-9_-])' — out-of-
+      charset names fail there. Use the canonical charset from all clients.
     note: |
-      Orchestrates: agv_map_manager/save_map → /agv/zed/save_area_memory →
-      /visual_slam/save_map → copy landing pad → /agv/localization/
-      save_last_known_pose. See docs/audit/2026-04-13-full-audit.md bug #2.
+      Runs nav2 map_saver_cli directly against /agv/live_map and writes
+      <name>.yaml/.pgm into AGV_DATA_DIR/maps. KNOWN DRIFT: it does NOT
+      call agv_map_manager/save_map, so the per-map sidecars (.area
+      Area Memory, _cuvslam/ keyframe DB, _meta.json last-known pose) are
+      only produced by service-path saves — see
+      specs/interfaces.yaml#/agv/map_manager/save_map.
 
   - path: "/api/maps/load"
     method: "POST"
@@ -181,10 +218,17 @@ rest_endpoints:
     response_404: "{error: 'Map not found'}"
     response_503: "{success: false, message: 'map_server not available'}"
     action_gate: "load_map"
+    name_contract: |
+      Canonical map/zone identifier charset: 1-64 chars of [A-Za-z0-9_-].
+      Out-of-charset names fail the C++ map_manager services with
+      'Invalid map name (allowed: 1-64 chars of [A-Za-z0-9_-])' (zone_id:
+      'Invalid zone_id (allowed: 1-64 chars of [A-Za-z0-9_-])'). This route
+      itself resolves the name against AGV_DATA_DIR/maps and 404s if the
+      .yaml is absent.
     note: |
       Calls nav2_msgs/srv/LoadMap on /agv/map_server/load_map, then publishes
-      /agv/maps/loaded latch so auto_init_orchestrator runs the localization
-      cascade.
+      the /agv/maps/loaded latch EXACTLY ONCE on success (never on failure)
+      so auto_init_orchestrator runs the localization cascade.
 
   - path: "/api/acc_map/image"
     method: "GET"
@@ -204,7 +248,7 @@ rest_endpoints:
     role: "viewer"
     source: "src/agv_ui_backend/src/routes/missions.ts"
     response: "Array<Mission>"
-    persistence: "AGV_DATA_DIR/missions.json"
+    persistence: "AGV_DATA_DIR/missions/missions.json (JSON array, seeded '[]')"
 
   - path: "/api/missions"
     method: "POST"
@@ -224,16 +268,22 @@ rest_endpoints:
     response_200: "{success: true, ...}"
     response_400: "{success: false, message: <reason>}"
     action_gate: "execute_mission"
+    note: |
+      Executes via the backend's TS executeMission loop, which dispatches
+      each waypoint through sendNavGoal with source='mission' — so mission
+      goals DO pass the nav_goal gates (localization, motors, safety chain).
     known_gap: |
-      agv_waypoint_manager (mission executor) currently bypasses sendNavGoal
-      gates. Tracked for Sprint 2 (Fase: migrate state machine to C++).
-      See specs/state_machine.yaml#nav_goal_requires_localization.
+      The separate C++ agv_waypoint_manager node (exercised only by
+      integration tests today) still bypasses sendNavGoal gates. Tracked for
+      Sprint 2 (Fase: migrate state machine to C++). See
+      specs/state_machine.yaml#nav_goal_requires_localization.
 
   - path: "/api/missions/pause"
     method: "POST"
-    role: "operator"
+    role: "anonymous"
     response: "{success: true}"
     action_gate: "pause_mission"
+    note: "Stop-type action — intentionally unauthenticated (pausing halts motion). See auth.always_anonymous."
 
   - path: "/api/missions/resume"
     method: "POST"
@@ -251,9 +301,10 @@ rest_endpoints:
 
   - path: "/api/nav/cancel"
     method: "POST"
-    role: "operator"
+    role: "anonymous"
     response: "{success: true}"
     action_gate: "cancel_nav"
+    note: "Stop-type action — intentionally unauthenticated so anyone on the local network can always stop the robot. See auth.always_anonymous."
 
   # ── Events log ─────────────────────────────────────────────────────────
   - path: "/api/events"
@@ -297,9 +348,12 @@ rest_endpoints:
 
   - path: "/api/recovery/trigger_estop"
     method: "POST"
-    role: "operator"
+    role: "anonymous"
     response: "{success: true, message: 'E-stop activated'}"
-    note: "CLI/automation mirror of the dashboard E-Stop button."
+    note: |
+      CLI/automation mirror of the dashboard E-Stop button. Intentionally
+      unauthenticated: stopping the robot must always be possible. Clearing
+      it (POST /api/recovery/clear_estop) remains operator-gated.
 
   # ── Auth ───────────────────────────────────────────────────────────────
   - path: "/api/auth/status"
@@ -623,21 +677,25 @@ action_gates:
 
   nav_goal:
     description: "Dispatch /navigate_to_pose action"
-    enforced_by: "src/agv_ui_backend/src/index.ts::sendNavGoal (lines ~246-292)"
+    enforced_by: "src/agv_ui_backend/src/index.ts::sendNavGoal"
     preconditions:
+      - "x/y/theta are finite numbers"
       - "currentMode === 'nav'"
+      - "no mission running (unless the goal comes from the mission executor itself: source === 'mission')"
       - "state.motorState.armed === true"
       - "state.localization.action !== 'FAILED'"
       - "collision_monitor fresh: cm.updated == 0 (cold boot OK) OR (cm.action !in ['STALE','OFFLINE'] AND age < 2.0s)"
       - "navActionClient.isActionServerAvailable() === true"
     rejection_messages:
+      non_finite: "Goal coordinates must be finite numbers"
       not_in_nav: "Not in nav mode"
+      mission_in_progress: "Mission in progress — cancel it before sending manual goals"
       not_armed: "Motors not armed. Arm motors before navigating."
       localization_failed: "Localization failed. Reinitialize with AprilTag before navigating."
       safety_chain_offline: "Safety chain offline (collision_monitor not publishing). Restart nav stack."
       no_action_server: "Nav2 action server not available"
     cross_ref: "specs/state_machine.yaml#nav_goal_requires_localization"
-    known_gap: "agv_waypoint_manager bypasses this gate — Sprint 2 follow-up."
+    known_gap: "The C++ agv_waypoint_manager bypasses this gate (integration-test path only) — Sprint 2 follow-up. The fleet vda5050 adapter also dispatches ungated goals — see specs/interfaces.yaml#actions."
 
   cancel_nav:
     description: "Cancel active navigation goal"
@@ -648,15 +706,19 @@ action_gates:
       - "Set state.missionCancel=true if mission active"
 
   save_map:
-    description: "Persist current SLAM map + landing pad + last-known pose"
+    description: "Persist the current occupancy grid"
     derived_from: "state_machine.ts::allowedActions::canSaveMap"
     allowed_states: "any except offline, fault"
-    orchestration:
-      - "agv_map_manager/save_map"
-      - "/agv/zed/save_area_memory (ZED Area Memory)"
-      - "/visual_slam/save_map (cuVSLAM keyframe DB)"
-      - "Copy landing pad to <map>_meta.json"
-      - "/agv/localization/save_last_known_pose"
+    behavior:
+      - "runs nav2 map_saver_cli against /agv/live_map → AGV_DATA_DIR/maps/<name>.{yaml,pgm}"
+    known_drift: |
+      The dashboard save path does NOT run the full sidecar orchestration
+      (agv_map_manager/save_map → /agv/zed/save_area_memory →
+      /visual_slam/save_map → landing-pad copy →
+      /agv/localization/save_last_known_pose). Those sidecars are produced
+      only by the C++ /agv/map_manager/save_map service path — see
+      specs/interfaces.yaml. Maps saved from the dashboard therefore lack
+      .area/_cuvslam/_meta.json and localize via the cascade's later paths.
 
   load_map:
     description: "Load map + trigger localization cascade"

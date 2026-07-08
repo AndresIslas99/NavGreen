@@ -20,13 +20,18 @@ namespace agv_hw_interface {
 //   command interfaces:  velocity (rad/s)
 //
 // Hardware parameters (read from <ros2_control><hardware><param> in URDF):
-//   can_interface       — SocketCAN interface name (default "can0")
-//   left_axis_id        — ODrive CAN node id for left motor (default 0)
-//   right_axis_id       — ODrive CAN node id for right motor (default 1)
-//   gear_ratio          — motor turns / wheel turns (default 10.0)
-//   invert_left         — bool, default true
-//   invert_right        — bool, default false
-//   recv_timeout_ms     — int, poll timeout per read() (default 5)
+//   can_interface           — SocketCAN interface name (default "can0")
+//   left_axis_id            — ODrive CAN node id for left motor (default 0)
+//   right_axis_id           — ODrive CAN node id for right motor (default 1)
+//   gear_ratio              — motor turns / wheel turns (default 10.0)
+//   invert_left             — bool, default true
+//   invert_right            — bool, default false
+//   recv_timeout_ms         — int, poll timeout per read() (default 5)
+//   max_send_failures       — consecutive write() send failures before the
+//                             plugin reports ERROR (default 10)
+//   encoder_timeout_cycles  — consecutive read() cycles without any encoder
+//                             frame before the plugin reports ERROR
+//                             (default 100 ≈ 2 s at the 50 Hz update rate)
 //
 // On platforms without can0, the plugin still loads but stays in the
 // inactive state. mock_components/GenericSystem is the recommended option for
@@ -60,6 +65,12 @@ class AgvDiffDriveSystem : public hardware_interface::SystemInterface {
   bool invert_left_{true};
   bool invert_right_{false};
   int recv_timeout_ms_{5};
+  int max_send_failures_{10};
+  int encoder_timeout_cycles_{100};
+
+  // Fault counters (reset on every successful cycle / on_activate)
+  int send_fail_count_{0};
+  int stale_read_cycles_{0};
 
   // CAN socket (null until on_activate)
   std::unique_ptr<CANSocket> can_;
@@ -77,7 +88,7 @@ class AgvDiffDriveSystem : public hardware_interface::SystemInterface {
 
   rclcpp::Logger logger_ = rclcpp::get_logger("agv_hw_interface");
 
-  void send_velocity(uint8_t node_id, double wheel_rad_per_s, bool invert);
+  bool send_velocity(uint8_t node_id, double wheel_rad_per_s, bool invert);
   void request_encoders(uint8_t node_id);
   void process_encoder_frame(uint8_t node_id, const struct can_frame& frame);
 };

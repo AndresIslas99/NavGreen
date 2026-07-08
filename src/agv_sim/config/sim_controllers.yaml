@@ -1,0 +1,77 @@
+# sim_controllers.yaml — standalone Gazebo Classic sim controllers.
+#
+# controller_manager + diff_drive_controller + joint_state_broadcaster for the
+# hardware-free sim. Wheel geometry and limits are REUSED verbatim from
+# src/agv_hw_interface/config/agv_controllers.yaml so the sim drives like the
+# real robot kinematically.
+#
+# TF OWNERSHIP — the one intentional difference from production:
+#   enable_odom_tf is TRUE here. This is the newcomer standalone sim demo, so
+#   diff_drive_controller must publish the complete odom -> base_link transform
+#   ON ITS OWN. The PRODUCTION stack does the opposite (enable_odom_tf: false)
+#   because the dual-EKF localization owns odom -> base_link and map -> odom
+#   (see CLAUDE.md "Localization architecture" and
+#   src/agv_hw_interface/config/agv_controllers.yaml).
+#
+# TOPIC NAMES: the un-namespaced /cmd_vel and /odom remaps are applied in
+# launch/sim.launch.py via the diff_drive_controller spawner
+# (--controller-ros-args), not in this file.
+
+/**/controller_manager:
+  ros__parameters:
+    update_rate: 50           # Hz — match the real drivetrain publish rate
+    use_sim_time: true
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+/**/joint_state_broadcaster:
+  ros__parameters:
+    use_sim_time: true
+
+/**/diff_drive_controller:
+  ros__parameters:
+    use_sim_time: true
+
+    left_wheel_names: ["left_wheel_joint"]
+    right_wheel_names: ["right_wheel_joint"]
+
+    # Reused from agv_controllers.yaml (agv_geometry.yaml values).
+    wheel_separation: 0.960
+    wheel_radius: 0.0781
+    wheel_separation_multiplier: 1.0
+    left_wheel_radius_multiplier: 1.0
+    right_wheel_radius_multiplier: 1.0
+
+    publish_rate: 50.0
+    odom_frame_id: odom
+    base_frame_id: base_link
+    pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+
+    # Standalone sim publishes its own odom -> base_link TF.
+    # Production uses the dual-EKF instead and sets this false.
+    enable_odom_tf: true
+    open_loop: false
+    position_feedback: true
+
+    cmd_vel_timeout: 0.5
+    publish_limited_velocity: true
+    use_stamped_vel: false      # accept plain geometry_msgs/Twist on /cmd_vel
+
+    linear:
+      x:
+        max_velocity: 0.4       # match Nav2 vx_max / agv_controllers.yaml
+        min_velocity: -0.4
+        max_acceleration: 0.5
+        min_acceleration: -1.5
+
+    angular:
+      z:
+        max_velocity: 1.5
+        min_velocity: -1.5
+        max_acceleration: 2.0
+        min_acceleration: -2.0

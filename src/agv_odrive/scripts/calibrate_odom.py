@@ -215,14 +215,19 @@ def main():
 
     sub = parser.add_subparsers(dest='command', required=True)
 
+    # Seed defaults MUST match the wheel_radius / track_width currently set in
+    # config/odrive_params.yaml (the values the running driver integrates with),
+    # otherwise the correction ratio is computed against the wrong baseline.
     p_rad = sub.add_parser('radius', help='Calibrate wheel_radius from straight-line drives')
-    p_rad.add_argument('--current-radius', type=float, default=0.0625,
-                       help='Current wheel_radius in meters (default: 0.0625)')
+    p_rad.add_argument('--current-radius', type=float, default=0.0781,
+                       help='wheel_radius the driver is running with (default: 0.0781, '
+                            'the calibrated value in config/odrive_params.yaml)')
     p_rad.add_argument('--trials', type=int, default=3, help='Number of trials (default: 3)')
 
     p_tw = sub.add_parser('trackwidth', help='Calibrate track_width from spin-in-place tests')
-    p_tw.add_argument('--current-track', type=float, default=0.735,
-                      help='Current track_width in meters (default: 0.735)')
+    p_tw.add_argument('--current-track', type=float, default=0.960,
+                      help='track_width the driver is running with (default: 0.960, '
+                           'the calibrated value in config/odrive_params.yaml)')
     p_tw.add_argument('--spin-speed', type=float, default=0.3,
                       help='Angular velocity in rad/s (default: 0.3)')
     p_tw.add_argument('--trials', type=int, default=3, help='Number of trials (default: 3)')

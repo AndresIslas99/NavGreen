@@ -1,7 +1,9 @@
 """
 agv_safety — Safety supervisor + cmd_vel gate.
 
-NOT yet wired into agv_full.launch.py. Bring up in isolation:
+Wired into agv_full.launch.py (included at t=6.5 s, only when a map is
+available — mapping-first mode bypasses the safety chain). Can also be
+brought up in isolation:
   ros2 launch agv_safety safety.launch.py
 
 Topology:

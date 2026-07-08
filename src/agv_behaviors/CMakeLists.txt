@@ -23,12 +23,18 @@ ament_target_dependencies(behavior_executor_node
 install(TARGETS behavior_executor_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY trees/ DESTINATION share/${PROJECT_NAME}/trees)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
-install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
+# launch/ exists only on commissioned robots (untracked); OPTIONAL keeps
+# fresh clones and CI building.
+install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch OPTIONAL)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_bt_loading test/test_bt_loading.cpp)
   ament_target_dependencies(test_bt_loading rclcpp behaviortree_cpp_v3)
+  # Load the shipped trees straight from the source dir so the test also
+  # fails fast on an XML broken before install.
+  target_compile_definitions(test_bt_loading PRIVATE
+    AGV_BEHAVIORS_TREES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/trees")
 endif()
 
 ament_package()

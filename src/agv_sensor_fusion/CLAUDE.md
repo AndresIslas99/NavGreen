@@ -90,6 +90,7 @@ ZED BMI088 @ 200Hz → /agv/zed/imu/data (raw, vibration noise)
 - AprilTag rejection threshold: 3.0
 - Dynamic process noise scales Q with velocity (realistic uncertainty at speed)
 - **TF ownership**: Only ekf_local publishes odom→base_link, only ekf_global publishes map→odom. cuVSLAM and SLAM Toolbox TF publishing are disabled via YAML overrides.
+- **set_pose ownership**: `fusion.launch.py` remaps ekf_local's `set_pose` to `ekf_local/set_pose` so `/agv/set_pose` is served by **ekf_global alone**. Marker RELOC (agv_markers) and auto-init seeding (agv_localization_init) call relative `set_pose`; a map-frame reset must never land on ekf_local, whose odom→base_link must stay continuous.
 
 ## Dependencies
 

@@ -46,10 +46,17 @@ public:
     auto nav_client = config().blackboard->get<
       rclcpp_action::Client<NavigateToPose>::SharedPtr>("nav_client");
 
+    // x/y have no port default: an unresolved port (e.g. a blackboard key
+    // like {goal_x} that nothing ever set) must fail the node loudly —
+    // silently keeping 0 would dispatch a real Nav2 goal to the map origin.
     double x = 0, y = 0, theta = 0;
-    getInput("x", x);
-    getInput("y", y);
-    getInput("theta", theta);
+    if (!getInput("x", x) || !getInput("y", y)) {
+      RCLCPP_ERROR(node->get_logger(),
+                   "BT NavigateToPose: input ports 'x'/'y' unresolved — "
+                   "refusing to dispatch a goal to the map origin");
+      return BT::NodeStatus::FAILURE;
+    }
+    getInput("theta", theta);  // optional — port declares a 0.0 default
 
     auto goal = NavigateToPose::Goal();
     goal.pose.header.frame_id = "map";

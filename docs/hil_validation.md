@@ -1,5 +1,15 @@
 # HIL Validation Procedure — Jetson Brain Against Simulated Sensors
 
+> **HISTORICAL — DO NOT RUN AS WRITTEN.** `agv_hil.launch.py` (used throughout
+> this document) and `agv_fusion.launch.py` (referenced in the comparison table)
+> were deleted in the 2026-04-13 audit — see `deleted_files` in
+> [specs/launch_sequence.yaml](../specs/launch_sequence.yaml). The surviving HIL
+> entry point is `agv_hil_full.launch.py`
+> (`ros2 launch agv_bringup agv_hil_full.launch.py map:=<map_name>`), and the
+> current LAN HIL procedure is
+> [docs/validation/RUNBOOK_lan_hil.md](validation/RUNBOOK_lan_hil.md). The topic
+> contract and pass/fail criteria below are kept as reference only.
+
 This document defines the exact validation steps for running the AGV autonomy
 brain on the Jetson using simulated topics from a PC over the network.
 
@@ -22,7 +32,7 @@ source ~/ros2_ws/install/setup.bash
 ### Network Check
 
 ```bash
-ping -c 3 SIM-HOST-LAN-IP   # PC sim IP — edit cyclonedds_hil.xml if different
+ping -c 3 <sim-host-ip>   # PC sim IP — must match cyclonedds_hil.xml
 ros2 topic list | grep agv
 ```
 

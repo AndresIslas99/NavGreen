@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""
-Integration test: verify all required ROS2 services are available.
-Run with: ros2 run agv_integration_tests test_service_availability.py
-Or via colcon test.
-"""
-import subprocess
-import sys
+"""Integration test: verify all required ROS2 services are available.
 
+Skips unless AGV_STACK_TEST=1 is set with the full stack running
+(agv_full.launch.py); asserts hard when it is.
+"""
+import os
+import subprocess
+
+import pytest
+
+if os.environ.get("AGV_STACK_TEST") != "1":
+    pytest.skip(
+        "stack-required test: set AGV_STACK_TEST=1 with the full stack "
+        "running (agv_full.launch.py)", allow_module_level=True)
+
+NS = os.environ.get("AGV_NAMESPACE", "agv")
 
 REQUIRED_SERVICES = [
-    '/agv/map_manager/save_map',
-    '/agv/map_manager/load_map',
-    '/agv/map_manager/update_zone',
-    '/agv/waypoint_manager/save',
-    '/agv/waypoint_manager/list',
-    '/agv/waypoint_manager/execute',
-    '/agv/navigate_to_pose/_action/get_result',
+    f'/{NS}/map_manager/save_map',
+    f'/{NS}/map_manager/load_map',
+    f'/{NS}/map_manager/update_zone',
+    f'/{NS}/waypoint_manager/save',
+    f'/{NS}/waypoint_manager/list',
+    f'/{NS}/waypoint_manager/execute',
+    f'/{NS}/navigate_to_pose/_action/get_result',
 ]
 
 
@@ -26,20 +34,14 @@ def test_services_available():
         capture_output=True, text=True, timeout=10)
 
     available = set(result.stdout.strip().splitlines())
-    missing = []
-
-    for svc in REQUIRED_SERVICES:
-        if svc not in available:
-            missing.append(svc)
+    missing = [svc for svc in REQUIRED_SERVICES if svc not in available]
 
     if missing:
         print(f"MISSING services ({len(missing)}/{len(REQUIRED_SERVICES)}):")
         for s in missing:
             print(f"  - {s}")
-        # Don't fail hard — services may not be running in test environment
-        print("NOTE: This test requires the full stack to be running.")
-    else:
-        print(f"All {len(REQUIRED_SERVICES)} services available.")
+    assert not missing, f"required services missing from ROS graph: {missing}"
+    print(f"All {len(REQUIRED_SERVICES)} services available.")
 
 
 if __name__ == '__main__':

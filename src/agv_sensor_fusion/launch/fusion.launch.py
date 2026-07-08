@@ -46,6 +46,17 @@ def generate_launch_description():
             parameters=[ekf_local_config, {'use_sim_time': use_sim_time}],
             remappings=[
                 ('odometry/filtered', 'odometry/local'),
+                # Both EKFs advertise set_pose by default, so without this
+                # remap ekf_local and ekf_global BOTH serve /agv/set_pose and
+                # a map-frame reset (marker RELOC, auto-init seeding) can
+                # nondeterministically land on ekf_local, teleporting the
+                # odom->base_link transform it owns (must stay continuous).
+                # Move ekf_local's service out of the way; ekf_global keeps
+                # the plain name because marker_correction_node and
+                # auto_init_orchestrator_node create their clients on
+                # relative "set_pose" → /agv/set_pose. Same split as
+                # agv_hil_full.launch.py.
+                ('set_pose', 'ekf_local/set_pose'),
             ],
             output='screen',
         ),
@@ -59,6 +70,8 @@ def generate_launch_description():
             parameters=[ekf_global_config, {'use_sim_time': use_sim_time}],
             remappings=[
                 ('odometry/filtered', 'odometry/global'),
+                # set_pose deliberately NOT remapped: /agv/set_pose must be
+                # served by ekf_global alone (see ekf_local comment above).
             ],
             output='screen',
         ),
