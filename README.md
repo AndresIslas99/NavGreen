@@ -1,19 +1,30 @@
-# AGV Greenhouse
+<p align="center">
+  <img src="docs/assets/navgreen-logo.svg" alt="NavGreen" width="440">
+</p>
 
-[![CI](https://github.com/AndresIslas99/agv-greenhouse/actions/workflows/ci.yaml/badge.svg)](https://github.com/AndresIslas99/agv-greenhouse/actions/workflows/ci.yaml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%2F%20Jazzy-blue.svg)](#ros-2-distributions)
-[![Robot nodes](https://img.shields.io/badge/robot%20nodes-C%2B%2B17%20%2B%20--Werror-orange.svg)](policies/engineering_rules.md)
+<p align="center">
+  <a href="https://github.com/AndresIslas99/agv-greenhouse/actions/workflows/ci.yaml"><img src="https://github.com/AndresIslas99/agv-greenhouse/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
+  <a href="#ros-2-distributions"><img src="https://img.shields.io/badge/ROS%202-Humble%20%2F%20Jazzy-blue.svg" alt="ROS 2"></a>
+  <a href="policies/engineering_rules.md"><img src="https://img.shields.io/badge/robot%20nodes-C%2B%2B17%20%2B%20--Werror-orange.svg" alt="C++17 -Werror"></a>
+</p>
 
-Autonomous differential-drive robot (AGV) for commercial greenhouse deployment in
-Mexico. The workspace covers the full stack of a real field robot: CAN motor
-control, dual-EKF localization fused with visual SLAM and AprilTag corrections,
-Nav2 autonomy, a rail-riding mode for heating-pipe crop rows, a software safety
-chain, a browser operator dashboard, and an optional VDA 5050 fleet layer.
+**NavGreen** is a production-grade autonomous navigation stack for greenhouse
+robots (AGVs). It covers the full stack of a real field robot deployed in a
+commercial greenhouse in Mexico: CAN motor control, dual-EKF localization fused
+with visual SLAM and AprilTag corrections, Nav2 autonomy, a rail-riding mode
+for heating-pipe crop rows, a software safety chain, a browser operator
+dashboard, and an optional VDA 5050 fleet layer.
+
+📖 **[Documentation site](https://andresislas99.github.io/agv-greenhouse/)** —
+getting started, tutorials, and architecture deep-dives.
 
 **Current MVP**: first field visit with a local-WiFi operator workflow —
 teleoperation, map commissioning, waypoint missions, and live monitoring from a
 browser tablet.
+
+> NavGreen is the project name; ROS package names keep the `agv_` prefix
+> (like Nav2's `nav2_*` packages live under the Nav2 brand).
 
 ## Spec-driven development
 

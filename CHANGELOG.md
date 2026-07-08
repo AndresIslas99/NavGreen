@@ -8,6 +8,13 @@ settling.
 ## [Unreleased]
 
 ### Added
+- **NavGreen**: the project's public name and visual identity (logo, README
+  hero). ROS package names keep the `agv_` prefix.
+- **Documentation site** (MkDocs Material): getting started, tutorials
+  (simulation, dashboard, mapping), architecture deep-dives (dual EKF, mode
+  arbitration, the SSOT spec system, safety model), package/interface
+  reference, and community pages — built strict on every PR and deployed to
+  GitHub Pages from `main` (`.github/workflows/docs.yaml`).
 - First green CI pipeline in the project's history: 20 of 24 packages build
   with `-Werror` plus tests, all four Node packages build, and the SSOT
   verifier suite runs as a blocking job.

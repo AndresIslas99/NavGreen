@@ -1,0 +1,35 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/docs.yaml']
+  pull_request:
+    branches: [main]
+    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/docs.yaml']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # gh-deploy pushes the gh-pages branch
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build site (strict)
+        run: |
+          pip install mkdocs-material
+          mkdocs build --strict
+
+      - name: Deploy to GitHub Pages
+        # Only on main. First-time setup: Settings -> Pages -> deploy from
+        # the gh-pages branch (see docs/going_public_checklist.md).
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdocs gh-deploy --force
