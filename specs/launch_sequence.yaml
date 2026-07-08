@@ -89,7 +89,7 @@ entry_points:
         forbidden: "agv_interfaces/* and any other custom msg — IDL is not guaranteed byte-compatible across distros."
       dds_peer_list:
         file: "cyclonedds.xml (in sim repo)"
-        must_contain: "Jetson IP (USB 192.168.55.1 preferred for stability; WiFi JETSON-LAN-IP fallback)"
+        must_contain: "Jetson IP (USB 192.168.55.1 preferred for stability; WiFi <jetson-lan-ip> fallback)"
         jetson_terminal_requirement: "any ros2 CLI terminal on the Jetson used for HIL verification must `export ROS_DOMAIN_ID=42` (default .bashrc is 0)."
       usd_staleness:
         warning: "After brain-parity refactor on 2026-04-15, the USD in sim repo is stale. Regenerate on sim host with `isaacsim --exec src/agv_isaac_sim/scripts/build_greenhouse_usd.py && isaacsim --exec src/agv_isaac_sim/scripts/import_robot_usd.py` before first Play of the day."

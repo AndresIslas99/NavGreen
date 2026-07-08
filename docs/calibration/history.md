@@ -38,8 +38,8 @@ lower bias.
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-04-25 | Replace `caster_covariance_multiplier=10` in `odrive_can_node` with explicit slip detector node | `robot_localization` documentation explicitly discourages covariance inflation as ignore-mechanism. Brossard 2019 and De Giorgi 2024 demonstrate detector-based approaches with order-of-magnitude better drift. |
-| 2026-04-25 | Skip Phase 3 (caster instrumentation) for now | Out of scope; Phases 1+2+4-advisory close ~80% of the gap without hardware. Revisit post-example if residual bias remains. |
-| 2026-04-25 | Phase 4 implemented as advisor (passive observer), not actuator | Mutating `/agv/cmd_vel` from a sniffer node would conflict with `mode_arbiter`'s ownership semantics. Closing the loop is post-example work. |
+| 2026-04-25 | Skip Phase 3 (caster instrumentation) for now | Out of scope; Phases 1+2+4-advisory close ~80% of the gap without hardware. Revisit post-deployment if residual bias remains. |
+| 2026-04-25 | Phase 4 implemented as advisor (passive observer), not actuator | Mutating `/agv/cmd_vel` from a sniffer node would conflict with `mode_arbiter`'s ownership semantics. Closing the loop is post-deployment work. |
 
 ## How to add a new row
 
