@@ -55,7 +55,17 @@ Then, regardless of the rewrite:
 
 </details>
 
-## 2. Land the community-readiness work on `main` — ✅ DONE (PR #5 merged; v0.1.0 tagged) — owner-only
+## 2. Land the community-readiness work on `main` — ✅ DONE (PR #5 merged)
+
+Tag `v0.1.0`: created locally against the current `main` commit, but the
+managed git proxy in the build environment does not propagate tag refs, so
+it must be pushed from your machine (one command) or created in the GitHub
+UI (Releases → Draft a new release → tag `v0.1.0` → target `main`):
+
+```bash
+git fetch origin main && git tag -a v0.1.0 origin/main -m "NavGreen v0.1.0"
+git push origin v0.1.0
+``` — owner-only
 
 PR #5 carries the green CI, the fixes, and this checklist. `main` is still
 the old red-CI state until it merges. Merge PR #5, then tag the release:
