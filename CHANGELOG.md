@@ -7,6 +7,10 @@ settling.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.0] — 2026-07-08
+
 ### Added
 - **NavGreen**: the project's public name and visual identity (logo, README
   hero). ROS package names keep the `agv_` prefix.
@@ -61,7 +65,3 @@ settling.
   `docs/going_public_checklist.md`).
 - Customer site configuration replaced with a neutral example site.
 
-## [0.1.0] — unreleased
-
-Tag `v0.1.0` on the merge commit of the community-readiness PR (#5) once it
-lands on `main`; move the entries above under it.

@@ -5,7 +5,16 @@ Steps to open this repository to outside contributors. The ones marked
 cannot be done from a pull request. Do them in order — the history rewrite
 must happen **before** the repo is made public.
 
-## 1. Scrub secrets from git history — owner-only, do first
+## 1. Scrub secrets from git history — ✅ DONE 2026-07-08
+
+Executed with git-filter-repo on both repositories (this repo and
+`agv-greenhouse-sim`): the leaked password, site LAN IPs, customer
+identity, and personal home paths are purged from every revision; tip
+trees verified byte-identical. **Still required: rotate the exposed
+Jetson SSH/VNC password** — treat it as compromised regardless of the
+rewrite — and anyone with an old clone must re-clone.
+
+<details><summary>Original instructions (for reference)</summary>
 
 The working tree no longer contains the leaked SSH password or the home-lab
 topology, but **git history still does**. Making the repo public exposes the
@@ -44,7 +53,9 @@ Then, regardless of the rewrite:
 - All collaborators must re-clone after the force-push (old clones keep the
   secrets).
 
-## 2. Land the community-readiness work on `main` — owner-only
+</details>
+
+## 2. Land the community-readiness work on `main` — ✅ DONE (PR #5 merged; v0.1.0 tagged) — owner-only
 
 PR #5 carries the green CI, the fixes, and this checklist. `main` is still
 the old red-CI state until it merges. Merge PR #5, then tag the release:
