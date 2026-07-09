@@ -3,17 +3,19 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/docs.yaml']
+  # No paths filter on pull_request: docs-build is a required status check
+  # for merging, and a path-filtered required check never runs on PRs that
+  # don't touch those paths — leaving the PR stuck at "Expected". The strict
+  # build takes ~40 s, so running it on every PR is the safe trade.
   pull_request:
     branches: [main]
-    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/docs.yaml']
   workflow_dispatch:
 
 permissions:
   contents: write   # gh-deploy pushes the gh-pages branch
 
 jobs:
-  build:
+  docs-build:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
