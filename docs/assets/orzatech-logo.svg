@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 64" role="img" aria-label="OrzaTech">
+  <defs>
+    <linearGradient id="oz" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1B5E20"/>
+      <stop offset="1" stop-color="#43A047"/>
+    </linearGradient>
+  </defs>
+  <!-- mark: an 'O' ring with an orbit dot (tech + the Orza seed) -->
+  <g transform="translate(6,6)">
+    <circle cx="26" cy="26" r="22" fill="none" stroke="url(#oz)" stroke-width="7"/>
+    <circle cx="45" cy="12" r="6" fill="#66BB6A"/>
+  </g>
+  <!-- wordmark -->
+  <text x="70" y="42" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#1B5E20">Orza</tspan><tspan fill="#43A047">Tech</tspan>
+  </text>
+</svg>

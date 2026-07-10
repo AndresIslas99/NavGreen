@@ -1,0 +1,3 @@
+# Shows a "Sponsor" button on the repository page.
+# custom points at the company behind NavGreen.
+custom: ["https://orzatech.com"]

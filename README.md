@@ -7,6 +7,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
   <a href="#ros-2-distributions"><img src="https://img.shields.io/badge/ROS%202-Humble%20%2F%20Jazzy-blue.svg" alt="ROS 2"></a>
   <a href="policies/engineering_rules.md"><img src="https://img.shields.io/badge/robot%20nodes-C%2B%2B17%20%2B%20--Werror-orange.svg" alt="C++17 -Werror"></a>
+  <a href="https://orzatech.com"><img src="https://img.shields.io/badge/by-OrzaTech-1B5E20.svg" alt="by OrzaTech"></a>
+</p>
+
+<p align="center">
+  Developed and maintained by <a href="https://orzatech.com"><b>OrzaTech</b></a>
 </p>
 
 **NavGreen** is a production-grade autonomous navigation stack for greenhouse
@@ -345,4 +350,12 @@ bash tools/verify_specs/all.sh
 
 ## License
 
-[MIT](LICENSE) © 2026 Andres Islas
+[MIT](LICENSE) © 2026 OrzaTech (Andres Islas)
+
+---
+
+<p align="center">
+  <a href="https://orzatech.com"><img src="docs/assets/orzatech-logo.svg" alt="OrzaTech" height="40"></a>
+  <br>
+  <sub>NavGreen is developed and maintained by <a href="https://orzatech.com">OrzaTech</a> — robotics for agriculture.</sub>
+</p>
