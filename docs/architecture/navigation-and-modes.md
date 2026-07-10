@@ -9,14 +9,14 @@ FSM that owns `/agv/cmd_vel`.
 
 This page covers the Nav2 configuration, the zone detector, the arbiter FSM,
 and the rail approach/drive/exit flow. Ground truth:
-[`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml)
+[`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml)
 (`layer_5_runtime_arbiter`) and
-[`mode_fsm.hpp`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp)
+[`mode_fsm.hpp`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp)
 — a verifier fails the build if the two ever drift.
 
 ## Nav2 configuration
 
-[`agv_navigation`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_navigation/CLAUDE.md)
+[`agv_navigation`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_navigation/CLAUDE.md)
 contains no custom C++ — it is configuration, launch, and one custom behavior
 tree over standard Nav2 nodes:
 
@@ -46,12 +46,12 @@ Nav goals from the dashboard pass through backend gates before Nav2 ever
 sees them: mode must be `nav`, motors armed, localization not `FAILED`,
 collision-monitor state fresh, no mission in progress. The full gate list per
 caller is in
-[`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml)
+[`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml)
 under `actions`.
 
 ## Zone detection: corridor vs rail aisle
 
-[`agv_zone_detector`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_zone_detector/CLAUDE.md)
+[`agv_zone_detector`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_zone_detector/CLAUDE.md)
 classifies the robot's global pose (`/agv/odometry/global`) against the known
 greenhouse geometry and publishes `/agv/zone/state` at 10 Hz — JSON with the
 zone label, the matched aisle's center line, the robot's lateral offset and
@@ -131,7 +131,7 @@ twist reaches the motors**. The backend translates between them — layer-3
 `mapping` is published to the arbiter as `teleop`, since the arbiter has no
 mapping concept. In `nav`, the arbiter runs its autonomous zone-driven
 selection; in `teleop`/`idle`, it stands down. See
-[`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml)
+[`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml)
 for the full five-layer mode matrix.
 
 ## The rail flow
@@ -140,14 +140,14 @@ End to end, a rail traversal looks like this:
 
 1. **Approach request.** Entering an approach strip does nothing by default:
    `auto_approach` is `false` in
-   [`mode_arbiter_params.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_mode_arbiter/config/mode_arbiter_params.yaml)
+   [`mode_arbiter_params.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_mode_arbiter/config/mode_arbiter_params.yaml)
    — the arbiter is an observer/router, and the caller (dashboard, mission
    executor, or test harness) fires `/agv/rail_approach/execute` explicitly.
    Profiles that want hands-off docking set `auto_approach: true`, which
    makes the arbiter fire the service itself on entering an approach strip
    (`rail_approach_pend`).
 2. **Coarse approach and tag acquisition.**
-   [`agv_rail_approach`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_rail_approach/CLAUDE.md)
+   [`agv_rail_approach`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_rail_approach/CLAUDE.md)
    first asks Nav2 to drive to a standoff pose before the tag (skippable via
    the service's `skip_coarse_approach` flag when the robot is already in
    front of the tag), then waits for the camera to detect the target
@@ -158,13 +158,13 @@ End to end, a rail traversal looks like this:
    arbiter relays `/agv/cmd_vel_approach`.
 4. **Rail drive** (`rail_drive`). On `settled`, the arbiter publishes a goal
    on `/agv/rail_driver/goal` and switches to `/agv/cmd_vel_rail`.
-   [`agv_rail_driver`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_rail_driver/CLAUDE.md)
+   [`agv_rail_driver`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_rail_driver/CLAUDE.md)
    is a P-controlled, longitudinal-only driver: **`angular.z == 0` in every
    message it publishes**, guaranteed structurally in its ROS-free
    controller header. It aborts to `blocked_misaligned` if yaw error vs the
    rail axis exceeds ~15° and to `blocked_lateral` if the robot drifts more
    than 0.30 m off the goal line. Optionally,
-   [`agv_rail_detector`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_rail_detector/CLAUDE.md)
+   [`agv_rail_detector`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_rail_detector/CLAUDE.md)
    feeds visual lateral/yaw corrections from ZED depth (BEV + RANSAC on the
    two tubes, ~5 Hz), used only when its confidence exceeds 0.7 and the
    detection is fresh — pose-based checks are the safe default.

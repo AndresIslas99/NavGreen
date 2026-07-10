@@ -6,7 +6,7 @@ system at a glance — the two chains that matter (command/safety and
 sensing/localization), the subsystems, and where the code runs.
 
 Everything below is backed by machine-readable contracts in
-[`specs/`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/README.md).
+[`specs/`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/README.md).
 If this page and a spec ever disagree, the spec wins — see
 [The spec system](spec-system.md).
 
@@ -52,7 +52,7 @@ Key facts about this chain:
   the normal production condition). In the map-less mapping-first branch the
   ODrive driver consumes `/agv/cmd_vel` directly, with no collision
   protection — see
-  [`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml)
+  [`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml)
   layer 2.
 - **The gate fails safe.** If the supervisor stops publishing, crashes, or
   reports any monitored topic silent, the gate forces zero velocity. See
@@ -98,7 +98,7 @@ the relocalization cascade, is in [Localization (dual EKF)](localization.md).
 | Drivetrain | `agv_odrive`, `agv_hw_interface`, `agv_description` | ODrive S1 CAN driver with 50 Hz wheel odometry; `ros2_control` alternative; URDF | [Jetson & CAN setup](../hardware_setup.md) |
 | Safety | `agv_safety` + Nav2 collision monitor | Liveness supervisor + final cmd_vel gate; stop polygons sized from stopping-distance physics | [Safety model](safety.md) |
 | Operator UI | `agv_ui_backend`, `web/agv_dashboard`, `agv_image_server` | REST/WS bridge (:8090), React dashboard, MJPEG camera streams (:8091) | [Run the operator dashboard](../tutorials/operator-dashboard.md) |
-| Fleet (opt-in) | `fleet/agv_fleet_manager`, `fleet/agv_vda5050_adapter` | VDA 5050 master (:8092) and per-robot MQTT adapter; not part of the default robot runtime | [`fleet/README.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/fleet/README.md) |
+| Fleet (opt-in) | `fleet/agv_fleet_manager`, `fleet/agv_vda5050_adapter` | VDA 5050 master (:8092) and per-robot MQTT adapter; not part of the default robot runtime | [`fleet/README.md`](https://github.com/AndresIslas99/NavGreen/blob/main/fleet/README.md) |
 | Spec system | `specs/`, `tools/verify_specs/` | Machine-readable SSOT contracts + 9 verifiers enforced by pre-commit hook and CI | [The spec system](spec-system.md) |
 
 The full package-by-package inventory is in the
@@ -118,9 +118,9 @@ robot (Jazzy) interoperate over Cyclone DDS on `ROS_DOMAIN_ID=42`, and only
 **standard message types** are allowed across that boundary — custom
 `agv_interfaces` types are forbidden because their IDL is not guaranteed
 byte-compatible across distros. The rationale lives in
-[`specs/launch_sequence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/launch_sequence.yaml)
+[`specs/launch_sequence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/launch_sequence.yaml)
 and
-[`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml).
+[`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml).
 
 Network surfaces: operator dashboard on `:8090`, MJPEG camera streams on
 `:8091`, fleet manager on `:8092`. All of them are designed for an isolated

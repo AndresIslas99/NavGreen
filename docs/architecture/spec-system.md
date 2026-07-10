@@ -18,7 +18,7 @@ machine-readable specs and made them the **Single Source of Truth (SSOT)**:
 > If a spec and the code disagree, one of them is a bug.
 
 The audit document
-([`docs/audit/2026-04-13-full-audit.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/docs/audit/2026-04-13-full-audit.md))
+([`docs/audit/2026-04-13-full-audit.md`](https://github.com/AndresIslas99/NavGreen/blob/main/docs/audit/2026-04-13-full-audit.md))
 records the bugs and drift evidence that justified each contract; the specs
 are its synthesis. A second reconciliation on 2026-07-06 registered the rail
 stack, the fleet layer, and hardened the verifiers.
@@ -31,18 +31,18 @@ commits that don't.
 ## The contracts
 
 Seven YAML files under
-[`specs/`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/README.md),
+[`specs/`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/README.md),
 each opening with a `spec_version` header whose presence is itself verified:
 
 | Spec | Contract | Answers questions like |
 |---|---|---|
-| [`project.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/project.yaml) | Phase, success definition, deployment targets, canonical deployment constants (ROS domain, ports, data dir), hard constraints | "What is the ROS_DOMAIN_ID and why 42?" |
-| [`state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml) | The five-layer mode matrix, valid combinations, invariants, authorized transitions | "Who publishes `map -> odom` in mapping mode?" |
-| [`launch_sequence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/launch_sequence.yaml) | The startup DAG of `agv_full.launch.py`: per-node timing, preconditions, failure impact, HIL conditions | "What breaks downstream if `ekf_local` fails to start at t=4 s?" |
-| [`persistence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml) | Every persistent artifact: writer, readers, format, lifecycle, atomicity rules | "Who writes `<map>_meta.json` and who reads it back?" |
-| [`interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml) | Every cross-package ROS interface — 60 topics, 15 services, 1 action at last count — with owner, type, QoS, rate, and subscribers | "What QoS does `/agv/live_map` use and who consumes it?" |
-| [`hmi_api.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/hmi_api.yaml) | The dashboard ↔ backend REST + WebSocket contract, roles, and the action gates protecting dispatch | "Which endpoints stay unauthenticated so the robot can always be stopped?" |
-| [`acceptance.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/acceptance.yaml) | Quality gates per phase, from static (spec sync, `-Werror` build) to HIL closed-loop precision numbers | "What does 'done' mean for a waypoint-precision change?" |
+| [`project.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/project.yaml) | Phase, success definition, deployment targets, canonical deployment constants (ROS domain, ports, data dir), hard constraints | "What is the ROS_DOMAIN_ID and why 42?" |
+| [`state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml) | The five-layer mode matrix, valid combinations, invariants, authorized transitions | "Who publishes `map -> odom` in mapping mode?" |
+| [`launch_sequence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/launch_sequence.yaml) | The startup DAG of `agv_full.launch.py`: per-node timing, preconditions, failure impact, HIL conditions | "What breaks downstream if `ekf_local` fails to start at t=4 s?" |
+| [`persistence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml) | Every persistent artifact: writer, readers, format, lifecycle, atomicity rules | "Who writes `<map>_meta.json` and who reads it back?" |
+| [`interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml) | Every cross-package ROS interface — 60 topics, 15 services, 1 action at last count — with owner, type, QoS, rate, and subscribers | "What QoS does `/agv/live_map` use and who consumes it?" |
+| [`hmi_api.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/hmi_api.yaml) | The dashboard ↔ backend REST + WebSocket contract, roles, and the action gates protecting dispatch | "Which endpoints stay unauthenticated so the robot can always be stopped?" |
+| [`acceptance.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/acceptance.yaml) | Quality gates per phase, from static (spec sync, `-Werror` build) to HIL closed-loop precision numbers | "What does 'done' mean for a waypoint-precision change?" |
 
 The four structural contracts (interfaces, state machine, launch sequence,
 persistence) also record their provenance and the script that enforces them —
@@ -61,7 +61,7 @@ contracts that cross package boundaries.
 
 ## The nine verifiers
 
-[`tools/verify_specs/all.sh`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/tools/verify_specs/all.sh)
+[`tools/verify_specs/all.sh`](https://github.com/AndresIslas99/NavGreen/blob/main/tools/verify_specs/all.sh)
 runs the suite: five BLOCKING scripts and four WARNING scripts. All are
 stdlib-only bash/Python, so they run anywhere in seconds.
 
@@ -108,7 +108,7 @@ on any blocking failure. Bypassing with `git commit --no-verify` is reserved
 for active incident response, noted in the commit message.
 
 CI runs the same suite as a dedicated `spec-verification` job in
-[`.github/workflows/ci.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/.github/workflows/ci.yaml),
+[`.github/workflows/ci.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml),
 alongside the `-Werror` build/test job, the TypeScript builds, and the
 simulation job — so a contributor who skipped the hook still cannot merge
 drift.
@@ -117,7 +117,7 @@ drift.
 
 The workspace assumes AI coding agents will modify it, and codifies how:
 
-- [`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/AGENT_INSTRUCTIONS.md)
+- [`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/NavGreen/blob/main/AGENT_INSTRUCTIONS.md)
   defines a specs-first workflow: a required reading order (root
   `CLAUDE.md` → `specs/README.md` → the relevant specs → engineering rules →
   package `CLAUDE.md` → only then code), a six-step change procedure in
@@ -129,10 +129,10 @@ The workspace assumes AI coding agents will modify it, and codifies how:
   consumed interfaces, invariants, failure modes, and cross-references into
   the specs. These double as excellent package documentation for humans —
   e.g.
-  [`agv_mode_arbiter/CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_mode_arbiter/CLAUDE.md)
+  [`agv_mode_arbiter/CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_mode_arbiter/CLAUDE.md)
   or
-  [`agv_safety/CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_safety/CLAUDE.md).
-- [`policies/engineering_rules.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/policies/engineering_rules.md)
+  [`agv_safety/CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_safety/CLAUDE.md).
+- [`policies/engineering_rules.md`](https://github.com/AndresIslas99/NavGreen/blob/main/policies/engineering_rules.md)
   states the enforceable Rules 0–9 (language policy, no hardcode, safety
   boundary, canonical terminology, interface-change governance, ...), and
   the verifiers are their teeth.
@@ -156,7 +156,7 @@ the fix.
 ## Definition of done
 
 A task is complete only when
-([`specs/acceptance.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/acceptance.yaml)
+([`specs/acceptance.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/acceptance.yaml)
 is authoritative):
 
 - specs are up to date and `bash tools/verify_specs/all.sh` reports zero

@@ -33,5 +33,5 @@
     "@types/ws": "^8.18.1",
     "typescript": "^6.0.2"
   },
-  "homepage": "https://github.com/AndresIslas99/agv-greenhouse"
+  "homepage": "https://github.com/AndresIslas99/NavGreen"
 }

@@ -7,9 +7,9 @@ guarantee.
 !!! danger "Operational safeguards — NOT certified functional safety"
     Everything on this page is software running on a single computer with a
     single forward-facing camera. Per
-    [SECURITY.md](https://github.com/AndresIslas99/agv-greenhouse/blob/main/SECURITY.md)
+    [SECURITY.md](https://github.com/AndresIslas99/NavGreen/blob/main/SECURITY.md)
     and Rule 6 of the
-    [engineering rules](https://github.com/AndresIslas99/agv-greenhouse/blob/main/policies/engineering_rules.md):
+    [engineering rules](https://github.com/AndresIslas99/NavGreen/blob/main/policies/engineering_rules.md):
     the collision monitor, mode arbitration, and software e-stop paths are
     operational safeguards. Certified human safety requires dedicated
     safety-rated hardware — scanners, PLC/relay logic — and a compliance
@@ -26,7 +26,7 @@ mode_arbiter -> /agv/cmd_vel -> velocity_smoother -> collision_monitor
 ```
 
 The last software element before the motor driver is the
-[`agv_safety`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_safety/CLAUDE.md)
+[`agv_safety`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_safety/CLAUDE.md)
 `cmd_vel_gate`, and its defining property is the **fail-safe default**:
 
 ```mermaid
@@ -51,7 +51,7 @@ flowchart TD
 The `safety_supervisor` watches a configurable list of critical topics
 through type-erased generic subscriptions and drops `safety_ok` when any of
 them misses its deadline
-([`safety_params.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_safety/config/safety_params.yaml)):
+([`safety_params.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_safety/config/safety_params.yaml)):
 
 | Monitored topic | Expected rate | Deadline |
 |---|---|---|
@@ -73,14 +73,14 @@ bringup.
     died with no error anywhere. Collision-monitor liveness is instead
     checked at boot by `agv_healthcheck.sh` and continuously by the
     backend's goal-dispatch freshness watchdog. The invariant is codified in
-    [`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml)
+    [`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml)
     (`safety_chain_never_silent_on_idle`).
 
 ## The collision monitor
 
 Nav2's collision monitor runs upstream of the gate with two polygons whose
 sizes are **derived from stopping-distance physics, not tuning**
-([`collision_monitor.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_navigation/config/collision_monitor.yaml)):
+([`collision_monitor.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_navigation/config/collision_monitor.yaml)):
 
 | Zone | Extent | Action | Trigger |
 |---|---|---|---|
@@ -115,7 +115,7 @@ invisible to every safeguard on this page.** This is a hardware limit,
 documented for operator training, with recommended hardware additions (2D
 lidar at shin height, bumper switches wired into the ODrive e-stop circuit,
 or a ToF array) in
-[`agv_navigation/CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_navigation/CLAUDE.md).
+[`agv_navigation/CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_navigation/CLAUDE.md).
 The same forward-only reality is why Nav2 is configured with no reverse
 motion at all — see
 [Navigation & modes](navigation-and-modes.md#nav2-configuration).
@@ -123,7 +123,7 @@ motion at all — see
 ## E-stop paths
 
 There are three stop channels, at different maturity levels
-([`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml)):
+([`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml)):
 
 | Topic | Status | Consumer | Semantics |
 |---|---|---|---|
@@ -148,7 +148,7 @@ Two operational details worth knowing:
 - The acceptance gate for the hardware requires e-stop command-to-stop
   **≤ 0.2 s**, and the end-to-end teleop gate requires the dashboard e-stop
   to halt the wheels and latch the state until cleared
-  ([`specs/acceptance.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/acceptance.yaml)).
+  ([`specs/acceptance.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/acceptance.yaml)).
 
 ## Always able to stop: unauthenticated stop endpoints
 
@@ -164,7 +164,7 @@ Rationale: stopping the robot must always be possible for anyone on the
 local network, mirroring a physical stop control. The corresponding
 *clearing/arming* actions (`/api/recovery/clear_estop`, motor enable, goal
 dispatch) stay role-gated. The full contract is in
-[`specs/hmi_api.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/hmi_api.yaml);
+[`specs/hmi_api.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/hmi_api.yaml);
 the deployment security posture (isolated LAN, auth disabled by default, no
 default accounts) is in the [security policy](../community/security.md).
 
@@ -194,7 +194,7 @@ These are documented in the specs rather than hidden:
   backend's localization/motors/collision-freshness gates. The dashboard's
   own mission executor is gated; unifying the paths is tracked follow-up
   work (see the `known_gap` entries in
-  [`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml)).
+  [`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml)).
 - **No safety chain without a map.** In the mapping-first branch
   (`has_map=false`) the ODrive consumes `/agv/cmd_vel` directly with no
   collision protection — acceptable for commissioning teleop at low speed,

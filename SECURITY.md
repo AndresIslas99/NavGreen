@@ -4,7 +4,7 @@
 
 Please report security issues privately — do **not** open a public issue.
 
-- Preferred: [GitHub private vulnerability reporting](https://github.com/AndresIslas99/agv-greenhouse/security/advisories/new)
+- Preferred: [GitHub private vulnerability reporting](https://github.com/AndresIslas99/NavGreen/security/advisories/new)
 - Alternative: email andresislas2107@gmail.com with `[SECURITY]` in the subject
 
 You should receive an acknowledgement within a week. Please include steps to

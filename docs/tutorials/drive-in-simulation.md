@@ -17,7 +17,7 @@ acceleration limits), so it drives kinematically like the real robot.
     no Nav2. You cannot run the full autonomy stack here — the production
     launch files need the external `agv_slam` overlay (NVIDIA cuVSLAM) and
     other vendor SDKs that are not on public package indexes. See
-    ["Running without the robot" in the README](https://github.com/AndresIslas99/agv-greenhouse/blob/main/README.md#running-without-the-robot)
+    ["Running without the robot" in the README](https://github.com/AndresIslas99/NavGreen/blob/main/README.md#running-without-the-robot)
     for the full picture of what does and does not work without hardware.
 
 ## Prerequisites
@@ -26,9 +26,9 @@ acceleration limits), so it drives kinematically like the real robot.
   `gazebo_ros` / `gazebo_ros2_control`).
 - A cloned workspace — see [Getting started](../getting-started.md).
 - The Gazebo and controller packages that
-  [`src/agv_sim/package.xml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sim/package.xml)
+  [`src/agv_sim/package.xml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sim/package.xml)
   depends on — the same Gazebo/controller list the
-  [CI `simulation` job](https://github.com/AndresIslas99/agv-greenhouse/blob/main/.github/workflows/ci.yaml)
+  [CI `simulation` job](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)
   installs, plus `teleop-twist-keyboard` and `xterm` for the keyboard teleop
   (CI runs headless and skips those two):
 
@@ -88,13 +88,13 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard \
     **not** the production `/agv/...` namespace. That is intentional: a
     newcomer should be able to drive with a single command. Production
     interfaces are specified in
-    [`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml).
+    [`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml).
 
 ## `sim.launch.py` reference
 
 `teleop_sim.launch.py` is a thin wrapper: it includes `sim.launch.py` and adds
 the keyboard node. All the knobs live on `sim.launch.py`
-([source](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sim/launch/sim.launch.py)):
+([source](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sim/launch/sim.launch.py)):
 
 | Argument | Default | Description |
 |----------|---------|-------------|
@@ -137,7 +137,7 @@ Press `Ctrl-C` to stop publishing; the robot halts on its own 0.5 s later.
 To turn while moving, set `angular.z` (e.g. `0.5`).
 
 The controller enforces the production limits from
-[`config/sim_controllers.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sim/config/sim_controllers.yaml):
+[`config/sim_controllers.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sim/config/sim_controllers.yaml):
 ±0.4 m/s linear, ±1.5 rad/s angular. Commanding more gets clamped.
 
 ## Watch the odometry
@@ -156,7 +156,7 @@ node is started with `use_sim_time: true`.
 
 In this sim, `diff_drive_controller` publishes the `odom -> base_link`
 transform itself (`enable_odom_tf: true` in
-[`sim_controllers.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sim/config/sim_controllers.yaml)).
+[`sim_controllers.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sim/config/sim_controllers.yaml)).
 
 On the real robot this is **false**: the dual-EKF localization stack owns the
 TF tree — `ekf_local` publishes `odom -> base_link` and `ekf_global` publishes
@@ -183,8 +183,8 @@ Humble's apt `gazebo_ros2_control` forwards the whole URDF to its embedded
 controller manager as a `--param robot_description:=` command-line rule, which
 `rcl` rejects (multi-line value). Result: no `/odom`, no `/joint_states`
 headless. A full physics drive **works locally with a display**. This is
-tracked in [issue #20](https://github.com/AndresIslas99/agv-greenhouse/issues/20);
-the [CI `simulation` job](https://github.com/AndresIslas99/agv-greenhouse/blob/main/.github/workflows/ci.yaml)
+tracked in [issue #20](https://github.com/AndresIslas99/NavGreen/issues/20);
+the [CI `simulation` job](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)
 therefore runs the headless Gazebo bringup as a *best-effort* step and gets
 its blocking "it drives with no hardware" guarantee from the identical
 controller stack running on `ros2_control` mock components instead
@@ -220,5 +220,5 @@ export GAZEBO_MODEL_DATABASE_URI=""
   display this un-namespaced sim).
 - [Map a greenhouse](build-a-map.md) — the commissioning workflow on the real
   robot.
-- [`src/agv_sim/CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sim/CLAUDE.md)
+- [`src/agv_sim/CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sim/CLAUDE.md)
   — the package contract: interfaces, invariants, and failure modes.

@@ -2,10 +2,10 @@ site_name: NavGreen
 site_description: >-
   Autonomous navigation for greenhouse robots — ROS 2, spec-driven,
   dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.
-site_url: https://andresislas99.github.io/agv-greenhouse/
+site_url: https://andresislas99.github.io/NavGreen/
 site_author: OrzaTech
-repo_url: https://github.com/AndresIslas99/agv-greenhouse
-repo_name: AndresIslas99/agv-greenhouse
+repo_url: https://github.com/AndresIslas99/NavGreen
+repo_name: AndresIslas99/NavGreen
 edit_uri: edit/main/docs/
 copyright: >-
   Developed and maintained by
@@ -80,7 +80,7 @@ extra:
       link: https://orzatech.com
       name: OrzaTech
     - icon: fontawesome/brands/github
-      link: https://github.com/AndresIslas99/agv-greenhouse
+      link: https://github.com/AndresIslas99/NavGreen
       name: NavGreen on GitHub
     - icon: fontawesome/solid/envelope
       link: mailto:andresislas2107@gmail.com

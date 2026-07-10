@@ -286,8 +286,8 @@ The map_manager save chain:
 
 ## Related reading
 
-- [src/agv_map_manager/CLAUDE.md](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_map_manager/CLAUDE.md) — package responsibilities and the full save chain
-- [src/agv_localization_init/CLAUDE.md](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_localization_init/CLAUDE.md) — orchestrator cascade (Path A0/A/B/C) details
-- [src/agv_bringup/CLAUDE.md](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_bringup/CLAUDE.md) — launch startup DAG at t=7.0 s
-- [specs/launch_sequence.yaml](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/launch_sequence.yaml) — authoritative startup order and conditions
-- [specs/persistence.yaml](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml) — which artifact each component owns
+- [src/agv_map_manager/CLAUDE.md](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_map_manager/CLAUDE.md) — package responsibilities and the full save chain
+- [src/agv_localization_init/CLAUDE.md](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_localization_init/CLAUDE.md) — orchestrator cascade (Path A0/A/B/C) details
+- [src/agv_bringup/CLAUDE.md](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_bringup/CLAUDE.md) — launch startup DAG at t=7.0 s
+- [specs/launch_sequence.yaml](https://github.com/AndresIslas99/NavGreen/blob/main/specs/launch_sequence.yaml) — authoritative startup order and conditions
+- [specs/persistence.yaml](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml) — which artifact each component owns

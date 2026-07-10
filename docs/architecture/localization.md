@@ -2,7 +2,7 @@
 
 NavGreen localizes with two chained Extended Kalman Filters from
 `robot_localization`, configured in
-[`agv_sensor_fusion`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sensor_fusion/CLAUDE.md):
+[`agv_sensor_fusion`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sensor_fusion/CLAUDE.md):
 a fast **local** filter that keeps odometry smooth and continuous, and a
 slower **global** filter that absorbs visual SLAM and absolute corrections.
 The split exists because a greenhouse is a hostile place for vision:
@@ -10,7 +10,7 @@ crop rows are visually repetitive, lighting changes across the day, and wet
 or reflective surfaces disturb visual features. Wheel odometry is therefore
 fused **continuously**, and AprilTags act as **drift correctors and pose
 anchors — never the sole localization strategy**. Both rules are canonical in
-[`specs/project.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/project.yaml).
+[`specs/project.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/project.yaml).
 
 ## The two filters
 
@@ -28,9 +28,9 @@ estimate and cuVSLAM **differentially** to avoid double-counting drift, and
 rejects outliers by Mahalanobis distance: cuVSLAM pose 3.5 / twist 2.5,
 AprilTag pose 3.0, ZED Area Memory pose 3.0 (tightened to match the AprilTag
 gate so the stricter absolute source wins on disagreement). Configuration:
-[`ekf_local.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sensor_fusion/config/ekf_local.yaml)
+[`ekf_local.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sensor_fusion/config/ekf_local.yaml)
 and
-[`ekf_global.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_sensor_fusion/config/ekf_global.yaml).
+[`ekf_global.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_sensor_fusion/config/ekf_global.yaml).
 
 ## TF tree ownership
 
@@ -46,12 +46,12 @@ flowchart TD
 ```
 
 How the single-owner invariants are enforced (from
-[`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml)
+[`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml)
 and
-[`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml)):
+[`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml)):
 
 - **cuVSLAM TF is disabled** via the `/**:` override in
-  [`cuvslam_greenhouse.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_bringup/config/cuvslam_greenhouse.yaml)
+  [`cuvslam_greenhouse.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_bringup/config/cuvslam_greenhouse.yaml)
   — it contributes odometry as a topic only.
 - **The ZED wrapper** runs with `publish_tf=false`.
 - **SLAM Toolbox** runs with `transform_publish_period=0.0` (TF disabled).
@@ -62,7 +62,7 @@ and
     `agv_mapping.launch.py`) cuVSLAM owns both transforms and the dual EKF is
     not running. That is a different launch file with a different TF
     invariant — see
-    [`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml)
+    [`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml)
     layer 1 and [Mapping commissioning](../mapping_commissioning.md).
 
 ## The IMU pipeline
@@ -80,7 +80,7 @@ orientation passed through unfiltered — before any EKF sees it:
 ```
 
 The filter must start before the EKFs (t=3.5 s vs t=4.0 s in the
-[startup DAG](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/launch_sequence.yaml))
+[startup DAG](https://github.com/AndresIslas99/NavGreen/blob/main/specs/launch_sequence.yaml))
 so the filter has a history buffer when fusion begins. The local EKF trusts
 IMU yaw over wheel encoders: IMU yaw covariance (0.02 rad²) is tighter than
 the wheel-odometry yaw base (0.03), and encoder covariance inflates with
@@ -107,11 +107,11 @@ companion node, `caster_dwell_advisor`, publishes an advisory JSON stream
 (`/agv/caster/dwell_state`) recommending a pause after direction reversals so
 the casters can realign — no runtime node consumes it yet; closing that loop
 is documented post-MVP work in
-[`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml).
+[`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml).
 
 ## AprilTag corrections (tag36h11)
 
-[`agv_markers`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_markers/CLAUDE.md)
+[`agv_markers`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_markers/CLAUDE.md)
 turns AprilTag detections into global pose corrections:
 
 - **Pose estimation**: `cv::solvePnP` from the four tag corners plus camera
@@ -148,7 +148,7 @@ filter deterministically.
 ## Relocalization on map load
 
 When a map is loaded, the `auto_init_orchestrator`
-([`agv_localization_init`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_localization_init/CLAUDE.md))
+([`agv_localization_init`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_localization_init/CLAUDE.md))
 runs a fallback cascade and reports progress as JSON on
 `/agv/localization/state` (`INITIALIZING | LOCALIZED | DEGRADED | FAILED`):
 
@@ -163,7 +163,7 @@ The winning path seeds `ekf_global` through `/agv/set_pose`. If everything
 fails, the state is `FAILED`, the dashboard LOC pill goes red, and nav-goal
 dispatch is gated off (a stale `map -> odom` would send the robot to phantom
 coordinates — an incident documented in
-[`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml),
+[`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml),
 invariant `nav_goal_requires_localization`). Recovery: teleop toward a
 visible tag and call `/agv/localization/reinitialize`.
 
@@ -176,7 +176,7 @@ visible tag and call `/agv/localization/reinitialize`.
 
 ## The validation-parallel factor graph
 
-[`agv_factor_graph`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_factor_graph/CLAUDE.md)
+[`agv_factor_graph`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_factor_graph/CLAUDE.md)
 runs a GTSAM iSAM2 sliding-window estimator over fused odometry, cuVSLAM
 visual odometry, and AprilTag marker poses, and publishes a
 validation-parallel pose on `/agv/factor_graph/odometry` (~10 Hz, driven by
@@ -188,7 +188,7 @@ evidence for a possible future cutover from EKF to factor-graph estimation
 by comparing it against `/agv/odometry/global`. One honest caveat: today its
 odometry input **is** `/agv/odometry/global` itself, so it is not yet an
 independent check — making it consume the raw sources instead is tracked in
-[#10](https://github.com/AndresIslas99/agv-greenhouse/issues/10). It needs
+[#10](https://github.com/AndresIslas99/NavGreen/issues/10). It needs
 GTSAM, so it is not built in CI.
 
 ## Validating the stack
@@ -198,4 +198,4 @@ checks, drift measurements — is documented in
 [Dual EKF validation](../dual_ekf_validation.md). The acceptance criteria
 (TF tree complete within 5 s, `/agv/wheel_odom` near 50 Hz, single-owner
 responsibilities respected) live in
-[`specs/acceptance.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/acceptance.yaml).
+[`specs/acceptance.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/acceptance.yaml).
