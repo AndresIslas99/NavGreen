@@ -1,0 +1,49 @@
+# Semantic map zones — operator-facing labeled overlay for the dashboard.
+#
+# This is a TEMPLATE. Copy to ${AGV_DATA_DIR}/zones.yaml and edit. The
+# backend reads the live file via GET /api/zones; missing or malformed
+# files degrade gracefully (frontend renders no polygons, no crash).
+#
+# Each entry is a polygon in map-frame coordinates (meters). The
+# dashboard's MapView paints these as semi-transparent polygons with
+# a centered label. Use real corner coordinates from your mapped area.
+#
+# Schema (see specs/persistence.yaml#semantic_zones_yaml +
+# src/agv_ui_backend/src/routes/zones.ts):
+#   name:     stable identifier (snake_case, used internally)
+#   label:    display label rendered on the map (operator-readable)
+#   polygon:  array of {x, y} corners in CCW order, ≥3 points
+#   color:    CSS color string (any leaflet-valid format)
+#   kind:     home | work | parking | other
+#
+# Example layout — replace coordinates with your greenhouse's real polygons.
+
+- name: base_de_carga
+  label: BASE DE CARGA
+  kind: home
+  color: "#5a9e3e"
+  polygon:
+    - { x: -1.5, y: -0.6 }
+    - { x:  0.0, y: -0.6 }
+    - { x:  0.0, y:  0.6 }
+    - { x: -1.5, y:  0.6 }
+
+- name: zona_de_trabajo_a
+  label: ZONA DE TRABAJO A
+  kind: work
+  color: "#7a9d8e"
+  polygon:
+    - { x:  1.0, y: -4.8 }
+    - { x:  3.4, y: -4.8 }
+    - { x:  3.4, y:  4.8 }
+    - { x:  1.0, y:  4.8 }
+
+- name: estacionamiento
+  label: ESTACIONAMIENTO
+  kind: parking
+  color: "#d4a373"
+  polygon:
+    - { x:  7.6, y: -1.0 }
+    - { x:  9.6, y: -1.0 }
+    - { x:  9.6, y:  1.0 }
+    - { x:  7.6, y:  1.0 }

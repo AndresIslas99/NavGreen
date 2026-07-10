@@ -134,6 +134,8 @@ rest_endpoints:
       nav_state: "{active: boolean, distance_remaining: number, status: string}"
       health: "Record<string, SubsystemHealth>"
       mission_progress: "MissionProgress | null"
+      battery_time_to_empty_s: "number | null (heuristic EMA slope of battery_pct over ≥30 samples / ≥60s window; null while charging, flat, or insufficient data)"
+      home_point: "HomePoint | null (operator-defined base/dock pose, persisted in home_point.json — see specs/persistence.yaml)"
 
   - path: "/api/health"
     method: "GET"
@@ -499,6 +501,98 @@ rest_endpoints:
       operator_mode=teleop. Use case: "robot está enfrente del tag, alinéate
       a él" without requiring a mapping/localization workflow first.
 
+  # ── Home point (operator base/dock) ────────────────────────────────────
+  - path: "/api/home_point"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/home_point.ts"
+    response: "HomePoint | null"
+    persistence: "AGV_DATA_DIR/home_point.json (see specs/persistence.yaml#home_point_json)"
+    note: "Returns null when no base has been defined yet (no implicit default — see PR rationale)."
+
+  - path: "/api/home_point"
+    method: "PUT"
+    role: "operator"
+    request: "{x: number, y: number, theta: number, name?: string}"
+    response_200: "{success: true, home_point: HomePoint}"
+    response_400: "{success: false, message: 'Invalid coordinates'}"
+    note: "Atomic tmp+rename write (Rule R4). name defaults to 'Base' if omitted."
+
+  - path: "/api/home_point/go"
+    method: "POST"
+    role: "operator"
+    response_200: "{success: true, message: string}"
+    response_409: "{success: false, message: 'No home point defined'}"
+    response_503: "{success: false, message: 'Nav goal not allowed in current state'}"
+    action_gate: "nav_goal"
+    note: "Reads home_point.json and dispatches navigate_to_pose action via existing routes/nav.ts sendNavGoal. No new DDS contract."
+
+  # ── Semantic zones (operator-facing labeled map overlay) ───────────────
+  - path: "/api/zones"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/zones.ts"
+    response: "{zones: Array<{name, label, polygon: Array<{x,y}>, color, kind}>, error?: string}"
+    persistence: "AGV_DATA_DIR/zones.yaml (see specs/persistence.yaml#semantic_zones_yaml)"
+    note: "Returns {zones: []} when file absent — graceful degradation, no 500."
+
+  - path: "/api/zones"
+    method: "PUT"
+    role: "engineer"
+    request: "{zones: Array<{name, label, polygon, color, kind}>}"
+    response_200: "{success: true, zones: <as written>}"
+    response_400: "{success: false, message: 'Schema validation failed', detail: string}"
+    note: "Atomic tmp+rename. Engineer role required (zones change navigation context)."
+
+  # ── Rails (data-driven map labels) ─────────────────────────────────────
+  - path: "/api/rails"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/rails.ts"
+    response: "Array<{id: string, label: string, x: number, y: number, yaw: number, aisle_letter: string, kind: 'rail_entry'}>"
+    note: |
+      Proxies agv_rail_approach/list_rail_starts service into REST. Cached 30s.
+      Returns [] (not 503) when the rail_approach node is not running so the
+      dashboard's RailLabelOverlay degrades gracefully. aisle_letter is derived
+      from the y-bucket of each rail entry pose. Replaces the hardcoded
+      RAIL_AISLE_Y constants previously inlined in MapView.tsx.
+
+  # ── Greenhouse geometry (SSOT for the physical layout) ────────────────
+  - path: "/api/greenhouse/geometry"
+    method: "GET"
+    role: "viewer"
+    source: "src/agv_ui_backend/src/routes/greenhouse_geometry.ts"
+    response: |
+      {
+        aisles:   {count: int, spacing_m: float, half_width_m: float},
+        sections: {rear: {x_start, x_end}, front: {x_start, x_end}},
+        corridor: {x_start, x_end},
+        rail:     {gauge_m: float}
+      }
+    persistence: "AGV_DATA_DIR/greenhouse_geometry.yaml (see specs/persistence.yaml#greenhouse_geometry_yaml)"
+    note: |
+      Returns the parsed YAML. If file absent, returns the same defaults the
+      ROS nodes use as fallback (5 aisles, 2.2 m spacing, 4 m corridor, 0.57 m
+      gauge, REAR x∈[-16.5, 3.5], FRONT x∈[7.5, 27.5]) so the dashboard always
+      renders coherent geometry. Polled every 30 s by the dashboard's
+      useGreenhouseGeometry() hook.
+
+  - path: "/api/greenhouse/geometry"
+    method: "PUT"
+    role: "engineer"
+    request: "<same shape as GET response>"
+    response_200: "{success: true, geometry: <as written>}"
+    response_400: "{success: false, message: 'Schema validation failed', detail: string}"
+    note: |
+      Atomic tmp+rename to AGV_DATA_DIR/greenhouse_geometry.yaml. Engineer
+      role required (geometry changes affect navigation correctness). Backend
+      enforces sane ranges (count ∈ [3, 9]; spacing_m ∈ [1.5, 3.5];
+      half_width_m ∈ [0.20, 0.60]; corridor width ∈ [2.0, 6.0]; section
+      length ∈ [10, 40]; gauge_m ∈ [0.30, 1.00]). ROS consumers (zone_detector,
+      rail_driver, mode_arbiter) load at boot — edits take effect on next
+      systemctl restart of those services. The dashboard's mapa visual updates
+      live on the next poll.
+
 # ─────────────────────────────────────────────────────────────────────────────
 # WebSocket Protocol
 # ─────────────────────────────────────────────────────────────────────────────
@@ -522,7 +616,7 @@ websocket_endpoints:
       - type: "status"
         rate: "5 Hz (200 ms interval)"
         purpose: "Primary telemetry broadcast — same shape as GET /api/status, plus rail_state block."
-        payload: "{type: 'status', robot_state, allowed_actions, wheel_odom_hz, velocity, e_stop, motors_armed, left_state, right_state, motor_errors, drive_online, slam_tracking, recording, clients, mode, pose, nav_state, health, battery_pct, mission_progress, mapping_coverage, collision_monitor, localization, current_map_name, rail_state}"
+        payload: "{type: 'status', robot_state, allowed_actions, wheel_odom_hz, velocity, e_stop, motors_armed, left_state, right_state, motor_errors, drive_online, slam_tracking, recording, clients, mode, pose, nav_state, health, battery_pct, battery_time_to_empty_s, mission_progress, mapping_coverage, collision_monitor, localization, current_map_name, rail_state, home_point}"
 
       - type: "scan"
         rate: "5 Hz (when scanPoints non-empty)"

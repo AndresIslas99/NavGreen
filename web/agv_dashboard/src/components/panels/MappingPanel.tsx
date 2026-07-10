@@ -1,6 +1,19 @@
+/**
+ * MappingPanel — Control de mapeo SLAM.
+ *
+ * Reescrito durante Round 2 del audit perfeccionista: pasaba de strings
+ * en inglés y clases legacy (`.panel-section`, `.action-btn`) a las
+ * primitivas del design system (Section / Button / Stack) y copy en
+ * español sentence case. Mantiene la misma lógica: iniciar/detener
+ * grabación + joystick + guardar/cargar mapas.
+ */
 import { useState, useEffect } from 'react'
 import type { MapInfo, RobotState, AllowedActions } from '../../api/types'
 import { Joystick } from '../Joystick'
+import { Section } from '../ui/Section'
+import { Button } from '../ui/Button'
+import { Stack } from '../ui/Stack'
+import { MapPin, Square, Trash2, Save, FolderOpen, RotateCcw } from '../ui/icons'
 import * as api from '../../api/client'
 
 interface Props {
@@ -13,7 +26,9 @@ interface Props {
   recordingResult?: { success: boolean; message: string } | null
 }
 
-export function MappingPanel({ state, actions, motorsArmed, onModeChange, onRecording, onCmdVel, recordingResult }: Props) {
+export function MappingPanel({
+  state, actions, motorsArmed, onModeChange, onRecording, onCmdVel, recordingResult,
+}: Props) {
   const [maps, setMaps] = useState<MapInfo[]>([])
   const [saveName, setSaveName] = useState('')
   const [selectedMap, setSelectedMap] = useState('')
@@ -35,95 +50,142 @@ export function MappingPanel({ state, actions, motorsArmed, onModeChange, onReco
 
   const handleSave = async () => {
     if (!saveName.trim()) return
-    setBusy(true)
-    setMsg('')
+    setBusy(true); setMsg('')
     const r = await api.saveMap(saveName.trim()) as { success?: boolean }
     setBusy(false)
-    setMsg(r.success ? 'Saved' : 'Failed')
+    setMsg(r.success ? 'Mapa guardado' : 'No se pudo guardar')
     if (r.success) { setSaveName(''); refresh() }
     setTimeout(() => setMsg(''), 3000)
   }
 
   const handleLoad = async () => {
     if (!selectedMap) return
-    setBusy(true)
-    setMsg('')
+    setBusy(true); setMsg('')
     const r = await api.loadMap(selectedMap) as { success?: boolean }
     setBusy(false)
-    setMsg(r.success ? 'Loaded' : 'Failed')
+    setMsg(r.success ? 'Mapa cargado' : 'No se pudo cargar')
     setTimeout(() => setMsg(''), 3000)
   }
 
-  return (
-    <div className="context-panel">
-      <div className="panel-section">
-        <div className="section-title">Mapping Control</div>
-        {state !== 'mapping' ? (
-          <button
-            className="full-width action-btn"
-            disabled={!actions.canStartMapping}
-            onClick={handleStartMapping}
-          >
-            Start Mapping
-          </button>
-        ) : (
-          <button className="full-width stop-btn" onClick={handleStopMapping}>
-            Stop Mapping
-          </button>
-        )}
-        {state === 'mapping' && <div className="recording-indicator">Mapping active</div>}
-        {recordingResult && (
-          <span className={`toolbar-msg ${recordingResult.success ? '' : 'toolbar-msg-error'}`}>
-            {recordingResult.success ? 'Recording saved' : `Error: ${recordingResult.message}`}
-          </span>
-        )}
-        {state === 'mapping' && (
-          <button className="full-width secondary" style={{ marginTop: 6 }}
-            onClick={() => api.clearAccMap()}>
-            Clear Scan Map
-          </button>
-        )}
-      </div>
+  const mapping = state === 'mapping'
 
-      {/* Joystick — always available in mapping mode */}
-      <div className="panel-section">
-        <div className="section-title">Drive</div>
+  return (
+    <div className="cockpit-panel context-panel">
+      <Section title="Control de mapeo">
+        <Stack gap={2}>
+          {!mapping ? (
+            <Button
+              variant="primary"
+              size="lg"
+              block
+              leadingIcon={MapPin}
+              disabled={!actions.canStartMapping}
+              onClick={handleStartMapping}
+            >
+              Iniciar mapeo
+            </Button>
+          ) : (
+            <Button
+              variant="destructive"
+              size="lg"
+              block
+              leadingIcon={Square}
+              onClick={handleStopMapping}
+            >
+              Detener mapeo
+            </Button>
+          )}
+          {mapping && (
+            <Button
+              variant="secondary"
+              size="md"
+              block
+              leadingIcon={Trash2}
+              onClick={() => api.clearAccMap()}
+            >
+              Limpiar acumulador
+            </Button>
+          )}
+          {recordingResult && (
+            <p
+              className="ui-section__description"
+              role="status"
+              style={recordingResult.success ? undefined : { color: 'var(--crit)' }}
+            >
+              {recordingResult.success ? 'Grabación guardada' : `Error: ${recordingResult.message}`}
+            </p>
+          )}
+        </Stack>
+      </Section>
+
+      <Section title="Conducción" description={!motorsArmed ? 'Activa los motores desde el panel Recuperar.' : undefined}>
         <Joystick
           enabled={motorsArmed && (state === 'mapping' || state === 'ready')}
           maxLinear={0.4}
           maxAngular={0.2}
           onMove={onCmdVel}
         />
-        {!motorsArmed && <p className="dim">Arm motors first (Recovery panel)</p>}
-      </div>
+      </Section>
 
-      <div className="panel-section">
-        <div className="section-title">Save Map</div>
-        <div className="input-row">
+      <Section title="Guardar mapa">
+        <div className="cockpit-input-row">
           <input
+            className="cockpit-input"
             type="text"
-            placeholder="Map name"
+            placeholder="Nombre del mapa"
             value={saveName}
             onChange={e => setSaveName(e.target.value)}
+            disabled={busy}
           />
-          <button onClick={handleSave} disabled={!saveName.trim() || busy || !actions.canSaveMap}>
-            Save
-          </button>
+          <Button
+            variant="primary"
+            size="md"
+            leadingIcon={Save}
+            disabled={!saveName.trim() || busy || !actions.canSaveMap}
+            onClick={handleSave}
+          >
+            Guardar
+          </Button>
         </div>
-      </div>
+      </Section>
 
-      <div className="panel-section">
-        <div className="section-title">Load Map</div>
-        <div className="input-row">
-          <select value={selectedMap} onChange={e => setSelectedMap(e.target.value)}>
-            <option value="">Select map...</option>
+      <Section
+        title="Cargar mapa"
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            leadingIcon={RotateCcw}
+            onClick={refresh}
+            title="Actualizar lista de mapas"
+            aria-label="Actualizar lista de mapas"
+          >
+            <span className="visually-hidden">Actualizar</span>
+          </Button>
+        }
+      >
+        <div className="cockpit-input-row">
+          <select
+            className="cockpit-input"
+            value={selectedMap}
+            onChange={e => setSelectedMap(e.target.value)}
+            disabled={busy}
+          >
+            <option value="">Elige un mapa…</option>
             {maps.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
           </select>
-          <button onClick={handleLoad} disabled={!selectedMap || busy || !actions.canLoadMap}>Load</button>
-          <button onClick={refresh} title="Refresh" className="icon-btn">↻</button>
+          <Button
+            variant="primary"
+            size="md"
+            leadingIcon={FolderOpen}
+            disabled={!selectedMap || busy || !actions.canLoadMap}
+            onClick={handleLoad}
+          >
+            Cargar
+          </Button>
         </div>
-        {msg && <span className="toolbar-msg">{msg}</span>}
-      </div>
+        {msg && <p className="ui-section__description" role="status">{msg}</p>}
+      </Section>
     </div>
   )
 }

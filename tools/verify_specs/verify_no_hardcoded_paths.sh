@@ -46,6 +46,10 @@ WHITELIST=(
   # systemd units
   'src/agv_bringup/systemd/|/home/orza/'
   'src/agv_bringup/systemd/|HOME=/home/orza'
+  # Foxglove bridge deployment config (per-site systemd installer, mirrors
+  # the agv_bringup/systemd pattern above). Lives under a gitignored
+  # third-party directory but is scanned by the verifier anyway.
+  'src/agv_slam/foxglove/systemd/|/home/orza/'
   # Per-site configs (parametrization by site)
   'src/agv_bringup/config/sites/|/home/orza/'
   # Launch files pass AGV_DATA_DIR as env var — target code reads via env
