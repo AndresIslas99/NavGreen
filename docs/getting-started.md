@@ -15,14 +15,14 @@ There are three paths. Pick one:
 First, clone the repository:
 
 ```bash
-git clone https://github.com/AndresIslas99/agv-greenhouse.git
+git clone https://github.com/AndresIslas99/NavGreen.git
 cd agv-greenhouse
 ```
 
 ## Path A — Dev container
 
 The repo ships a dev container in
-[`.devcontainer/`](https://github.com/AndresIslas99/agv-greenhouse/tree/main/.devcontainer)
+[`.devcontainer/`](https://github.com/AndresIslas99/NavGreen/tree/main/.devcontainer)
 that mirrors CI exactly: the `ros:humble` base image plus colcon, rosdep, git,
 and Node 20, with ROS sourced in every shell.
 
@@ -84,7 +84,7 @@ The `--skip-keys` are dependencies that are **not on the public apt index**
 command also pulls in everything the simulation needs.
 
 !!! note "CI skips a few more keys"
-    [`.github/workflows/ci.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/.github/workflows/ci.yaml)
+    [`.github/workflows/ci.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)
     additionally skips `gazebo_ros gazebo_ros2_control gazebo_ros_pkgs
     teleop_twist_keyboard` in its build job, because CI installs the Gazebo
     stack via apt only in the dedicated simulation job. On a native machine
@@ -181,7 +181,7 @@ Drive it by publishing `geometry_msgs/Twist` on `/cmd_vel` and watch `/odom`.
     the sim. You cannot run the full autonomy stack in simulation — the
     production launch files require the external `agv_slam` (cuVSLAM) overlay,
     which is not published. Adding sensors and Nav2 to the sim is roadmap
-    work (issue [#18](https://github.com/AndresIslas99/agv-greenhouse/issues/18)).
+    work (issue [#18](https://github.com/AndresIslas99/NavGreen/issues/18)).
 
 Full walkthrough: [Drive the robot in simulation](tutorials/drive-in-simulation.md).
 
@@ -251,4 +251,4 @@ backend and fleet packages need a sourced ROS environment but no hardware.
 - [The spec system](architecture/spec-system.md) — read this before your
   first PR; specs and code must change in the same commit.
 - [Contributing](community/contributing.md) — ground rules and workflow
-  (also: [`CONTRIBUTING.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/CONTRIBUTING.md)).
+  (also: [`CONTRIBUTING.md`](https://github.com/AndresIslas99/NavGreen/blob/main/CONTRIBUTING.md)).

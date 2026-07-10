@@ -1,14 +1,14 @@
 # Security
 
 This page summarizes NavGreen's security posture. The canonical policy is
-[`SECURITY.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/SECURITY.md)
+[`SECURITY.md`](https://github.com/AndresIslas99/NavGreen/blob/main/SECURITY.md)
 on GitHub — read it in full before any deployment.
 
 ## Reporting a vulnerability
 
 Please report security issues **privately** — do not open a public issue.
 
-- **Preferred**: [GitHub private vulnerability reporting](https://github.com/AndresIslas99/agv-greenhouse/security/advisories/new)
+- **Preferred**: [GitHub private vulnerability reporting](https://github.com/AndresIslas99/NavGreen/security/advisories/new)
 - **Alternative**: email <andresislas2107@gmail.com> with `[SECURITY]` in the
   subject
 

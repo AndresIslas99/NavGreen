@@ -47,7 +47,7 @@ source install/setup.bash
 ```
 
 This is exactly the order the
-[CI `typescript-build` job](https://github.com/AndresIslas99/agv-greenhouse/blob/main/.github/workflows/ci.yaml)
+[CI `typescript-build` job](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)
 follows.
 
 ## Step 1 — Build and start the backend
@@ -79,7 +79,7 @@ Configuration is via environment variables:
 | `AGV_UI_ALLOWED_ORIGINS` | *(empty)* | Comma-separated CORS origins when the frontend is hosted elsewhere; empty = same-origin only |
 
 On the robot, `AGV_DATA_DIR` is the canonical persistent-data root defined in
-[`specs/persistence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml).
+[`specs/persistence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml).
 
 ## Step 2 — Build and open the dashboard
 
@@ -104,7 +104,7 @@ npm run dev     # http://localhost:5173, proxies /api and /ws to :8090
 Set `VITE_DEV_PROXY_TARGET=http://<jetson>:8090` to develop against a backend
 on another host. Build-time configuration (`VITE_API_BASE`,
 `VITE_FLEET_BASE`, `VITE_BASE_PATH`) is documented in
-[`web/agv_dashboard/.env.example`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/web/agv_dashboard/.env.example).
+[`web/agv_dashboard/.env.example`](https://github.com/AndresIslas99/NavGreen/blob/main/web/agv_dashboard/.env.example).
 
 ## What the dashboard shows
 
@@ -122,7 +122,7 @@ action client.
 Auth is **disabled by default**, and **no default accounts ship with the
 repo** — shipping well-known credentials in a public repository would defeat
 auth entirely. The model
-(see [`src/agv_ui_backend/src/auth.ts`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_ui_backend/src/auth.ts)):
+(see [`src/agv_ui_backend/src/auth.ts`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_ui_backend/src/auth.ts)):
 
 - Users live in **`$AGV_DATA_DIR/users.json`** (created on first backend
   start with auth disabled and an empty user list, file mode `0600`).
@@ -163,7 +163,7 @@ to fix.
     goals, motor enable. The camera stream (8091) is plain unauthenticated
     HTTP, and ROS 2 DDS traffic is unencrypted. Enable dashboard auth before
     any field deployment and read the full deployment security model in
-    [SECURITY.md](https://github.com/AndresIslas99/agv-greenhouse/blob/main/SECURITY.md).
+    [SECURITY.md](https://github.com/AndresIslas99/NavGreen/blob/main/SECURITY.md).
 
 ## Troubleshooting
 
@@ -184,7 +184,7 @@ rm -rf src/agv_ui_backend/node_modules/rclnodejs/generated/*
 ```
 
 The next start takes 2–3 minutes longer while bindings regenerate. Details in
-[`src/agv_ui_backend/CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_ui_backend/CLAUDE.md).
+[`src/agv_ui_backend/CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_ui_backend/CLAUDE.md).
 
 ### Dashboard loads but everything reads "offline"
 
@@ -203,5 +203,5 @@ backend and `VITE_API_BASE` at dashboard build time.
 - [Map a greenhouse](build-a-map.md) — the dashboard's mapping workflow on the
   real robot.
 - [Operator runbook](../operator_runbook.md) — field operating procedures.
-- [`specs/hmi_api.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/hmi_api.yaml)
+- [`specs/hmi_api.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/hmi_api.yaml)
   — the machine-readable dashboard ↔ backend contract.

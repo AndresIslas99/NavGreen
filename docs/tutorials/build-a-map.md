@@ -32,7 +32,7 @@ coordinated artifacts** under `$AGV_DATA_DIR/maps/`:
 The `auto_init_orchestrator` cold-start cascade tries these in order on every
 boot; each missing sidecar removes one relocalization path. Writers and
 readers of every artifact are specified in
-[`specs/persistence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml).
+[`specs/persistence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml).
 
 ## Step 1 — Launch mapping mode
 
@@ -73,9 +73,9 @@ diagnostics.
 ## Step 3 — Drive the mapping run
 
 The commissioning protocol (canonical in the
-[project spec](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/project.yaml)
+[project spec](https://github.com/AndresIslas99/NavGreen/blob/main/specs/project.yaml)
 and the root
-[CLAUDE.md](https://github.com/AndresIslas99/agv-greenhouse/blob/main/CLAUDE.md)):
+[CLAUDE.md](https://github.com/AndresIslas99/NavGreen/blob/main/CLAUDE.md)):
 
 - **Speed 0.3–0.5 m/s.** Faster causes motion blur that degrades cuVSLAM
   feature matching and Area Memory landmark quality.
@@ -116,7 +116,7 @@ three sidecars land asynchronously a moment later.
 
 !!! warning "The dashboard's Save Map button currently saves less"
     Known drift, documented in
-    [`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml):
+    [`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml):
     the dashboard's `POST /api/maps/save` does **not** call this service — it
     runs nav2's `map_saver_cli` directly, producing only the `.pgm` + `.yaml`
     pair with **no relocalization sidecars**. The same is true of calling
@@ -132,7 +132,7 @@ ls -la $AGV_DATA_DIR/maps/ | grep corridor_v1
 You should see the `.pgm`, `.yaml`, a non-trivial `.area` file, a non-empty
 `_cuvslam/` directory, and `_meta.json`. (`AGV_DATA_DIR` is the single
 canonical data root — default `/home/orza/agv_data` on the robot, per
-[`specs/persistence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml).)
+[`specs/persistence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml).)
 If a sidecar is missing or empty, check the `map_manager` logs; the
 [runbook's troubleshooting table](../mapping_commissioning.md#troubleshooting)
 maps each symptom to its cause.
@@ -159,5 +159,5 @@ every fallback path — run both before calling the map done.
   procedure: pipeline diagram, parameters, all checks and failure modes.
 - [Operator runbook](../operator_runbook.md) — day-to-day operation once a
   map exists.
-- [`src/agv_map_manager/CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/src/agv_map_manager/CLAUDE.md)
+- [`src/agv_map_manager/CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/src/agv_map_manager/CLAUDE.md)
   — the save/load chain in detail.

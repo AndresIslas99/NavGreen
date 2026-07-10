@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AndresIslas99/agv-greenhouse/actions/workflows/ci.yaml"><img src="https://github.com/AndresIslas99/agv-greenhouse/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/AndresIslas99/NavGreen/actions/workflows/ci.yaml"><img src="https://github.com/AndresIslas99/NavGreen/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
   <a href="#ros-2-distributions"><img src="https://img.shields.io/badge/ROS%202-Humble%20%2F%20Jazzy-blue.svg" alt="ROS 2"></a>
   <a href="policies/engineering_rules.md"><img src="https://img.shields.io/badge/robot%20nodes-C%2B%2B17%20%2B%20--Werror-orange.svg" alt="C++17 -Werror"></a>
@@ -21,7 +21,7 @@ with visual SLAM and AprilTag corrections, Nav2 autonomy, a rail-riding mode
 for heating-pipe crop rows, a software safety chain, a browser operator
 dashboard, and an optional VDA 5050 fleet layer.
 
-📖 **[Documentation site](https://andresislas99.github.io/agv-greenhouse/)** —
+📖 **[Documentation site](https://andresislas99.github.io/NavGreen/)** —
 getting started, tutorials, and architecture deep-dives.
 
 **Current MVP**: first field visit with a local-WiFi operator workflow —

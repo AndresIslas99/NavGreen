@@ -15,7 +15,7 @@ to a fleet master.
 
 !!! note "One project, two names"
     **NavGreen** is the project name. The GitHub repository is
-    [`AndresIslas99/agv-greenhouse`](https://github.com/AndresIslas99/agv-greenhouse)
+    [`AndresIslas99/NavGreen`](https://github.com/AndresIslas99/NavGreen)
     and the code keeps its literal identifiers — packages are `agv_*`
     (`agv_sim`, `agv_bringup`, …) and topics live under `/agv/`
     (`/agv/cmd_vel`, …). When these docs show a literal name, it matches the
@@ -49,7 +49,7 @@ flowchart TD
 
 The most distinctive part of this workspace is not a node — it is the
 contract system around the nodes. Machine-readable specs in
-[`specs/`](https://github.com/AndresIslas99/agv-greenhouse/tree/main/specs)
+[`specs/`](https://github.com/AndresIslas99/NavGreen/tree/main/specs)
 describe every topic, service, action, operation mode, launch step, and
 persistent file. If a spec and the code disagree, one of them is a bug — and
 nine verifiers (5 BLOCKING, 4 WARNING) catch the disagreement, both as a
@@ -68,7 +68,7 @@ project constants. The full spec-by-spec breakdown is in
 A commit that adds a topic without updating `specs/interfaces.yaml` is
 rejected. This is what lets humans — and AI coding agents, which get their
 own specs-first workflow in
-[`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/AGENT_INSTRUCTIONS.md)
+[`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/NavGreen/blob/main/AGENT_INSTRUCTIONS.md)
 — answer "who owns the `map → odom` transform?" without reading C++.
 [Read how the spec system works →](architecture/spec-system.md)
 
@@ -77,7 +77,7 @@ own specs-first workflow in
 NavGreen documents what is weak as carefully as what works:
 
 - Known architecture debt lives in a dedicated, blunt document —
-  [`docs/architectural_gaps.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/docs/architectural_gaps.md)
+  [`docs/architectural_gaps.md`](https://github.com/AndresIslas99/NavGreen/blob/main/docs/architectural_gaps.md)
   — and the full pre-release review ledger, including **open, unfixed
   findings**, is published in the
   [community-readiness review](reviews/2026-07-06-community-readiness-review.md).
@@ -87,7 +87,7 @@ NavGreen documents what is weak as carefully as what works:
 - The in-repo simulation (`agv_sim`) is drivetrain-only — physics and two
   wheels, no cameras or lidar — and its docs say so instead of overselling it.
 - The specs were produced by a full workspace audit
-  ([2026-04-13](https://github.com/AndresIslas99/agv-greenhouse/blob/main/docs/audit/2026-04-13-full-audit.md)),
+  ([2026-04-13](https://github.com/AndresIslas99/NavGreen/blob/main/docs/audit/2026-04-13-full-audit.md)),
   and any future drift between specs and reality must update both the audit
   trail and the specs together.
 
@@ -130,11 +130,11 @@ NavGreen is a working engineering codebase, honestly mid-journey:
 
 - **Target deployment**: a commercial greenhouse in Mexico. The core stack is
   implemented and validated hardware-in-the-loop (HIL); per
-  [`specs/project.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/project.yaml),
+  [`specs/project.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/project.yaml),
   field validation on the physical robot is the current milestone. The MVP
   scope is the first field visit: teleoperation, map commissioning, waypoint
   missions, and live monitoring from a browser tablet over local WiFi.
-- **CI is green** ([workflow](https://github.com/AndresIslas99/agv-greenhouse/blob/main/.github/workflows/ci.yaml)),
+- **CI is green** ([workflow](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)),
   with four jobs:
     - **Spec verification** — the same `tools/verify_specs/all.sh` suite as
       the pre-commit hook.
@@ -160,13 +160,13 @@ NavGreen is a working engineering codebase, honestly mid-journey:
 - **Contributing** — the [contributing guide](community/contributing.md)
   covers the specs-first workflow, the C++17 ground rules, and how to get a
   change merged. AI coding agents start at
-  [`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/AGENT_INSTRUCTIONS.md).
+  [`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/NavGreen/blob/main/AGENT_INSTRUCTIONS.md).
 - **Roadmap** — open work is tracked in the [roadmap](community/roadmap.md)
   and in the tracking issue
-  [#18](https://github.com/AndresIslas99/agv-greenhouse/issues/18)
+  [#18](https://github.com/AndresIslas99/NavGreen/issues/18)
   (post-community-review follow-ups).
 - **Security** — read the [security notes](community/security.md) before any
   deployment: the stack assumes an isolated greenhouse LAN, and dashboard
   authentication is disabled by default.
-- **License** — [MIT](https://github.com/AndresIslas99/agv-greenhouse/blob/main/LICENSE)
+- **License** — [MIT](https://github.com/AndresIslas99/NavGreen/blob/main/LICENSE)
   © 2026 Andres Islas.

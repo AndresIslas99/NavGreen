@@ -2,7 +2,7 @@
 
 Every ROS 2 topic, service, and action that crosses a package boundary in
 NavGreen is declared in
-[`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml).
+[`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml).
 That file is the contract — the Single Source of Truth (SSOT). If the code and
 the spec disagree, one of them is a bug, and a verifier will block the commit
 until they agree again.
@@ -129,7 +129,7 @@ verified_by: "tools/verify_specs/verify_interfaces.py"
 ```
 
 `verify_interfaces.py` is part of the BLOCKING set in
-[`tools/verify_specs/all.sh`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/tools/verify_specs/all.sh)
+[`tools/verify_specs/all.sh`](https://github.com/AndresIslas99/NavGreen/blob/main/tools/verify_specs/all.sh)
 (5 BLOCKING + 4 WARNING checks). It runs as a pre-commit hook and as the
 `spec-verification` CI job on every push and PR. It performs four static
 checks, all blocking:
@@ -167,13 +167,13 @@ bash tools/verify_specs/all.sh   # run the whole suite locally
 ```
 
 Related contracts live in sibling files:
-[`specs/hmi_api.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/hmi_api.yaml)
+[`specs/hmi_api.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/hmi_api.yaml)
 (dashboard REST/WebSocket — authoritative for the HMI surface),
-[`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml),
-[`specs/launch_sequence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/launch_sequence.yaml),
+[`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml),
+[`specs/launch_sequence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/launch_sequence.yaml),
 and
-[`specs/persistence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml).
+[`specs/persistence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml).
 Start with the reading order in
-[`specs/README.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/README.md),
+[`specs/README.md`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/README.md),
 and see [the spec system](../architecture/spec-system.md) for the design
 rationale.

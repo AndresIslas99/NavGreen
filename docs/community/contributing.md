@@ -3,13 +3,13 @@
 Contributions of all sizes are welcome — code, tests, documentation, and
 field reports. This page is the docs-site summary; the canonical, always
 up-to-date guide is
-[`CONTRIBUTING.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/CONTRIBUTING.md)
+[`CONTRIBUTING.md`](https://github.com/AndresIslas99/NavGreen/blob/main/CONTRIBUTING.md)
 on GitHub.
 
 ## The one rule that matters most: specs first
 
 NavGreen is **spec-driven**. The machine-readable contracts in
-[`specs/`](https://github.com/AndresIslas99/agv-greenhouse/tree/main/specs)
+[`specs/`](https://github.com/AndresIslas99/NavGreen/tree/main/specs)
 are the Single Source of Truth, and automated verifiers keep code and specs in
 sync. If your change touches a ROS interface, a persistent artifact, an
 operation mode, or a launch step, the matching spec file must change **in the
@@ -17,10 +17,10 @@ same commit**:
 
 | You changed… | Update |
 |---|---|
-| A topic / service / action / cross-package parameter | [`specs/interfaces.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/interfaces.yaml) |
-| A persistent file or folder the robot reads/writes | [`specs/persistence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/persistence.yaml) |
-| An operation mode, transition, or runtime state | [`specs/state_machine.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/state_machine.yaml) |
-| Nodes in a launch file | [`specs/launch_sequence.yaml`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/launch_sequence.yaml) |
+| A topic / service / action / cross-package parameter | [`specs/interfaces.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/interfaces.yaml) |
+| A persistent file or folder the robot reads/writes | [`specs/persistence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/persistence.yaml) |
+| An operation mode, transition, or runtime state | [`specs/state_machine.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/state_machine.yaml) |
+| Nodes in a launch file | [`specs/launch_sequence.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/launch_sequence.yaml) |
 
 Verify locally before committing:
 
@@ -36,9 +36,9 @@ the interface contract.
 ## Ground rules
 
 These are absolute — the full set lives in
-[`CLAUDE.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/CLAUDE.md)
+[`CLAUDE.md`](https://github.com/AndresIslas99/NavGreen/blob/main/CLAUDE.md)
 and
-[`policies/engineering_rules.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/policies/engineering_rules.md):
+[`policies/engineering_rules.md`](https://github.com/AndresIslas99/NavGreen/blob/main/policies/engineering_rules.md):
 
 - **Robot runtime nodes are C++17 only.** Python ROS 2 packages are allowed
   only as development/commissioning/diagnostic tooling, marked
@@ -54,7 +54,7 @@ and
 ## Getting a working environment
 
 The fastest path is the dev container in
-[`.devcontainer/`](https://github.com/AndresIslas99/agv-greenhouse/tree/main/.devcontainer):
+[`.devcontainer/`](https://github.com/AndresIslas99/NavGreen/tree/main/.devcontainer):
 open the repo in VS Code and "Reopen in Container" (any
 devcontainer-compatible tool works). It matches CI — ROS 2 Humble, colcon,
 Node 20 — resolves workspace dependencies on first launch, and sets
@@ -69,14 +69,14 @@ vendor SDKs and are skipped in CI (see the
 ## Where to start
 
 Issues labeled
-[`good first issue`](https://github.com/AndresIslas99/agv-greenhouse/labels/good%20first%20issue)
+[`good first issue`](https://github.com/AndresIslas99/NavGreen/labels/good%20first%20issue)
 are curated to be self-contained and hardware-free — at the time of writing,
 things like clearing the dashboard's pre-existing eslint errors
-([#19](https://github.com/AndresIslas99/agv-greenhouse/issues/19)), an
+([#19](https://github.com/AndresIslas99/NavGreen/issues/19)), an
 optional CI job for the vendor-SDK packages
-([#13](https://github.com/AndresIslas99/agv-greenhouse/issues/13)), and a
+([#13](https://github.com/AndresIslas99/NavGreen/issues/13)), and a
 dashboard demo GIF for the README
-([#14](https://github.com/AndresIslas99/agv-greenhouse/issues/14)). The
+([#14](https://github.com/AndresIslas99/NavGreen/issues/14)). The
 larger open workstreams are on the [roadmap](roadmap.md).
 
 Good first contributions beyond the labeled issues: enabling more packages in
@@ -84,7 +84,7 @@ CI, adding unit tests to packages that have none, documentation fixes, and
 translating docs.
 
 Read first: the README, then
-[`specs/README.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/specs/README.md),
+[`specs/README.md`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/README.md),
 then the `CLAUDE.md` of the package you want to touch — every package has one
 describing its responsibilities, interfaces, and invariants.
 
@@ -117,9 +117,9 @@ final calls on architecture and scope. What to expect:
 
 !!! tip "Using an AI coding agent?"
     The repository is deliberately agent-friendly. Point your agent at
-    [`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/agv-greenhouse/blob/main/AGENT_INSTRUCTIONS.md)
+    [`AGENT_INSTRUCTIONS.md`](https://github.com/AndresIslas99/NavGreen/blob/main/AGENT_INSTRUCTIONS.md)
     before it writes anything — the same spec-sync rules apply to humans and
     machines, and the pre-commit verifiers enforce them for both.
 
 Be excellent to each other — see the
-[Code of Conduct](https://github.com/AndresIslas99/agv-greenhouse/blob/main/CODE_OF_CONDUCT.md).
+[Code of Conduct](https://github.com/AndresIslas99/NavGreen/blob/main/CODE_OF_CONDUCT.md).

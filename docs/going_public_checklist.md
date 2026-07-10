@@ -27,7 +27,7 @@ pip install git-filter-repo
 
 # From a FRESH clone (filter-repo refuses to run on a repo with a remote by
 # default and rewrites all history — never do this on your only copy):
-git clone --mirror git@github.com:AndresIslas99/agv-greenhouse.git
+git clone --mirror git@github.com:AndresIslas99/NavGreen.git
 cd agv-greenhouse.git
 
 # Redact the leaked strings everywhere they appear in history.
@@ -89,20 +89,11 @@ must be mechanical, not habitual. Require:
 - Branches up to date before merging.
 - No force-pushes / no deletion of `main`.
 
-## 4. Rename the repository to `navgreen` — owner-only, optional but decided
+## 4. Rename the repository — ✅ DONE (now `AndresIslas99/NavGreen`)
 
-Settings → General → Repository name → `navgreen`. GitHub redirects the old
-`agv-greenhouse` URLs (clones, links, badges keep working), but after
-renaming run this once so first-party links don't rely on redirects:
-
-```bash
-grep -rl 'AndresIslas99/agv-greenhouse' --include='*.md' --include='*.yml' \
-  --include='*.yaml' . | xargs sed -i 's#AndresIslas99/agv-greenhouse#AndresIslas99/navgreen#g'
-# also update site_url in mkdocs.yml (…github.io/navgreen/)
-```
-
-Package names keep the `agv_` prefix — NavGreen is the project brand, like
-Nav2's `nav2_*` packages.
+GitHub redirects the old `agv-greenhouse` URLs; all first-party links in the
+tree have been updated to the new name. Package names keep the `agv_`
+prefix — NavGreen is the project brand, like Nav2's `nav2_*` packages.
 
 ## 5. Enable the documentation site — owner-only
 
