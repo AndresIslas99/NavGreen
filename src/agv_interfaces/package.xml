@@ -6,6 +6,9 @@
   <description>ROS2 message and service definitions for AGV greenhouse</description>
   <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
   <license>MIT</license>
+  <url type="website">https://orzatech.com</url>
+  <url type="repository">https://github.com/AndresIslas99/agv-greenhouse</url>
+  <url type="bugtracker">https://github.com/AndresIslas99/agv-greenhouse/issues</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>

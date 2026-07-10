@@ -6,6 +6,9 @@
   <description>Hardware-free Gazebo Classic simulation of the AGV differential-drive robot (ROS 2 Humble). Reuses the agv_description geometry and the agv_hw_interface controller gains to let a contributor with no robot spawn the AGV, drive it via /cmd_vel and watch odometry. Development / simulation tool only (dev_only) -- it provides physics + a sensor-free drivetrain, never production compute.</description>
   <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
   <license>MIT</license>
+  <url type="website">https://orzatech.com</url>
+  <url type="repository">https://github.com/AndresIslas99/agv-greenhouse</url>
+  <url type="bugtracker">https://github.com/AndresIslas99/agv-greenhouse/issues</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

@@ -10,6 +10,9 @@
   pose/EKF alone. Phase 2 Stage J.</description>
   <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
   <license>MIT</license>
+  <url type="website">https://orzatech.com</url>
+  <url type="repository">https://github.com/AndresIslas99/agv-greenhouse</url>
+  <url type="bugtracker">https://github.com/AndresIslas99/agv-greenhouse/issues</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
