@@ -25,17 +25,17 @@ interface Props {
   onLogout?: () => void
 }
 
-// Ada Labs brand lockup — official logomark + wordmark. The PNG lives in
-// /public; we prefix with import.meta.env.BASE_URL because Vite serves
-// the dashboard under `/dashboard/` (see vite.config.ts → `base`),
-// so a bare `/adalabs_logo_transparent.png` 404s in dev.
-const ADALABS_LOGO_SRC = `${import.meta.env.BASE_URL}adalabs_logo_transparent.png`
+// NavGreen brand lockup — logomark + wordmark. The SVG lives in /public;
+// we prefix with import.meta.env.BASE_URL because Vite serves the
+// dashboard under `/dashboard/` (see vite.config.ts → `base`), so a bare
+// `/navgreen-logo.svg` 404s in dev.
+const NAVGREEN_LOGO_SRC = `${import.meta.env.BASE_URL}navgreen-logo.svg`
 
 function BrandLogo() {
   return (
     <img
-      src={ADALABS_LOGO_SRC}
-      alt="Ada Labs"
+      src={NAVGREEN_LOGO_SRC}
+      alt="NavGreen"
       className="topbar-brand__logo"
       draggable={false}
     />

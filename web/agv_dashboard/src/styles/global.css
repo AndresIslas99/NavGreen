@@ -319,7 +319,7 @@ body {
   z-index: 10;
 }
 
-/* Brand lockup — Ada Labs logo + AGV unit identifier separated by a
+/* Brand lockup — NavGreen logo + AGV unit identifier separated by a
    thin vertical divider so the two reading levels (company vs unit)
    are visually distinct. */
 .topbar-brand {
@@ -340,7 +340,7 @@ body {
   display: flex;
   flex-direction: column;
   line-height: 1.15;
-  /* Thin divider to the left visually separates "Ada Labs" (company)
+  /* Thin divider to the left visually separates "NavGreen" (project)
      from "AGV-01 / Greenhouse 1" (this unit's identity). */
   padding-left: var(--sp-3);
   border-left: 1px solid var(--border-strong);
@@ -4310,7 +4310,7 @@ button.depth-pip:focus-visible {
     -webkit-backdrop-filter: var(--glass-blur-strong);
     border-bottom: 1px solid var(--border);
     /* Soft elevation shadow + accent hairline at the bottom edge — the
-       hairline is the Ada Labs forest-green at very low alpha, so a thin
+       hairline is the NavGreen forest-green at very low alpha, so a thin
        brand stripe runs across the whole top of the app without shouting. */
     box-shadow:
       0 4px 14px rgba(26, 36, 33, 0.06),
