@@ -6,6 +6,9 @@
   <description>ros2_control SystemInterface plugin for the AGV ODrive CAN driver. Wraps the existing CAN protocol so that diff_drive_controller and mock_components/GenericSystem can drive the robot. Co-exists with agv_odrive — opt-in via the agv_ros2control launch files.</description>
   <maintainer email="andresislas2107@gmail.com">Andres Islas</maintainer>
   <license>MIT</license>
+  <url type="website">https://orzatech.com</url>
+  <url type="repository">https://github.com/AndresIslas99/agv-greenhouse</url>
+  <url type="bugtracker">https://github.com/AndresIslas99/agv-greenhouse/issues</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

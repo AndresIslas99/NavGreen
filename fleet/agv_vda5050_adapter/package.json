@@ -1,7 +1,7 @@
 {
   "name": "agv-vda5050-adapter",
   "version": "1.0.0",
-  "description": "VDA 5050 MQTT adapter — bridges ROS2 topics to VDA 5050 protocol",
+  "description": "VDA 5050 MQTT adapter \u2014 bridges ROS2 topics to VDA 5050 protocol",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -15,5 +15,7 @@
   "devDependencies": {
     "@types/node": "^25.5.0",
     "typescript": "^6.0.2"
-  }
+  },
+  "author": "Andres Islas <andresislas2107@gmail.com> (https://orzatech.com)",
+  "homepage": "https://github.com/AndresIslas99/agv-greenhouse"
 }

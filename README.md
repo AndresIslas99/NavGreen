@@ -355,7 +355,9 @@ bash tools/verify_specs/all.sh
 ---
 
 <p align="center">
-  <a href="https://orzatech.com"><img src="docs/assets/orzatech-logo.svg" alt="OrzaTech" height="40"></a>
+  <a href="https://orzatech.com"><img src="https://orzatech.com/images/logo/orza-logo.webp" alt="OrzaTech" height="48"></a>
   <br>
   <sub>NavGreen is developed and maintained by <a href="https://orzatech.com">OrzaTech</a> — robotics for agriculture.</sub>
+  <br>
+  <sub>Maintainer: Andrés Islas · <a href="mailto:andresislas2107@gmail.com">andresislas2107@gmail.com</a></sub>
 </p>

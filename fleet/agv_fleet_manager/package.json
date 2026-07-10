@@ -1,7 +1,7 @@
 {
   "name": "agv-fleet-manager",
   "version": "1.0.0",
-  "description": "VDA 5050 fleet manager — multi-robot state aggregation and order dispatch",
+  "description": "VDA 5050 fleet manager \u2014 multi-robot state aggregation and order dispatch",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -20,5 +20,7 @@
     "@types/ws": "^8.18.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.10"
-  }
+  },
+  "author": "Andres Islas <andresislas2107@gmail.com> (https://orzatech.com)",
+  "homepage": "https://github.com/AndresIslas99/agv-greenhouse"
 }

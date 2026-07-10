@@ -82,6 +82,9 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/AndresIslas99/agv-greenhouse
       name: NavGreen on GitHub
+    - icon: fontawesome/solid/envelope
+      link: mailto:andresislas2107@gmail.com
+      name: Contact the maintainer
 
 nav:
   - Home: index.md
