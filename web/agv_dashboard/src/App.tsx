@@ -5,10 +5,13 @@ import * as api from './api/client'
 
 import { LoginPage } from './components/LoginPage'
 import { TopBar } from './components/TopBar'
+import { HeroRow } from './components/HeroRow'
+import { ConnectionBanner } from './components/ConnectionBanner'
 import { ModeRail } from './components/ModeRail'
 import { MapView } from './components/MapView'
+import { MapEmptyState } from './components/map/MapEmptyState'
 import { CameraFeed } from './components/CameraFeed'
-import { EventLog } from './components/EventLog'
+import { MissionStrip } from './components/strip/MissionStrip'
 
 import { OperatePanel } from './components/panels/OperatePanel'
 import { MappingPanel } from './components/panels/MappingPanel'
@@ -137,9 +140,11 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
             actions={actions}
             motorsArmed={status?.motors_armed || false}
             mode={mode}
+            status={status}
             onCmdVel={handleCmdVel}
             onMotorEnable={handleMotorEnable}
             onModeChange={handleModeChange}
+            onCancelNav={handleNavCancel}
           />
         )
       case 'map':
@@ -192,8 +197,43 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
     }
   }
 
+  const estopEngaged = !!status?.e_stop
+
   return (
-    <div className="app">
+    <div
+      className={`app app--immersive ${connected ? '' : 'is-disconnected'}`}
+      data-estop={estopEngaged ? 'active' : 'idle'}
+    >
+      {/* Capa 0 — mapa full-bleed (la identidad del producto). */}
+      <div className="map-bg">
+        <MapView
+          mapData={state === 'mapping' && accMapData ? accMapData : mapData}
+          pose={pose}
+          path={path}
+          scanPoints={scanPoints}
+          mode={capturingWaypoints ? 'nav' : mode}
+          onGoalClick={handleGoalClick}
+          waypoints={capturingWaypoints ? pendingWaypoints : undefined}
+          fleetRobots={fleetRobots}
+          selectedRobot={selectedRobot}
+          ghostPose={rail === 'analytics' ? ghostPose : null}
+          mappingCoverage={status?.mapping_coverage}
+          state={state}
+          homePoint={status?.home_point ?? null}
+          batteryPct={status?.battery_pct ?? null}
+        />
+        {/* Empty state overlay — visible cuando no hay SLAM map cargado.
+            Sigue mostrando el greenhouse template detrás. */}
+        {(state === 'mapping' ? !accMapData : !mapData) && (
+          <MapEmptyState
+            onStartMapping={() => handleModeChange('mapping')}
+            onOpenMapPanel={() => setRail('map')}
+          />
+        )}
+      </div>
+
+      {/* Capa 1 — chrome superior: banner de desconexión + topbar. */}
+      <ConnectionBanner connected={connected} />
       <TopBar
         status={status}
         state={state}
@@ -205,52 +245,40 @@ function Dashboard({ username, userRole, onLogout }: { username: string; userRol
         onLogout={onLogout}
       />
 
-      <div className="body">
-        <ModeRail active={rail} onChange={setRail} />
+      {/* Capa 2 — overlays flotantes (fleet, hero, replay, camera). */}
+      <FleetOverlay
+        robots={fleetRobots}
+        selectedRobot={selectedRobot}
+        onSelectRobot={selectRobot}
+        connected={fleetConnected}
+      />
+      <HeroRow status={status} state={state} loading={connected && status === null} />
+      <ReplaySlider
+        visible={rail === 'analytics'}
+        onGhostPose={setGhostPose}
+      />
+      {state !== 'mapping' && <CameraFeed visible={true} expanded={false} />}
 
-        <div className={`map-area ${state === 'mapping' ? 'mapping-layout' : ''}`}>
-          <div className="map-section">
-          <MapView
-            mapData={state === 'mapping' && accMapData ? accMapData : mapData}
-            pose={pose}
-            path={path}
-            scanPoints={scanPoints}
-            mode={capturingWaypoints ? 'nav' : mode}
-            onGoalClick={handleGoalClick}
-            waypoints={capturingWaypoints ? pendingWaypoints : undefined}
-            fleetRobots={fleetRobots}
-            selectedRobot={selectedRobot}
-            ghostPose={rail === 'analytics' ? ghostPose : null}
-            mappingCoverage={status?.mapping_coverage}
-          />
-          <FleetOverlay
-            robots={fleetRobots}
-            selectedRobot={selectedRobot}
-            onSelectRobot={selectRobot}
-            connected={fleetConnected}
-          />
-          {state !== 'mapping' && <CameraFeed visible={rail === 'operate' || rail === 'map'} expanded={false} />}
-          <ReplaySlider
-            visible={rail === 'analytics'}
-            onGhostPose={setGhostPose}
-          />
-          </div>
-
-          {/* Expanded camera panel during mapping */}
-          {state === 'mapping' && (
-            <div className="mapping-camera-panel">
-              <CameraFeed visible={true} expanded={true} />
-            </div>
-          )}
-        </div>
-
-        <div className="right-panel">
-          {renderPanel()}
-        </div>
+      {/* Capa 3 — rail izquierdo + cockpit derecho + strip inferior. */}
+      <ModeRail active={rail} onChange={setRail} />
+      <div className="cockpit-drawer">
+        {renderPanel()}
       </div>
+      <MissionStrip
+        events={events}
+        missionProgress={status?.mission_progress || null}
+        distanceRemaining={status?.nav_state?.distance_remaining ?? null}
+        onClear={() => fetch(api.apiUrl('/api/events'), { method: 'DELETE' })}
+      />
 
-      <EventLog entries={events} onClear={() => fetch(api.apiUrl('/api/events'), { method: 'DELETE' })} />
+      {/* Capa 4 — mapping mode camera takeover (sin cambios). */}
+      {state === 'mapping' && (
+        <div className="mapping-camera-panel">
+          <CameraFeed visible={true} expanded={true} />
+        </div>
+      )}
 
+      {/* Capa 5 — modales (z-index 9999). */}
       {pendingApriltag !== null && (
         <AprilTagAssignmentModal
           hardwareId={pendingApriltag}

@@ -39,7 +39,9 @@ function getStatus(deps: AppDeps) {
     nav_state: s.navState,
     health: s.health,
     battery_pct: s.batteryPct,
+    battery_time_to_empty_s: s.batteryTteS,
     mission_progress: s.missionProgress,
+    home_point: s.homePoint,
     mapping_coverage: 0,
     collision_monitor: {
       action: s.collisionMonitor.action,

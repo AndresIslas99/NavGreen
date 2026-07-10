@@ -72,6 +72,48 @@ export interface MissionProgress {
 }
 
 // ---------------------------------------------------------------------------
+// Home point (operator-defined base/dock pose)
+// ---------------------------------------------------------------------------
+
+export interface HomePoint {
+  x: number
+  y: number
+  theta: number
+  set_at: number   // unix seconds
+  name: string
+}
+
+// ---------------------------------------------------------------------------
+// Semantic map overlay (operator-facing labeled zones, separate from the
+// Nav2 traffic zones served by the fleet manager).
+// ---------------------------------------------------------------------------
+
+export interface ZonePoint { x: number; y: number }
+export interface SemanticZone {
+  name: string                    // stable id ("base_de_carga")
+  label: string                   // display label ("BASE DE CARGA")
+  polygon: ZonePoint[]
+  color: string                   // CSS color
+  kind: 'home' | 'work' | 'parking' | 'other'
+}
+
+// ---------------------------------------------------------------------------
+// Rail map labels (data-driven from agv_rail_approach/list_rail_starts).
+// Replaces the hardcoded RAIL_AISLE_Y constants previously in MapView.tsx.
+// ---------------------------------------------------------------------------
+
+export interface RailEntry {
+  id: string                      // 'tag_<id>' — stable across calls
+  tag_id: number
+  label: string                   // 'RIEL A', 'RIEL B', …
+  x: number
+  y: number
+  yaw: number
+  aisle_letter: string
+  kind: 'rail_entry'
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket payloads
 // ---------------------------------------------------------------------------
 
@@ -95,6 +137,14 @@ export interface RobotStatus {
   mode: 'teleop' | 'mapping' | 'nav'
   pose: { x: number; y: number; theta: number }
   battery_pct: number | null
+  // Backend-derived heuristic seconds-to-empty (slope of battery_pct over a
+  // rolling window). null while charging, flat, or with insufficient samples.
+  // See src/agv_ui_backend/src/battery_tte.ts and specs/hmi_api.yaml.
+  battery_time_to_empty_s: number | null
+  // Operator-defined base/dock pose. POST /api/home_point/go dispatches a
+  // navigate_to_pose action to this pose. null when no base has been set —
+  // the IR A BASE button stays disabled in that case (no implicit default).
+  home_point: HomePoint | null
   nav_state: { active: boolean; distance_remaining: number; status: string }
   health: HealthMap
   mapping_coverage: number
