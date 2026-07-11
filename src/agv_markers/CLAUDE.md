@@ -31,7 +31,7 @@ Post-MVP priority — supplemental to visual SLAM + wheel odometry fusion.
 |-----------|---------|---------|
 | `markers_registry_file` | `""` | YAML file with marker ID -> map pose |
 | `max_detection_range` | `5.0` | Ignore detections beyond (m) |
-| `tag_size` | `0.2` | Physical tag size (m) |
+| `tag_size` | `0.2` | Global physical tag size (m); a per-tag `size:` field in the registry overrides it (HIGH-04-04) |
 | `covariance_xy` | `0.01` | Base XY covariance (m^2) |
 | `covariance_yaw` | `0.03` | Base yaw covariance (rad^2) |
 | `relocalization_threshold` | `2.0` | Drift threshold for EKF hard reset (m) |
