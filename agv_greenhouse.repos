@@ -1,0 +1,87 @@
+# agv_greenhouse.repos
+#
+# vcstool manifest of the external dependencies the AGV greenhouse
+# workspace needs to build and run on a real Jetson. Pinning strategy:
+# prefer a SHA so rebuilds are byte-identical; fall back to a branch
+# with a TODO comment when no SHA is documented yet.
+#
+# Usage from a fresh clone of this repository:
+#
+#   cd <workspace_root>
+#   vcs import src < agv_greenhouse.repos
+#   colcon build --symlink-install --cmake-args -DCMAKE_CXX_FLAGS="-Werror"
+#
+# NOTE: contributors without robot hardware do NOT need this file — the
+# simulation path (`ros2 launch agv_sim teleop_sim.launch.py`) and CI
+# resolve everything via rosdep. This manifest exists for fresh-Jetson
+# recovery (CR-00-01 of the 2026-05-13 field-readiness audit): the
+# production stack used to be assembled by hand on the dev Jetson,
+# a single point of failure. With this file a new flash is a
+# clone + vcs import + colcon build away.
+#
+# TODO items:
+# - For every entry marked `# TODO verify SHA`, the next hardware
+#   contact must capture the SHA of the package as actually built on
+#   the production Jetson and pin it here.
+# - `agv_slam` is referenced by every production launch file in this
+#   repo (agv_full, agv_mapping, agv_hil_full) but no repository
+#   containing it has been located; it exists only as an installed
+#   package on the dev Jetson. Documented gap: a future session must
+#   either locate the upstream repo and pin it here, or vendor agv_slam
+#   into src/ of this workspace. (Kept out of the manifest until then —
+#   an entry with an empty URL would break `vcs import`.)
+# - `zed-ros2-wrapper` runs from a patched fork (area_memory_db_path
+#   live re-read — see specs/persistence.yaml). Same situation: pin the
+#   fork URL + patch SHA on next hardware contact.
+
+repositories:
+
+  # ── NVIDIA Isaac ROS (cuVSLAM, AprilTag, NITROS) ──
+  isaac_ros_common:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git
+    version: main  # TODO verify SHA on next hardware contact
+  isaac_ros_visual_slam:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_visual_slam.git
+    version: main  # TODO verify SHA on next hardware contact
+  isaac_ros_apriltag:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_apriltag.git
+    version: main  # TODO verify SHA on next hardware contact
+
+  # ── Nav2 (SmacPlanner2D + MPPI + collision_monitor + bt_navigator) ──
+  navigation2:
+    type: git
+    url: https://github.com/ros-navigation/navigation2.git
+    version: humble  # TODO verify SHA matches Jetson production build
+
+  # ── SLAM toolbox (mapping mode + serialize_map service) ──
+  slam_toolbox:
+    type: git
+    url: https://github.com/SteveMacenski/slam_toolbox.git
+    version: humble  # TODO verify SHA
+
+  # ── AprilTag detection (community fork maintained by Christian Rauch) ──
+  apriltag_ros:
+    type: git
+    url: https://github.com/christianrauch/apriltag_ros.git
+    version: humble  # TODO verify SHA
+
+  # ── pointcloud_to_laserscan (depth → 2D scan for collision_monitor) ──
+  pointcloud_to_laserscan:
+    type: git
+    url: https://github.com/ros-perception/pointcloud_to_laserscan.git
+    version: humble  # TODO verify SHA
+
+  # ── robot_localization (dual EKF nodes) ──
+  robot_localization:
+    type: git
+    url: https://github.com/cra-ros-pkg/robot_localization.git
+    version: humble  # TODO verify SHA
+
+  # ── Foxglove bridge (diagnostic WebSocket on :8765) ──
+  foxglove_bridge:
+    type: git
+    url: https://github.com/foxglove/ros-foxglove-bridge.git
+    version: main  # TODO verify SHA
