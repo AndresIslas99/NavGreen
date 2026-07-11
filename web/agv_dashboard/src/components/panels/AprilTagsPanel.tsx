@@ -129,31 +129,31 @@ export function AprilTagsPanel() {
 
       <div className="panel-section">
         <div className="section-title">
-          Defined Tags
+          Etiquetas definidas
           {!showAddForm && (
-            <button className="btn-small" onClick={() => setShowAddForm(true)}>+ Add</button>
+            <button className="btn-small" onClick={() => setShowAddForm(true)}>+ Añadir</button>
           )}
         </div>
 
         {showAddForm && (
           <form onSubmit={handleSubmit} className="apriltag-form">
             <input
-              type="text" placeholder="Label (e.g. Entrada principal)"
+              type="text" placeholder="Nombre (p. ej. Entrada principal)"
               value={form.label}
               onChange={e => setForm({ ...form, label: e.target.value })}
               required
             />
             <input
-              type="text" placeholder="Description (optional)"
+              type="text" placeholder="Descripción (opcional)"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
             />
             <label className="form-field">
-              Type
+              Tipo
               <select value={form.type}
                 onChange={e => setForm({ ...form, type: e.target.value as TagType })}>
-                <option value="wall">Wall (vertical — drift correction)</option>
-                <option value="rail_start">Rail start (horizontal — precision approach)</option>
+                <option value="wall">Pared (vertical — corrección de drift)</option>
+                <option value="rail_start">Inicio de riel (horizontal — aproximación de precisión)</option>
               </select>
             </label>
             <div className="form-row">
@@ -165,38 +165,38 @@ export function AprilTagsPanel() {
                 onChange={e => setForm({ ...form, yaw: parseFloat(e.target.value) || 0 })} /></label>
             </div>
             <div className="form-actions">
-              <button type="submit" className="btn-primary">{editingId !== null ? 'Update' : 'Create'}</button>
-              <button type="button" onClick={resetForm}>Cancel</button>
+              <button type="submit" className="btn-primary">{editingId !== null ? 'Actualizar' : 'Crear'}</button>
+              <button type="button" onClick={resetForm}>Cancelar</button>
             </div>
           </form>
         )}
 
         {state && state.defined_tags.length === 0 && !showAddForm && (
-          <p className="dim">No tags defined yet. Click "+ Add" to define your first tag.</p>
+          <p className="dim">Sin etiquetas definidas. Toca "+ Añadir" para crear la primera.</p>
         )}
 
         {state && state.defined_tags.map(tag => {
           const hwId = getHardwareForDefined(tag.id)
           const typeIcon = tag.type === 'rail_start' ? '⏸' : '🟦'
-          const typeLabel = tag.type === 'rail_start' ? 'Rail start' : 'Wall'
+          const typeLabel = tag.type === 'rail_start' ? 'Inicio de riel' : 'Pared'
           return (
             <div key={tag.id} className={`apriltag-item apriltag-${tag.type}`}>
               <div className="apriltag-header">
                 <strong>{typeIcon} #{tag.id} {tag.label}</strong>
                 <div className="apriltag-actions">
-                  <button className="btn-small" onClick={() => handleNavigate(tag)} title="Send AGV via Nav2 (requires map + LOCALIZED)">
-                    Send AGV
+                  <button className="btn-small" onClick={() => handleNavigate(tag)} title="Enviar AGV vía Nav2 (requiere mapa + LOCALIZADO)">
+                    Enviar AGV
                   </button>
                   <button
                     className="btn-small"
                     onClick={() => handleAlign(tag)}
-                    title="Align with this tag using fine-servoing only — skips Nav2. Tag must be visible and a hardware ID assigned."
+                    title="Alinea con esta etiqueta usando fine-servoing (sin Nav2). Requiere etiqueta visible + ID hardware asignado."
                     disabled={hwId === null}
                   >
-                    Align
+                    Alinear
                   </button>
-                  <button className="btn-small" onClick={() => handleEdit(tag)}>Edit</button>
-                  <button className="btn-small btn-danger" onClick={() => handleDelete(tag.id)}>Delete</button>
+                  <button className="btn-small" onClick={() => handleEdit(tag)}>Editar</button>
+                  <button className="btn-small btn-danger" onClick={() => handleDelete(tag.id)}>Borrar</button>
                 </div>
               </div>
               <div className="apriltag-type-badge">{typeLabel}</div>
@@ -208,10 +208,10 @@ export function AprilTagsPanel() {
                 Hardware: {hwId !== null ? (
                   <>
                     <span className="badge">ID {hwId}</span>
-                    <button className="btn-small" onClick={() => handleUnassign(hwId)}>Unassign</button>
+                    <button className="btn-small" onClick={() => handleUnassign(hwId)}>Desasignar</button>
                   </>
                 ) : (
-                  <span className="dim">not assigned</span>
+                  <span className="dim">sin asignar</span>
                 )}
               </div>
             </div>
@@ -221,14 +221,14 @@ export function AprilTagsPanel() {
 
       {state && state.pending_detections.length > 0 && (
         <div className="panel-section">
-          <div className="section-title">Pending Detections</div>
-          <p className="dim">Hardware AprilTags detected but not yet assigned to any defined tag.</p>
+          <div className="section-title">Detecciones pendientes</div>
+          <p className="dim">AprilTags hardware detectadas pero aún sin asignar a una etiqueta definida.</p>
           {state.pending_detections.map(d => (
             <div key={d.hardware_id} className="apriltag-pending">
-              Hardware ID {d.hardware_id} (seen {Math.round(Date.now() / 1000 - d.first_seen)}s ago)
+              Hardware ID {d.hardware_id} (vista hace {Math.round(Date.now() / 1000 - d.first_seen)} s)
             </div>
           ))}
-          <p className="dim">A modal will appear automatically to assign each new detection.</p>
+          <p className="dim">Se abrirá un modal automáticamente para asignar cada detección nueva.</p>
         </div>
       )}
     </div>

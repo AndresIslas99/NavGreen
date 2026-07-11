@@ -129,7 +129,7 @@ export function AnalyticsPanel() {
     <div className="context-panel analytics-panel">
       {/* Period selector */}
       <div className="panel-section">
-        <div className="section-title">Period</div>
+        <div className="section-title">Período</div>
         <div className="period-btns">
           {PERIODS.map(p => (
             <button
@@ -148,19 +148,19 @@ export function AnalyticsPanel() {
         <div className="panel-section">
           <div className="analytics-error">{error}</div>
           <button className="full-width" onClick={fetchData} style={{ marginTop: 8 }}>
-            Retry
+            Reintentar
           </button>
         </div>
       )}
 
       {/* Loading state */}
-      {loading && !summary && !error && <div className="analytics-loading">Loading...</div>}
+      {loading && !summary && !error && <div className="analytics-loading">Cargando…</div>}
 
       {/* No data state */}
       {!loading && !error && summary && summary.uptime_pct === 0 && summary.mission_count === 0 && odomSeries.length === 0 && (
         <div className="panel-section">
           <div className="analytics-empty">
-            No telemetry data yet for this period. Data is recorded at 1Hz while the backend runs.
+            Aún no hay telemetría para este período. La data se registra a 1 Hz mientras el backend está activo.
           </div>
         </div>
       )}
@@ -169,31 +169,31 @@ export function AnalyticsPanel() {
         <>
           {/* KPI Cards */}
           <div className="panel-section">
-            <div className="section-title">Key Metrics</div>
+            <div className="section-title">Métricas clave</div>
             <div className="kpi-grid">
               <div className="kpi-card">
                 <span className="kpi-value">{summary.uptime_pct.toFixed(1)}%</span>
-                <span className="kpi-label">Uptime</span>
+                <span className="kpi-label">Tiempo activo</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-value">{summary.distance_m.toFixed(1)}m</span>
-                <span className="kpi-label">Distance</span>
+                <span className="kpi-label">Distancia</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-value">{summary.mission_success_rate}%</span>
-                <span className="kpi-label">Mission Success</span>
+                <span className="kpi-label">Misiones exitosas</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-value">{summary.mission_count}</span>
-                <span className="kpi-label">Missions</span>
+                <span className="kpi-label">Misiones</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-value">{formatDuration(summary.avg_mission_duration_s)}</span>
-                <span className="kpi-label">Avg Duration</span>
+                <span className="kpi-label">Duración media</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-value">{summary.slam_good_pct}%</span>
-                <span className="kpi-label">SLAM Good</span>
+                <span className="kpi-label">SLAM bueno</span>
               </div>
             </div>
           </div>
@@ -202,9 +202,9 @@ export function AnalyticsPanel() {
           {odomSeries.length > 1 && (
             <div className="panel-section">
               <div className="section-title">
-                Odom Hz
+                Hz odometría
                 <span className="section-subtitle">
-                  avg {summary.avg_odom_hz} | min {summary.min_odom_hz} | max {summary.max_odom_hz}
+                  prom {summary.avg_odom_hz} | mín {summary.min_odom_hz} | máx {summary.max_odom_hz}
                 </span>
               </div>
               <Sparkline data={odomSeries} color="#4fc3f7" />
@@ -214,7 +214,7 @@ export function AnalyticsPanel() {
           {/* Velocity chart */}
           {velSeries.length > 1 && (
             <div className="panel-section">
-              <div className="section-title">Linear Velocity (m/s)</div>
+              <div className="section-title">Velocidad lineal (m/s)</div>
               <Sparkline data={velSeries} color="#4caf50" />
             </div>
           )}
@@ -222,7 +222,7 @@ export function AnalyticsPanel() {
           {/* SLAM confidence chart */}
           {slamSeries.length > 1 && (
             <div className="panel-section">
-              <div className="section-title">SLAM Confidence</div>
+              <div className="section-title">Confianza SLAM</div>
               <Sparkline data={slamSeries} color="#ff9800" />
             </div>
           )}
@@ -230,7 +230,7 @@ export function AnalyticsPanel() {
           {/* Mission history (C5) */}
           {missionRuns.length > 0 && (
             <div className="panel-section">
-              <div className="section-title">Mission History</div>
+              <div className="section-title">Historial de misiones</div>
               <div className="mission-history">
                 {missionRuns.map(run => {
                   const dur = run.ended ? Math.round(run.ended - run.started) : null

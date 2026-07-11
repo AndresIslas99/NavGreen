@@ -997,7 +997,15 @@ services:
       - {pkg: "agv_mode_arbiter", node: "mode_arbiter", role: "RAIL_APPROACH_PEND → ACTIVE handoff"}
       - {pkg: "agv_ui_backend", role: "POST /api/apriltags/:hw_id/align (skip_coarse_approach=true) and post-Nav2 rail_start auto-trigger"}
       - {pkg: "agv_integration_tests", role: "rail approach exercise in HIL tests (dev-only)"}
-    notes: "rail_approach also serves rail_approach/abort (std_srvs/Trigger) and rail_approach/list_rail_starts (agv_interfaces/srv/ListRailStarts) for the same callers."
+    notes: "rail_approach also serves rail_approach/abort (std_srvs/Trigger) for the same callers."
+
+  - name: "/agv/rail_approach/list_rail_starts"
+    type: "agv_interfaces/srv/ListRailStarts"
+    owner_pkg: "agv_rail_approach"
+    owner_node: "rail_approach"
+    callers:
+      - {pkg: "agv_ui_backend", role: "GET /api/rails proxy — rail map labels for the dashboard greenhouse layer (routes/rails.ts)"}
+    notes: "Empty request; the response carries RailStartPoint[] from the runtime rail-start registry."
 
   - name: "/agv/rail_driver/cancel_goal"
     type: "std_srvs/srv/Trigger"

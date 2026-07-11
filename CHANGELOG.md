@@ -7,7 +7,13 @@ settling.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- Immersive operator HMI (May design sprint, now integrated): greenhouse
+  place layer on the map (rail tracks, crop rows, charging dock), state-aware
+  animated robot icon, full-bleed map with camera follow, AprilTag detection
+  ripples, compass/scale, WCAG AA accessibility pass, Spanish operator copy,
+  and a greenhouse-geometry SSOT route (`GET/PUT /api/greenhouse/geometry`).
+  Rebranded to NavGreen.
 
 ## [0.1.0] — 2026-07-08
 

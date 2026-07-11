@@ -11,74 +11,486 @@
      - White = selected/highlighted normal element.
    ========================================================================= */
 
+/* Inter font — self-hosted via @fontsource for offline reliability (greenhouse
+   may not have outbound internet from the Jetson). Subset = latin, swap so
+   the system fallback paints while loading. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
 :root {
-  --bg: #1a1a1a;
-  --surface: #232323;
-  --surface-2: #2a2a2a;
-  --border: #363636;
-  --text: #e0e0e0;             /* Was #c8c8c8 — bumped for outdoor glare */
-  --text-secondary: #a8a8a8;   /* Was #808080 — now passes WCAG AAA */
-  --dim: #8a8a8a;              /* Was #5a5a5a — now passes WCAG AA (4.6:1) */
-  /* ISA-101: color reserved for abnormalities */
-  --green: #43a047;
-  --red: #d32f2f;
-  --orange: #ef6c00;
-  --blue: #1e88e5;
-  --amber: #f9a825;
-  --estop-engaged: #ffeb3b;    /* Bright yellow — highest visibility under sun */
-  /* Normal state indicators */
-  --normal: #8a8a8a;            /* Was #707070 — bumped for visibility */
-  --normal-bg: #333;
-  --rail-w: 72px;               /* Was 64px — larger touch targets */
-  --panel-w: 300px;             /* Was 280px — accommodate larger buttons */
-  --topbar-h: 64px;             /* Was 44px — accommodate larger E-stop */
-  --log-h: 140px;               /* Was 120px — larger log readability */
-  /* Touch targets (WCAG AAA = 44px+) */
-  --tap-min: 44px;
-  --tap-small: 36px;
-  --tap-large: 56px;
-  /* Font scale (outdoor-readable baseline) */
+  /* ── Surfaces (cream base + warm-white cards) ───────── */
+  --bg:            #f5f3ee;
+  --surface:       #fefdfb;
+  --surface-2:     #efece5;
+  --surface-3:     #e6e1d6;
+  --border:        rgba(26, 36, 33, 0.07);
+  --border-strong: rgba(26, 36, 33, 0.14);
+
+  /* ── Text (forest-tinted greys, AAA contrast) ───────── */
+  --text:           #1a2421;
+  --text-secondary: #4a554d;
+  --dim:            #7a847c;
+  /* On-color tokens — always-readable foregrounds for filled semantic
+     surfaces. Missing --on-crit / --on-warn previously caused the
+     E-STOP button's text to fall back to body color (dark on red,
+     contrast 2.93 — WCAG fail). */
+  --on-accent:      #ffffff;
+  --on-warn:        #ffffff;
+  --on-crit:        #ffffff;
+
+  /* ── Accent (forest green, growth identity) ─────────── */
+  --accent:        #2f6f2a;
+  --accent-hover:  #245821;
+  --accent-active: #1c4419;
+  --accent-soft:        #e2eedc;
+  --accent-soft-strong: #c1d9b6;
+  --accent-ring:   rgba(47, 111, 42, 0.25);
+
+  /* ── Semantic (warm, restrained) ────────────────────── */
+  --warn:        #b8612e;
+  --warn-hover:  #9c5126;
+  --warn-soft:   #f6e7d4;
+  --warn-ring:   rgba(184, 97, 46, 0.25);
+
+  --crit:        #a8392a;
+  --crit-hover:  #8e2f23;
+  --crit-soft:   #f5d8d2;
+  --crit-ring:   rgba(168, 57, 42, 0.30);
+
+  --info:        #3a5a8a;
+  --info-soft:   #dde5f0;
+
+  /* ── E-stop (safety convention, non-negotiable) ─────── */
+  --estop:              #c0392b;
+  --estop-pressed:      #9b2d22;
+  --estop-engaged:      #ffeb3b;
+  --estop-engaged-text: #1a2421;
+
+  /* Legacy aliases (used by older component CSS — will phase out
+     as each component migrates to the new tokens). */
+  --green:    var(--accent);
+  --red:      var(--crit);
+  --orange:   var(--warn);
+  --blue:     var(--info);
+  --amber:    #d4a373;
+  --normal:    var(--dim);
+  --normal-bg: var(--surface-2);
+
+  /* ── Shadows (Stripe-style elevation ladder) ────────── */
+  --shadow-xs: 0 1px 1px rgba(26,36,33,0.04);
+  --shadow-sm: 0 1px 2px rgba(26,36,33,0.04), 0 1px 1px rgba(26,36,33,0.06);
+  --shadow-md: 0 2px 6px rgba(26,36,33,0.06), 0 1px 2px rgba(26,36,33,0.08);
+  --shadow-lg: 0 8px 24px rgba(26,36,33,0.10), 0 2px 6px rgba(26,36,33,0.06);
+  --shadow-xl: 0 24px 64px rgba(26,36,33,0.14), 0 4px 12px rgba(26,36,33,0.08);
+  --shadow-focus: 0 0 0 3px var(--accent-ring);
+
+  /* ── Spacing (4-px grid) ────────────────────────────── */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ── Radii ──────────────────────────────────────────── */
+  --r-xs:   4px;
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-full: 999px;
+
+  /* ── Touch targets ──────────────────────────────────── */
+  --tap-min:    44px;
+  --tap-small:  36px;
+  --tap-large:  56px;
+  --tap-action: 64px;
+
+  /* ── Motion ─────────────────────────────────────────── */
+  --ease:        cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast:    120ms;
+  --dur-base:    180ms;
+  --dur-slow:    280ms;
+  --dur-slower:  450ms;
+
+  /* ── Layout ─────────────────────────────────────────── */
+  --rail-w:   76px;
+  --panel-w:  324px;
+  --topbar-h: 56px;
+  --hero-h:   112px;
+  --log-h:    104px;
+
+  /* ── Immersive map layout (Phase 3) ─────────────────── */
+  /* 64 px wide so each rail button can be 44×44 (WCAG min touch) with
+     proper breathing room. Was 56 px which forced 38 px button width. */
+  --rail-w-floating:     64px;     /* icon-only column when floating */
+  --drawer-w-collapsed: 280px;     /* cockpit drawer collapsed (mode pill rail) */
+  --drawer-w-expanded:  360px;     /* cockpit drawer expanded */
+  --fab-size:            48px;     /* recenter FAB */
+  --strip-pill-w:       260px;     /* mission strip pull-tab pill */
+  --strip-card-max:     820px;     /* mission strip expanded max width */
+
+  /* Glass surfaces — light minimal cream over the live greenhouse map.
+     Higher alpha = more legible chrome, lower = map breathes through.
+     Tuned for tablet under polycarbonate roof daylight. */
+  --glass-bg-soft:    rgba(254, 253, 251, 0.78);
+  --glass-bg:         rgba(254, 253, 251, 0.85);
+  --glass-bg-strong:  rgba(254, 253, 251, 0.92);
+  --glass-bg-solid:   rgba(254, 253, 251, 0.96);
+  --glass-blur:        blur(10px);
+  --glass-blur-strong: blur(14px) saturate(140%);
+  --glass-blur-deep:   blur(16px) saturate(130%);
+
+  /* Z-index ladder — one source of truth so layer order can't drift. */
+  --z-map:       0;
+  --z-map-empty: 25;
+  --z-fleet:     30;
+  --z-hero:      30;
+  --z-replay:    30;
+  --z-recenter:  32;
+  --z-strip:     35;
+  --z-camera:    35;
+  --z-rail:      40;
+  --z-cockpit:   50;
+  --z-topbar:    70;
+  --z-banner:    80;
+  --z-modal:   9999;
+  --z-toast:  10000;
+
+  /* ── Type scale ─────────────────────────────────────── */
+  --font-2xs:  11px;
+  --font-xs:   12px;
+  --font-sm:   13px;
   --font-base: 15px;
-  --font-sm: 13px;
-  --font-xs: 11px;
-  --font-lg: 18px;
-  --font-xl: 22px;
+  --font-md:   17px;
+  --font-lg:   20px;
+  --font-xl:   26px;
+  --font-2xl:  34px;
+  --font-3xl:  44px;
+
+  /* Legacy font tokens (used by old code — alias to new scale). */
+  --font-hero:     var(--font-xl);
+  --font-hero-sub: var(--font-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast:   1ms;
+    --dur-base:   1ms;
+    --dur-slow:   1ms;
+    --dur-slower: 1ms;
+  }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   font-size: var(--font-base);
-  line-height: 1.4;
+  line-height: 1.45;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
   height: 100dvh;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 #root { height: 100%; }
 
 /* =========================================================================
-   App layout: top-bar | [rail | map | panel] | log
+   App layout — Phase 3 immersive (default ≥900px).
+   Map fills the entire viewport; every other surface floats on top.
+   At <900px we revert to the 4-row grid via the media query below.
    ========================================================================= */
 
 .app {
-  display: grid;
-  grid-template-rows: var(--topbar-h) 1fr var(--log-h);
-  height: 100%;
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
 }
 
+/* The full-bleed map background layer. MapView's Leaflet container fills
+   this absolutely-positioned wrapper, so the map covers the whole viewport
+   even when chrome (topbar, hero, etc.) floats on top.
+
+   The "satellite" feel: the leaflet pane shows our greenhouse template
+   (enclosure + row bands + AprilTags) painted on top of a continuous earth
+   wash. The wash is built from three layered backgrounds on .leaflet-container
+   (see below) so it scrolls WITH the map content rather than staying pinned
+   to the viewport. */
+.map-bg {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-map);
+  background: var(--bg);
+}
+.map-bg > .map-container,
+.map-bg > .map-section,
+.map-bg .leaflet-container { width: 100%; height: 100%; position: relative; }
+
+/* Earth wash on the leaflet pane — outside the greenhouse rectangle we
+   want it to read as "rural Mexican soil from above", not as the cream
+   interior of a card. Built from four CSS background layers:
+
+     1) Edge vignette (darker corners) → "we're looking down from altitude"
+     2) Hot-spot light (warmer center)  → "sun above the greenhouse"
+     3) Tiled soil grain — visible-but-quiet dotted SVG, 18 px tile
+     4) Solid sandy-tan base                                            */
+.map-bg .leaflet-container {
+  background-color: #ece1ca !important;   /* sandy tan — overrides --bg */
+  background-image:
+    radial-gradient(ellipse 130% 110% at 50% 50%, transparent 45%, rgba(120, 92, 50, 0.14) 100%),
+    radial-gradient(ellipse 55% 38% at 50% 38%, rgba(255, 247, 230, 0.50), transparent 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'><circle cx='3' cy='4' r='0.9' fill='%23a08a64' opacity='0.32'/><circle cx='12' cy='9' r='0.7' fill='%23a08a64' opacity='0.22'/><circle cx='6' cy='13' r='0.5' fill='%23a08a64' opacity='0.18'/><circle cx='15' cy='15' r='0.4' fill='%23a08a64' opacity='0.15'/></svg>");
+  background-size: cover, cover, 18px 18px;
+  background-repeat: no-repeat, no-repeat, repeat;
+  background-attachment: fixed, fixed, fixed;
+}
+
+/* Pointer-events helpers — let clicks fall through to the map in the gaps
+   between floating cards. Wrappers carry pass-through; visible cards
+   re-enable pointer events on themselves. */
+.float-passthrough { pointer-events: none; }
+.float-passthrough > *,
+.float-surface     { pointer-events: auto; }
+
+/* Legacy .body — kept as a no-op for narrow viewports where the grid
+   fallback (below) still uses it. In immersive mode there is no .body. */
 .body {
-  display: grid;
-  grid-template-columns: var(--rail-w) 1fr var(--panel-w);
-  overflow: hidden;
+  display: contents;
+}
+
+/* ── Responsive fallback (<900px): restore the 4-row grid ─────────── */
+@media (max-width: 899px) {
+  .app {
+    display: grid;
+    grid-template-rows: var(--topbar-h) var(--hero-h) 1fr var(--log-h);
+    height: 100%;
+    width: 100%;
+    position: static;
+    overflow: hidden;
+  }
+  .map-bg {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+  }
+  .body {
+    display: grid;
+    grid-template-columns: var(--rail-w) 1fr var(--panel-w);
+    overflow: hidden;
+    background: var(--bg);
+  }
+  /* Cancel `position: fixed` on floating overlays so they flow back into
+     the grid. Specific overlay selectors are restored in their own blocks. */
+  .topbar, .hero-row, .mode-rail, .mission-strip,
+  .cockpit-drawer { position: static; }
 }
 
 /* =========================================================================
-   Top bar — always visible, ISA-101: neutral base, color for state
+   Topbar — slim 56px header (Light Minimal Redesign).
+   Replaces the old .top-bar (kept below as dead code until cleanup commit).
+   Composition: brand → map pill → spacer → conn → user → E-STOP.
+   ========================================================================= */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: var(--topbar-h);
+  position: relative;
+  z-index: 10;
+}
+
+/* Brand lockup — NavGreen logo + AGV unit identifier separated by a
+   thin vertical divider so the two reading levels (company vs unit)
+   are visually distinct. */
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+}
+.topbar-brand__logo {
+  display: block;
+  height: 34px;
+  width: auto;
+  /* PNG has a soft drop shadow baked in — let it breathe by NOT clipping. */
+  flex-shrink: 0;
+  user-select: none;
+}
+.topbar-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  /* Thin divider to the left visually separates "NavGreen" (project)
+     from "AGV-01 / Greenhouse 1" (this unit's identity). */
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--border-strong);
+}
+.topbar-brand__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+}
+.topbar-brand__sub {
+  font-size: var(--font-xs);                   /* 12 px — minimum readable on tablet */
+  color: var(--text-secondary);                /* darker than --dim; passes AA at 11–12 px */
+  letter-spacing: 0.4px;
+}
+
+/* Spacer pushes the right group to the edge */
+.topbar-spacer { flex: 1 1 auto; }
+
+/* Connection indicator */
+.topbar-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.topbar-conn__icon { color: var(--crit); flex-shrink: 0; }
+.topbar-conn__label { font-weight: 500; }
+
+/* User badge with dropdown */
+.topbar-user {
+  position: relative;
+  flex-shrink: 0;
+}
+.topbar-user__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px var(--sp-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  min-height: 36px;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.topbar-user__trigger:hover { background: var(--surface-2); }
+.topbar-user__trigger:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.topbar-user__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.topbar-user__name {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+.topbar-user__role {
+  font-size: var(--font-2xs);
+  color: var(--dim);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.topbar-user__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-1);
+  min-width: 180px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topbar-user__menu .ui-btn { justify-content: flex-start; width: 100%; }
+
+/* E-STOP — always far right, prominent. */
+.topbar-estop {
+  background: var(--estop);
+  color: var(--on-crit);
+  border: none;
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 0 var(--sp-4);
+  height: var(--tap-min);   /* 44 px — WCAG minimum for critical safety control */
+  min-width: 120px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+  flex-shrink: 0;
+}
+.topbar-estop:hover {
+  background: var(--estop-pressed);
+  box-shadow: var(--shadow-lg);
+}
+.topbar-estop:active {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-sm);
+}
+.topbar-estop:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(192, 57, 43, 0.35);
+}
+.topbar-estop--engaged {
+  background: var(--estop-engaged);
+  color: var(--estop-engaged-text);
+  animation: topbar-estop-pulse 2s ease-in-out infinite;
+}
+.topbar-estop--engaged:hover { background: #ffea2c; }
+
+@keyframes topbar-estop-pulse {
+  0%, 100% { box-shadow: var(--shadow-md), 0 0 0 0 rgba(255, 235, 59, 0.5); }
+  50%      { box-shadow: var(--shadow-md), 0 0 0 8px rgba(255, 235, 59, 0); }
+}
+
+/* Narrow viewports — hide the user role label, then the user name, to
+   keep the topbar single-row. The E-STOP stays at all sizes. */
+@media (max-width: 900px) {
+  .topbar-user__role { display: none; }
+}
+@media (max-width: 720px) {
+  .topbar-conn__label { display: none; }
+  .topbar-brand__sub { display: none; }
+  .topbar-user__name { display: none; }
+}
+
+/* =========================================================================
+   Legacy .top-bar (dead code from the old design; kept for now so the build
+   stays clean — removed in a later cleanup commit).
    ========================================================================= */
 
 .top-bar {
@@ -148,6 +560,194 @@ body {
   width: 10px; height: 10px; border-radius: 50%;
   display: inline-block;
   border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* =========================================================================
+   Hero row — Block A redux (light minimal).
+   Lives in row 2 of the .app grid: 3 horizontal Tile cards across the
+   full width below the topbar. Uses the Tile primitive (defined down in
+   the design system section). The wrapper just provides the 3-column
+   grid and edge padding.
+   ========================================================================= */
+
+.hero-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);            /* was --sp-3 (12 px); 16 px reads as a true triad */
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--bg);
+  align-items: stretch;
+}
+
+/* At narrow viewports we keep the row 1-line tall by COMPACTING the tiles
+   (smaller icon + smaller value) rather than wrapping to multiple rows.
+   This protects the .app grid's fixed --hero-h from being overflowed. */
+@media (max-width: 1100px) {
+  .hero-row {
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+  }
+  .hero-row .ui-tile {
+    grid-template-columns: 40px 1fr;
+    padding: var(--sp-3) var(--sp-4);
+    min-height: 80px;
+    gap: var(--sp-3);
+  }
+  .hero-row .ui-tile__icon { width: 40px; height: 40px; }
+  .hero-row .ui-tile__value { font-size: var(--font-lg); }
+  .hero-row .ui-tile__sub { font-size: var(--font-2xs); }
+}
+@media (max-width: 760px) {
+  /* When even compacting isn't enough, hide the Localization sub line and
+     let the tile shrink horizontally. Localization stays visible — we don't
+     drop indicators, we densify. */
+  .hero-row .ui-tile__sub { display: none; }
+  .hero-row .ui-tile__icon { width: 36px; height: 36px; }
+  .hero-row .ui-tile { min-height: 64px; padding: var(--sp-2) var(--sp-3); }
+}
+
+/* Spinner — used by Loader icon in LocalizationTile when INITIALIZING.
+   Respects prefers-reduced-motion via the --dur-* tokens (which collapse
+   to 1ms in the reduced-motion block at top of file). */
+.ui-icon--spin { animation: ui-spin var(--dur-slower) linear infinite; animation-duration: 1.4s; }
+
+/* =========================================================================
+   Legacy .topbar-hero / .hero-tile-* (dead code from the old dark design;
+   no longer referenced anywhere — the new Tile primitive uses .ui-tile-*).
+   Kept for one commit so a quick revert is harmless; cleaned in the final
+   cleanup commit.
+   ========================================================================= */
+
+.topbar-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(var(--hero-tile-min-w), 1fr));
+  gap: var(--hero-tile-gap);
+  padding: 8px 16px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--hero-tile-h);
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  position: relative;
+  /* subtle inner highlight, like the existing state-badge */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset 0 -1px 0 rgba(0,0,0,0.18);
+}
+
+.hero-tile-eyebrow {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.hero-tile-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  opacity: 0.95;
+  flex-shrink: 0;
+}
+
+.hero-tile-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hero-tile-value {
+  font-size: var(--font-hero);
+  line-height: 1.05;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero-tile-value--bold { font-weight: 700; }
+
+.hero-tile-sub {
+  font-size: var(--font-hero-sub);
+  color: var(--text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Per-state coloring — mirrors the existing state-badge palette but applied
+   to the value (the eyebrow stays neutral so the layout reads consistently
+   regardless of state). Same ISA-101 discipline as the topbar pills above. */
+.hero-tile--state-e_stop      .hero-tile-value,
+.hero-tile--state-e_stop      .hero-tile-icon { color: var(--red); }
+.hero-tile--state-fault       .hero-tile-value,
+.hero-tile--state-fault       .hero-tile-icon { color: var(--red); }
+.hero-tile--state-blocked     .hero-tile-value,
+.hero-tile--state-blocked     .hero-tile-icon { color: var(--orange); }
+.hero-tile--state-mapping     .hero-tile-value,
+.hero-tile--state-mapping     .hero-tile-icon,
+.hero-tile--state-navigating  .hero-tile-value,
+.hero-tile--state-navigating  .hero-tile-icon,
+.hero-tile--state-executing_mission .hero-tile-value,
+.hero-tile--state-executing_mission .hero-tile-icon { color: var(--blue); }
+.hero-tile--state-ready       .hero-tile-value,
+.hero-tile--state-ready       .hero-tile-icon { color: var(--text); }
+.hero-tile--state-idle        .hero-tile-value,
+.hero-tile--state-idle        .hero-tile-icon { color: var(--text-secondary); }
+.hero-tile--state-offline     .hero-tile-value,
+.hero-tile--state-offline     .hero-tile-icon { color: var(--dim); }
+
+.hero-tile--battery-crit .hero-tile-value,
+.hero-tile--battery-crit .hero-tile-icon { color: var(--red); }
+.hero-tile--battery-warn .hero-tile-value,
+.hero-tile--battery-warn .hero-tile-icon { color: var(--orange); }
+.hero-tile--battery-ok   .hero-tile-value { color: var(--text); }
+.hero-tile--battery-ok   .hero-tile-icon  { color: var(--green); }
+.hero-tile--battery-unknown .hero-tile-value,
+.hero-tile--battery-unknown .hero-tile-icon { color: var(--dim); }
+
+.hero-tile--loc-crit    .hero-tile-value,
+.hero-tile--loc-crit    .hero-tile-icon { color: var(--red); }
+.hero-tile--loc-warn    .hero-tile-value,
+.hero-tile--loc-warn    .hero-tile-icon { color: var(--orange); }
+.hero-tile--loc-ok      .hero-tile-value { color: var(--text); }
+.hero-tile--loc-ok      .hero-tile-icon  { color: var(--green); }
+.hero-tile--loc-unknown .hero-tile-value,
+.hero-tile--loc-unknown .hero-tile-icon { color: var(--dim); }
+
+/* Narrow viewports — stack tiles 2-up then 1-up. The hero strip is the
+   primary surface so we prioritise tile size over keeping all three on a
+   row at narrow widths. */
+@media (max-width: 1100px) {
+  .topbar-hero { grid-template-columns: repeat(2, minmax(var(--hero-tile-min-w), 1fr)); }
+  .topbar-hero .hero-tile--loc { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .topbar-hero {
+    grid-template-columns: 1fr;
+    padding: 6px 12px 10px;
+  }
+  .topbar-hero .hero-tile--loc { grid-column: auto; }
+  :root { --font-hero: 24px; }
 }
 
 /* Mission progress bar (OTTO-style at-a-glance) */
@@ -310,6 +910,14 @@ body {
   position: absolute; bottom: 8px; left: 8px;
   pointer-events: none; z-index: 2;
 }
+/* In immersive mode the .map-overlay-tl pose chip sat at (8, 8) — fully
+   inside the topbar's bounds. Through the topbar's backdrop blur it
+   read as a smudge. Hide it in immersive; the compass chip carries
+   spatial reference, and precise pose lives in the cockpit's
+   "Detalles técnicos" RailStatus block when an operator needs it. */
+@media (min-width: 900px) {
+  .map-overlay-tl { display: none; }
+}
 .map-coord {
   font-size: 10px; color: var(--dim);
   background: rgba(0,0,0,0.6); padding: 2px 6px;
@@ -437,6 +1045,239 @@ button.secondary { color: var(--text-secondary); }
 
 .icon-btn { padding: 8px 12px; min-width: 40px; min-height: var(--tap-min); }
 
+/* =========================================================================
+   Mission Cockpit — Block B
+   The OperatePanel rebuilt as a hierarchical column of large, jurisdictional
+   sections (mode → actions → task info → home hint → motors → joystick).
+   Each section has an eyebrow label and a clear visual block. Designed for
+   gloved-hand operation on a greenhouse tablet.
+   ========================================================================= */
+
+.cockpit-panel { gap: 0; }
+
+.cockpit-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit-section--joystick { flex-grow: 1; }
+
+.cockpit-eyebrow {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ── ControlModeRail ─────────────────────────────────────────────────── */
+.control-mode-rail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.control-mode-pill {
+  min-height: 56px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+.control-mode-pill.active {
+  background: var(--blue);
+  color: #000;
+  border-color: var(--blue);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.control-mode-pill-label { font-size: 15px; }
+.control-mode-pill-sub {
+  font-size: 11px;
+  opacity: 0.75;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: none;
+}
+
+/* ── ActionStack ──────────────────────────────────────────────────────── */
+.action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit-action-btn {
+  min-height: 64px;
+  padding: 10px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  border-radius: 6px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  transition: background-color 0.15s, border-color 0.15s, opacity 0.2s;
+}
+.cockpit-action-btn--primary {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.cockpit-action-btn--primary:not(:disabled):hover {
+  background: var(--blue);
+  color: #000;
+  border-color: var(--blue);
+}
+.cockpit-action-btn--home {
+  background: var(--surface-2);
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+.cockpit-action-btn--home:not(:disabled):hover {
+  background: var(--green);
+  color: #000;
+}
+.cockpit-action-btn--danger {
+  background: var(--surface-2);
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+.cockpit-action-btn--danger:not(:disabled):hover {
+  background: var(--red);
+  color: #fff;
+}
+.cockpit-action-btn--busy { opacity: 0.6; }
+.cockpit-action-btn--ok {
+  box-shadow: inset 0 0 0 2px var(--green);
+}
+.cockpit-action-btn--err {
+  box-shadow: inset 0 0 0 2px var(--red);
+}
+
+/* ── TaskInfoCard ─────────────────────────────────────────────────────── */
+.task-info-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.task-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+.task-doughnut { display: block; }
+.task-doughnut-value {
+  font-size: 18px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.task-doughnut-label {
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.task-linear { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.task-linear-value { font-size: 24px; font-weight: 700; color: var(--text); }
+.task-linear-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.task-mission-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+.task-mission-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.task-mission-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── HomePointHint ────────────────────────────────────────────────────── */
+.home-point-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.home-point-hint--set { border-style: solid; }
+.home-point-hint--set strong { color: var(--green); }
+.home-point-hint--empty strong { color: var(--text); }
+.home-point-coords { opacity: 0.75; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.home-point-btn-primary,
+.home-point-btn-secondary {
+  margin-left: auto;
+  padding: 6px 10px;
+  min-height: var(--tap-small);
+  font-size: 12px;
+}
+.home-point-btn-primary {
+  background: var(--green);
+  color: #000;
+  border-color: var(--green);
+  font-weight: 700;
+}
+.home-point-btn-primary:disabled { background: var(--surface-2); color: var(--dim); border-color: var(--border); }
+
+/* Cockpit motor button — armed pill remains green (existing .armed styling
+   already adopts the green palette). No override needed beyond the .full-width
+   styling that already exists. */
+.motor-toggle.armed { background: var(--green); color: #000; border-color: var(--green); }
+
+/* Modal — minimal styling for the home-point capture dialog */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  width: min(420px, calc(100% - 32px));
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+}
+
 /* Input rows */
 .input-row {
   display: flex;
@@ -500,26 +1341,36 @@ input.full-width {
 .diag-grid {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 3px 12px;
-  font-size: 12px;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
 }
-.diag-label { color: var(--dim); }
-.diag-value { font-variant-numeric: tabular-nums; }
-.diag-value.warn { color: var(--orange); font-weight: 600; }
+.diag-label { color: var(--text-secondary); }
+.diag-value { color: var(--text); font-variant-numeric: tabular-nums; }
+.diag-value.warn { color: var(--warn); font-weight: 600; }
 
-/* Health grid (Improvement 3) */
-.health-grid { display: flex; flex-direction: column; gap: 8px; }
-.health-row { display: flex; align-items: flex-start; gap: 10px; }
+/* Health grid — RecoveryPanel N2 refresh. Light-minimal tokens, accent
+   dot per tone, Pill primitive for status pill on the right. */
+.health-grid { display: flex; flex-direction: column; gap: var(--sp-3); }
+.health-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
 .health-dot {
-  width: 14px; height: 14px; border-radius: 50%;
-  margin-top: 4px; flex-shrink: 0;
-  border: 1px solid rgba(255,255,255,0.25);
-  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+  width: 10px; height: 10px; border-radius: var(--r-full);
+  margin-top: 6px; flex-shrink: 0;
 }
-.health-info { display: flex; flex-direction: column; gap: 2px; }
-.health-name { font-size: 14px; font-weight: 600; }
-.health-detail { font-size: 12px; color: var(--text-secondary); }
-.health-action { font-size: 12px; color: var(--orange); font-style: italic; font-weight: 500; }
+.health-dot--accent  { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.health-dot--warn    { background: var(--warn);   box-shadow: 0 0 0 3px var(--warn-soft); }
+.health-dot--crit    { background: var(--crit);   box-shadow: 0 0 0 3px var(--crit-soft); }
+.health-dot--neutral { background: var(--dim);    box-shadow: 0 0 0 3px var(--surface-2); }
+.health-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.health-info-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.health-name { font-size: var(--font-sm); font-weight: 600; color: var(--text); }
+.health-detail { font-size: var(--font-xs); color: var(--text-secondary); }
+.health-action { font-size: var(--font-xs); color: var(--warn); font-weight: 500; }
 
 /* Mission active + progress bar (Improvement 4) */
 .mission-active { display: flex; flex-direction: column; gap: 4px; }
@@ -558,84 +1409,199 @@ input.full-width {
 }
 
 /* =========================================================================
-   Bottom event log
+   MissionStrip — Block D
+   Bottom row of the dashboard. Two columns:
+     left  = MissionProgressCard (current mission + bar + ETA)
+     right = EventTicker         (last 3 events with severity pills)
+   Replaces the previous bottom EventLog. Forensic log still on disk
+   (events.jsonl). Sized via --log-h to keep the .app grid stable.
    ========================================================================= */
 
-.event-log {
+.mission-strip {
   background: var(--surface);
   border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 1px minmax(320px, 1.4fr);
+  gap: 0;
   overflow: hidden;
+  height: 100%;
+}
+.mission-strip-divider {
+  background: var(--border);
 }
 
-.event-log.expanded { --log-h: 300px; height: 300px; }
+.mission-strip-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
 
-.log-header {
+/* ── Left: MissionProgressCard ────────────────────────────────────────── */
+.mission-strip-progress {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+.mission-strip-progress--idle .mission-strip-empty {
+  color: var(--dim);
+  font-size: 14px;
+  margin-top: 4px;
+}
+.mission-strip-progress-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mission-strip-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.mission-strip-status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.mission-strip-progress--running .mission-strip-status { color: var(--blue); }
+.mission-strip-progress--paused  .mission-strip-status { color: var(--amber); }
+.mission-strip-progress--completed .mission-strip-status { color: var(--green); }
+.mission-strip-progress--failed  .mission-strip-status { color: var(--red); }
+.mission-strip-progress--canceled .mission-strip-status { color: var(--dim); }
+
+.mission-strip-bar {
+  position: relative;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.mission-strip-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--blue);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.mission-strip-progress--paused .mission-strip-bar-fill { background: var(--amber); }
+.mission-strip-progress--failed .mission-strip-bar-fill { background: var(--red); }
+
+.mission-strip-progress-footer {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mission-strip-progress-footer strong { color: var(--text); }
+.mission-strip-progress-dist,
+.mission-strip-progress-eta { color: var(--dim); }
+
+/* ── Right: EventTicker ───────────────────────────────────────────────── */
+.mission-strip-events {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.mission-strip-events-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
 }
-.log-filters { display: flex; gap: 2px; }
-.log-filter {
-  padding: 1px 8px; font-size: 9px; min-height: 20px;
-  background: transparent; border: 1px solid var(--border);
-  color: var(--dim); border-radius: 2px; cursor: pointer;
-}
-.log-filter.active { background: var(--surface-2); color: var(--text); border-color: var(--text-secondary); }
-.log-count {
-  margin-left: auto;
+.mission-strip-events-count {
   background: var(--surface-2);
+  border: 1px solid var(--border);
   padding: 1px 6px;
   border-radius: 8px;
-  font-size: 9px;
-  color: var(--dim);
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 600;
 }
-.log-expand {
-  padding: 0 4px; min-height: 20px; font-size: 10px;
-  background: transparent; border: none; color: var(--dim); cursor: pointer;
-}
-
-.log-scroll {
-  overflow-y: auto;
-  flex: 1;
-  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+.mission-strip-events-clear {
+  margin-left: auto;
+  padding: 2px 10px;
+  min-height: 22px;
   font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  cursor: pointer;
 }
+.mission-strip-events-clear:hover { color: var(--text); border-color: var(--text-secondary); }
 
-.log-empty {
-  padding: 8px 12px;
-  color: var(--dim);
-}
-
-.log-entry {
+.mission-strip-events-list {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.mission-strip-events-empty {
+  color: var(--dim);
+  font-size: 12px;
+  padding: 4px 0;
+}
+.mission-strip-event-row {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  padding: 2px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.3;
+  min-width: 0;
 }
-.log-entry:hover { background: rgba(255,255,255,0.02); }
+.mission-strip-event-text {
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mission-strip-event-time {
+  color: var(--dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
 
-.log-entry.even { background: rgba(255,255,255,0.015); }
-.log-time { color: var(--text-secondary); white-space: nowrap; font-size: 12px; }
-.log-sev-pill {
-  font-size: 11px; font-weight: 700;
-  padding: 3px 10px; border-radius: 3px;
-  letter-spacing: 0.5px; white-space: nowrap;
-  min-width: 48px; text-align: center;
+/* Severity-tagged category pill (e.g. "CRIT NAV", "WARN MOT") */
+.event-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  flex-shrink: 0;
 }
-.log-sub {
-  color: var(--text-secondary); font-size: 12px; width: 64px; font-weight: 500;
-}
-.log-text { color: var(--text); font-size: 13px; }
+.event-pill--crit  { color: var(--red);    background: rgba(211,47,47,0.18);  border-color: rgba(211,47,47,0.35); }
+.event-pill--warn  { color: var(--orange); background: rgba(239,108,0,0.18);  border-color: rgba(239,108,0,0.35); }
+.event-pill--info  { color: var(--blue);   background: rgba(30,136,229,0.15); border-color: rgba(30,136,229,0.30); }
+.event-pill--muted { color: var(--dim);    background: var(--surface-2);      border-color: var(--border); }
 
-/* Event log entry vertical spacing */
-.log-entry {
-  padding: 6px 14px !important;  /* override existing 2px 12px */
+/* Narrow viewports: stack columns. Hide the divider when columns wrap. */
+@media (max-width: 900px) {
+  .mission-strip {
+    grid-template-columns: 1fr;
+  }
+  .mission-strip-divider { display: none; }
 }
 
 /* =========================================================================
@@ -968,7 +1934,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .map-leaflet {
   width: 100%;
   height: 100%;
-  background: #1a1a2e;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .map-leaflet .leaflet-tile-pane { filter: none; }
 
@@ -983,6 +1950,139 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   filter: drop-shadow(0 0 3px rgba(76,175,80,0.6));
 }
 
+/* Robot icon "vivo" animations — make the AGV read as a character with
+   mood. State and tone come through as data attributes on the wrapper
+   so we can target each axis independently. */
+.robot-icon { position: relative; line-height: 0; }
+
+/* Glow ring around the body. Always present; pulses by state. */
+.robot-icon__ring {
+  transform-origin: 20px 19px;     /* center of the 40×38 canvas */     /* center of the 48×40 canvas */
+  animation: robot-ring-pulse 2.4s var(--ease) infinite;
+}
+.robot-icon[data-state="halted"] .robot-icon__ring {
+  animation: robot-ring-halt 1.4s var(--ease) infinite;
+}
+.robot-icon[data-state="idle"] .robot-icon__ring {
+  animation-duration: 4s;
+  opacity: 0.55;
+}
+
+/* Body wobble — only when actively moving (mapping / navigating / mission).
+   1.5px translate on x is just enough to read as motion without being
+   distracting at 5 Hz pose updates. */
+.robot-icon[data-state="moving"] .robot-icon__body {
+  animation: robot-body-wobble 0.65s var(--ease) infinite alternate;
+  transform-origin: 20px 19px;     /* center of the 40×38 canvas */
+}
+
+/* Heading wedge pulse when navigating — tiny scale breath on the wedge
+   that suggests the robot is "looking ahead". */
+.robot-icon[data-state="moving"] .robot-icon__wedge {
+  animation: robot-wedge-pulse 1.2s var(--ease) infinite;
+  transform-origin: 25px 19px;     /* wedge tip on the 40×38 canvas */
+}
+
+/* Low-battery dot — gentle red blink, top-right of the icon canvas. */
+.robot-icon__lowbat {
+  animation: robot-lowbat-blink 1.4s var(--ease) infinite;
+}
+
+@keyframes robot-ring-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.55; }
+  50%      { transform: scale(1.08); opacity: 0.85; }
+}
+@keyframes robot-ring-halt {
+  /* Faster, slightly louder pulse — communicates "stopped, attention". */
+  0%, 100% { transform: scale(1);    opacity: 0.85; }
+  50%      { transform: scale(1.10); opacity: 0.40; }
+}
+@keyframes robot-body-wobble {
+  from { transform: translateY(-0.4px); }
+  to   { transform: translateY(0.4px);  }
+}
+@keyframes robot-wedge-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1;    }
+  50%      { transform: scale(1.18); opacity: 0.85; }
+}
+@keyframes robot-lowbat-blink {
+  0%, 60% { opacity: 1; }
+  70%     { opacity: 0.2; }
+  100%    { opacity: 1; }
+}
+
+/* Skylight ridge — slow shimmer that suggests sunlight moving through the
+   polycarbonate roof. Very long cycle (8 s) and tiny opacity range so it
+   never competes with operator-facing elements. Targets the SVG fill of
+   the rectangle's path element. */
+.skylight-ridge {
+  animation: skylight-shimmer 8s ease-in-out infinite;
+}
+@keyframes skylight-shimmer {
+  0%, 100% { fill-opacity: 0.45; }
+  50%      { fill-opacity: 0.65; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skylight-ridge { animation: none; }
+}
+
+/* Ambient E-stop border — when an emergency stop is engaged (`e_stop:
+   true` on the status payload), the entire viewport gains a soft
+   yellow inset glow that gently pulses. Unmistakable peripheral cue
+   the operator can never accidentally ignore, without being alarming
+   like a flashing red banner. Pointer-events: none so it doesn't
+   intercept clicks. */
+.app[data-estop="active"]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9990;   /* above all chrome, below modals (10000) */
+  box-shadow:
+    inset 0 0 0 4px #ffeb3b,
+    inset 0 0 36px 6px rgba(255, 215, 0, 0.45);
+  animation: estop-ambient-pulse 1.8s var(--ease) infinite;
+}
+@keyframes estop-ambient-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 4px #ffeb3b,
+      inset 0 0 36px 6px rgba(255, 215, 0, 0.45);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 6px #ffe600,
+      inset 0 0 48px 8px rgba(255, 215, 0, 0.62);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app[data-estop="active"]::before { animation: none; }
+}
+
+/* AprilTag detection ripple — brief expanding ring on a Leaflet circle
+   marker. Triggered when the robot pose comes within 2 m of a defined
+   tag. The ring lives for ~800 ms; we animate the SVG circle's radius
+   and opacity via CSS on the `.apriltag-ripple > circle` selector. */
+.apriltag-ripple {
+  animation: apriltag-ripple-anim 850ms ease-out forwards;
+  pointer-events: none;
+}
+@keyframes apriltag-ripple-anim {
+  0%   { transform: scale(0.6); opacity: 1;   }
+  60%  { transform: scale(2.0); opacity: 0.45; }
+  100% { transform: scale(3.0); opacity: 0;   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .apriltag-ripple { animation: none; opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .robot-icon__ring,
+  .robot-icon__body,
+  .robot-icon__wedge,
+  .robot-icon__lowbat { animation: none !important; }
+}
+
 /* Waypoint tooltip */
 .waypoint-tooltip {
   background: rgba(255,152,0,0.9) !important;
@@ -993,6 +2093,39 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   padding: 2px 6px !important;
   border-radius: 3px;
 }
+
+/* Block C — Semantic zone label (permanent tooltip centered inside polygon).
+   Used by ZoneOverlay (BASE DE CARGA, ZONA DE TRABAJO A, ESTACIONAMIENTO).
+   Leaflet wraps tooltips in .leaflet-tooltip — the !important overrides are
+   needed because Leaflet's built-in styles win specificity otherwise. */
+.zone-label-tooltip {
+  background: rgba(20, 28, 22, 0.78) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 3px 8px !important;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.zone-label-tooltip::before { display: none !important; } /* hide arrow */
+
+/* Block C — Rail label (RIEL A, RIEL B, …) attached to rail-start markers
+   from /api/rails. Same treatment as zone labels but smaller and offset
+   to the right of the marker. */
+.rail-label-tooltip {
+  background: rgba(20, 28, 22, 0.85) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  padding: 1px 5px !important;
+  border-radius: 3px;
+}
+.rail-label-tooltip::before { display: none !important; }
 
 /* Map button active state */
 .map-btn-active {
@@ -1206,6 +2339,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .map-area:not(.mapping-layout) .map-section {
   width: 100%;
   height: 100%;
+  position: relative;   /* anchor for .map-empty-overlay and similar overlays */
 }
 
 /* Coverage badge overlay on map */
@@ -1413,4 +2547,1969 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* =========================================================================
+   Design system primitives — Light Minimal Redesign (Stripe/Apple vibe)
+   Each .ui-* class corresponds to a component in src/components/ui/.
+   Tokens (defined at top of file) flow through here so themes are swappable.
+   ========================================================================= */
+
+/* ── Card ──────────────────────────────────────────────────────────────── */
+.ui-card {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  color: var(--text);
+  position: relative;
+  transition: box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.ui-card--p-compact     { padding: var(--sp-3); }
+.ui-card--p-default     { padding: var(--sp-4); }
+.ui-card--p-comfortable { padding: var(--sp-5); }
+.ui-card--p-spacious    { padding: var(--sp-6); }
+
+.ui-card--shadow-none { box-shadow: none; }
+.ui-card--shadow-sm   { box-shadow: var(--shadow-sm); }
+.ui-card--shadow-md   { box-shadow: var(--shadow-md); }
+
+.ui-card--tone-accent { border-top: 2px solid var(--accent); }
+.ui-card--tone-warn   { border-top: 2px solid var(--warn); }
+.ui-card--tone-crit   { border-top: 2px solid var(--crit); }
+.ui-card--tone-info   { border-top: 2px solid var(--info); }
+
+.ui-card--interactive { cursor: pointer; }
+.ui-card--interactive:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.ui-card--interactive:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
+
+/* ── Button ────────────────────────────────────────────────────────────── */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ui-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.ui-btn:active:not(:disabled) { transform: scale(0.98); }
+/* Disabled treatment is per-variant below — keep cursor + accessibility
+   attributes here. We deliberately avoid a blanket opacity: 0.45 because
+   that left filled primary/destructive buttons looking colorful-but-faded,
+   easy to misread as still-enabled at a glance. */
+.ui-btn:disabled { cursor: not-allowed; }
+
+.ui-btn--sm { min-height: var(--tap-small); padding: 0 var(--sp-3); font-size: var(--font-sm); }
+.ui-btn--md { min-height: var(--tap-min);   padding: 0 var(--sp-4); font-size: var(--font-base); }
+.ui-btn--lg { min-height: var(--tap-action); padding: 0 var(--sp-5); font-size: var(--font-md); font-weight: 600; }
+.ui-btn--block { width: 100%; }
+
+/* Primary: accent green, white text */
+.ui-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-xs);
+}
+.ui-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.ui-btn--primary:active:not(:disabled) { background: var(--accent-active); border-color: var(--accent-active); }
+/* Primary disabled — flat surface-2 + text-secondary, NOT a faded green.
+   A pale green button is easy to misread as "enabled but ghosted"; a
+   grey button reads as "not available right now". */
+.ui-btn--primary:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+
+/* Secondary: surface bg, dark text */
+.ui-btn--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.ui-btn--secondary:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-strong); }
+.ui-btn--secondary:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+
+/* Ghost: transparent, hover lights up */
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: transparent;
+}
+.ui-btn--ghost:hover:not(:disabled) { background: var(--surface-2); }
+.ui-btn--ghost:disabled { color: var(--dim); }
+
+/* Destructive: crit text on surface; the actual "danger" red bg is reserved
+   for cases where the user should think twice (E-stop, mission cancel). */
+.ui-btn--destructive {
+  background: var(--surface);
+  color: var(--crit);
+  border-color: var(--crit-soft);
+}
+.ui-btn--destructive:hover:not(:disabled) { background: var(--crit-soft); border-color: var(--crit); }
+.ui-btn--destructive:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+
+.ui-btn__icon { display: inline-flex; flex-shrink: 0; }
+.ui-btn__icon--spin {
+  animation: ui-spin 0.8s linear infinite;
+}
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+.ui-btn__label { white-space: nowrap; }
+
+/* ── Pill ──────────────────────────────────────────────────────────────── */
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  border-radius: var(--r-xs);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ui-pill--xs { font-size: var(--font-2xs); padding: 2px var(--sp-2); }
+.ui-pill--sm { font-size: var(--font-xs);  padding: 3px var(--sp-2); }
+.ui-pill--md { font-size: var(--font-sm);  padding: 4px var(--sp-3); }
+
+.ui-pill--tone-neutral { background: var(--surface-2); color: var(--text-secondary); }
+.ui-pill--tone-accent  { background: var(--accent-soft); color: var(--accent); }
+.ui-pill--tone-warn    { background: var(--warn-soft);   color: var(--warn); }
+.ui-pill--tone-crit    { background: var(--crit-soft);   color: var(--crit); }
+.ui-pill--tone-info    { background: var(--info-soft);   color: var(--info); }
+
+.ui-pill__icon { display: inline-flex; flex-shrink: 0; }
+
+/* ── Tile ──────────────────────────────────────────────────────────────── */
+.ui-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 88px;
+  transition: box-shadow var(--dur-base) var(--ease);
+}
+.ui-tile__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ui-tile--tone-neutral .ui-tile__icon { background: var(--surface-2);  color: var(--text-secondary); }
+.ui-tile--tone-accent  .ui-tile__icon { background: var(--accent-soft); color: var(--accent); }
+.ui-tile--tone-warn    .ui-tile__icon { background: var(--warn-soft);   color: var(--warn); }
+.ui-tile--tone-crit    .ui-tile__icon { background: var(--crit-soft);   color: var(--crit); }
+
+.ui-tile--tone-crit { box-shadow: var(--shadow-sm), 0 0 0 1px var(--crit-ring); }
+.ui-tile--tone-warn { box-shadow: var(--shadow-sm), 0 0 0 1px var(--warn-ring); }
+
+.ui-tile__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ui-tile__eyebrow {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+.ui-tile__value {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-tile__sub {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Section ────────────────────────────────────────────────────────────── */
+.ui-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.ui-section--boxed {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  box-shadow: var(--shadow-sm);
+}
+.ui-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.ui-section__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ui-section__title {
+  margin: 0;
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+.ui-section__description {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);     /* was --dim (3.81:1 on surface) — now 7.66:1 */
+}
+.ui-section__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+.ui-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* Input row inside a Section — used by MappingPanel save/load + future
+   forms. Text input grows; trailing Button stays at intrinsic size. */
+.cockpit-input-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+.cockpit-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 0 var(--sp-3);
+  height: var(--tap-min);   /* 44 px — same touch floor as buttons */
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.cockpit-input::placeholder { color: var(--text-secondary); }
+.cockpit-input:hover:not(:disabled) { border-color: var(--text-secondary); }
+.cockpit-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+.cockpit-input:disabled {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+/* Screen-reader-only utility — visually hidden text that screen readers
+   still announce. Used for icon-only buttons where the icon carries the
+   meaning visually but ARIA needs a label. */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
+/* ── EmptyState ────────────────────────────────────────────────────────── */
+.ui-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  color: var(--text-secondary);
+}
+.ui-empty--compact { padding: var(--sp-2) 0; }
+.ui-empty__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ui-empty--compact .ui-empty__icon { width: 28px; height: 28px; }
+.ui-empty__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ui-empty__title {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.3;
+}
+.ui-empty__description {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.ui-empty__action { flex-shrink: 0; }
+
+/* ── StatusDot ─────────────────────────────────────────────────────────── */
+.ui-dot {
+  display: inline-block;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+  position: relative;
+}
+.ui-dot--sm { width: 8px; height: 8px; }
+.ui-dot--md { width: 10px; height: 10px; }
+
+.ui-dot--tone-ok      { background: var(--accent); }
+.ui-dot--tone-warn    { background: var(--warn); }
+.ui-dot--tone-crit    { background: var(--crit); }
+.ui-dot--tone-neutral { background: var(--dim); }
+
+.ui-dot--pulse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-full);
+  background: currentColor;
+  opacity: 0.4;
+  animation: ui-dot-pulse 1.6s cubic-bezier(0, 0.4, 0.6, 1) infinite;
+}
+@keyframes ui-dot-pulse {
+  0%   { transform: scale(1);   opacity: 0.4; }
+  100% { transform: scale(3);   opacity: 0; }
+}
+.ui-dot--pulse.ui-dot--tone-ok::before    { background: var(--accent); }
+.ui-dot--pulse.ui-dot--tone-warn::before  { background: var(--warn); }
+.ui-dot--pulse.ui-dot--tone-crit::before  { background: var(--crit); }
+
+/* ── Skeleton ──────────────────────────────────────────────────────────── */
+.ui-skeleton {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--r-sm);
+  animation: ui-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+.ui-skeleton--bar    { width: 100%; height: 14px; }
+.ui-skeleton--text   { width: 80%; height: 12px; }
+.ui-skeleton--circle { width: 32px; height: 32px; border-radius: var(--r-full); }
+
+@keyframes ui-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton { animation: none; background: var(--surface-2); }
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+.ui-toast-region {
+  position: fixed;
+  right: var(--sp-5);
+  bottom: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  z-index: 100;
+  pointer-events: none;
+  max-width: 380px;
+}
+.ui-toast {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  animation: ui-toast-in var(--dur-slow) var(--ease-bounce);
+}
+.ui-toast--ok    { border-left: 3px solid var(--accent); }
+.ui-toast--warn  { border-left: 3px solid var(--warn); }
+.ui-toast--crit  { border-left: 3px solid var(--crit); }
+.ui-toast--info  { border-left: 3px solid var(--info); }
+
+.ui-toast__icon { flex-shrink: 0; margin-top: 1px; }
+.ui-toast--ok   .ui-toast__icon { color: var(--accent); }
+.ui-toast--warn .ui-toast__icon { color: var(--warn); }
+.ui-toast--crit .ui-toast__icon { color: var(--crit); }
+.ui-toast--info .ui-toast__icon { color: var(--info); }
+
+.ui-toast__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-toast__title { margin: 0; font-size: var(--font-sm); font-weight: 600; color: var(--text); }
+.ui-toast__description { margin: 0; font-size: var(--font-xs); color: var(--text-secondary); }
+
+.ui-toast__dismiss {
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ui-toast__dismiss:hover { background: var(--surface-2); color: var(--text); }
+
+@keyframes ui-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================================
+   Cockpit panel — Operate right column (Light Minimal).
+   Uses Section + Card + Button primitives; this section just adds the
+   panel-level layout + bespoke composition styles (mode pills, action
+   stack, task card, home-point card, modal).
+   ========================================================================= */
+
+.context-panel.cockpit-panel {
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  padding: var(--sp-4);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.cockpit-hint {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  margin: var(--sp-2) 0 0;
+}
+
+/* ── Mode pills (Modo de control) ──────────────────────────────────────── */
+.control-mode-rail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+.mode-pill {
+  position: relative;
+  min-height: var(--tap-large);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.mode-pill:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.mode-pill:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.mode-pill:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mode-pill--active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.mode-pill--active:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+  border-color: var(--accent-hover);
+}
+
+.mode-pill__label {
+  font-size: var(--font-md);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.mode-pill__sub {
+  font-size: var(--font-2xs);
+  opacity: 0.85;
+  letter-spacing: 0.3px;
+}
+
+/* ── Action stack ──────────────────────────────────────────────────────── */
+.action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* ── Task info card ────────────────────────────────────────────────────── */
+.task-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  min-height: 120px;
+}
+.task-card--mission {
+  justify-content: flex-start;
+}
+.task-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+}
+.task-card__name {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-doughnut { display: block; flex-shrink: 0; }
+.task-doughnut__value {
+  font-size: 18px;
+  font-weight: 600;
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.task-doughnut__label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.task-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.task-metric__value {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+}
+.task-metric__sub {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+/* ── Home point card ───────────────────────────────────────────────────── */
+.home-point-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.home-point-card--set { border-top: 2px solid var(--accent); }
+.home-point-card__body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.home-point-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.home-point-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.home-point-card__name {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.home-point-card__coords {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Modal (light theme, calm) ─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 36, 33, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: var(--sp-5);
+}
+.modal-card {
+  width: min(440px, 100%);
+  max-height: calc(100vh - var(--sp-10));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.modal-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.modal-card__title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.modal-card__body-text {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.modal-card__pose {
+  margin: 0;
+  font-size: var(--font-xs);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+}
+.modal-card__pose--err { color: var(--warn); background: var(--warn-soft); }
+.modal-card__label {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+.modal-card__input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-3);
+  font-size: var(--font-base);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.modal-card__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+.modal-card__error {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--crit);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--crit-soft);
+  border-radius: var(--r-sm);
+}
+.modal-card__footer {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+
+/* =========================================================================
+   Mission strip — bottom row (Light Minimal).
+   Two cards side by side: mission progress (left) + event ticker (right).
+   Uses Card primitive; strip-card-* classes add the bespoke layout.
+   ========================================================================= */
+
+.mission-strip {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.4fr);
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  align-items: stretch;
+}
+
+.strip-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.strip-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+}
+.strip-card__eyebrow {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.strip-card__title {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.strip-card__counter {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-variant-numeric: tabular-nums;
+}
+.strip-card__counter + .ui-btn {
+  margin-left: auto;
+}
+
+.strip-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.strip-card__footer strong { color: var(--text); font-weight: 600; }
+.strip-card__footer-dim { color: var(--dim); }
+
+/* Progress bar */
+.mission-bar {
+  position: relative;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+.mission-bar__fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--accent);
+  border-radius: var(--r-full);
+  transition: width var(--dur-slower) var(--ease);
+}
+.mission-bar--paused .mission-bar__fill { background: var(--warn); }
+.mission-bar--failed .mission-bar__fill { background: var(--crit); }
+
+/* Status-tinted top border for the mission card */
+.strip-card--status-running   { border-top: 2px solid var(--accent); }
+.strip-card--status-paused    { border-top: 2px solid var(--warn); }
+.strip-card--status-completed { border-top: 2px solid var(--accent); }
+.strip-card--status-failed    { border-top: 2px solid var(--crit); }
+.strip-card--status-canceled  { border-top: 2px solid var(--border-strong); }
+
+/* Event ticker rows */
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  overflow: hidden;
+}
+.event-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--font-xs);
+  min-width: 0;
+}
+.event-row__text {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.event-row__time {
+  color: var(--dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-2xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Narrow viewports: stack cards. */
+@media (max-width: 1100px) {
+  .mission-strip { grid-template-columns: 1fr 1fr; padding: var(--sp-2) var(--sp-4); }
+}
+@media (max-width: 820px) {
+  .mission-strip { grid-template-columns: 1fr; }
+}
+
+/* =========================================================================
+   ModeRail — left vertical navigation (Light Minimal).
+   Replaces emoji-icon kitsch with Lucide icons. Active state: accent-soft
+   bg + accent text + 2px accent strip on the left edge.
+   ========================================================================= */
+
+.mode-rail {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-2);
+  overflow-y: auto;
+}
+
+.rail-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: var(--sp-2) var(--sp-1);
+  min-height: var(--tap-large);
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.rail-btn:hover:not(.rail-btn--active) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.rail-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.rail-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-btn__label {
+  font-size: var(--font-2xs);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  text-align: center;
+  line-height: 1.15;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-btn--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.rail-btn--active::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: var(--accent);
+  border-radius: 0 var(--r-full) var(--r-full) 0;
+}
+
+/* Narrow viewports — hide labels (icon + native title tooltip still
+   give plenty of context). Cleaner than ellipsis-truncated nonsense. */
+@media (max-width: 1280px) {
+  .rail-btn__label { display: none; }
+  .rail-btn { padding: var(--sp-3) var(--sp-2); min-height: var(--tap-min); }
+}
+
+/* =========================================================================
+   LoginPage (Light Minimal).
+   Centered card on cream bg, brand lockup at top, single accent CTA.
+   ========================================================================= */
+
+.login-page {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
+}
+
+.login-card {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.login-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.login-card__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.login-card__title {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+.login-card__sub {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.login-form__label {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  margin-top: var(--sp-2);
+}
+.login-form__input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-3);
+  font-size: var(--font-base);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.login-form__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+.login-form__error {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--font-xs);
+  color: var(--crit);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--crit-soft);
+  border-radius: var(--r-sm);
+}
+.login-form .ui-btn { margin-top: var(--sp-3); }
+
+/* =========================================================================
+   Leaflet controls (Light Minimal).
+   Override defaults so zoom controls + attribution match the design system.
+   ========================================================================= */
+
+.leaflet-container {
+  /* `background-color` only — not the shorthand — so the .map-bg
+     .leaflet-container rule above can still layer its earth-wash
+     background-image. The !important is needed to defeat leaflet.css'
+     own `background: #ddd` default. */
+  background-color: var(--bg) !important;
+  font-family: inherit;
+  /* Smooth animation when the heading-up rotation engages /
+     disengages. JS sets `transform: rotate(...)` and updates the
+     `--map-bearing` custom property; the transition glues it
+     together. */
+  transition: transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --map-bearing: 0deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-container { transition: none; }
+}
+
+/* Counter-rotate text inside tooltips so labels stay horizontal while
+   the map spins around the robot. Leaflet sets `transform:
+   translate3d(...)` inline on the tooltip outer div, which beats our
+   stylesheet rule for `transform: rotate(...)` (inline > stylesheet
+   without `!important`). To avoid the conflict, MapView wraps every
+   tooltip text in a `.ll-rotate` span. We rotate THAT inner span,
+   not the outer tooltip div — so Leaflet's translate is untouched
+   and our rotation stacks cleanly. */
+.ll-rotate {
+  display: inline-block;
+  transform: rotate(calc(-1 * var(--map-bearing, 0deg)));
+  transform-origin: center center;
+  transition: transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ll-rotate { transition: none; }
+}
+
+/* SLAM occupancy overlay — only the dark (obstacle/wall) pixels survive
+   after multiply with the greenhouse layer, so free-space white doesn't
+   sit as a hard rectangle behind our row bands. The chained filter
+   pushes white pixels toward neutral grey before blending, which makes
+   the multiply visually "kill" the white-square artifact entirely while
+   keeping detected walls/obstacles legible as soft shadows. */
+.slam-overlay {
+  mix-blend-mode: multiply;
+  filter: contrast(1.4) brightness(1.08) saturate(0.7);
+  pointer-events: none;
+}
+/* When the robot is NOT in mapping mode the SLAM raster is redundant
+   noise behind the hand-designed greenhouse layout — the React layer
+   adds `.slam-hidden` to fade it out. */
+.slam-overlay.slam-hidden {
+  opacity: 0 !important;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+
+.leaflet-control-zoom {
+  border: 1px solid var(--border-strong) !important;
+  border-radius: var(--r-sm) !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm) !important;
+}
+.leaflet-control-zoom a {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  font-family: inherit;
+  font-weight: 500;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--surface-2) !important;
+  color: var(--accent) !important;
+}
+.leaflet-control-zoom a:first-child { border-bottom-color: var(--border) !important; }
+
+.leaflet-control-attribution {
+  background: rgba(254, 253, 251, 0.85) !important;
+  color: var(--dim) !important;
+  font-size: 10px;
+  padding: 1px 6px !important;
+  border-radius: var(--r-xs);
+}
+.leaflet-control-attribution a { color: var(--text-secondary) !important; }
+
+/* Map zone/rail tooltips already styled earlier; bump contrast for light bg. */
+.zone-label-tooltip {
+  background: rgba(254, 253, 251, 0.95) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border-strong) !important;
+  box-shadow: var(--shadow-sm);
+}
+.rail-label-tooltip {
+  background: rgba(254, 253, 251, 0.95) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-xs);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* Row band label — permanent tooltip centered inside each crop row band.
+   "HILERA A · FRENTE" / "HILERA A · ATRÁS". Subtle but legible at zoom-out;
+   M3 flips this to .row-band-label--active when the robot enters the band. */
+.row-band-label {
+  background: rgba(254, 253, 251, 0.94) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-strong) !important;
+  box-shadow: var(--shadow-xs);
+  font-size: 11px;                    /* was 10 — readable floor at tablet distance */
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px !important;
+  border-radius: var(--r-xs);
+  pointer-events: none;
+}
+.row-band-label::before { display: none !important; }   /* hide arrow */
+
+.row-band-label--active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border-color: var(--accent-soft-strong) !important;
+  box-shadow: var(--shadow-sm);
+  transform: scale(1.05);
+  transition: all var(--dur-slow) var(--ease-bounce);
+}
+
+/* When ANY row is active, the others dim so the operator's eye locks
+   on the working row. Smooth fade so changing rows doesn't flash. */
+.row-band-label--dimmed {
+  opacity: 0.45;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+
+/* Ghost row band — shown when /api/rails is empty (no rails registered yet).
+   Operator still sees the greenhouse skeleton with a clear "to be configured"
+   visual hint. */
+.row-band-label--ghost {
+  color: var(--text-secondary) !important;    /* was --dim (3.81 ratio fail) */
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  background: rgba(254, 253, 251, 0.92) !important;
+}
+
+/* Door label — sits just outside the greenhouse wall at the operator
+   access point. Calm tan-on-cream so it reads as architectural signage,
+   not a UI control. */
+.greenhouse-door-label {
+  background: transparent;
+  border: none;
+  font-size: 11px;                  /* was 9.5 — below readable floor */
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #6b5e44;                   /* slightly darker for AA at 11 px on cream */
+  white-space: nowrap;
+  pointer-events: none;
+}
+.greenhouse-door-label span {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(255, 248, 226, 0.85);
+  border: 1px solid rgba(124, 110, 79, 0.25);
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Rural context labels — neighbour greenhouse, water tank, distant
+   features. Small but readable; never compete with the active area. */
+.rural-distant-label {
+  background: transparent;
+  border: none;
+  font-size: 10px;                  /* was 9 — sub-readable */
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #6b5e44;                   /* darker tan, AA on the soil wash */
+  text-align: center;
+  opacity: 0.85;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Home / base landmark — pulsing accent-soft circle with a house glyph.
+   Marks the operator-defined base where "Ir a base" will navigate to. */
+.home-landmark-wrapper { background: transparent !important; border: none !important; }
+.home-landmark {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+.home-landmark__core {
+  position: absolute;
+  inset: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+.home-landmark__pulse {
+  position: absolute;
+  inset: 8px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  opacity: 0.35;
+  animation: home-landmark-pulse 2s cubic-bezier(0, 0.4, 0.6, 1) infinite;
+}
+@keyframes home-landmark-pulse {
+  0%   { transform: scale(1);   opacity: 0.4; }
+  100% { transform: scale(2.0); opacity: 0;   }
+}
+.home-landmark-tooltip {
+  background: rgba(254, 253, 251, 0.95) !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--accent-soft-strong) !important;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px !important;
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-xs);
+}
+.home-landmark-tooltip::before { display: none !important; }
+
+/* AprilTag marker labels — styled tooltip for the new divIcon glyphs.
+   Three rail-entry variants + one wall variant:
+   - rail        → linked structural slot (live tag configured)
+   - rail-empty  → structural slot with no tag yet (faint dashed outline)
+   - rail-loose  → tag at irregular pose (amber warning glyph)
+   - wall        → precise floor reference (grey square at raw pose) */
+.apriltag-marker { background: transparent !important; border: none !important; }
+
+/* Plant glyphs — small leaf silhouettes along each row band's edges
+   (where cucumber plants actually grow tight against the rail beds).
+   Decorative only: pointer-events off, kept under all other markers
+   via negative zIndexOffset on the Leaflet side. */
+.plant-marker {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+}
+.apriltag-marker--rail-empty { opacity: 0.85; }
+.apriltag-marker--rail-empty:hover { opacity: 1; }
+.apriltag-marker--rail-loose { /* keeps full opacity — the warning glyph
+                                   already telegraphs the issue */ }
+.apriltag-marker--wall-empty { opacity: 0.75; }
+.apriltag-marker--wall-empty:hover { opacity: 1; }
+.apriltag-marker--wall-other { opacity: 0.7; }   /* auxiliary refs (dock, etc.) */
+.apriltag-marker--wall-other:hover { opacity: 1; }
+
+/* Map empty state overlay — visible when no occupancy grid is loaded.
+   Sits on top of the greenhouse template (rendered behind via Leaflet),
+   centered with backdrop blur so the template peeks through. */
+.map-empty-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  pointer-events: none;   /* card itself enables pointer events */
+  padding: var(--sp-5);
+}
+.map-empty-card {
+  pointer-events: auto;
+  width: min(420px, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  backdrop-filter: blur(3px);
+  background: rgba(254, 253, 251, 0.92) !important;
+}
+.map-empty-card__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.map-empty-card__eyebrow {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.map-empty-card__title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.map-empty-card__description {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.map-empty-card__actions {
+  display: inline-flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Compass + scale chip — top-right of the viewport, just below the
+   topbar. Two stacked readouts:
+   - compass arrow rotating with the robot's heading
+   - dynamic scale bar that updates with the map zoom
+   Portal'd to body so it lives above Leaflet's compositor. */
+.compass-scale {
+  position: fixed;
+  /* Sits just BELOW the hero row, to the LEFT of the cockpit drawer.
+     The cockpit (right: var(--sp-3); width: var(--drawer-w-expanded))
+     occupies the right edge — adding the drawer width to the offset keeps
+     the compass entirely outside the drawer's area and outside its
+     semi-transparent backdrop (otherwise the chip bleeds through). */
+  top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3));
+  right: calc(var(--drawer-w-expanded) + var(--sp-3) * 2);
+  z-index: var(--z-recenter, 45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+.compass-scale__compass svg {
+  display: block;
+}
+.compass-scale__bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+.compass-scale__bar-line {
+  height: 4px;
+  background:
+    linear-gradient(to right,
+      var(--accent) 0%, var(--accent) 50%,
+      var(--text-secondary) 50%, var(--text-secondary) 100%);
+  border-radius: 1px;
+  position: relative;
+  transition: width var(--dur-base) var(--ease);
+}
+.compass-scale__bar-line::before,
+.compass-scale__bar-line::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 8px;
+  background: var(--text-secondary);
+}
+.compass-scale__bar-line::before { left: 0; }
+.compass-scale__bar-line::after  { right: 0; }
+.compass-scale__bar-label {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* Hide on narrow viewports — operators on phones don't need it. */
+@media (max-width: 899px) {
+  .compass-scale { display: none; }
+}
+
+/* Camera status pill — top-center of the map, shown when the camera is
+   in manual or frozen modes. Tells the operator why the view is no longer
+   auto-following. Paired with the floating RecenterButton FAB so the
+   "vista manual" callout has an obvious "tap to fix" affordance.
+
+   Centered absolute positioning so the pill reads as a system-level
+   status banner rather than a control. Pointer-events: none — pure label. */
+.camera-status-pill-wrap {
+  position: absolute;
+  top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-2));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: none;
+}
+.camera-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  animation: camera-pill-in var(--dur-base) var(--ease-out);
+}
+.camera-status-pill svg { flex-shrink: 0; }
+.camera-status-pill--manual {
+  background: rgba(246, 231, 212, 0.92);  /* warn-soft @ glass */
+  color: var(--warn);
+  border-color: rgba(184, 97, 46, 0.35);
+}
+.camera-status-pill--frozen {
+  background: rgba(245, 216, 210, 0.92);  /* crit-soft @ glass */
+  color: var(--crit);
+  border-color: rgba(168, 57, 42, 0.40);
+}
+@keyframes camera-pill-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+}
+@media (prefers-reduced-motion: reduce) {
+  .camera-status-pill { animation: none; }
+}
+
+/* Recenter FAB — floating action button at the bottom-right corner of the
+   map. Visible only when cameraMode !== 'follow'. Sized to clear the
+   cockpit drawer's left edge on tablet (1280×800 landscape). On viewports
+   below 900 px (responsive fallback), it shifts to the bottom-left so the
+   bottom sheet doesn't overlap.
+
+   Expanded state (first 4 s after appearing): label slides in to teach
+   the affordance. Collapses to icon-only afterward to stay calm. */
+.recenter-fab {
+  position: fixed;
+  bottom: calc(var(--log-h) + var(--sp-4));
+  right: calc(var(--drawer-w-expanded) + var(--sp-4));
+  z-index: var(--z-recenter, 45);
+
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--fab-size);
+  min-width: var(--fab-size);
+  padding: 0;
+  border: 1px solid var(--accent-hover);
+  border-radius: var(--r-full);
+  /* Accent primary treatment — the FAB is a true CTA ("get me back to the
+     robot"), and a cream-on-cream ghost button disappears against the
+     greenhouse template. Forest-green bg with white text reads instantly
+     against any map content. */
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-lg), 0 0 0 4px rgba(254, 253, 251, 0.55);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+
+  /* Width animates between icon-only and expanded label. */
+  overflow: hidden;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+  animation: recenter-fab-in var(--dur-slow) var(--ease-bounce);
+}
+.recenter-fab > svg {
+  flex-shrink: 0;
+  margin-left: 14px;
+  margin-right: 14px;
+}
+.recenter-fab--expanded > svg {
+  margin-right: var(--sp-2);
+}
+.recenter-fab__label {
+  max-width: 0;
+  opacity: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  padding-right: 0;
+  transition:
+    max-width var(--dur-slow) var(--ease),
+    opacity var(--dur-base) var(--ease),
+    padding-right var(--dur-slow) var(--ease);
+}
+.recenter-fab--expanded .recenter-fab__label {
+  max-width: 200px;
+  opacity: 1;
+  padding-right: var(--sp-4);
+}
+.recenter-fab:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-active);
+  box-shadow: var(--shadow-xl), 0 0 0 4px rgba(254, 253, 251, 0.55);
+}
+.recenter-fab:active {
+  transform: scale(0.96);
+  background: var(--accent-active);
+}
+.recenter-fab:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), 0 0 0 4px rgba(254, 253, 251, 0.55), var(--shadow-focus);
+}
+.recenter-fab--frozen {
+  background: var(--crit);
+  border-color: var(--crit-hover);
+  color: var(--on-crit);
+}
+.recenter-fab--frozen:hover {
+  background: var(--crit-hover);
+}
+@keyframes recenter-fab-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recenter-fab,
+  .recenter-fab__label { animation: none; transition: none; }
+}
+
+/* When the cockpit drawer collapses (or on narrow viewports), shift the
+   FAB to the left edge so it doesn't pile on top of the strip pill. */
+@media (max-width: 1199px) {
+  .recenter-fab {
+    right: calc(var(--rail-w-floating) + var(--sp-4));
+  }
+}
+@media (max-width: 899px) {
+  /* Below the immersive breakpoint the layout reverts to a grid; the FAB
+     pins above the bottom strip so it doesn't overlap content. */
+  .recenter-fab {
+    bottom: calc(var(--log-h) + var(--sp-3));
+    right: var(--sp-3);
+  }
+}
+
+/* Off-screen indicator — circular chevron pinned to the viewport edge when
+   the robot is outside the visible map bounds. Rotates to point toward
+   the robot; clicking re-engages camera follow. Smaller than the FAB so
+   the two reading levels (status vs. action) are distinct. */
+.offscreen-indicator {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  z-index: var(--z-recenter, 45);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent-hover);
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6);
+  cursor: pointer;
+  animation: offscreen-pulse 1.8s var(--ease) infinite;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.offscreen-indicator:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-xl), 0 0 0 3px rgba(254, 253, 251, 0.6);
+}
+.offscreen-indicator:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6), var(--shadow-focus);
+}
+/* Pulse via a glowing accent ring so we don't fight the inline transform
+   that React uses to apply the rotation toward the off-screen robot. */
+@keyframes offscreen-pulse {
+  0%, 100% {
+    box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6),
+                0 0 0 0 rgba(47, 111, 42, 0.45);
+  }
+  50% {
+    box-shadow: var(--shadow-lg), 0 0 0 3px rgba(254, 253, 251, 0.6),
+                0 0 0 10px rgba(47, 111, 42, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .offscreen-indicator { animation: none; }
+}
+
+/* Navigation path — animated marching dashes when actively navigating;
+   static when blocked or stopped. Targets the Leaflet SVG path element. */
+.nav-path { transition: stroke var(--dur-slow) var(--ease); }
+.nav-path--animated {
+  animation: nav-path-march 0.9s linear infinite;
+}
+@keyframes nav-path-march {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -14; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-path--animated { animation: none; }
+}
+
+/* Camera PIP — softer than the old hard black. */
+/* a11y: PIPs are now <button> elements — reset default button chrome and
+   restore the visual treatment that the old <div> had. */
+button.camera-pip,
+button.depth-pip {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+/* Hover affordance — the PIP was a button but had no tactile feedback,
+   so it read as a static thumbnail. Lift the shadow and tighten the
+   border on hover so the operator sees it's pressable. */
+button.camera-pip:hover,
+button.depth-pip:hover {
+  box-shadow: var(--shadow-lg) !important;
+  border-color: var(--border-strong) !important;
+  transform: translateY(-1px);
+}
+button.camera-pip:active,
+button.depth-pip:active {
+  transform: translateY(0) scale(0.99);
+}
+button.camera-pip:focus-visible,
+button.depth-pip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-md), var(--shadow-focus) !important;
+}
+.camera-pip {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--shadow-md) !important;
+  background: var(--surface-3) !important;
+  overflow: hidden;
+}
+.camera-pip-placeholder {
+  background: var(--surface-3);
+  color: var(--dim);
+  font-size: var(--font-xs);
+  letter-spacing: 0.3px;
+}
+.camera-snapshot-btn {
+  background: rgba(254, 253, 251, 0.9) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+/* =========================================================================
+   Connection banner — full-width overlay alert when WS disconnects.
+   Position fixed so it doesn't perturb the .app 4-row grid.
+   ========================================================================= */
+.connection-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
+  background: var(--warn);
+  color: var(--on-warn);
+  padding: var(--sp-2) var(--sp-5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  animation: connection-banner-in var(--dur-slow) var(--ease-out);
+}
+@keyframes connection-banner-in {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+.connection-banner__text { letter-spacing: 0.2px; }
+
+/* =========================================================================
+   PHASE 3 — IMMERSIVE FLOATING CHROME (≥900px)
+   Each chrome surface gets position: fixed + glass treatment + explicit
+   z-index. At <900px the responsive guard above neutralizes these via
+   the legacy 4-row grid.
+   ========================================================================= */
+
+@media (min-width: 900px) {
+  /* ── TopBar — full-width translucent chrome ─────────────────────────── */
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--topbar-h);
+    z-index: var(--z-topbar);
+    background: var(--glass-bg-soft);
+    backdrop-filter: var(--glass-blur-strong);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    border-bottom: 1px solid var(--border);
+    /* Soft elevation shadow + accent hairline at the bottom edge — the
+       hairline is the NavGreen forest-green at very low alpha, so a thin
+       brand stripe runs across the whole top of the app without shouting. */
+    box-shadow:
+      0 4px 14px rgba(26, 36, 33, 0.06),
+      inset 0 -2px 0 rgba(47, 111, 42, 0.10);
+  }
+  .app.is-disconnected .topbar { top: 36px; }   /* banner pushes topbar down */
+
+  /* ── HeroRow — 3 floating tile cards centered below the topbar ──────── */
+  .hero-row {
+    position: fixed;
+    top: calc(var(--topbar-h) + var(--sp-3));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(900px, calc(100vw - 240px));
+    z-index: var(--z-hero);
+    background: transparent;
+    border-bottom: none;
+    padding: 0;
+    /* Wrapper passes pointer events through; individual Tiles capture them. */
+    pointer-events: none;
+  }
+  .app.is-disconnected .hero-row { top: calc(var(--topbar-h) + 36px + var(--sp-3)); }
+  /* Each Tile becomes a glass card */
+  .hero-row > .ui-tile {
+    pointer-events: auto;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--shadow-md);
+    /* Tighter padding so the longest label ("Localización perdida") fits. */
+    padding: var(--sp-3) var(--sp-4);
+    grid-template-columns: 40px 1fr;
+    gap: var(--sp-3);
+    min-height: 72px;
+  }
+  .hero-row > .ui-tile .ui-tile__icon { width: 40px; height: 40px; }
+  /* Hero values stay at --font-lg (20 px) because longer status strings
+     like "Localización perdida" need to fit in a single line at the
+     292 px tile width. We get "more presence" via a slightly heavier
+     weight (700) instead of a bigger size. */
+  .hero-row > .ui-tile .ui-tile__value {
+    font-size: var(--font-lg);
+    font-weight: 700;
+  }
+  .hero-row > .ui-tile .ui-tile__sub { font-size: var(--font-xs); }   /* was --font-2xs (11) — 12 px reads better */
+
+  /* ── FleetOverlay — top-left below TopBar ───────────────────────────── */
+  .fleet-overlay {
+    position: fixed !important;
+    top: calc(var(--topbar-h) + var(--sp-3)) !important;
+    left: var(--sp-3) !important;
+    bottom: auto !important;
+    z-index: var(--z-fleet);
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+
+  /* ── ReplaySlider — bottom-center, only on analytics rail ───────────── */
+  .replay-panel {
+    position: fixed !important;
+    bottom: calc(var(--log-h) + var(--sp-3)) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: var(--z-replay);
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+
+  /* ── ModeRail — left floating column, icon-only ─────────────────────── */
+  .mode-rail {
+    position: fixed;
+    left: var(--sp-3);
+    top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3) * 2);
+    bottom: calc(var(--log-h) + var(--sp-3));
+    width: var(--rail-w-floating);
+    z-index: var(--z-rail);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--sp-2);
+    overflow-y: auto;
+  }
+  /* Icon-only in immersive mode: rail-w-floating is 64 px so a 44×44
+     button fits comfortably with 2 px of breathing room on each side.
+     Native `title` attribute on each button still provides the label
+     on hover, and we also surface a flyout label below. */
+  .mode-rail .rail-btn__label { display: none; }
+  .mode-rail .rail-btn {
+    padding: var(--sp-2) 0;
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+    width: 100%;
+  }
+
+  /* ── Cockpit drawer — right floating column ─────────────────────────── */
+  .cockpit-drawer {
+    position: fixed;
+    right: var(--sp-3);
+    top: calc(var(--topbar-h) + var(--hero-h) + var(--sp-3) * 2);
+    bottom: calc(var(--log-h) + var(--sp-3));
+    width: var(--drawer-w-expanded);
+    z-index: var(--z-cockpit);
+    background: var(--glass-bg-solid);
+    backdrop-filter: var(--glass-blur-deep);
+    -webkit-backdrop-filter: var(--glass-blur-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    transition: width var(--dur-slow) var(--ease);
+    /* Earlier had a bottom mask-image fade as a "scroll affordance",
+       but the operator reported it generated doubt more than it
+       communicated overflow — the controls near the bottom edge
+       looked half-rendered. Removed; the scrollbar plus the
+       MissionStrip sitting below carry enough visual context. */
+  }
+  /* The cockpit panel inside loses its old left-border + grid bg. */
+  .cockpit-drawer .context-panel.cockpit-panel {
+    background: transparent;
+    border-left: none;
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  /* ── MissionStrip — bottom centered floating card ───────────────────── */
+  .mission-strip {
+    position: fixed;
+    bottom: var(--sp-3);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(var(--strip-card-max), calc(100vw - var(--rail-w-floating) - var(--drawer-w-expanded) - var(--sp-3) * 4));
+    height: var(--log-h);
+    z-index: var(--z-strip);
+    background: var(--glass-bg-strong);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* ── CameraFeed PIPs — left column, right of ModeRail, stacked ──────────
+     Operator's left column reads top-to-bottom: ModeRail (icons) → blank →
+     Camera RGB → Depth heatmap → MissionStrip. Both PIPs share the same
+     `left` offset and width; they're stacked by varying `bottom`. Compact
+     enough that the camera + depth + strip don't fight for vertical room
+     on a 1280×800 tablet. */
+  .camera-pip,
+  button.camera-pip {
+    position: fixed !important;
+    left: calc(var(--rail-w-floating) + var(--sp-3) * 2) !important;
+    bottom: calc(var(--log-h) + var(--sp-3) * 3 + 132px) !important;
+    width: 220px !important;
+    height: 132px !important;
+    z-index: var(--z-camera);
+  }
+  .depth-pip,
+  button.depth-pip {
+    position: fixed !important;
+    left: calc(var(--rail-w-floating) + var(--sp-3) * 2) !important;
+    bottom: calc(var(--log-h) + var(--sp-3) * 2) !important;
+    width: 220px !important;
+    height: 132px !important;
+    z-index: var(--z-camera);
+  }
+  /* Snapshot button reads against the new compact aspect ratio. */
+  .camera-pip .camera-snapshot-btn,
+  button.camera-pip .camera-snapshot-btn {
+    top: 6px;
+    right: 6px;
+  }
+
+  /* ── Map empty state — sits OVER the map-bg, behind chrome ──────────── */
+  .map-empty-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: var(--z-map-empty);
+  }
+
+  /* ── ConnectionBanner — above topbar ────────────────────────────────── */
+  .connection-banner {
+    z-index: var(--z-banner);
+  }
+
+  /* ── Modal overlay z-index ──────────────────────────────────────────── */
+  .modal-overlay { z-index: var(--z-modal); }
+  .ui-toast-region { z-index: var(--z-toast); }
 }
