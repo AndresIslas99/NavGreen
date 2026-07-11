@@ -3,10 +3,15 @@
     can_interface: "can0"
     left_axis_id: 0
     right_axis_id: 1
-    # Measured 2026-03-18 on production chassis
-    wheel_radius: 0.0781       # meters — calibrated 2026-04-08 (ratio 2.66/2.13 from 3-trial test)
-    track_width: 0.960         # meters — calibrated 2026-04-08 (effective, from 2 spin trials)
-    gear_ratio: 10.0           # 10:1 planetary gearbox (motor turns per wheel turn)
+    # ── Kinematic geometry moved to the SSOT ──
+    # wheel_radius, track_width and gear_ratio now live in
+    # src/agv_description/config/robot_geometry.yaml (CRITICAL-02-02,
+    # 2026-05-13 SSOT-revert sprint: geometric truth 0.0625 / 0.735 / 10.0,
+    # vernier + manual-rotation verified; the April "calibrated" 0.0781 /
+    # 0.960 values were compensation for since-corrected mechanical issues).
+    # odrive.launch.py chains robot_geometry.yaml BEFORE this file; if the
+    # keys reappear here they would override the SSOT and silently mask
+    # drift — verify_geometry_ssot.py blocks exactly that.
     odom_frame_id: "odom"
     base_frame_id: "base_link"
     publish_rate_hz: 50
@@ -26,8 +31,18 @@
     zero_vel_epsilon: 0.03     # turns/s — below this, bypass all shaping and send exact zero
     min_effective_vel: 0.0     # turns/s — disabled; re-enable (e.g. 0.05) if stiction observed
     stiction_torque_ff: 0.03   # Nm — compensates caster wheel static friction
-    max_wheel_accel: 0.5       # turns/s² — gentler ramp reduces wheel slip on caster resistance
-    max_wheel_decel: 1.5       # turns/s² — decel 3x faster than accel for responsive stopping
+    # SSOT-revert sprint (2026-05-13): scaled up from 0.5 to 0.625 to
+    # preserve the empirical caster-safe real linear m/s² this value
+    # encodes. The previous 0.5 was tuned against the inflated R=0.0781
+    # and corresponded to 0.0245 m/s² real linear accel. After the revert
+    # to R=0.0625, holding 0.5 turns/s² would drop real accel to
+    # 0.0196 m/s² (-20%) with no safety benefit. 0.625 restores the
+    # prior real-world feel: 0.625 × 2π × 0.0625 / 10 ≈ 0.0245 m/s².
+    max_wheel_accel: 0.625     # turns/s² — HAL is the binding constraint (ADR-0002, F5);
+                               #            kept tighter than velocity_smoother on purpose.
+    # Scaled proportionally with max_wheel_accel (same 1.25× factor) to
+    # keep the accel/decel asymmetry ratio (3×) constant.
+    max_wheel_decel: 1.875     # turns/s² — decel 3x faster than accel for responsive stopping
     # Caster wheel resistance compensation — inflates odometry covariance during
     # direction changes when caster wheels resist and then realign, corrupting
     # wheel encoder accuracy. The EKF then naturally shifts weight to IMU/VSLAM.

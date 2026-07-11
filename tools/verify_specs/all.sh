@@ -21,6 +21,8 @@ BLOCKING=(
   "$DIR/verify_werror.sh"
   "$DIR/verify_dev_only.py"
   "$DIR/verify_interfaces.py"
+  "$DIR/verify_topic_types.py"
+  "$DIR/verify_geometry_ssot.py"
 )
 
 WARNING=(

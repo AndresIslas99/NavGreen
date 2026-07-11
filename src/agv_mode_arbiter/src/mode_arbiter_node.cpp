@@ -113,6 +113,11 @@ class ModeArbiterNode : public rclcpp::Node {
     // sticky push flag below still prevents double-publication of
     // EXIT_PUSH without blocking any transitions.
     declare_parameter<double>("min_mode_dwell_s", 0.0);
+    // Sprint A.5 / HIGH-11-A-02: defense in depth on top of ODrive's
+    // cmd_vel_timeout_ms (200 ms). If the active source's most recent
+    // Twist is older than this threshold, publish zero instead of
+    // relaying the stale cache. 250 ms = 5× tick period at 20 Hz.
+    declare_parameter<double>("cmd_vel_source_timeout_ms", 250.0);
 
     const auto cmd_out      = get_parameter("cmd_vel_out_topic").as_string();
     const auto cmd_nav      = get_parameter("cmd_vel_nav_topic").as_string();
@@ -144,6 +149,8 @@ class ModeArbiterNode : public rclcpp::Node {
     auto_approach_ = get_parameter("auto_approach").as_bool();
     latest_inputs_.auto_approach = auto_approach_;
     min_mode_dwell_s_ = get_parameter("min_mode_dwell_s").as_double();
+    cmd_vel_source_timeout_ms_ =
+        get_parameter("cmd_vel_source_timeout_ms").as_double();
 
     pub_cmd_   = create_publisher<geometry_msgs::msg::Twist>(cmd_out, rclcpp::QoS{10});
     pub_state_ = create_publisher<std_msgs::msg::String>(state_topic, rclcpp::QoS{10});
@@ -159,15 +166,28 @@ class ModeArbiterNode : public rclcpp::Node {
           latest_inputs_.current_y = msg->pose.pose.position.y;
         });
 
+    // Each source callback stamps its own receive time so on_tick()
+    // can enforce cmd_vel_source_timeout_ms (HIGH-11-A-02). The arbiter
+    // does NOT trust upstream header stamps — only the time the message
+    // arrived at this node, which is what staleness should measure.
     sub_nav_ = create_subscription<geometry_msgs::msg::Twist>(
         cmd_nav, rclcpp::QoS{10},
-        [this](geometry_msgs::msg::Twist::ConstSharedPtr msg) { last_nav_ = msg; });
+        [this](geometry_msgs::msg::Twist::ConstSharedPtr msg) {
+          last_nav_ = msg;
+          last_nav_time_ = this->now();
+        });
     sub_approach_ = create_subscription<geometry_msgs::msg::Twist>(
         cmd_approach, rclcpp::QoS{10},
-        [this](geometry_msgs::msg::Twist::ConstSharedPtr msg) { last_approach_ = msg; });
+        [this](geometry_msgs::msg::Twist::ConstSharedPtr msg) {
+          last_approach_ = msg;
+          last_approach_time_ = this->now();
+        });
     sub_rail_ = create_subscription<geometry_msgs::msg::Twist>(
         cmd_rail, rclcpp::QoS{10},
-        [this](geometry_msgs::msg::Twist::ConstSharedPtr msg) { last_rail_ = msg; });
+        [this](geometry_msgs::msg::Twist::ConstSharedPtr msg) {
+          last_rail_ = msg;
+          last_rail_time_ = this->now();
+        });
 
     sub_zone_ = create_subscription<std_msgs::msg::String>(
         zone_topic, rclcpp::QoS{10},
@@ -178,6 +198,9 @@ class ModeArbiterNode : public rclcpp::Node {
     sub_driver_state_ = create_subscription<std_msgs::msg::String>(
         driver_state_topic, rclcpp::QoS{10},
         std::bind(&ModeArbiterNode::on_driver_state, this, _1));
+    // HIL-only String side-channel from agv_hil_bridges/sim_obstacle_relay,
+    // OR-ed with the typed nav2 subscription below (CLAUDE.md "subscribed twice").
+    // verify_topic_types: allow(documented HIL dual-type side-channel)
     sub_collision_ = create_subscription<std_msgs::msg::String>(
         collision_topic, rclcpp::QoS{10},
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
@@ -197,8 +220,13 @@ class ModeArbiterNode : public rclcpp::Node {
                      nav2_msgs::msg::CollisionMonitorState::STOP);
               });
     }
+    // QoS — transient_local so we receive the operator's last-published
+    // mode even when this arbiter starts AFTER the dashboard backend
+    // (systemd units boot in non-deterministic order; with volatile QoS
+    // the backend's boot-seed publish was lost when the arbiter started
+    // later). Both sides must be transient_local for late-joiner delivery.
     sub_operator_ = create_subscription<std_msgs::msg::String>(
-        operator_topic, rclcpp::QoS{10},
+        operator_topic, rclcpp::QoS(1).transient_local().reliable(),
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
           latest_inputs_.operator_mode = msg->data;
         });
@@ -354,21 +382,55 @@ class ModeArbiterNode : public rclcpp::Node {
     active_source_ = out.active_source;
 
     // Relay the selected Twist, or publish zero.
+    //
+    // Sprint A.5 / HIGH-11-A-02 — per-source staleness gate. ODrive's
+    // cmd_vel_timeout_ms (200 ms) is the downstream backstop, but the
+    // arbiter itself should not relay stale cached commands. If the
+    // active source's last receive time is older than
+    // cmd_vel_source_timeout_ms_, publish zero instead and emit a
+    // throttled WARN naming the offending source. last_*_time_ at
+    // (0,0,RCL_ROS_TIME) means "never received" — treat as stale.
+    const auto now_t = this->now();
+    const rclcpp::Duration timeout_dur =
+        rclcpp::Duration::from_seconds(cmd_vel_source_timeout_ms_ / 1000.0);
+    auto is_source_fresh = [&](const rclcpp::Time& t) -> bool {
+      if (t.nanoseconds() == 0) return false;
+      return (now_t - t) <= timeout_dur;
+    };
     geometry_msgs::msg::Twist cmd;
+    bool source_stale = false;
+    const char* stale_name = "";
     switch (active_source_) {
       case Source::NAV:
-        if (last_nav_) cmd = *last_nav_;
+        if (last_nav_ && is_source_fresh(last_nav_time_)) {
+          cmd = *last_nav_;
+        } else if (last_nav_) {
+          source_stale = true; stale_name = "nav";
+        }
         break;
       case Source::APPROACH:
-        if (last_approach_) cmd = *last_approach_;
+        if (last_approach_ && is_source_fresh(last_approach_time_)) {
+          cmd = *last_approach_;
+        } else if (last_approach_) {
+          source_stale = true; stale_name = "approach";
+        }
         break;
       case Source::RAIL:
-        if (last_rail_) cmd = *last_rail_;
+        if (last_rail_ && is_source_fresh(last_rail_time_)) {
+          cmd = *last_rail_;
+        } else if (last_rail_) {
+          source_stale = true; stale_name = "rail";
+        }
         break;
       case Source::NONE:
       default:
         // Leave cmd zero-initialised.
         break;
+    }
+    if (source_stale) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 500,
+          "active source '%s' has not published in > %.0f ms; publishing zero Twist",
+          stale_name, cmd_vel_source_timeout_ms_);
     }
 
     // Iter-33 diagnostics: RAIL source is wz=0 by contract. If we ever
@@ -520,6 +582,14 @@ class ModeArbiterNode : public rclcpp::Node {
   geometry_msgs::msg::Twist::ConstSharedPtr last_approach_;
   geometry_msgs::msg::Twist::ConstSharedPtr last_rail_;
 
+  // Sprint A.5 / HIGH-11-A-02 (2026-05-13 audit). Track per-source
+  // receive time so on_tick() can detect source silence and publish
+  // zero Twist instead of relaying a stale cached command. Sentinel
+  // value 0 means "never received".
+  rclcpp::Time last_nav_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_approach_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_rail_time_{0, 0, RCL_ROS_TIME};
+
   Mode   mode_ = Mode::CORRIDOR_NAV;
   Source active_source_ = Source::NAV;
   FsmInputs latest_inputs_;
@@ -537,6 +607,10 @@ class ModeArbiterNode : public rclcpp::Node {
   double approach_offset_y_ = 0.0;
   bool auto_approach_ = false;
   double min_mode_dwell_s_ = 0.5;
+  // Sprint A.5 / HIGH-11-A-02. If the active source's most recent
+  // Twist is older than this, the arbiter publishes zero instead of
+  // relaying the stale cached value. Defaults to 5× tick period.
+  double cmd_vel_source_timeout_ms_ = 250.0;
 
   // Greenhouse geometry for RAIL_EXIT push-goal + clearance. Populated
   // from parameters at ctor; the push logic is stateless (depends only

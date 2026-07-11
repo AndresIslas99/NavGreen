@@ -65,11 +65,12 @@ WHITELIST=(
   'src/agv_bringup/scripts/setup_production_network.sh|'
   # systemd unit comment with reference IP for documentation
   'src/agv_bringup/systemd/agv.service|192.168.'
-  # C++ defaults that will be parametrized via env var in Fase 5.c.3
-  # Whitelisted for now so the rest of the verify suite passes;
-  # tracked as known_issue in specs/persistence.yaml.
-  'src/agv_map_manager/src/map_manager_node.cpp|/home/orza/agv_data/maps/.current.area'
-  'src/agv_localization_init/src/auto_init_orchestrator_node.cpp|/home/orza/agv_data/maps/.current.area'
+  # C++ env-var fallback (parametrized 2026-07-11, closing the Fase 5.c.3
+  # known_issue): both nodes now read AGV_DATA_DIR at construction and only
+  # keep the dev-machine literal as the getenv fallback — the same idiom
+  # the launch files use (whitelisted above under 'AGV_DATA_DIR').
+  'src/agv_map_manager/src/map_manager_node.cpp|std::string("/home/orza/agv_data")'
+  'src/agv_localization_init/src/auto_init_orchestrator_node.cpp|std::string("/home/orza/agv_data")'
   # NOTE 2026-07-06: all src/agv_slam/* and src/zed-ros2-wrapper/* whitelist
   # entries were removed — those trees are external deploy-time packages and
   # no longer exist in this workspace. Dead whitelist entries are latent

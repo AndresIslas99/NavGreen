@@ -58,12 +58,14 @@ relays its Twist downstream and publishes the current mode.
 
 ## Failure modes
 
-- If an upstream source stops publishing, the arbiter keeps relaying the
-  last message until the FSM leaves that source. To hold zero velocity in
-  that case, upstream controllers must publish zero themselves when idle
-  (rail_driver does this via its IDLE state; Nav2 publishes nothing when
-  no goal is active, which is fine because the FSM will only select
-  `Source::NAV` while a Nav2 goal is being pursued).
+- If an upstream source stops publishing, the arbiter publishes zero
+  Twist once the source's last message is older than
+  `cmd_vel_source_timeout_ms` (default 250 ms; Sprint A.5 /
+  HIGH-11-A-02) and WARNs, instead of relaying the stale cache at
+  20 Hz. ODrive's own `cmd_vel_timeout_ms` (200 ms) remains the
+  downstream backstop if the arbiter itself dies. Upstream controllers
+  publishing zero on idle (rail_driver's IDLE state) is still good
+  practice but no longer the only line of defense.
 - `/agv/mode/set` missing is non-fatal: `operator_mode` defaults to
   `"nav"` so the FSM runs its zone-based logic.
 

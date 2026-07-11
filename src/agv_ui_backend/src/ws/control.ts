@@ -86,6 +86,50 @@ function verifyWsAuth(req: http.IncomingMessage, deps: AppDeps): Role | null {
   }
 }
 
+/**
+ * Sprint B / MEDIUM-11-C-06 (2026-05-13 audit) heartbeat. Server pings every
+ * 2 s; if the client misses two consecutive pongs (~5 s) the connection is
+ * terminated so the close handler runs. Browsers answer ping frames with
+ * pong automatically at the WebSocket wire level — no frontend change.
+ * Without this, a TCP half-open connection (WiFi drops on the dashboard
+ * side) goes undetected until the next write attempt, by which time the
+ * 5 Hz status loop may have queued seconds of pending messages. Returns the
+ * interval handle; the caller must clearInterval it on close.
+ */
+function startHeartbeat(ws: WebSocket): NodeJS.Timeout {
+  let isAlive = true;
+  ws.on('pong', () => { isAlive = true; });
+  const HEARTBEAT_INTERVAL_MS = 2000;
+  return setInterval(() => {
+    if (!isAlive) {
+      try { ws.terminate(); } catch { /* ignore */ }
+      return;
+    }
+    isAlive = false;
+    try { ws.ping(); } catch { /* ignore */ }
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+/**
+ * Sprint B / MEDIUM-11-C-06 + HAZOP H-07 deadman. If the disconnecting
+ * client was the last operator AND a mission is running, pause the mission
+ * and emit a crit event. The mission executor loops on state.missionPause
+ * with a 500 ms tick, so the pause takes effect within ~1 s. The mission is
+ * NOT aborted — position is preserved so the operator can click Resume
+ * (POST /api/missions/resume) after the WiFi recovers.
+ */
+function pauseMissionIfUnattended(deps: AppDeps): void {
+  const missionRunning =
+    deps.state.missionProgress != null &&
+    deps.state.missionProgress.status === 'running';
+  if (deps.state.activeClients === 0 && missionRunning && !deps.state.missionPause) {
+    deps.state.missionPause = true;
+    deps.eventLog.emit('crit', 'MISSION',
+      'Mission paused: last operator disconnected. ' +
+      'Resume from the dashboard after reconnecting.');
+  }
+}
+
 export function setupControlWs(server: http.Server, deps: AppDeps): void {
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
@@ -108,6 +152,8 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
     deps.state.activeClients++;
     console.log(`Dashboard client connected (${deps.state.activeClients})`);
+
+    const heartbeatInterval = startHeartbeat(ws);
 
     let lastPathSnapshot = '';
     let clientMapVersion = deps.state.mapVersion;  // start at current so we don't re-send on connect
@@ -287,8 +333,10 @@ export function setupControlWs(server: http.Server, deps: AppDeps): void {
 
     ws.on('close', () => {
       clearInterval(statusInterval);
+      clearInterval(heartbeatInterval);
       deps.state.activeClients = Math.max(0, deps.state.activeClients - 1);
       deps.ros.sendCmdVel(0, 0);
+      pauseMissionIfUnattended(deps);
     });
   });
 }
@@ -317,6 +365,10 @@ export function setupTeleopWs(server: http.Server, deps: AppDeps): void {
     }
 
     deps.state.activeClients++;
+    // Heartbeat matters even more here: a half-open teleop socket means the
+    // joystick's cmd_vel stream stopped arriving, but the close-handler's
+    // zero-velocity send only fires once the close is actually detected.
+    const heartbeatInterval = startHeartbeat(ws);
     ws.on('message', (data: Buffer) => {
       let msg: any;
       try {
@@ -331,8 +383,10 @@ export function setupTeleopWs(server: http.Server, deps: AppDeps): void {
       }
     });
     ws.on('close', () => {
+      clearInterval(heartbeatInterval);
       deps.state.activeClients = Math.max(0, deps.state.activeClients - 1);
       deps.ros.sendCmdVel(0, 0);
+      pauseMissionIfUnattended(deps);
     });
   });
 }

@@ -38,9 +38,9 @@ Publishes differential-drive wheel odometry at 50 Hz and converts `cmd_vel` to m
 | `can_interface` | `"can0"` | SocketCAN interface |
 | `left_axis_id` | `0` | CAN node ID left motor |
 | `right_axis_id` | `1` | CAN node ID right motor |
-| `wheel_radius` | *(required, YAML)* | Wheel radius (m) — 0.0781 calibrated 2026-04-08; no in-code default |
-| `track_width` | *(required, YAML)* | Effective wheel-to-wheel distance (m) — 0.960 calibrated; no in-code default |
-| `gear_ratio` | *(required, YAML)* | Motor turns / wheel turns — 10.0 for the 10:1 planetary; no in-code default |
+| `wheel_radius` | *(required, from SSOT)* | 0.0625 m geometric truth (vernier, CRITICAL-02-02). Lives in `agv_description/config/robot_geometry.yaml`, chained by odrive.launch.py; no in-code default |
+| `track_width` | *(required, from SSOT)* | 0.735 m geometric truth. Same SSOT file; the April "calibrated" 0.960 was compensation for since-corrected mechanical issues |
+| `gear_ratio` | *(required, from SSOT)* | 10.0 — confirmed empirically (1 wheel turn = 9.841 motor turns); firmware does NOT gear |
 | `publish_rate_hz` | `50` | Main loop frequency |
 | `cmd_vel_timeout_ms` | `200` | Stop motors if no cmd_vel (was 500) |
 | `feedback_timeout_ms` | `300` | Feedback watchdog: fault if no heartbeat/encoder frame for this long (0 disables) |

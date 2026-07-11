@@ -295,6 +295,7 @@ sequence:
     package: "agv_factor_graph"
     source: "src/agv_bringup/launch/agv_full.launch.py (factor_graph.launch.py)"
     start_time_s: 4.5
+    condition: "IfCondition(enable_factor_graph), default=false (Sprint B / HIGH-04-01: zero production consumers; 10-20% of a core when on)"
     mode: "parallel (publish_tf=false)"
     provides:
       - "topic /agv/factor_graph/odometry (validation only)"
@@ -448,6 +449,16 @@ sequence:
     status: "NEVER ENABLED in practice — dead launch branch"
 
   # ── t = 7.5 seconds ── (conditional)
+
+  - name: "rosbag2 event recorder (optional, snapshot mode)"
+    package: "rosbag2 (external, ExecuteProcess)"
+    source: "src/agv_bringup/launch/agv_full.launch.py (ros2 bag record)"
+    start_time_s: 8.5
+    condition: "IfCondition(enable_event_recording), default=false (Sprint D / MEDIUM-10-04)"
+    mode: "snapshot — ~32 MB in-memory ring, flushed to ${AGV_DATA_DIR}/bags/ by /rosbag2_recorder/snapshot"
+    provides:
+      - "post-mortem MCAP bags of the cmd_vel chain + odom + scan + safety topics"
+    failure_impact: "None — diagnostics only. Not in the critical path."
 
   - name: "foxglove_bridge (optional diagnostics)"
     package: "foxglove_bridge (external)"
