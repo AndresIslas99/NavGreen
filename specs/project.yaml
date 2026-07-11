@@ -62,6 +62,11 @@ environment:
 
 robot:
   kinematics: "differential_drive"
+  # Single source of truth for kinematic geometry (wheel_radius, track_width,
+  # gear_ratio + URDF wheel-mount offsets), added in Sprint A of the
+  # 2026-05-13 audit to close CRITICAL-02-02. See
+  # specs/persistence.yaml#config_artifacts.robot_geometry.
+  kinematics_ssot_file: "src/agv_description/config/robot_geometry.yaml"
   traction:
     controller: "ODrive S1"
     motors: "2x M8325s BLDC"

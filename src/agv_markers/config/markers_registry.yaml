@@ -1,5 +1,9 @@
 # AprilTag marker registry — known marker poses in map frame
-# Family: tag36h11, tag face 0.20m × 0.20m (override per-tag via tag_size).
+# Family: tag36h11, tag face 0.20m × 0.20m by default. Each entry may
+# declare an optional `size: <meters>` field (Sprint E / HIGH-04-04) that
+# overrides the global tag_size parameter for that tag only — lets floor
+# and wall tags of different physical sizes coexist in one registry.
+# Duplicate ids keep the FIRST definition; malformed entries are skipped.
 # Border plate 0.25m × 0.25m × 5 mm (OmniPBR white). Tag thickness 1 mm.
 # Positions baked into agv-greenhouse-sim USD (greenhouse_with_robot.usd,
 # operator-confirmed 2026-04-18). 36 tags total, IDs 0–37 (ID 32 unused).

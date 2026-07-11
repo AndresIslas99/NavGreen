@@ -124,6 +124,20 @@ ODriveCANNode::ODriveCANNode() : Node("agv_odrive_node") {
     throw std::runtime_error("Invalid feedback_timeout_ms");
   }
 
+  // -- Kinematics boot diagnostic (CRITICAL-02-02 closure) --
+  // Log the live kinematics at every boot so the operator can cross-check
+  // against the geometry SSOT (agv_description/config/robot_geometry.yaml)
+  // and, on any doubt, against ODrive NVRAM via odrivetool
+  // (docs/calibration/odrive_nvram_dump_procedure.md). If ROS gear_ratio
+  // != 1.0 AND ODrive NVRAM also gears, motor turns are double-counted —
+  // verify before deployment.
+  RCLCPP_INFO(get_logger(),
+              "Kinematics SSOT: wheel_radius=%.4fm, track_width=%.4fm, gear_ratio=%.2f. "
+              "Cross-check against robot_geometry.yaml and ODrive NVRAM "
+              "(encoder.cpr, motor.config.pole_pairs) per "
+              "docs/calibration/odrive_nvram_dump_procedure.md.",
+              wheel_radius_, track_width_, gear_ratio_);
+
   // -- Publishers --
   pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>("wheel_odom", 10);
   pub_joint_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);

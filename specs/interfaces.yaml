@@ -490,8 +490,8 @@ topics:
          role: "safety stop → BLOCKED_HANDOFF (zero cmd_vel until clear)",
          subscribed_type: "nav2_msgs/msg/CollisionMonitorState (STOP action) + legacy std_msgs/String side-channel, OR-ed"}
       - {pkg: "agv_rail_driver", node: "rail_driver",
-         role: "collision hold during rail drive",
-         subscribed_type: "std_msgs/msg/String side-channel ONLY (substring 'stop') — does NOT match the nav2 type; in production rail_driver relies on the arbiter's BLOCKED_HANDOFF instead"}
+         role: "collision hold during rail drive (BLOCKED_WAIT)",
+         subscribed_type: "nav2_msgs/msg/CollisionMonitorState (STOP action) — typed since the Section-0 Day-2 field fix; the earlier std_msgs/String subscription never matched and rail_driver depended on the arbiter's BLOCKED_HANDOFF alone"}
     notes: |
       The spec previously declared this as std_msgs/msg/String which matched
       an older Nav2 version. Updated 2026-04-13 after audit bug #1 revealed
@@ -629,6 +629,7 @@ topics:
     owner_pkg: "agv_ui_backend"
     owner_node: "teleop_server"
     payload: "'nav' | 'teleop' | 'idle'"
+    qos: {reliability: "reliable", durability: "transient_local", history: "keep_last", depth: 1}
     alternative_publishers:
       - {pkg: "agv_integration_tests", role: "forces arbiter mode in HIL runs (dev-only)"}
     subscribers:
@@ -637,6 +638,11 @@ topics:
       The backend translates its layer-3 vocabulary before publishing:
       currentMode 'mapping' is sent as 'teleop' (the arbiter has no mapping
       concept). See specs/state_machine.yaml layer_5_runtime_arbiter.
+      transient_local on BOTH sides (2026-05-13 field fix): the backend and
+      the arbiter boot in non-deterministic order as separate systemd units;
+      with volatile QoS the backend's boot-seed publish was lost whenever
+      the arbiter started later, leaving operator_mode stuck at 'nav' and
+      the joystick clobbered by the arbiter's 20 Hz zero-Twist stream.
 
   - name: "/agv/zone/state"
     type: "std_msgs/msg/String"

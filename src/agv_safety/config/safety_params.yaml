@@ -41,6 +41,29 @@
       - 250   # ekf_global @10Hz → 2.5x period
       - 250   # scan @10Hz → 2.5x period
 
+    # Per-topic QoS reliability (Sprint D / HIGH-09-02, 2026-05-13).
+    # Empty array (default) preserves pre-Sprint-D behavior: every
+    # subscription uses best_effort. When provided, must be the same
+    # length as monitored_topics, in the same order. Valid values:
+    #   - "best_effort"             (pre-Sprint-D default)
+    #   - "reliable"
+    #   - "reliable_transient_local"
+    #
+    # Use "reliable" when monitoring a topic published RELIABLE; use
+    # "reliable_transient_local" when the publisher uses transient_local
+    # durability AND a late-joining supervisor must see the latched
+    # value. Mismatched durability between publisher (transient_local)
+    # and subscriber (volatile) loses the latched message on late-join —
+    # the bug class HIGH-09-02 catches.
+    #
+    # All three current monitored topics publish best_effort per
+    # specs/interfaces.yaml; the explicit list documents the intent
+    # and prevents silent drift if a future change flips one of them.
+    monitored_qos:
+      - "best_effort"   # wheel_odom
+      - "best_effort"   # odometry/global
+      - "best_effort"   # scan
+
 /**/cmd_vel_gate:
   ros__parameters:
     # These are the LAST-LINE caps. Nav2 already caps vx_max=0.4 and wz_max=1.5.
