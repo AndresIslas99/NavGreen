@@ -178,6 +178,9 @@ class ModeArbiterNode : public rclcpp::Node {
     sub_driver_state_ = create_subscription<std_msgs::msg::String>(
         driver_state_topic, rclcpp::QoS{10},
         std::bind(&ModeArbiterNode::on_driver_state, this, _1));
+    // HIL-only String side-channel from agv_hil_bridges/sim_obstacle_relay,
+    // OR-ed with the typed nav2 subscription below (CLAUDE.md "subscribed twice").
+    // verify_topic_types: allow(documented HIL dual-type side-channel)
     sub_collision_ = create_subscription<std_msgs::msg::String>(
         collision_topic, rclcpp::QoS{10},
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
