@@ -167,8 +167,16 @@ RailApproachNode::RailApproachNode() : Node("rail_approach") {
   // JSON payload published by auto_init_orchestrator. Used by the gate
   // in on_execute to reject coarse_approach paths when the EKF anchor
   // is not LOCALIZED.
+  //
+  // Sprint C / MEDIUM-10-06 (2026-05-13 audit). The publisher uses
+  // QoS(1).transient_local().reliable() so late joiners receive the most
+  // recent state on connect. Without transient_local here, a
+  // rail_approach booting AFTER auto_init already declared LOCALIZED
+  // never saw the latched message — the on_execute gate rejected
+  // coarse_approach calls until the next state transition (which may not
+  // come for minutes). Match the publisher's durability.
   loc_state_sub_ = create_subscription<std_msgs::msg::String>(
-    "localization/state", rclcpp::QoS(1).reliable(),
+    "localization/state", rclcpp::QoS(1).transient_local().reliable(),
     [this](std_msgs::msg::String::SharedPtr msg) {
       const std::string& d = msg->data;
       const std::string key = "\"action\":\"";
