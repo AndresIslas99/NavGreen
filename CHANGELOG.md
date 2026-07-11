@@ -14,6 +14,40 @@ settling.
   ripples, compass/scale, WCAG AA accessibility pass, Spanish operator copy,
   and a greenhouse-geometry SSOT route (`GET/PUT /api/greenhouse/geometry`).
   Rebranded to NavGreen.
+- May 2026 field-readiness audit integrated (sprints A–E + Section-0,
+  hardware-validated): kinematic geometry SSOT
+  (`agv_description/config/robot_geometry.yaml`, geometric truth
+  0.0625 m wheel radius / 0.735 m track width, vernier + manual-rotation
+  verified — closes CRITICAL-02-02), two new BLOCKING verifiers
+  (`verify_topic_types.py` catches pub/sub type drift against the spec;
+  `verify_geometry_ssot.py` blocks geometry re-declaration), per-source
+  staleness timeout in the mode arbiter, WebSocket heartbeat + mission
+  pause on operator disconnect, chrony wait at boot, `enable_factor_graph`
+  and `enable_event_recording` launch gates, per-tag AprilTag sizes,
+  per-topic QoS in the safety supervisor, `agv_greenhouse.repos` manifest
+  for fresh-Jetson recovery, and ~6,000 lines of audit evidence under
+  `docs/audit/` (HAZOP skeleton, E-stop wiring procedure, ODrive NVRAM
+  dump + G5 calibration records, ADRs 0001/0002).
+
+### Fixed
+- `rail_driver` subscribed to `/agv/collision_monitor_state` with the
+  wrong message type, so its own collision hold (`BLOCKED_WAIT`) never
+  engaged during rail drive — the arbiter's `BLOCKED_HANDOFF` was the
+  only effective stop. Same bug class as the arbiter fix in 0.1.0; the
+  new `verify_topic_types.py` blocks a fourth occurrence.
+- `/agv/mode/set` was volatile on both sides: when the arbiter booted
+  after the dashboard backend, the operator-mode seed was lost and the
+  joystick was clobbered by a 20 Hz zero-Twist stream. Both sides are
+  now reliable + transient_local.
+- `ekf_local` fused IMU orientation as absolute heading; any IMU re-zero
+  (USB reboot) snapped the local filter (+2.4° measured on a stationary
+  robot). It now consumes gyro rates only (HIGH-04-09).
+- `rail_approach` missed the latched localization state on late join
+  (volatile vs transient_local durability mismatch).
+- Collision stop_zone rear lobe trimmed to the footprint — the robot is
+  forward-only, so the 5 cm rear margin only produced false stops.
+- Hardcoded `/home/orza` defaults removed from `auto_init_orchestrator`
+  and `map_manager` (derive from `AGV_DATA_DIR`).
 
 ## [0.1.0] — 2026-07-08
 
