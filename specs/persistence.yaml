@@ -330,6 +330,37 @@ global_artifacts:
     note: "SSOT for the greenhouse's physical layout — aisle count, aisle spacing in Y, half-width of the rail centerline band, X-bounds of REAR/CORRIDOR/FRONT sections, rail gauge. Previously hardcoded constants lived in zone_classifier_impl.hpp and mirrored in the dashboard's greenhouseGeometry.ts; this artifact unifies them. Each ROS consumer loads at boot (not hot-reload — requires service restart). If the file is absent, each consumer falls back to its hardcoded defaults so the system never breaks; the dashboard's GET returns the defaults too. Edits via dashboard apply visually immediately; navigation picks them up on next restart."
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Event-triggered recording artifacts (Sprint D, MEDIUM-10-04)
+# ─────────────────────────────────────────────────────────────────────────────
+# When agv_full.launch.py is invoked with enable_event_recording:=true, an
+# ExecuteProcess runs `ros2 bag record --snapshot-mode --storage mcap` for
+# the safety-critical topic list. Flushes a bag to disk only when its
+# /rosbag2_recorder/snapshot service is called (manual or, in a future
+# commit, by the backend on a /agv/safety/status transition).
+
+recording_artifacts:
+
+  rosbag2_snapshot:
+    path_pattern: "${AGV_DATA_DIR}/bags/snapshot_<rosbag2_timestamp>"
+    format: "MCAP (rosbag2 storage plugin)"
+    writer:
+      package: "agv_bringup (ExecuteProcess in agv_full.launch.py)"
+      code_ref: "src/agv_bringup/launch/agv_full.launch.py"
+      mechanism: "ros2 bag record --snapshot-mode; flushed by /rosbag2_recorder/snapshot service call"
+    readers:
+      - package: "operator / engineer (Foxglove Studio replay)"
+        role: "post-mortem analysis of field events"
+    lifecycle: "persistent until manual cleanup (no rotation policy yet — tracked)"
+    required: false
+    note: |
+      enable_event_recording defaults to false. The recorder uses ~32 MB
+      of memory continuously. Trigger a dump via:
+        ros2 service call /rosbag2_recorder/snapshot std_srvs/srv/Trigger
+
+      MEDIUM-10-04 ships the recorder; auto-trigger from the backend on
+      /agv/safety/status transitions is a follow-up.
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HIL validation artifacts (not iterated by verify_persistence.py)
 # ─────────────────────────────────────────────────────────────────────────────
 # Separate top-level section because these artifacts are either (a) written
@@ -457,13 +488,10 @@ rules:
 # ─────────────────────────────────────────────────────────────────────────────
 known_issues:
   - issue: "Hardcoded /home/orza/agv_data/maps/.current.area default in 3 in-repo places"
-    locations:
-      - "src/agv_map_manager/src/map_manager_node.cpp (ROS param default, ~line 47)"
-      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp (declare_parameter default, ~line 132)"
-      - "src/agv_localization_init/src/auto_init_orchestrator_node.cpp (member initializer, ~line 1098)"
-      - "(external) agv_slam config zed2i_override.yaml pos_tracking.area_memory_db_path — follows the external package"
-    current_status: "Whitelisted in verify_no_hardcoded_paths.sh pending a proper refactor."
-    fix: "Read AGV_DATA_DIR env var at construction and build the path programmatically. Tracked as Fase 6 follow-up (not critical-path but desirable for portability)."
+    status: "FIXED 2026-07-11 (field-audit integration)"
+    was: "map_manager_node.cpp and auto_init_orchestrator_node.cpp declared the .current.area parameter default as a /home/orza literal; the orchestrator's member initializer duplicated it."
+    now: "Both nodes read AGV_DATA_DIR at construction and build the default programmatically (getenv fallback keeps the dev-machine literal, mirroring agv_full.launch.py's data_dir resolution). The member initializer is empty — always overwritten from the parameter."
+    remaining: "(external) agv_slam config zed2i_override.yaml pos_tracking.area_memory_db_path — follows the external package"
 
   - issue: "map_manager_node.map_dir drift to install share"
     status: "FIXED 2026-04-13 Fase 7 F3"

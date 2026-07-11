@@ -30,7 +30,8 @@ import os
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction,
+    DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription,
+    OpaqueFunction, TimerAction,
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -168,6 +169,31 @@ def generate_launch_description():
                               description='Enable behavior tree executor'),
         DeclareLaunchArgument('enable_slam_localization', default_value='true',
                               description='Enable SLAM Toolbox in localization mode for loop closure'),
+        # Sprint B (2026-05-13 audit, HIGH-04-01 / MEDIUM-04-05).
+        # agv_factor_graph runs iSAM2 at 10 Hz on a 200-pose sliding
+        # window. Its output topic /agv/factor_graph/odometry has zero
+        # downstream consumers in production; the validation it provides
+        # is moot because it currently consumes ekf_global's output and
+        # re-applies marker_pose priors (double-counting). Default OFF
+        # so production runs don't burn 10-20 % of a CPU core on a
+        # parallel estimator that nobody reads. Enable per-session for
+        # comparator runs (`enable_factor_graph:=true`).
+        DeclareLaunchArgument('enable_factor_graph', default_value='false',
+                              description='Run agv_factor_graph (parallel iSAM2 estimator). Off by default; turn on per-session for cutover validation runs.'),
+        # Sprint D (2026-05-13 audit, MEDIUM-10-04). Event-triggered
+        # rosbag2 in snapshot mode: ros2 bag record keeps messages in a
+        # memory ring buffer and only writes to disk when its snapshot
+        # service is called. Default false because the recorder holds a
+        # ~32 MB cache continuously — enable per-session when
+        # investigating field incidents or running endurance tests.
+        DeclareLaunchArgument(
+            'enable_event_recording', default_value='false',
+            description=(
+                'Run ros2 bag record in snapshot mode for safety-critical '
+                'topics. Output goes to ${AGV_DATA_DIR}/bags/. Trigger a '
+                'dump via `ros2 service call /rosbag2_recorder/snapshot '
+                'std_srvs/srv/Trigger`. See docs/audit/2026-05-13-greenhouse-'
+                'hardening/10_comms.md MEDIUM-10-04.')),
         DeclareLaunchArgument('slam_map_file', default_value='',
                               description='Path to serialized SLAM Toolbox map (without extension)'),
         DeclareLaunchArgument(
@@ -440,7 +466,8 @@ def generate_launch_description():
         ),
 
         # ── Factor graph estimator (t=4.5s, parallel to ekf_global) ──
-        # Runs alongside ekf_global with publish_tf=false. Compare on
+        # OFF by default (Sprint B / HIGH-04-01). When enabled, runs
+        # alongside ekf_global with publish_tf=false. Compare on
         # /agv/factor_graph/odometry vs /agv/odometry/global to validate.
         # Set publish_tf:=true to perform cutover from ekf_global.
         TimerAction(
@@ -456,6 +483,7 @@ def generate_launch_description():
                         'publish_tf': 'false',  # Parallel mode — ekf_global owns TF
                         'use_sim_time': use_sim_time,
                     }.items(),
+                    condition=IfCondition(LaunchConfiguration('enable_factor_graph')),
                 ),
             ],
         ),
@@ -795,6 +823,55 @@ def generate_launch_description():
                     }],
                     output='log',
                     condition=IfCondition(enable_behaviors),
+                ),
+            ],
+        ),
+
+        # ── Event-triggered rosbag2 (Sprint D, MEDIUM-10-04) ─────────────
+        # ros2 bag record in snapshot mode keeps a ~32 MB in-memory ring
+        # of the listed topics; flushes to disk only when its
+        # /rosbag2_recorder/snapshot service is called. Output bags land
+        # in ${AGV_DATA_DIR}/bags/ with an MCAP storage backend
+        # (compatible with Foxglove Studio). t=8.5 s — after the
+        # backend's status topic is established and after Nav2 has
+        # advertised its outputs.
+        TimerAction(
+            period=8.5,
+            actions=[
+                ExecuteProcess(
+                    cmd=[
+                        'ros2', 'bag', 'record',
+                        '--snapshot-mode',
+                        '--storage', 'mcap',
+                        '--max-cache-size', '33554432',  # 32 MiB ring buffer
+                        '--output',
+                        os.path.join(data_dir, 'bags', 'snapshot'),
+                        # Cmd_vel chain
+                        '/agv/cmd_vel',
+                        '/agv/cmd_vel_nav',
+                        '/agv/cmd_vel_approach',
+                        '/agv/cmd_vel_rail',
+                        '/agv/cmd_vel_smoothed',
+                        '/agv/cmd_vel_collision_safe',
+                        '/agv/cmd_vel_safe',
+                        # State / odom
+                        '/agv/wheel_odom',
+                        '/agv/odometry/global',
+                        '/agv/odometry/local',
+                        '/agv/scan',
+                        '/agv/marker_pose',
+                        '/agv/localization/state',
+                        # Safety + arbiter
+                        '/agv/safety/status',
+                        '/agv/collision_monitor_state',
+                        '/agv/mode/state',
+                        '/agv/mode/set',
+                        '/agv/e_stop',
+                        # ROS framework
+                        '/rosout',
+                    ],
+                    output='log',
+                    condition=IfCondition(LaunchConfiguration('enable_event_recording')),
                 ),
             ],
         ),

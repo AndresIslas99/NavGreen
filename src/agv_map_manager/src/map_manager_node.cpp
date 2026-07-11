@@ -43,8 +43,14 @@ public:
     // (pos_tracking.area_memory_db_path). On save we copy this file to
     // `<map_dir>/<name>.area`; on load we copy `<name>.area` back here and
     // trigger reset_pos_tracking so the SDK re-reads the swapped contents.
+    // Default derives from AGV_DATA_DIR (workspace rule: no hardcoded
+    // paths). Must resolve to the same file as auto_init_orchestrator's
+    // zed_area_file_path — both default to ${AGV_DATA_DIR}/maps/.current.area.
+    const char* env_data_dir = std::getenv("AGV_DATA_DIR");
+    const std::string default_data_dir =
+        env_data_dir ? std::string(env_data_dir) : std::string("/home/orza/agv_data");
     this->declare_parameter("zed_area_landing_path",
-      std::string("/home/orza/agv_data/maps/.current.area"));
+      default_data_dir + "/maps/.current.area");
     // Auto-save period for the area memory while a real map is loaded.
     // Defends against crashes/reboots losing the in-RAM landmark DB the
     // operator has accumulated between explicit Save Map clicks.

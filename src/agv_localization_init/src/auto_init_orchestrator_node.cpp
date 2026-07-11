@@ -52,6 +52,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <cstdlib>
 #include <string>
 #include <thread>
 #include <cmath>
@@ -128,8 +129,15 @@ public:
     this->declare_parameter("zed_max_xy_cov_m2", 0.10);
     this->declare_parameter("zed_max_yaw_cov_rad2", 0.05);
     this->declare_parameter("zed_min_consecutive_frames", 5);
+    // Default derives from AGV_DATA_DIR (workspace rule: no hardcoded
+    // paths — configuration comes from YAML or environment). The literal
+    // fallback matches the dev-machine layout, same backstop pattern as
+    // agv_full.launch.py's data_dir resolution.
+    const char* env_data_dir = std::getenv("AGV_DATA_DIR");
+    const std::string default_data_dir =
+        env_data_dir ? std::string(env_data_dir) : std::string("/home/orza/agv_data");
     this->declare_parameter("zed_area_file_path",
-      std::string("/home/orza/agv_data/maps/.current.area"));
+      default_data_dir + "/maps/.current.area");
 
     map_dir_ = this->get_parameter("map_dir").as_string();
     marker_timeout_s_ = this->get_parameter("marker_wait_timeout_s").as_double();
@@ -1095,7 +1103,9 @@ private:
   double zed_max_xy_cov_m2_{0.10};
   double zed_max_yaw_cov_rad2_{0.05};
   int zed_min_consecutive_{5};
-  std::string zed_area_file_path_{"/home/orza/agv_data/maps/.current.area"};
+  // Overwritten in the ctor from the zed_area_file_path parameter (whose
+  // default derives from AGV_DATA_DIR) — never read before that.
+  std::string zed_area_file_path_;
 
   std::mutex state_mutex_;  // protects current_map_name_ + current_state_ + last_seen_mode_
   std::string current_map_name_;
