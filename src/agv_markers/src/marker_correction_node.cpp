@@ -36,6 +36,11 @@
 struct MarkerPose {
   double x, y, z;
   double yaw;
+  // Per-tag physical size in meters (Sprint E / HIGH-04-04). 0 means
+  // "not declared" — fall back to the global tag_size parameter. Lets
+  // floor (small) and wall (larger) tags mix in one registry without
+  // corrupting the PnP geometry of one class.
+  double size{0.0};
 };
 
 class MarkerCorrectionNode : public rclcpp::Node {
@@ -227,6 +232,28 @@ private:
     int current_id = -1;
     MarkerPose current{0, 0, 0, 0};
     std::string line;
+    // Sprint E / HIGH-04-04: commit_current validates and inserts one
+    // parsed entry. Duplicate IDs keep the FIRST definition (preserves
+    // the canonical entry over a random later edit); non-finite fields
+    // and negative sizes drop the entry with a warning.
+    auto commit_current = [&]() {
+      if (current_id < 0) return;
+      if (!std::isfinite(current.x) || !std::isfinite(current.y) ||
+          !std::isfinite(current.z) || !std::isfinite(current.yaw) ||
+          !std::isfinite(current.size) || current.size < 0.0) {
+        RCLCPP_WARN(get_logger(),
+          "Rejecting tag_%d from %s: non-finite field or negative size",
+          current_id, path.c_str());
+        return;
+      }
+      if (registry_.count(current_id)) {
+        RCLCPP_WARN(get_logger(),
+          "Duplicate tag id %d in %s — keeping the first definition",
+          current_id, path.c_str());
+        return;
+      }
+      registry_[current_id] = current;
+    };
     while (std::getline(in, line)) {
       // Trim
       size_t start = line.find_first_not_of(" \t-");
@@ -235,7 +262,7 @@ private:
 
       try {
         if (trimmed.substr(0, 3) == "id:") {
-          if (current_id >= 0) registry_[current_id] = current;
+          commit_current();
           current = {0, 0, 0, 0};
           // Reset BEFORE parsing: if stoi throws, fields that follow the
           // bad id line are dropped instead of overwriting a valid marker.
@@ -249,6 +276,10 @@ private:
           current.z = std::stod(trimmed.substr(2));
         } else if (trimmed.substr(0, 4) == "yaw:") {
           current.yaw = std::stod(trimmed.substr(4));
+        } else if (trimmed.substr(0, 5) == "size:") {
+          // Optional per-tag physical size (HIGH-04-04). Omitted → 0 →
+          // the global tag_size parameter applies at detection time.
+          current.size = std::stod(trimmed.substr(5));
         }
       } catch (const std::exception& e) {
         RCLCPP_WARN(get_logger(),
@@ -256,11 +287,14 @@ private:
           path.c_str(), line.c_str(), e.what());
       }
     }
-    if (current_id >= 0) registry_[current_id] = current;
+    commit_current();
 
     RCLCPP_INFO(get_logger(), "Loaded %zu markers from %s", registry_.size(), path.c_str());
     for (auto& [id, m] : registry_) {
-      RCLCPP_INFO(get_logger(), "  tag_%d: (%.2f, %.2f, %.2f) yaw=%.2f", id, m.x, m.y, m.z, m.yaw);
+      RCLCPP_INFO(get_logger(), "  tag_%d: (%.2f, %.2f, %.2f) yaw=%.2f size=%.3f%s",
+        id, m.x, m.y, m.z, m.yaw,
+        m.size > 0.0 ? m.size : tag_size_,
+        m.size > 0.0 ? "" : " (default)");
     }
   }
 
@@ -309,8 +343,12 @@ private:
       if (it == registry_.end()) continue;
 
       // Estimate tag pose in camera frame using solvePnP
-      // Tag corners in tag frame (centered, CCW from bottom-left)
-      double half = tag_size_ / 2.0;
+      // Tag corners in tag frame (centered, CCW from bottom-left).
+      // Per-tag size wins over the global parameter (HIGH-04-04) so
+      // floor and wall tags of different physical sizes can coexist.
+      const double effective_size =
+          it->second.size > 0.0 ? it->second.size : tag_size_;
+      double half = effective_size / 2.0;
       std::vector<cv::Point3d> obj_pts = {
         {-half, -half, 0}, { half, -half, 0},
         { half,  half, 0}, {-half,  half, 0}
