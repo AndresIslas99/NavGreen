@@ -238,7 +238,7 @@ Pending validation in a separate session — requires a workflow change for map 
 
 | Parameter | Value | File |
 |-----------|-------|------|
-| `vx_max` (MPPI) | 0.4 m/s | nav2_params.yaml |
+| `vx_max` (MPPI) | **0.25 m/s** (safety cap — see [SAFETY] note in YAML) | nav2_params.yaml |
 | `vx_min` (MPPI) | **0.0** (forward-only) | nav2_params.yaml |
 | `wz_max` (MPPI) | 1.5 rad/s | nav2_params.yaml |
 | `time_steps` × `model_dt` (MPPI horizon) | 32 × 0.05 = 1.6 s | nav2_params.yaml |
@@ -246,7 +246,7 @@ Pending validation in a separate session — requires a workflow change for map 
 | `goal_tolerance` | xy=0.15m, yaw=0.25 rad | nav2_params.yaml |
 | `max_planning_time` | 2.0s | nav2_params.yaml |
 | `controller_frequency` | 20 Hz | nav2_params.yaml |
-| **Stop zone** | footprint + 5cm | collision_monitor.yaml |
+| **Stop zone** | footprint + 20cm front, footprint-exact rear | collision_monitor.yaml |
 | **Slowdown zone** | footprint + 25cm, 30% speed | collision_monitor.yaml |
 
 **Robot footprint** (meters): `[[0.50, 0.37], [0.50, -0.37], [-0.30, -0.37], [-0.30, 0.37]]`
@@ -268,9 +268,11 @@ Pending validation in a separate session — requires a workflow change for map 
 cmd_vel -> velocity_smoother -> cmd_vel_smoothed -> collision_monitor -> cmd_vel_safe
 ```
 
-- Stop zone: immediate halt if obstacle inside footprint + 5cm
+- Stop zone: immediate halt if obstacle inside footprint + 20cm front
+  (rear is footprint-exact — forward-only robot, see MEDIUM-09-05)
 - Slowdown zone: 30% speed reduction if obstacle within footprint + 25cm
-- Source: `/agv/scan` only (not depth, to avoid false positives)
+- Sources: `/agv/scan` + the pointcloud source configured in
+  collision_monitor.yaml
 
 ### HIL mode override
 
