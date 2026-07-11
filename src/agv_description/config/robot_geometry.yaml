@@ -1,0 +1,60 @@
+# Robot kinematic geometry — SSOT
+#
+# This is the SINGLE source of truth for wheel_radius, track_width,
+# gear_ratio, and the URDF wheel-mount offsets derived from them. Loaded
+# by:
+#   - src/agv_description/launch/description.launch.py
+#       → passed to xacro as args (`wheel_radius:=`, `left_wheel_y:=`, ...)
+#   - src/agv_odrive/launch/odrive.launch.py
+#       → chained before odrive_params.yaml so geometry SSOT wins; consumed
+#         by odrive_can_node
+#
+# Contract declared in specs/persistence.yaml#config_artifacts.robot_geometry
+# and specs/launch_sequence.yaml (robot_description_launch + agv_odrive_node
+# parameters_files).
+#
+# ─────────────────────────────────────────────────────────────────────────
+# CRITICAL-02-02 — closed 2026-05-13 (Section 0 + SSOT-revert sprint)
+# ─────────────────────────────────────────────────────────────────────────
+# The audit's original hypothesis ("the 1.25× factor between scaffold
+# 0.0781 and geometric 0.0625 is an ODrive NVRAM bug") is DISPROVEN by
+# Section-0 Day-2 empirical verification:
+#
+#   * Both ODrive S1 boards have stock M8325s values: pole_pairs=20,
+#     onboard_encoder0 (commutation+load), pos_vel_mapper.scale=1.0.
+#     No hidden gearing or scale in firmware.
+#     See docs/calibration/odrive_nvram_dump_2026-05-13.txt.
+#   * Gearbox is 10:1 — confirmed empirically: 1 manual wheel turn =
+#     9.841 motor turns (1.6% manual-rotation precision).
+#   * Wheel diameter is 125 mm (radius 0.0625 m) — vernier-confirmed.
+#   * `inc_encoder0.cpr=8192` exists but is NOT in the loop:
+#     commutation_encoder = load_encoder = 13 (ONBOARD_ENCODER0).
+#
+# The 0.0781 scaffold was historical compensation for mechanical
+# manufacturing variance + caster backlash, both since corrected at the
+# hardware level (per operator authority, 2026-05-13).
+#
+# Values are now reverted to the geometric truth. Downstream parameters
+# tuned against the inflated scaffold have been rescaled where strictly
+# necessary to preserve real-world m/s² parity (HAL accel/decel — see
+# src/agv_odrive/config/odrive_params.yaml).
+#
+# Full audit + empirical record:
+#   docs/audit/2026-05-13-pre-phase1-verification.md §F1
+#   docs/audit/2026-05-13-greenhouse-hardening/SUMMARY.md §CRITICAL-02-02
+# ─────────────────────────────────────────────────────────────────────────
+
+/**:
+  ros__parameters:
+    # ── Wheel kinematics (consumed by agv_odrive odrive_can_node) ──
+    wheel_radius: 0.0625         # m — geometric truth (vernier-measured)
+    track_width:  0.735          # m — geometric truth
+    gear_ratio:   10.0           # motor turns / wheel turn (external planetary, firmware does NOT do gearing)
+
+    # ── URDF wheel-mount offsets (consumed by description.launch.py as
+    # xacro args; values derived from track_width above; wheel_z is the
+    # physical axle drop from base_link) ──
+    left_wheel_y:   0.3675       # = +track_width / 2
+    right_wheel_y: -0.3675       # = -track_width / 2
+    wheel_z:       -0.1375       # axle below base_link plane (200 mm above ground - 62.5 mm radius)
+    wheel_width:    0.05         # cosmetic; affects visual + collision cylinder length

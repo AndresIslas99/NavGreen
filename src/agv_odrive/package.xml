@@ -17,6 +17,8 @@
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>sensor_msgs</depend>
+  <!-- odrive.launch.py reads robot_geometry.yaml from the agv_description share -->
+  <exec_depend>agv_description</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
 

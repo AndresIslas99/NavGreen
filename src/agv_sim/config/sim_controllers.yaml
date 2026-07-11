@@ -40,8 +40,12 @@
     right_wheel_names: ["right_wheel_joint"]
 
     # Reused from agv_controllers.yaml (agv_geometry.yaml values).
-    wheel_separation: 0.960
-    wheel_radius: 0.0781
+    # Matches the geometry SSOT (src/agv_description/config/robot_geometry.yaml,
+    # CRITICAL-02-02 revert to geometric truth). The previous 0.960/0.0781
+    # copied the April compensation values, which also mismatched the URDF
+    # this sim spawns (xacro defaults 0.0625/±0.3675).
+    wheel_separation: 0.735
+    wheel_radius: 0.0625
     wheel_separation_multiplier: 1.0
     left_wheel_radius_multiplier: 1.0
     right_wheel_radius_multiplier: 1.0

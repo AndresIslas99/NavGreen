@@ -330,6 +330,50 @@ global_artifacts:
     note: "SSOT for the greenhouse's physical layout — aisle count, aisle spacing in Y, half-width of the rail centerline band, X-bounds of REAR/CORRIDOR/FRONT sections, rail gauge. Previously hardcoded constants lived in zone_classifier_impl.hpp and mirrored in the dashboard's greenhouseGeometry.ts; this artifact unifies them. Each ROS consumer loads at boot (not hot-reload — requires service restart). If the file is absent, each consumer falls back to its hardcoded defaults so the system never breaks; the dashboard's GET returns the defaults too. Edits via dashboard apply visually immediately; navigation picks them up on next restart."
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Config artifacts (versioned in repo, loaded by multiple consumers)
+# ─────────────────────────────────────────────────────────────────────────────
+# Build-time config that lives in source control AND is loaded at runtime by
+# more than one node. The SSOT discipline: one writer (the repo file), many
+# readers; verify_geometry_ssot.py enforces consumers do not re-declare the
+# same values.
+
+config_artifacts:
+
+  robot_geometry:
+    path: "src/agv_description/config/robot_geometry.yaml"
+    format: "flat ROS 2 `/**:` parameter YAML"
+    writer:
+      package: "agv_description"
+      code_ref: "src/agv_description/config/robot_geometry.yaml"
+      mechanism: "hand-edited, versioned"
+    readers:
+      - package: "agv_description"
+        code_ref: "src/agv_description/launch/description.launch.py"
+        role: "passes wheel_radius / left_wheel_y / right_wheel_y / wheel_z / wheel_width as xacro args to robot_state_publisher"
+      - package: "agv_odrive"
+        code_ref: "src/agv_odrive/launch/odrive.launch.py"
+        role: "chained before odrive_params.yaml so geometry SSOT wins; consumed by odrive_can_node"
+      - package: "agv_sim"
+        code_ref: "src/agv_sim/config/sim_controllers.yaml"
+        role: "diff_drive_controller wheel_separation/wheel_radius mirror the SSOT values (sim reuses the real geometry)"
+    lifecycle: "persistent"
+    required: true
+    note: |
+      Single source of truth for kinematic geometry — wheel_radius,
+      track_width, gear_ratio, and the URDF wheel-mount offsets derived
+      from them. Created in Sprint A of the 2026-05-13 audit to close
+      CRITICAL-02-02 (six conflicting sources of wheel_radius across
+      URDF, odrive_params.yaml, robot_params.yaml, C++ defaults, nav2
+      footprint, and HIL bridge). CLOSED numerically by the SSOT-revert
+      sprint: the ODrive NVRAM dump disproved the firmware-bug
+      hypothesis (stock M8325s values, no hidden gearing), the 10:1
+      gearbox was confirmed by manual rotation (9.841 motor turns per
+      wheel turn), and the wheel radius vernier-measured at 0.0625 m.
+      The file holds the geometric truth: 0.0625 / 0.735 / 10.0.
+      Evidence: docs/audit/2026-05-13-pre-phase1-verification.md §F1,
+      docs/calibration/odrive_nvram_dump_2026-05-13.txt.
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Event-triggered recording artifacts (Sprint D, MEDIUM-10-04)
 # ─────────────────────────────────────────────────────────────────────────────
 # When agv_full.launch.py is invoked with enable_event_recording:=true, an
