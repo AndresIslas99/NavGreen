@@ -490,8 +490,8 @@ topics:
          role: "safety stop → BLOCKED_HANDOFF (zero cmd_vel until clear)",
          subscribed_type: "nav2_msgs/msg/CollisionMonitorState (STOP action) + legacy std_msgs/String side-channel, OR-ed"}
       - {pkg: "agv_rail_driver", node: "rail_driver",
-         role: "collision hold during rail drive",
-         subscribed_type: "std_msgs/msg/String side-channel ONLY (substring 'stop') — does NOT match the nav2 type; in production rail_driver relies on the arbiter's BLOCKED_HANDOFF instead"}
+         role: "collision hold during rail drive (BLOCKED_WAIT)",
+         subscribed_type: "nav2_msgs/msg/CollisionMonitorState (STOP action) — typed since the Section-0 Day-2 field fix; the earlier std_msgs/String subscription never matched and rail_driver depended on the arbiter's BLOCKED_HANDOFF alone"}
     notes: |
       The spec previously declared this as std_msgs/msg/String which matched
       an older Nav2 version. Updated 2026-04-13 after audit bug #1 revealed
