@@ -12,11 +12,11 @@ interface Props {
   onClearWaypoints: () => void
 }
 
-// Mission templates
+// Plantillas de misión — patrón de recorrido sobre los waypoints capturados.
 const TEMPLATES = [
-  { label: 'Row Patrol (A-B-C)', type: 'linear' },
-  { label: 'Loop (A-B-C-A)', type: 'loop' },
-  { label: 'Shuttle (A-B-A-B)', type: 'shuttle' },
+  { label: 'Patrulla (A-B-C)', short: 'Patrulla', type: 'linear' },
+  { label: 'Bucle (A-B-C-A)',  short: 'Bucle',    type: 'loop' },
+  { label: 'Vaivén (A-B-A-B)', short: 'Vaivén',   type: 'shuttle' },
 ]
 
 export function MissionsPanel({
@@ -144,7 +144,7 @@ export function MissionsPanel({
   const handleExecute = async (m: Mission) => {
     setActionError('')
     try { await api.executeMission(m.id) }
-    catch { setActionError('Failed to start mission') }
+    catch { setActionError('No se pudo iniciar la misión') }
   }
 
   const handleDelete = async (m: Mission) => {
@@ -155,19 +155,19 @@ export function MissionsPanel({
   const handlePause = async () => {
     setActionError('')
     try { await api.pauseMission() }
-    catch { setActionError('Failed to pause') }
+    catch { setActionError('No se pudo pausar') }
   }
 
   const handleResume = async () => {
     setActionError('')
     try { await api.resumeMission() }
-    catch { setActionError('Failed to resume') }
+    catch { setActionError('No se pudo reanudar') }
   }
 
   const handleCancel = async () => {
     setActionError('')
     try { await api.cancelGoal() }
-    catch { setActionError('Failed to cancel') }
+    catch { setActionError('No se pudo cancelar') }
   }
 
   const mp = missionProgress
@@ -178,11 +178,11 @@ export function MissionsPanel({
       {/* Mission progress (if executing) */}
       {mp && mp.status !== 'completed' && (
         <div className="panel-section">
-          <div className="section-title">Active Mission</div>
+          <div className="section-title">Misión activa</div>
           <div className="mission-active">
             <span className="mission-name">{mp.mission_name}</span>
             <span className="mission-meta">
-              Node {mp.current_node + 1} / {mp.total_nodes} — {mp.status}
+              Nodo {mp.current_node + 1} / {mp.total_nodes} — {mp.status}
             </span>
             <div className="progress-bar">
               <div
@@ -192,13 +192,13 @@ export function MissionsPanel({
             </div>
             <div className="btn-row">
               {isRunning && (
-                <button className="small" onClick={handlePause}>Pause</button>
+                <button className="small" onClick={handlePause}>Pausar</button>
               )}
               {mp.status === 'paused' && (
-                <button className="small action-btn" onClick={handleResume}>Resume</button>
+                <button className="small action-btn" onClick={handleResume}>Reanudar</button>
               )}
               {(isRunning || mp.status === 'paused') && (
-                <button className="small stop-btn" onClick={handleCancel}>Cancel</button>
+                <button className="small stop-btn" onClick={handleCancel}>Cancelar</button>
               )}
               {actionError && <span className="mission-error">{actionError}</span>}
             </div>
@@ -208,16 +208,16 @@ export function MissionsPanel({
 
       {/* Create mission */}
       <div className="panel-section">
-        <div className="section-title">Create Mission</div>
+        <div className="section-title">Crear misión</div>
         {!capturingWaypoints ? (
           <button className="full-width" onClick={onStartCapture} disabled={!actions.canSendGoal}>
-            + Capture Waypoints
+            + Capturar waypoints
           </button>
         ) : (
           <>
             <input
               type="text"
-              placeholder="Mission name"
+              placeholder="Nombre de la misión"
               value={missionName}
               onChange={e => setMissionName(e.target.value)}
               className="full-width"
@@ -232,7 +232,7 @@ export function MissionsPanel({
                   onClick={() => setSelectedTemplate(t.type)}
                   title={t.label}
                 >
-                  {t.label.split(' ')[0]}
+                  {t.short}
                 </button>
               ))}
             </div>
@@ -256,42 +256,42 @@ export function MissionsPanel({
             {/* Node edit dialog */}
             {editingNode !== null && (
               <div className="node-edit-dialog">
-                <div className="section-title">Node {editingNode + 1}</div>
+                <div className="section-title">Nodo {editingNode + 1}</div>
 
                 {/* Snap to defined AprilTag */}
                 <label className="form-field">
-                  Snap to AprilTag (optional)
+                  Fijar a AprilTag (opcional)
                   <select
                     value={nodeApriltagId ?? ''}
                     onChange={e => setNodeApriltagId(e.target.value === '' ? null : parseInt(e.target.value, 10))}
                     className="full-width"
                   >
-                    <option value="">— None (use waypoint coordinates) —</option>
+                    <option value="">— Ninguno (usar coordenadas del waypoint) —</option>
                     {definedTags.map(t => (
                       <option key={t.id} value={t.id}>
-                        #{t.id} {t.label} ({t.type === 'rail_start' ? '⏸ rail' : '🟦 wall'})
+                        #{t.id} {t.label} ({t.type === 'rail_start' ? '⏸ riel' : '🟦 pared'})
                       </option>
                     ))}
                   </select>
                 </label>
 
                 <label className="form-field">
-                  Action
+                  Acción
                   <select
                     value={nodeAction}
                     onChange={e => setNodeAction(e.target.value as WaypointAction)}
                     className="full-width"
                   >
-                    <option value="none">None</option>
-                    <option value="pause">Pause (wait N seconds)</option>
-                    <option value="signal">Signal</option>
-                    <option value="start_recording">Start recording</option>
-                    <option value="stop_recording">Stop recording</option>
+                    <option value="none">Ninguna</option>
+                    <option value="pause">Pausa (esperar N segundos)</option>
+                    <option value="signal">Señal</option>
+                    <option value="start_recording">Iniciar grabación</option>
+                    <option value="stop_recording">Detener grabación</option>
                   </select>
                 </label>
                 {nodeAction === 'pause' && (
                   <div className="pause-input">
-                    <label>Duration (s):</label>
+                    <label>Duración (s):</label>
                     <input
                       type="number"
                       min={1}
@@ -302,18 +302,18 @@ export function MissionsPanel({
                   </div>
                 )}
                 <div className="btn-row">
-                  <button className="small action-btn" onClick={handleSaveNodeEdit}>Apply</button>
-                  <button className="small secondary" onClick={() => setEditingNode(null)}>Cancel</button>
+                  <button className="small action-btn" onClick={handleSaveNodeEdit}>Aplicar</button>
+                  <button className="small secondary" onClick={() => setEditingNode(null)}>Cancelar</button>
                 </div>
               </div>
             )}
 
-            <p className="capture-status">{pendingWaypoints.length} waypoints — click map to add</p>
+            <p className="capture-status">{pendingWaypoints.length} waypoints — clic en el mapa para añadir</p>
             <div className="btn-row">
               <button onClick={handleSave} disabled={!missionName.trim() || pendingWaypoints.length === 0}>
-                Save
+                Guardar
               </button>
-              <button onClick={onClearWaypoints} className="secondary">Cancel</button>
+              <button onClick={onClearWaypoints} className="secondary">Cancelar</button>
             </div>
           </>
         )}
@@ -321,8 +321,8 @@ export function MissionsPanel({
 
       {/* Mission list */}
       <div className="panel-section">
-        <div className="section-title">Missions</div>
-        {missions.length === 0 && <p className="dim">No missions saved</p>}
+        <div className="section-title">Misiones</div>
+        {missions.length === 0 && <p className="dim">Sin misiones guardadas</p>}
         {missions.map(m => {
           const nodeCount = (m.nodes || m.waypoints || []).length
           const isExpanded = expandedMission === m.id
@@ -330,7 +330,7 @@ export function MissionsPanel({
             <div key={m.id} className="mission-row">
               <div className="mission-info" onClick={() => setExpandedMission(isExpanded ? null : m.id)}>
                 <span className="mission-name">{m.name}</span>
-                <span className="mission-meta">{nodeCount} nodes</span>
+                <span className="mission-meta">{nodeCount} {nodeCount === 1 ? 'nodo' : 'nodos'}</span>
               </div>
               {isExpanded && m.nodes && (
                 <div className="mission-detail">
@@ -351,9 +351,9 @@ export function MissionsPanel({
                   onClick={() => handleExecute(m)}
                   disabled={!actions.canExecuteMission || navActive}
                 >
-                  Run
+                  Ejecutar
                 </button>
-                <button className="small secondary" onClick={() => handleDelete(m)}>Del</button>
+                <button className="small secondary" onClick={() => handleDelete(m)}>Borrar</button>
               </div>
             </div>
           )

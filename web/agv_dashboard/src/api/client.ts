@@ -1,4 +1,7 @@
-import type { MapInfo, Mission, AuthStatus, AuthSession, TrafficZone, ZoneOccupancy, MissionRun } from './types'
+import type {
+  MapInfo, Mission, AuthStatus, AuthSession, TrafficZone, ZoneOccupancy,
+  MissionRun, HomePoint, SemanticZone, RailEntry,
+} from './types'
 
 // Sprint 1 Fase 1a: host-agnostic base URLs.
 // VITE_API_BASE empty (default) preserves same-origin behavior — works when
@@ -127,6 +130,22 @@ export const resumeMission = () => post('/api/missions/resume', {})
 export const sendGoal = (x: number, y: number, theta = 0) =>
   post('/api/nav/goal', { x, y, theta })
 export const cancelGoal = () => post('/api/nav/cancel', {})
+
+// Home point (operator base/dock) — see specs/hmi_api.yaml#home_point and
+// specs/persistence.yaml#home_point_json.
+export const getHomePoint = () => json<HomePoint | null>('/api/home_point')
+export const setHomePoint = (hp: { x: number; y: number; theta: number; name?: string }) =>
+  put('/api/home_point', hp)
+export const goHome = () => post('/api/home_point/go', {})
+
+// Semantic zones (operator-facing labeled map overlay; distinct from the
+// Nav2 traffic zones served by the fleet manager).
+export const getSemanticZones = () =>
+  json<{ zones: SemanticZone[]; error?: string }>('/api/zones')
+export const setSemanticZones = (zones: SemanticZone[]) => put('/api/zones', { zones })
+
+// Rails (data-driven map labels from agv_rail_approach/list_rail_starts).
+export const getRails = () => json<RailEntry[]>('/api/rails')
 
 // Accumulated map
 export const clearAccMap = () => del('/api/acc_map')
