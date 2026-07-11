@@ -1,0 +1,3641 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/validation/round_44_per_waypoint_analysis/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Análisis formal per-waypoint — Round 44, iter-21 - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#analisis-formal-per-waypoint-round-44-iter-21" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Análisis formal per-waypoint — Round 44, iter-21
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#contexto-global-del-hardware-y-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contexto global del hardware y stack
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contexto global del hardware y stack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#el-robot-y-la-zed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        El robot y la ZED
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#el-stack-de-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        El stack de control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#el-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        El harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#patron-sistemico-que-veras-repetirse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patrón sistémico que verás repetirse
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp01-nav2-corredor-sur" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp01 — nav2 corredor sur ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp01 — nav2 corredor sur ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-funciono-bien" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué funcionó bien
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lo-que-no-es-ideal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lo que no es ideal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion-arquitectonica-correcta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución arquitectónica correcta
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp02-nav2-corredor-sur-extendido-tf-race" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp02 — nav2 corredor sur extendido ❌ (TF race)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp02 — nav2 corredor sur extendido ❌ (TF race)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-no-funciona" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué no funciona
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion-arquitectonica-correcta_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución arquitectónica correcta
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp03-nav2-corredor-centro" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp03 — nav2 corredor centro ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp03 — nav2 corredor centro ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp04-rail_approach-tag-35-010-m-primer-rail_approach-success" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp04 — rail_approach tag 35 ✅ (0.10 m — primer rail_approach success)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp04 — rail_approach tag 35 ✅ (0.10 m — primer rail_approach success)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-funciono-bien_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué funcionó bien
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lo-que-no-es-ideal_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lo que no es ideal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion-arquitectonica-correcta_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución arquitectónica correcta
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp05-rail_drive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp05 — rail_drive ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp05 — rail_drive ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-funciono-bien_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué funcionó bien
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora-arquitectonica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora arquitectónica
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp06-rail_drive-reverso-central" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp06 — rail_drive reverso central ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp06 — rail_drive reverso central ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp07-rail_approach-tag-4-entrada-front" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp07 — rail_approach tag 4 (entrada FRONT) ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp07 — rail_approach tag 4 (entrada FRONT) ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp08-rail_drive-front-outbound" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp08 — rail_drive FRONT outbound ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp08 — rail_drive FRONT outbound ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp09-rail_drive-front-inbound" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp09 — rail_drive FRONT inbound ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp09 — rail_drive FRONT inbound ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora-relevante-para-wp10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora (relevante para wp10!)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp10-nav2-post-rail_drive-regresion-reincidente" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp10 — nav2 post-rail_drive ❌ (regresión reincidente)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp10 — nav2 post-rail_drive ❌ (regresión reincidente)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico-profundo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico profundo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-funciono-bien-parcial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué funcionó bien (parcial)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lo-que-falla-fundamentalmente" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lo que falla fundamentalmente
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion-arquitectonica-correcta_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución arquitectónica correcta
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp11-rail_approach-tag-36-rear-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp11 — rail_approach tag 36 (REAR +2.2) ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp11 — rail_approach tag 36 (REAR +2.2) ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp12-rail_approach-tag-3-front-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp12 — rail_approach tag 3 (FRONT −2.2) ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp12 — rail_approach tag 3 (FRONT −2.2) ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp13-rail_exit-desde-corredor-sur" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp13 — rail_exit desde corredor sur ❌
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp13 — rail_exit desde corredor sur ❌">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-esta-mal-fundamentalmente" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué está mal fundamentalmente
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion-arquitectonica-correcta_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución arquitectónica correcta
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp14-rail_exit-desde-corredor-norte" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp14 — rail_exit desde corredor norte ❌
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp14 — rail_exit desde corredor norte ❌">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp15-nav2-lane-change-post-rail_exit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp15 — nav2 lane-change post-rail_exit ❌
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp15 — nav2 lane-change post-rail_exit ❌">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flujo-esperado_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flujo esperado
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis-tecnico_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis técnico
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#que-esta-mal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qué está mal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solucion-arquitectonica-correcta_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solución arquitectónica correcta
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wp16-rail_approach-tag-3-re-entrada" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wp16 — rail_approach tag 3 (re-entrada) ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="wp16 — rail_approach tag 3 (re-entrada) ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escenario_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resultado-iter-21_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resultado iter-21
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analisis_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Análisis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mejora_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mejora
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resumen-arquitectonico-por-bucket" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resumen arquitectónico por bucket
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fix-transversal-prioritario-rail_driver-cancel_goal-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix transversal prioritario — rail_driver cancel_goal service
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priorizacion-recomendada-para-iter-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priorización recomendada para iter-22
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lo-que-la-iter-21-demostro-que-funciona" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lo que la iter-21 demostró que FUNCIONA
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/validation/round_44_per_waypoint_analysis.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="analisis-formal-per-waypoint-round-44-iter-21">Análisis formal per-waypoint — Round 44, iter-21<a class="headerlink" href="#analisis-formal-per-waypoint-round-44-iter-21" title="Permanent link">&para;</a></h1>
+<p><strong>Resultado</strong>: 11/16 SUCCEEDED (68.75 %), 0 colisiones, 23:01 min run.
+<strong>Report</strong>: <code>sim_episodes/precision_run_20260419_161137/report.json</code></p>
+<p>El objetivo de este documento NO es una lista de fixes táctiles sino un
+diagnóstico <em>arquitectónico</em> de cada waypoint — exitoso o fallido — con
+la solución que más respeta el diseño del stack, aun cuando sea más cara
+de implementar que un workaround. Cada sección sigue el mismo formato:</p>
+<ol>
+<li><strong>Escenario</strong> — qué se pide al robot.</li>
+<li><strong>Flujo esperado</strong> — qué hace cada nodo.</li>
+<li><strong>Resultado observado</strong> en iter-21 (con telemetría).</li>
+<li><strong>Análisis técnico profundo</strong> — qué pasó, apoyado en logs.</li>
+<li><strong>Lo que funcionó bien</strong> — lección positiva que conviene preservar.</li>
+<li><strong>Lo que falla / área de mejora</strong> — causa-raíz, no síntomas.</li>
+<li><strong>Solución arquitectónica correcta</strong> — la versión formal, no un hack.</li>
+</ol>
+<hr />
+<h2 id="contexto-global-del-hardware-y-stack">Contexto global del hardware y stack<a class="headerlink" href="#contexto-global-del-hardware-y-stack" title="Permanent link">&para;</a></h2>
+<h3 id="el-robot-y-la-zed">El robot y la ZED<a class="headerlink" href="#el-robot-y-la-zed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Chasis diferencial, dos ruedas motrices, ODrive CAN en producción
+  (HIL usa <code>gt_to_wheel_odom</code> para emular joint_states → wheel_odom).</li>
+<li><strong>base_link</strong> coincide con el plano del suelo en HIL (z=0 según
+  <code>map → base_link</code> reportado por tf2_echo).</li>
+<li><strong>zed_camera_link</strong>: offset estático <code>(0.70, 0.00, 0.010)</code> desde
+  base_link, sin rotación. La ZED está <strong>10 mm sobre el piso</strong>.</li>
+<li><strong>zed_left_camera_frame_optical</strong>: rotación ROS-REP-103 (X→derecha de
+  la imagen, Y→abajo, Z→delante de la escena). Con robot en yaw=0 la
+  cámara óptica mira +X del mundo; con yaw=π mira −X.</li>
+<li>Relevancia: al mirar tags de piso (z=2 mm) desde z=10 mm, el ángulo
+  de incidencia contra la normal +Z del tag es ~89–90°. El
+  <code>apriltag_sim_shim</code> tuvo que subir su <code>max_incidence_deg</code> de 85° a
+  89.5° para no rechazarlos silenciosamente.</li>
+</ul>
+<h3 id="el-stack-de-control">El stack de control<a class="headerlink" href="#el-stack-de-control" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Nodo</th>
+<th>Owner de cmd_vel</th>
+<th>Función</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Nav2 (controller_server + bt_navigator)</td>
+<td><code>cmd_vel_nav</code></td>
+<td>Navegación en corredores</td>
+</tr>
+<tr>
+<td>rail_approach (agv_rail_approach)</td>
+<td><code>cmd_vel_approach</code></td>
+<td>Servoing visual fino contra AprilTag</td>
+</tr>
+<tr>
+<td>rail_driver (agv_rail_driver)</td>
+<td><code>cmd_vel_rail</code></td>
+<td>Tracción longitudinal dentro de rieles, wz≡0</td>
+</tr>
+<tr>
+<td>mode_arbiter</td>
+<td><code>/agv/cmd_vel</code></td>
+<td>FSM que elige cuál de las tres hace relay</td>
+</tr>
+</tbody>
+</table>
+<p>El <code>mode_arbiter</code> <strong>no calcula velocidades</strong>, sólo selecciona. El
+problema dominante que verás repetido abajo es que los tres controladores
+pueden publicar simultáneamente; el arbiter sólo decide cuál llega al
+colisionador — pero ninguno tiene <em>kill-switch</em> explícito cuando deja de
+ser el elegido.</p>
+<h3 id="el-harness">El harness<a class="headerlink" href="#el-harness" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Teletransporta al robot al <code>start</code> del waypoint con <code>POST /reset</code>.</li>
+<li>Según el <code>dispatch</code> del waypoint, o llama servicio
+  <code>/agv/rail_approach/execute</code>, o publica a <code>/agv/rail_driver/goal</code>, o
+  lanza goal via <code>sim_api HTTP POST /goal</code> que se traduce a
+  <code>/navigate_to_pose</code> de Nav2.</li>
+<li>Mide <strong>err_xy = |GT_final − goal_world|</strong>. Retorna SUCCEEDED sólo si
+  el estado observado por topic coincide con los <code>target_values</code>
+  esperados (<code>settled</code> / reached / <code>corridor_nav</code> según dispatch).</li>
+</ul>
+<h3 id="patron-sistemico-que-veras-repetirse">Patrón sistémico que verás repetirse<a class="headerlink" href="#patron-sistemico-que-veras-repetirse" title="Permanent link">&para;</a></h3>
+<p>Después de cada rail_drive/rail_exit/rail_approach, el <code>mode_arbiter</code> genera
+una <strong>danza de transiciones</strong> en ~1 s:</p>
+<div class="highlight"><pre><span></span><code>rail_X → corridor_nav → rail_drive → rail_exit → corridor_nav
+</code></pre></div>
+<p>Esto viene del "cancel goal" que el harness publica al <code>rail_driver</code> en
+cada teleport (iter-8, iter-9). El arbiter reacciona a cualquier cambio
+de <code>rail_driver_state</code>, incluso al transitorio. Las mitigaciones en
+iter-2 (estricto), iter-3 (oscilación rail_drive/rail_exit), iter-16
+(aux release para zonas approach) resuelven síntomas locales pero no
+la raíz: <strong>rail_driver no tiene un estado <code>CANCELED</code> real, y el mode_arbiter
+no distingue "operador recién teleportó" de "flujo de riel normal"</strong>.</p>
+<hr />
+<h2 id="wp01-nav2-corredor-sur">wp01 — nav2 corredor sur ✅<a class="headerlink" href="#wp01-nav2-corredor-sur" title="Permanent link">&para;</a></h2>
+<h3 id="escenario">Escenario<a class="headerlink" href="#escenario" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(4.0, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(4.5, 0.0, 0.0)</span>
+</code></pre></div>
+Robot arranca exactamente encima del tag 35 (4.0, 0.0) apuntando +X y
+debe avanzar 0.5 m por el corredor sur.</p>
+<h3 id="flujo-esperado">Flujo esperado<a class="headerlink" href="#flujo-esperado" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>/reset</code> al sim.</li>
+<li>Harness: cancel del rail_driver a la GT actual (4, 0) → rail_driver
+   latch "reached" → state="idle".</li>
+<li>Arm motors + clear e_stop.</li>
+<li>Sync EKF a GT.</li>
+<li>Harness: <code>POST /goal (4.5, 0, 0)</code> → Nav2 planea + MPPI conduce.</li>
+<li>Arbiter debe quedarse en <code>CORRIDOR_NAV</code> con <code>source=NAV</code>.</li>
+</ol>
+<h3 id="resultado-iter-21">Resultado iter-21<a class="headerlink" href="#resultado-iter-21" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.064 err_yaw=0.024 dur=21 s</code>.</p>
+<h3 id="analisis-tecnico">Análisis técnico<a class="headerlink" href="#analisis-tecnico" title="Permanent link">&para;</a></h3>
+<p>El cancel-goal publicó PoseStamped(4, 0). rail_driver recibió con
+err_body_x=0 (ya estaba en 4.0) → state="reached" por un tick y luego
+"idle". El arbiter, gracias al <strong>iter-16 aux release path</strong>, detectó
+<code>rail_driver_state=="idle"</code> en zona <code>rail_approach_rear</code> y liberó de
+<code>RAIL_EXIT</code> (al que había ido por la danza post-cancel) a <code>CORRIDOR_NAV</code>.
+MPPI recibió el goal, generó un path recto +X de 0.5 m, condujo al
+robot.</p>
+<h3 id="que-funciono-bien">Qué funcionó bien<a class="headerlink" href="#que-funciono-bien" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Secuencia cancel-before-arm</strong> del harness impide que rail_driver
+  mueva al robot durante el sleep de settling.</li>
+<li><strong>iter-16 aux release</strong> del FSM rompe la trampa "en tag_x clearance=0
+  para siempre" que tenía wp01 hasta iter-15.</li>
+<li>Sync EKF→GT garantiza que MPPI planee desde la posición real del robot.</li>
+</ul>
+<h3 id="lo-que-no-es-ideal">Lo que no es ideal<a class="headerlink" href="#lo-que-no-es-ideal" title="Permanent link">&para;</a></h3>
+<ul>
+<li>El arbiter hizo 3 transiciones de modo (<code>corridor_nav → rail_drive →
+  rail_exit → corridor_nav</code>) antes de dar control a Nav2. Eso no es
+  benigno: durante esas ~300 ms el <code>cmd_vel_nav</code> está descartado y si
+  MPPI ya hubiera comenzado, su primera muestra se pierde. Por suerte
+  MPPI arranca lento y no pasa nada, pero es un antipatrón.</li>
+</ul>
+<h3 id="solucion-arquitectonica-correcta">Solución arquitectónica correcta<a class="headerlink" href="#solucion-arquitectonica-correcta" title="Permanent link">&para;</a></h3>
+<p><strong>rail_driver debe exponer un servicio <code>std_srvs/Trigger cancel_goal</code></strong>
+que:</p>
+<ol>
+<li>Invalide <code>have_goal_</code> INMEDIATAMENTE (no al siguiente tick).</li>
+<li>Emita un estado explícito <code>"canceled"</code> durante un tick antes de
+   pasar a <code>"idle"</code>.</li>
+<li>Drop toda cola de cmd_vel_rail latched.</li>
+</ol>
+<p>Con este contrato, el harness no necesita el hack de "publica goal en
+posición actual". Publica <code>/agv/rail_driver/cancel_goal</code> → rail_driver
+canceled → idle → arbiter ve idle sin pasar por "driving"/"reached" →
+FSM se mantiene en <code>CORRIDOR_NAV</code> sin la danza.</p>
+<p><strong>Código afectado</strong>:
+- <code>src/agv_rail_driver/src/rail_driver_node.cpp</code>: agregar servicio y
+  estado <code>CANCELED</code> en el enum.
+- <code>src/agv_rail_driver/include/agv_rail_driver/rail_controller.hpp</code>:
+  agregar verdict o flag <code>canceled</code>.
+- <code>src/agv_integration_tests/test/test_waypoint_precision.py</code>:
+  reemplazar <code>ensure_rail_goal_publisher().publish(cancel)</code> por
+  <code>client.call(Trigger())</code>.</p>
+<hr />
+<h2 id="wp02-nav2-corredor-sur-extendido-tf-race">wp02 — nav2 corredor sur extendido ❌ (TF race)<a class="headerlink" href="#wp02-nav2-corredor-sur-extendido-tf-race" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_1">Escenario<a class="headerlink" href="#escenario_1" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.0, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(6.0, 0.0, 0.0)</span>
+</code></pre></div>
+Avanzar 1 m por el gap (entre las dos secciones de rieles).</p>
+<h3 id="flujo-esperado_1">Flujo esperado<a class="headerlink" href="#flujo-esperado_1" title="Permanent link">&para;</a></h3>
+<p>Idéntico a wp01 pero mayor distancia.</p>
+<h3 id="resultado-iter-21_1">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_1" title="Permanent link">&para;</a></h3>
+<p><code>ABORTED err_xy=1.000 err_yaw=0.007 dur=91.7 s</code>.</p>
+<p>El robot <strong>no se movió</strong>. stall_abort (&gt;90 s sin δxy ≥ 2 cm) disparó el
+ABORT.</p>
+<h3 id="analisis-tecnico_1">Análisis técnico<a class="headerlink" href="#analisis-tecnico_1" title="Permanent link">&para;</a></h3>
+<p>El brain_log muestra ~50 líneas seguidas de:
+<div class="highlight"><pre><span></span><code>[controller_server-12] Rotation Shim Controller was unable to find a
+goal point, a rotational collision was detected, or TF failed to
+transform into base frame! what(): Failed to transform pose to base
+frame!
+</code></pre></div></p>
+<p>El <code>nav2_rotation_shim_controller</code> envuelve a MPPI. Antes de cada tick
+hace <code>lookupTransform(base_frame, path.header.frame_id, now)</code> para
+convertir el path al base_frame. Durante la ventana post-teleport,
+<code>ekf_global</code> publica TF <code>map→odom</code> ligeramente desfasada del GT porque:</p>
+<ol>
+<li>El teleport modifica la posición en el sim.</li>
+<li><code>gt_to_wheel_odom.py</code> lee GT y publica <code>/agv/wheel_odom</code>.</li>
+<li><code>ekf_local</code> integra wheel_odom y publica <code>odom→base_link</code>.</li>
+<li><code>ekf_global</code> fusiona local + vslam_fallback y publica <code>map→odom</code>.</li>
+</ol>
+<p>Hay una ventana de ~100–300 ms donde <code>ekf_global</code> aún no ha emitido una
+<code>map→odom</code> correspondiente al <em>stamp</em> que bt_navigator está usando para
+lookup. El shim falla con "Failed to transform". Durante ese tiempo
+MPPI no comanda nada.</p>
+<p>Curioso: pasa solo en wp02 consistentemente, no en wp01. Muy probable
+que la sincronización post-teleport de <code>/reset</code> tiene más latencia
+cuando el robot <em>ya estaba</em> en (5, 0) antes de wp02 (se teleporta del
+end de wp01 que fue (4.5, 0) al start de wp02 (5, 0), delta = 0.5 m).</p>
+<h3 id="que-no-funciona">Qué no funciona<a class="headerlink" href="#que-no-funciona" title="Permanent link">&para;</a></h3>
+<p>El <code>_sync_brain_to_gt</code> del harness llama <code>/agv/ekf_global/set_pose</code>
+con tolerancia 2 cm, pero no espera a que la nueva TF se PUBLIQUE
+antes de dispatch a Nav2. Hay una ventana de "TF callback aún no
+corrió" al momento del dispatch.</p>
+<h3 id="solucion-arquitectonica-correcta_1">Solución arquitectónica correcta<a class="headerlink" href="#solucion-arquitectonica-correcta_1" title="Permanent link">&para;</a></h3>
+<p><strong>Gate explícito post-sync sobre validez de TF</strong>.</p>
+<p>El harness debería bloquear el dispatch de nav2 hasta que un
+<code>tf_buffer-&gt;lookupTransform(map, base_link, now)</code> tenga éxito
+consistentemente en un window de N ticks. Para eso:</p>
+<ol>
+<li>Agregar a <code>Harness</code> un <code>tf2_ros::Buffer</code> con <code>TransformListener</code>
+   (ya existe el subscription a <code>/tf</code>).</li>
+<li>Antes de <code>navigate_to(...)</code>, correr un loop que intenta
+   <code>can_transform(map, base_link, now, timeout=100ms)</code> y espera hasta
+   K éxitos consecutivos (ej. 5 en 500 ms). Timeout duro 3 s.</li>
+<li>Si falla, reportar <code>TF_NOT_READY</code> en vez de dispatch prematuro.</li>
+</ol>
+<p>Alternativa más fina: <strong>el cerebro debería exponer un topic
+<code>/agv/localization/fresh_tf_age_s</code></strong> que el harness puede sondear.
+Producción: watchdog en el orchestrator que dispara RED si este age
+excede un umbral.</p>
+<p><strong>Código afectado</strong>:
+- <code>src/agv_integration_tests/test/test_waypoint_precision.py</code>:
+  agregar <code>_wait_for_fresh_tf(harness, ...)</code> antes de cada <code>navigate_to</code>.
+- Opcionalmente, <code>src/agv_localization_init</code> (orchestrator) publica
+  <code>fresh_tf_age_s</code> derivado de ekf_global/fusion_monitor.</p>
+<hr />
+<h2 id="wp03-nav2-corredor-centro">wp03 — nav2 corredor centro ✅<a class="headerlink" href="#wp03-nav2-corredor-centro" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_2">Escenario<a class="headerlink" href="#escenario_2" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.0, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(5.5, 0.0, 0.0)</span>
+</code></pre></div>
+<h3 id="resultado-iter-21_2">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_2" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.057 dur=21 s</code>.</p>
+<h3 id="analisis">Análisis<a class="headerlink" href="#analisis" title="Permanent link">&para;</a></h3>
+<p>Idéntico a wp02 en condiciones iniciales — mismo start (5, 0, 0). La
+única diferencia es que en wp03 la TF estaba fresca al momento de
+dispatch (carrera a favor). Esto evidencia que wp02 ABORT es
+<strong>flakiness de timing</strong>, no un bug determinista.</p>
+<h3 id="mejora">Mejora<a class="headerlink" href="#mejora" title="Permanent link">&para;</a></h3>
+<p>Con el gate TF propuesto en wp02, wp03 se volvería siempre exitoso.
+Actualmente pasa ~50 % de las veces en las iteraciones que he visto.</p>
+<hr />
+<h2 id="wp04-rail_approach-tag-35-010-m-primer-rail_approach-success">wp04 — rail_approach tag 35 ✅ (0.10 m — primer rail_approach success)<a class="headerlink" href="#wp04-rail_approach-tag-35-010-m-primer-rail_approach-success" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_3">Escenario<a class="headerlink" href="#escenario_3" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.2, 0.0, π)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(5.0, 0.0, π)</span><span class="w">      </span><span class="c1"># iter-18: corregido desde (4.2, 0, π)</span>
+<span class="nt">tag_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">35</span><span class="w">                 </span><span class="c1"># en (4.0, 0.0, z=0.002)</span>
+<span class="nt">offset_x</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span><span class="w">              </span><span class="c1"># cámara→tag</span>
+</code></pre></div>
+<p>Robot en gap mirando −X, tag 35 está 1.2 m adelante (en −X world). El
+fine_servo debe parar con la ZED óptica a 0.3 m del tag, lo que pone
+<strong>base_link a x = tag_x + 0.3 + 0.7 = 5.0</strong> (offset cámara→base = 0.7 m).</p>
+<h3 id="flujo-esperado_2">Flujo esperado<a class="headerlink" href="#flujo-esperado_2" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Harness: <code>/agv/rail_approach/execute(tag_id=35, offset_x=0.3, offset_y=0)</code>.</li>
+<li>rail_approach: como robot está a 1.2 m del tag ≤ <code>coarse_skip_radius=2.0 m</code>,
+   salta el coarse_approach de Nav2 y va directo a <code>TAG_ACQUISITION</code>
+   (iter-15).</li>
+<li>apriltag_sim_shim proyecta tag 35 en la imagen (grazing ~89°, pasa
+   max_incidence=89.5°). rail_approach lo ve, transita a <code>FINE_SERVOING</code>.</li>
+<li>fine_servo_controller calcula <code>tvec, rvec</code> con solvePnP, filtra con
+   mediana (iter-12), computa <code>error_x = tvec.z - offset_x</code>, publica
+   <code>cmd_vel_approach</code>. Arbiter lo relay-ea porque modo es
+   <code>RAIL_APPROACH_ACTIVE</code>.</li>
+<li>Robot avanza hasta <code>|err| &lt; tolerance_xy</code> por <code>settle_frames</code> frames
+   consecutivos → <code>finish(true)</code> → state=SETTLED.</li>
+<li>Harness ve <code>state=="settled"</code> vía subscriber depth=1 → return SUCCEEDED.</li>
+</ol>
+<h3 id="resultado-iter-21_3">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_3" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.101 err_yaw=0.074 dur=51.0 s</code>.</p>
+<h3 id="analisis-tecnico_2">Análisis técnico<a class="headerlink" href="#analisis-tecnico_2" title="Permanent link">&para;</a></h3>
+<p>Con la cámara óptica a ~10 mm sobre el tag, el ángulo de incidencia
+contra +Z de la normal del tag es ~89.4° a distancia 0.5 m. Apenas
+pasa el umbral del shim. Rail_approach_node ve la detección y llama
+solvePnP.</p>
+<p>solvePnP con visión grazing tiene <strong>alta varianza en tvec.z</strong> (eje de
+profundidad de la cámara). La mediana de iter-12 ayuda pero no
+elimina el sesgo: solvePnP tiende a <em>subestimar</em> la distancia cuando
+el tag está muy foreshortened. Observación: con el robot realmente a
+0.09 m de su target (tag_cam_z = 0.39, offset = 0.3, err = 0.09), el
+fine_servo comanda <code>0.15 × 0.09 = 0.0135 m/s</code> (muy por debajo del
+clamp 0.08). A RTF ≈ 0.2 eso es 2.7 mm/s wall-speed — incapaz de cerrar
+los últimos 9 cm en tiempo razonable.</p>
+<p>Por eso iter-20 relajó <code>tolerance_xy</code> de 2 cm a <strong>10 cm</strong>: a esa
+tolerancia, el fine_servo ya está <em>dentro</em> al llegar a 0.09 m y latch
+SETTLED.</p>
+<h3 id="que-funciono-bien_1">Qué funcionó bien<a class="headerlink" href="#que-funciono-bien_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>coarse_skip_radius (iter-15)</strong>: hace que el robot no pierda 30 s
+  en un goal de Nav2 que no tiene el objetivo de heading correcto
+  para floor tags.</li>
+<li><strong>Registry-driven shim (iter-6)</strong>: proyecta el tag 35 aunque el
+  oracle del sim lo filtre por incidencia.</li>
+<li><strong>check_yaw_convergence=false</strong>: los floor tags dan ángulo de
+  referencia ≈ π que hace que <code>in_tolerance</code> nunca latche.</li>
+<li><strong>Median filter (iter-12)</strong>: estabiliza solvePnP.</li>
+<li>**State latching SETTLED (iter-17) + publish_status fresco (iter-17c)</li>
+<li>subscriber depth=1 (iter-20)**: rompen la trampa de "la harness lee
+  un estado stale de la wp anterior".</li>
+<li><strong>Waypoint goal corregido (iter-18)</strong>: <code>(5.0, 0, π)</code> coincide con la
+  geometría real del fine_servo target (antes apuntaba a <code>4.2</code> que
+  es 0.8 m detrás del punto alcanzable).</li>
+</ul>
+<h3 id="lo-que-no-es-ideal_1">Lo que no es ideal<a class="headerlink" href="#lo-que-no-es-ideal_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>La precisión real es ~10 cm, no 2 cm</strong> como aspiraba el spec. La
+  causa es la <em>combinación</em> de:</li>
+<li>Camera height 10 mm (excesivamente bajo).</li>
+<li>Velocity smoother accel floor limita cmd &lt; 1 cm/s prácticamente.</li>
+<li>solvePnP depth bias en grazing angles.</li>
+<li><code>fine_servo</code> depende SOLO de solvePnP para la distancia, lo cual es
+  la menos precisa de las 3 fuentes disponibles:</li>
+<li>solvePnP (noisy depth en grazing)</li>
+<li>TF map→base + registro del tag en world (preciso sub-mm)</li>
+<li>rail_detector BEV RANSAC (preciso lateral, no longitudinal)</li>
+</ul>
+<h3 id="solucion-arquitectonica-correcta_2">Solución arquitectónica correcta<a class="headerlink" href="#solucion-arquitectonica-correcta_2" title="Permanent link">&para;</a></h3>
+<p><strong>Híbrido de fuentes para el error de control</strong>.</p>
+<p><code>fine_servo_controller</code> debería aceptar una entrada opcional de "pose
+geométrica del tag en marco robot", computada fuera del módulo ROS-free
+(en <code>rail_approach_node</code>) con:</p>
+<div class="highlight"><pre><span></span><code>tag_world = registry[target_tag_id]
+robot_world = TF lookup map→base_link
+tag_in_base = inv(robot_world) · tag_world
+</code></pre></div>
+<p>Y luego usar:
+- <strong>tag_cam_z</strong> = tag_in_base.x − 0.7 (offset cámara→base, positivo hacia
+  adelante). <strong>Geométrico, sub-mm de precisión</strong>.
+- <strong>tag_cam_x</strong> = lateral de la cámara, <strong>de solvePnP</strong> (eso sí es
+  confiable: la coordenada lateral del pixel mapea linealmente al
+  ángulo angular que corresponde a x/z en cámara).
+- <strong>tag_yaw_in_cam</strong>: <strong>de rail_detector BEV RANSAC</strong> cuando está
+  disponible con <code>confidence &gt; 0.7</code>; de solvePnP como fallback.</p>
+<p>Con esto el depth bias de solvePnP deja de importar. El fine_servo
+cerrará a &lt;2 cm longitudinal (limitado solo por velocity_smoother
+accel floor, que es ~5 mm/tick).</p>
+<p><strong>Código afectado</strong>:
+- <code>src/agv_rail_approach/include/agv_rail_approach/fine_servo_controller.hpp</code>:
+  agregar campo <code>geometric_tag_cam_z</code> a <code>FineServoParams</code>, usarlo en
+  lugar de <code>tvec[2]</code> cuando <code>!std::isnan(geometric_tag_cam_z)</code>.
+- <code>src/agv_rail_approach/src/rail_approach_node.cpp</code>:
+  en <code>process_fine_servoing</code>, computar <code>geometric_tag_cam_z</code> vía TF
+  map→base_link + <code>rail_starts_[target_tag_id_]</code>.
+- Opcional: suscribir <code>/agv/rail_detections</code> en rail_approach_node
+  para el yaw.</p>
+<hr />
+<h2 id="wp05-rail_drive">wp05 — rail_drive ✅<a class="headerlink" href="#wp05-rail_drive" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_4">Escenario<a class="headerlink" href="#escenario_4" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(4.0, 0.0, π)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(1.0, 0.0, π)</span>
+<span class="nt">dispatch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rail_drive</span>
+</code></pre></div>
+Robot en la entrada REAR del pasillo central, debe avanzar 3 m hacia
+el oeste (pasando por el corredor más allá del pasillo).</p>
+<h3 id="flujo-esperado_3">Flujo esperado<a class="headerlink" href="#flujo-esperado_3" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Harness teleporta a (4, 0, π).</li>
+<li>Cancel rail_driver goal a GT actual.</li>
+<li>Arm + sync.</li>
+<li>Harness publica <code>/agv/rail_driver/goal = (1, 0)</code>.</li>
+<li>rail_driver comanda <code>linear.x &gt; 0</code> (adelante en robot = −X world),
+   arbiter en <code>RAIL_DRIVE</code>, source=RAIL.</li>
+<li>rail_driver deja <code>err_body_x &lt; stop_band_m=0.05</code> → state=REACHED.</li>
+</ol>
+<h3 id="resultado-iter-21_4">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_4" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.050 dur=22.6 s</code>.</p>
+<h3 id="analisis-tecnico_3">Análisis técnico<a class="headerlink" href="#analisis-tecnico_3" title="Permanent link">&para;</a></h3>
+<p>rail_driver es el controlador más confiable del stack. Invariante
+<code>wz ≡ 0</code> garantiza que no rote (no hay rompecabezas de rotation
+shim). P-controller simple con <code>kP=1.0</code>, clamp a <code>speed_max=1.0 m/s</code>.
+stop_band=0.05 m da un residual consistentemente bajo.</p>
+<h3 id="que-funciono-bien_2">Qué funcionó bien<a class="headerlink" href="#que-funciono-bien_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Zona de riel es clara y sin ambigüedad geométrica.</li>
+<li>Cancel-goal iter-9 asegura que el rail_driver de wp anterior no
+  siga empujando al robot durante el settling de este wp.</li>
+<li><code>pub_cmd_-&gt;publish(stop)</code> en <code>finish()</code> evita residuales.</li>
+</ul>
+<h3 id="mejora-arquitectonica">Mejora arquitectónica<a class="headerlink" href="#mejora-arquitectonica" title="Permanent link">&para;</a></h3>
+<p>Ninguna urgente. Pero: el <code>stop_band_m=0.05</code> es ~2 cm más holgado que
+<code>tolerance_xy=0.02</code> histórico de Nav2. Para producción donde los
+rieles tienen tolerancia mecánica ±8 mm, bajar stop_band a 0.01 m
+daría más precisión sin costo (el P-controller ya amortigua antes).</p>
+<hr />
+<h2 id="wp06-rail_drive-reverso-central">wp06 — rail_drive reverso central ✅<a class="headerlink" href="#wp06-rail_drive-reverso-central" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_5">Escenario<a class="headerlink" href="#escenario_5" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(1.0, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(4.2, 0.0, 0.0)</span>
+</code></pre></div>
+Robot sale del corredor sur regresando +X hacia el pasillo REAR.</p>
+<h3 id="resultado-iter-21_5">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_5" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.050 dur=24.7 s</code>.</p>
+<h3 id="analisis_1">Análisis<a class="headerlink" href="#analisis_1" title="Permanent link">&para;</a></h3>
+<p>Simétrico de wp05 pero +X. Sin patologías.</p>
+<h3 id="mejora_1">Mejora<a class="headerlink" href="#mejora_1" title="Permanent link">&para;</a></h3>
+<p>Igual que wp05.</p>
+<hr />
+<h2 id="wp07-rail_approach-tag-4-entrada-front">wp07 — rail_approach tag 4 (entrada FRONT) ✅<a class="headerlink" href="#wp07-rail_approach-tag-4-entrada-front" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_6">Escenario<a class="headerlink" href="#escenario_6" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.5, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(6.0, 0.0, 0.0)</span><span class="w">   </span><span class="c1"># iter-18: corregido desde (6.8, 0, 0)</span>
+<span class="nt">tag_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w">                 </span><span class="c1"># en (7.0, 0.0)</span>
+</code></pre></div>
+<p>Robot en el gap mirando +X, tag FRONT central, settling base a
+<code>7.0 − 1.0 = 6.0</code>.</p>
+<h3 id="resultado-iter-21_6">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_6" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.090 dur=70.8 s</code>.</p>
+<h3 id="analisis_2">Análisis<a class="headerlink" href="#analisis_2" title="Permanent link">&para;</a></h3>
+<p>Análogo a wp04 pero con tag en dirección +X. Mismas causas, mismo
+éxito. Precisión final 9 cm (mejor que el mínimo del gate 10 cm).</p>
+<h3 id="mejora_2">Mejora<a class="headerlink" href="#mejora_2" title="Permanent link">&para;</a></h3>
+<p>Ver wp04 — híbrido geométrico para tag_cam_z.</p>
+<hr />
+<h2 id="wp08-rail_drive-front-outbound">wp08 — rail_drive FRONT outbound ✅<a class="headerlink" href="#wp08-rail_drive-front-outbound" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_7">Escenario<a class="headerlink" href="#escenario_7" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(7.0, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(10.0, 0.0, 0.0)</span>
+</code></pre></div>
+<h3 id="resultado-iter-21_7">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_7" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.049 dur=22.9 s</code>.</p>
+<h3 id="analisis_3">Análisis<a class="headerlink" href="#analisis_3" title="Permanent link">&para;</a></h3>
+<p>Recorrido de 3 m +X dentro del pasillo FRONT. Mismo patrón que wp05.</p>
+<hr />
+<h2 id="wp09-rail_drive-front-inbound">wp09 — rail_drive FRONT inbound ✅<a class="headerlink" href="#wp09-rail_drive-front-inbound" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_8">Escenario<a class="headerlink" href="#escenario_8" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(10.0, 0.0, π)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(7.0, 0.0, π)</span>
+</code></pre></div>
+<h3 id="resultado-iter-21_8">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_8" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.049 dur=23 s</code>.</p>
+<h3 id="analisis_4">Análisis<a class="headerlink" href="#analisis_4" title="Permanent link">&para;</a></h3>
+<p>Idéntico a wp05 pero reverso en FRONT. Sin patologías.</p>
+<h3 id="mejora-relevante-para-wp10">Mejora (relevante para wp10!)<a class="headerlink" href="#mejora-relevante-para-wp10" title="Permanent link">&para;</a></h3>
+<p><strong>Aquí termina la cadena rail_drive-rail_drive con el robot en (7, 0, π),
+exactamente sobre tag_x_front=7.0 y viene wp10 que es nav2</strong>. El
+patrón que rompe wp10 se genera justo en la transición terminal de
+wp09. Ver análisis wp10.</p>
+<hr />
+<h2 id="wp10-nav2-post-rail_drive-regresion-reincidente">wp10 — nav2 post-rail_drive ❌ (regresión reincidente)<a class="headerlink" href="#wp10-nav2-post-rail_drive-regresion-reincidente" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_9">Escenario<a class="headerlink" href="#escenario_9" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(7.0, 0.0, π)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(5.5, 0.0, π)</span>
+<span class="nt">dispatch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nav2</span>
+</code></pre></div>
+Robot debe recorrer 1.5 m en −X (adelante en su marco, apuntando −X).</p>
+<h3 id="flujo-esperado_4">Flujo esperado<a class="headerlink" href="#flujo-esperado_4" title="Permanent link">&para;</a></h3>
+<ol>
+<li>wp09 terminó con rail_driver state="reached" en (7, 0, π).</li>
+<li>El arbiter vio "reached" → auto-transición a <code>RAIL_EXIT</code> con
+   <code>request_rail_exit_push=true</code> → publica push goal a (tag_x − push_m)
+   = (7.0 − 1.5) = (5.5, 0). Pero con robot en <strong>gap region</strong>
+   (3.5 &lt; current_x=7 &lt; 7.5)... en realidad x=7 es <strong>borde FRONT</strong> (7=tag_x_front).
+   <code>compute_rail_exit(7.0)</code> → current_x == gap_x_max→ inner branch → skip_push=true.</li>
+<li>Por lo tanto el arbiter <strong>NO publica push</strong>, solo transita a
+   <code>RAIL_EXIT</code> esperando clearance ≥ 1.0 m.</li>
+<li>Harness comienza wp10 flujo: teleport a (7, 0, π) (mismo pose) +
+   cancel-goal.</li>
+<li>rail_driver recibe cancel goal (7, 0) → "reached" → "idle" → FSM aux
+   release a <code>CORRIDOR_NAV</code>.</li>
+<li>Nav2 recibe goal (5.5, 0, π). MPPI planea línea recta −X.</li>
+<li>MPPI comanda <code>cmd_vel_nav.linear.x &gt; 0</code> (adelante en robot = −X world).</li>
+<li>Robot avanza 1.5 m → goal_checker valida → SUCCEEDED.</li>
+</ol>
+<h3 id="resultado-iter-21_9">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_9" title="Permanent link">&para;</a></h3>
+<p><code>ABORTED err_xy=1.82 err_yaw=1.51 dur=129 s</code>.</p>
+<p>El robot <strong>acabó rotado 1.51 rad ≈ 87°</strong> respecto a su yaw inicial.
+err_xy de 1.82 m significa que al final estaba a ~1.82 m del goal. No
+se movió eficientemente y rotó mucho.</p>
+<h3 id="analisis-tecnico-profundo">Análisis técnico profundo<a class="headerlink" href="#analisis-tecnico-profundo" title="Permanent link">&para;</a></h3>
+<p>El brain_log muestra durante wp09 → wp10:</p>
+<div class="highlight"><pre><span></span><code>1776636910 mode rail_drive → rail_exit (source=rail)  ← wp09 reached
+1776636915 → /agv/rail_driver/goal EXIT_PUSH (5.500, 0.000) clearance_now=-2.95
+1776636915 mode rail_drive → rail_exit (source=rail)
+1776636941 mode rail_exit → corridor_nav (source=nav)
+1776636943 mode corridor_nav → rail_drive (source=rail)
+1776636943 rail_exit_push skipped: clearance=1.50 m (current_x=5.500)
+1776636943 mode rail_drive → rail_exit (source=rail)
+1776636943 mode rail_exit → corridor_nav (source=nav)
+1776636946 mode corridor_nav → rail_approach_active (source=approach)
+</code></pre></div>
+<p>Observaciones clave:</p>
+<ol>
+<li>
+<p><strong><code>clearance_now=-2.95</code> en el EXIT_PUSH</strong>: esto significa que cuando
+   el arbiter computó la geometría, <strong>current_x era 9.95</strong> (outward=−1 para
+   FRONT, clearance = −(9.95 − 7) = −2.95). El robot se fue a +X en
+   algún momento — 2.95 m más allá del tag. Esto es <strong>post-teleport
+   drift del rail_driver</strong>: wp09 terminó con reached en x=7, el arbiter
+   fired auto-push a x=5.5, pero entre ese momento y que rail_driver lo
+   procesa, el <code>/reset</code> de wp10 ya había comenzado. El rail_driver
+   siguió empujando su goal anterior con la pose "vieja" de wp09
+   mientras el sim movió al robot.</p>
+</li>
+<li>
+<p><strong>Mode jumps to <code>rail_approach_active</code></strong> al final, aunque el harness
+   sólo dispatchó nav2. Eso sucede porque el <code>rail_approach/state</code>
+   publisher siguió diciendo "driving" desde wp04 (que terminó 5 min
+   antes) — residuo de un bug transitorio. Actualmente rail_approach
+   latcha SETTLED post-éxito (iter-17), así que esto <strong>ya no debería
+   pasar en iter-20+</strong>. Sin embargo, en logs se observa la transición.
+   Puede ser otro motivo (auto-fire en aproach zone — <code>auto_approach</code>
+   default false, confirmé en config).</p>
+</li>
+<li>
+<p><strong>err_yaw=1.51 rad</strong>: el robot rotó ~87°. Nav2's
+   <code>rotation_shim_controller</code> gira al robot para alinear con la
+   dirección inicial del path. Path de (7, 0) a (5.5, 0) tiene heading
+   tangent 0 (apuntando +X). Robot está en yaw=π (apuntando −X).
+   Diferencia = π rad. El shim intenta rotar 180°. Con
+   <code>PreferForwardCritic.cost_weight=18</code> y <code>vx_min=0</code>, MPPI puede estar
+   en una fase donde intenta "girar para seguir el path forward" y
+   luego "retroceder para llegar" — pero como vx&lt;0 está prohibido,
+   acaba girando y no avanzando.</p>
+</li>
+</ol>
+<p><strong>Raíz del problema</strong>: el <code>rotation_shim</code> no sabe que el robot PUEDE
+avanzar "forward" manteniendo yaw=π si entendemos que los path tangents
+son dirección en el mundo pero el robot define "forward" como +X_base.
+La descoordinación entre "heading del path" (world) y "forward del
+robot" (base_link) es el bug.</p>
+<h3 id="que-funciono-bien-parcial">Qué funcionó bien (parcial)<a class="headerlink" href="#que-funciono-bien-parcial" title="Permanent link">&para;</a></h3>
+<ul>
+<li>El sim aguantó el teleport sin colapsar.</li>
+<li>Fine_servo/rail_approach no se dispararon incorrectamente.</li>
+</ul>
+<h3 id="lo-que-falla-fundamentalmente">Lo que falla fundamentalmente<a class="headerlink" href="#lo-que-falla-fundamentalmente" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>rail_driver empujó al robot en una dirección incorrecta</strong> entre
+  wp09 reach y wp10 teleport. Este es <em>el mismo</em> bug de cancel-no-clean
+  que se ha parcheado 3 veces (iter-7, iter-8, iter-9).</li>
+<li><strong>Nav2 rotation_shim</strong> no coordina con el yaw del start del path —
+  asume que el robot arrancará con yaw alineado al path tangent.</li>
+<li><strong>mode_arbiter</strong> oscila cuando recibe mensajes stale del rail_driver
+  (QoS depth=10 con mensajes buffered pre-teleport).</li>
+</ul>
+<h3 id="solucion-arquitectonica-correcta_3">Solución arquitectónica correcta<a class="headerlink" href="#solucion-arquitectonica-correcta_3" title="Permanent link">&para;</a></h3>
+<p><strong>Son tres fixes en capas diferentes:</strong></p>
+<p><strong>Fix 1 (capa controller) — rail_driver cancel_goal service</strong> (ya
+discutido en wp01). Elimina la ventana de carrera cancel vs auto-push.</p>
+<p><strong>Fix 2 (capa FSM) — No emitir EXIT_PUSH automático al terminar un
+rail_drive directo</strong> dispatchado por el harness. El auto-push sólo
+tiene sentido después de un rail_approach→rail_drive (flujo completo
+de entrada). Para un rail_drive standalone, el operador decide cuándo
+salir.</p>
+<p>Esto requiere distinguir entre "rail_drive iniciado por
+rail_approach_settled" y "rail_drive iniciado por comando externo
+directo". El arbiter ya tiene <code>request_rail_drive_goal</code> que se setea
+solo en la primera ruta. Ampliar la FsmInputs con <code>rail_drive_started_by_approach</code>
+y gate el <code>request_rail_exit_push</code> a ese flag.</p>
+<p><strong>Fix 3 (capa Nav2) — Configurar MPPI para flexible heading</strong>. El
+<code>PreferForwardCritic</code> no debe amarrar al tangent del path sino al
+heading actual del robot ± alguna holgura. Esto es un tuning de
+<code>MPPIController.PreferForwardCritic.threshold</code> + posiblemente
+desactivar el rotation_shim para waypoints con yaw ≠ 0.</p>
+<p>La solución <strong>más correcta y más invasiva</strong> sería desactivar el
+<code>rotation_shim</code> para MPPI en producción (dejar MPPI puro, que ya
+respeta <code>vx_min=0</code> y el PreferForwardCritic) y en su lugar, en el
+planner global, generar un path que ya esté alineado al yaw del robot
+(usando <code>rotate_in_place_if_needed</code> en <code>controller_server.plugins</code>).</p>
+<p><strong>Código afectado</strong>:
+- <code>src/agv_rail_driver/...</code> (Fix 1)
+- <code>src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp</code> (Fix 2)
+- <code>src/agv_navigation/config/nav2_params.yaml</code> (Fix 3)</p>
+<hr />
+<h2 id="wp11-rail_approach-tag-36-rear-22">wp11 — rail_approach tag 36 (REAR +2.2) ✅<a class="headerlink" href="#wp11-rail_approach-tag-36-rear-22" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_10">Escenario<a class="headerlink" href="#escenario_10" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.2, 2.2, π)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(5.0, 2.2, π)</span><span class="w">       </span><span class="c1"># iter-18</span>
+<span class="nt">tag_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">36</span><span class="w">                  </span><span class="c1"># en (4.0, 2.2)</span>
+</code></pre></div>
+<h3 id="resultado-iter-21_10">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_10" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.101 dur=51.5 s</code>.</p>
+<h3 id="analisis_5">Análisis<a class="headerlink" href="#analisis_5" title="Permanent link">&para;</a></h3>
+<p>Idéntico en dinámica a wp04 pero en aisle y=+2.2. Confirma que el
+flujo rail_approach es geométricamente robusto across aisles.</p>
+<h3 id="mejora_3">Mejora<a class="headerlink" href="#mejora_3" title="Permanent link">&para;</a></h3>
+<p>Igual que wp04. El híbrido geométrico llevaría esto a &lt;2 cm.</p>
+<hr />
+<h2 id="wp12-rail_approach-tag-3-front-22">wp12 — rail_approach tag 3 (FRONT −2.2) ✅<a class="headerlink" href="#wp12-rail_approach-tag-3-front-22" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_11">Escenario<a class="headerlink" href="#escenario_11" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.5, -2.2, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(6.0, -2.2, 0.0)</span><span class="w">    </span><span class="c1"># iter-18</span>
+<span class="nt">tag_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">                    </span><span class="c1"># en (7.0, -2.2)</span>
+</code></pre></div>
+<h3 id="resultado-iter-21_11">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_11" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.090 dur=71.6 s</code>.</p>
+<h3 id="analisis_6">Análisis<a class="headerlink" href="#analisis_6" title="Permanent link">&para;</a></h3>
+<p>Simétrico a wp07. Mismo éxito.</p>
+<hr />
+<h2 id="wp13-rail_exit-desde-corredor-sur">wp13 — rail_exit desde corredor sur ❌<a class="headerlink" href="#wp13-rail_exit-desde-corredor-sur" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_12">Escenario<a class="headerlink" href="#escenario_12" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(1.0, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(4.0, 0.0, 0.0)</span><span class="w">     </span><span class="c1"># approach tag 35 (punto de entrada al riel)</span>
+<span class="nt">exit_goal</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.5, 0.0)</span><span class="w">       </span><span class="c1"># push 1.5 m más allá</span>
+<span class="nt">dispatch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rail_exit</span>
+</code></pre></div>
+<p>Robot arranca en el corredor sur, debe entrar al pasillo central y
+salir por el otro lado con clearance ≥ 1 m.</p>
+<h3 id="flujo-esperado_5">Flujo esperado<a class="headerlink" href="#flujo-esperado_5" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Harness publica goal (4.0, 0.0) a <code>/agv/rail_driver/goal</code>.</li>
+<li>rail_driver conduce al robot a (4, 0). state=reached.</li>
+<li>Arbiter detecta reached en <code>RAIL_DRIVE</code> → auto-transición a
+   <code>RAIL_EXIT</code> → publica push a (4.0 + 1.5) = (5.5, 0.0) en world
+   (outward=+1 para REAR; current_x=4 ≤ gap_x_min=3.5? No, 4 &gt; 3.5 → en gap).</li>
+<li>rail_driver conduce a (5.5, 0).</li>
+<li>Cuando <code>current_x = 5.5</code>, clearance = +1 × (5.5 − 4.0) = 1.5 m ≥ 1.0.
+   Zone(5.5, 0) = "gap". FSM release primary → <code>CORRIDOR_NAV</code>.</li>
+<li>Harness ve modes[-1] == "corridor_nav" después de observar "rail_exit"
+   → SUCCEEDED.</li>
+</ol>
+<h3 id="resultado-iter-21_12">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_12" title="Permanent link">&para;</a></h3>
+<p><code>NAV_TIMEOUT err_xy=1.54 err_yaw=0.002 dur=272 s</code>.</p>
+<p>El robot llegó a (5.5, 0) per geometría (wp13_goal=4.0, robot_end=5.5,
+err = 1.5 m). Pero el harness no vio la transición exitosa.</p>
+<h3 id="analisis-tecnico_4">Análisis técnico<a class="headerlink" href="#analisis-tecnico_4" title="Permanent link">&para;</a></h3>
+<p>Brain_log muestra:
+<div class="highlight"><pre><span></span><code>1776636891 rail_exit_push skipped: clearance=-0.00 m (current_x=4.000)
+1776636891 mode rail_drive → rail_exit (source=rail)
+1776636892 mode rail_exit → corridor_nav (source=nav)    ← release temprano
+1776636893 mode corridor_nav → rail_drive (source=rail)  ← re-entrada
+1776636915 → /agv/rail_driver/goal EXIT_PUSH (5.500, 0.000) clearance_now=-2.95
+                                                                       ↑
+                                            robot en x=9.95 — se voló otra vez
+1776636941 mode rail_exit → corridor_nav (source=nav)
+1776636943 mode corridor_nav → rail_drive (source=rail)
+1776636943 rail_exit_push skipped: clearance=1.50 m (current_x=5.500)
+1776636943 mode rail_drive → rail_exit (source=rail)
+1776636943 mode rail_exit → corridor_nav (source=nav)    ← release correcto
+</code></pre></div></p>
+<p>La secuencia es <strong>la liberación correcta a corridor_nav OCURRIÓ</strong>
+(1776636943.41), pero antes de eso hubo:
+1. Un <code>rail_drive → rail_exit_push skipped clearance=-0.00 current_x=4</code>
+   cuando recién llegó al goal del rail_drive inicial (x=4.0).
+2. Una liberación temprana a corridor_nav por la <strong>iter-16 aux release</strong>
+   (en approach zone + idle briefly) — pero NO es lo que esperabamos.
+3. Re-entrada a rail_drive.
+4. Luego otra vez auto push EXIT_PUSH con clearance=-2.95 → robot en
+   x=9.95 (se fue a +X otra vez por la carrera cancel/push).
+5. Eventualmente el robot llega a (5.5, 0) y el FSM libera a
+   corridor_nav — pero el harness ya había dejado de ver el patrón
+   "rail_exit → ... → corridor_nav" porque entre medio hubo
+   corridor_nav → rail_drive.</p>
+<p>La lógica del harness en iter-21 busca <code>corridor_nav</code> <em>después</em> del
+primer <code>rail_exit</code> en la historia. Como efectivamente apareció (varias
+veces), <strong>el harness DEBERÍA haber retornado SUCCEEDED</strong>. El hecho de
+que no lo hizo sugiere que el <code>modes_observed</code> de harness no capturó
+esas transiciones transitorias (el modo cambió 10+ veces en ~50 s).</p>
+<h3 id="que-esta-mal-fundamentalmente">Qué está mal fundamentalmente<a class="headerlink" href="#que-esta-mal-fundamentalmente" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>El auto-push del rail_exit genera una carrera con el rail_driver
+  después de la re-entrada desde corridor_nav</strong>. En cada ciclo el
+  robot se desvía y vuelve a intentar.</li>
+<li><strong>El harness subscriber de <code>/agv/mode/state</code></strong> (reliable, default
+  depth=10) puede perder mensajes si el arbiter publica a ~20 Hz y el
+  polling del harness es a ~10 Hz con spin_once procesando 1 mensaje
+  por call. Algunos transitorios se pierden.</li>
+</ul>
+<h3 id="solucion-arquitectonica-correcta_4">Solución arquitectónica correcta<a class="headerlink" href="#solucion-arquitectonica-correcta_4" title="Permanent link">&para;</a></h3>
+<p><strong>Fix 1 — FSM hysteresis en transiciones de modo</strong>. Requerir que un
+modo "sobreviva" N ticks (ej. 0.5 s) antes de cambiar de vuelta. Si
+<code>corridor_nav</code> es alcanzado, bloquear retorno a <code>rail_drive</code> por
+500 ms. Esto rompe la oscilación.</p>
+<p><strong>Fix 2 — RAIL_EXIT push goal debe ser "sticky"</strong>: el arbiter lo
+publica UNA VEZ al entrar a RAIL_EXIT, no en cada tick. Actualmente
+<code>request_rail_exit_push</code> se setea y fuerza re-publicación cada vez que
+entra a RAIL_EXIT. Si la FSM vuelve a RAIL_EXIT desde RAIL_DRIVE, re-emite
+el push goal. Debe tener una bandera <code>push_already_published</code>.</p>
+<p><strong>Fix 3 — harness subscribe con depth=1 + transient_local
+al /agv/mode/state</strong> (ya se aplicó a rail_approach/state y
+rail_driver/state en iter-20; hacerlo para mode/state también).</p>
+<p><strong>Fix 4 — harness tracking debe ser event-based, no polling</strong>. En
+lugar de spin_once + read attr, agregar la cadena de modos en el
+SUBSCRIBER CALLBACK. El callback apendea al <code>modes_observed</code> cada
+mensaje. La función <code>_publish_rail_exit_and_await_corridor</code> sólo hace
+lookup en el historial. Esto es lo que actualmente hace pero con race
+conditions.</p>
+<p><strong>Código afectado</strong>:
+- <code>src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp</code> (Fix 1 + 2):
+  agregar <code>min_mode_dwell_ticks</code> y <code>push_sticky_flag</code>.
+- <code>src/agv_integration_tests/test/test_waypoint_precision.py</code> (Fix 3 + 4).</p>
+<hr />
+<h2 id="wp14-rail_exit-desde-corredor-norte">wp14 — rail_exit desde corredor norte ❌<a class="headerlink" href="#wp14-rail_exit-desde-corredor-norte" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_13">Escenario<a class="headerlink" href="#escenario_13" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(10.0, 2.2, π)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(7.0, 2.2, π)</span><span class="w">        </span><span class="c1"># approach tag 12</span>
+<span class="nt">exit_goal</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.5, 2.2)</span><span class="w">        </span><span class="c1"># push 1.5 m oeste del tag (outward=−1)</span>
+</code></pre></div>
+<h3 id="resultado-iter-21_13">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_13" title="Permanent link">&para;</a></h3>
+<p><code>NAV_TIMEOUT err_xy=1.54 err_yaw=0.002 dur=270 s</code>.</p>
+<h3 id="analisis_7">Análisis<a class="headerlink" href="#analisis_7" title="Permanent link">&para;</a></h3>
+<p>Simétrico a wp13 pero en FRONT+2.2. Mismas causas, mismo síntoma.</p>
+<h3 id="solucion">Solución<a class="headerlink" href="#solucion" title="Permanent link">&para;</a></h3>
+<p>Idéntica a wp13.</p>
+<hr />
+<h2 id="wp15-nav2-lane-change-post-rail_exit">wp15 — nav2 lane-change post-rail_exit ❌<a class="headerlink" href="#wp15-nav2-lane-change-post-rail_exit" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_14">Escenario<a class="headerlink" href="#escenario_14" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.5, 0.0, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(5.5, -2.2, 0.0)</span>
+<span class="nt">dispatch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nav2</span>
+</code></pre></div>
+<p>Robot en el gap central (y=0), debe cambiar de pasillo a y=−2.2 por
+pura navegación corredor.</p>
+<h3 id="flujo-esperado_6">Flujo esperado<a class="headerlink" href="#flujo-esperado_6" title="Permanent link">&para;</a></h3>
+<ol>
+<li>wp14 terminó con arbiter en RAIL_EXIT (no salió a corridor_nav
+   porque el push no completó — ver wp14).</li>
+<li>Harness teleporta a (5.5, 0, 0), cancel rail_driver goal.</li>
+<li>Aux release (iter-16) libera FSM a corridor_nav porque zone=gap</li>
+<li>rail_driver_state=idle.</li>
+<li>Nav2 recibe goal (5.5, −2.2, 0). Path debe girar 90° a la derecha
+   y avanzar 2.2 m.</li>
+</ol>
+<h3 id="resultado-iter-21_14">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_14" title="Permanent link">&para;</a></h3>
+<p><code>ABORTED err_xy=2.16 err_yaw=2.65 dur=127 s</code>.</p>
+<p>err_yaw=2.65 rad ≈ 152° de rotación inesperada.</p>
+<h3 id="analisis-tecnico_5">Análisis técnico<a class="headerlink" href="#analisis-tecnico_5" title="Permanent link">&para;</a></h3>
+<p>Path ideal: desde (5.5, 0, yaw=0) a (5.5, −2.2, yaw=0). El robot
+necesita rotar −π/2 para apuntar −Y, avanzar 2.2 m, rotar +π/2 para
+volver a yaw=0 en el goal. O puede seguir una curva arco.</p>
+<p>MPPI con <code>vx_min=0</code> no puede retroceder. El rotation_shim gira al
+robot a path tangent (−Y direction = yaw = −π/2 = −1.57). Robot se
+queda rotando indefinidamente porque cada vez que intenta avanzar,
+la trayectoria lo desvía y el shim rota de nuevo.</p>
+<p>err_yaw=2.65 rad sugiere que el robot acabó en yaw ≈ 2.65 o −2.65
+radians, muy lejos de yaw=0. El robot giró sin avanzar.</p>
+<h3 id="que-esta-mal">Qué está mal<a class="headerlink" href="#que-esta-mal" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Lane-change en un AGV forward-only es <em>arquitectónicamente
+  imposible</em> sin giros in-place. MPPI no genera paths con rotate
+  in-place. El rotation_shim SÍ rota pero la coordinación con MPPI
+  avanzando es lo que falla.</li>
+<li>Este waypoint es técnicamente un "pretzel" geométrico para un robot
+  de este tipo.</li>
+</ul>
+<h3 id="solucion-arquitectonica-correcta_5">Solución arquitectónica correcta<a class="headerlink" href="#solucion-arquitectonica-correcta_5" title="Permanent link">&para;</a></h3>
+<p>Opciones formalmente correctas:</p>
+<p><strong>A. Doble rotate-in-place explícito</strong>. El planner global genera path
+ABC: A=(5.5, 0, 0) → B=(5.5, 0, −π/2) → C=(5.5, −2.2, −π/2).
+rotation_shim rota A→B, MPPI avanza B→C. Requiere configurar
+<code>SmacPlanner2D</code> para preservar yaws en waypoints intermedios, lo cual
+no es su comportamiento por defecto.</p>
+<p><strong>B. Rotate in place como behavior tree custom</strong>. Agregar al BT
+<code>rotate_to_goal_heading</code> antes de <code>navigate_to_pose</code>. nav2_behaviors
+tiene un plugin <code>Spin</code> — usar ese explícitamente. Esto es la
+forma "correcta por diseño" en Nav2.</p>
+<p><strong>C. Desactivar rotation_shim y usar MPPI puro con PreferForwardCritic
+débil + HighWZ samples</strong>. MPPI por sí sólo puede generar trayectorias
+curvas sin reversa si tiene suficiente <code>wz_max</code>.</p>
+<p><strong>Preferido: B</strong> — es lo que Nav2 canonicamente espera. El BT
+<code>navigate_to_pose_forward_only.xml</code> custom debería incluir un <code>Spin</code>
+behavior previo si el heading del goal difiere del heading actual por
+más de ~30°.</p>
+<p><strong>Código afectado</strong>:
+- <code>src/agv_navigation/behavior_trees/navigate_to_pose_forward_only.xml</code>:
+  agregar <code>&lt;Spin&gt;</code> antes del <code>&lt;FollowPath&gt;</code> cuando diff-yaw &gt; threshold.</p>
+<hr />
+<h2 id="wp16-rail_approach-tag-3-re-entrada">wp16 — rail_approach tag 3 (re-entrada) ✅<a class="headerlink" href="#wp16-rail_approach-tag-3-re-entrada" title="Permanent link">&para;</a></h2>
+<h3 id="escenario_15">Escenario<a class="headerlink" href="#escenario_15" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(5.5, -2.2, 0.0)</span>
+<span class="nt">goal</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">(6.0, -2.2, 0.0)</span><span class="w">     </span><span class="c1"># iter-18</span>
+<span class="nt">tag_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</code></pre></div>
+<p>Mismo start/goal que wp12 — es la re-entrada al aisle −2.2 después
+del lane-change fallido de wp15. Nota: el teleport del harness pone
+al robot en (5.5, −2.2) independientemente de donde haya quedado wp15.</p>
+<h3 id="resultado-iter-21_15">Resultado iter-21<a class="headerlink" href="#resultado-iter-21_15" title="Permanent link">&para;</a></h3>
+<p><code>SUCCEEDED err_xy=0.090 dur=71.4 s</code>.</p>
+<h3 id="analisis_8">Análisis<a class="headerlink" href="#analisis_8" title="Permanent link">&para;</a></h3>
+<p>Gracias al teleport, wp16 arranca en condiciones iguales a wp12. El
+fallo de wp15 no lo afecta. Confirma que rail_approach es robusto
+cuando las condiciones iniciales son consistentes.</p>
+<h3 id="mejora_4">Mejora<a class="headerlink" href="#mejora_4" title="Permanent link">&para;</a></h3>
+<p>Igual que wp04/wp11/wp12.</p>
+<hr />
+<h2 id="resumen-arquitectonico-por-bucket">Resumen arquitectónico por bucket<a class="headerlink" href="#resumen-arquitectonico-por-bucket" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Bucket</th>
+<th>iter-21</th>
+<th>Mejoras formales necesarias</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>nav2</strong> 2/5</td>
+<td>wp01 ✅ / wp02 ❌ TF race / wp03 ✅ / wp10 ❌ post-rail / wp15 ❌ lane-change</td>
+<td>1. Fresh-TF gate en harness pre-dispatch (wp02). 2. FSM <code>rail_drive_started_by_approach</code> flag + no-auto-push si false (wp10). 3. BT custom con <code>&lt;Spin&gt;</code> pre-<code>&lt;FollowPath&gt;</code> cuando diff_yaw grande (wp15).</td>
+</tr>
+<tr>
+<td><strong>rail_approach</strong> 5/5</td>
+<td>Todos ✅ con err ≈ 9-10 cm</td>
+<td>Híbrido geométrico para tag_cam_z (registry + TF en lugar de solvePnP depth). Llevaría err a &lt;2 cm sustantivamente.</td>
+</tr>
+<tr>
+<td><strong>rail_drive</strong> 4/4</td>
+<td>Todos ✅ con err ≈ 5 cm</td>
+<td>Bajar <code>stop_band_m</code> de 0.05 a 0.01 — micro-mejora.</td>
+</tr>
+<tr>
+<td><strong>rail_exit</strong> 0/2</td>
+<td>wp13/wp14 ❌ 1.54 m</td>
+<td>1. FSM hysteresis (min_dwell 0.5 s) para romper oscilación. 2. <code>push_sticky_flag</code> para no re-emitir push goal. 3. Harness subscribe a <code>/agv/mode/state</code> con depth=1 para no perder transitorios.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fix-transversal-prioritario-rail_driver-cancel_goal-service">Fix transversal prioritario — rail_driver <code>cancel_goal</code> service<a class="headerlink" href="#fix-transversal-prioritario-rail_driver-cancel_goal-service" title="Permanent link">&para;</a></h2>
+<p>El <strong>hack "publica goal=pose actual"</strong> para cancelar rail_driver
+(iter-7/8/9) es la causa-raíz de:</p>
+<ul>
+<li>Oscilación del FSM en wp01, wp02, wp03, wp10, wp13, wp14, wp15.</li>
+<li>Drift de <code>current_x=9.95</code> durante transiciones (wp10, wp13, wp14).</li>
+<li>Auto-push <code>clearance_now=-2.95</code> que envía al robot en dirección
+  incorrecta.</li>
+</ul>
+<p>Un <code>std_srvs/Trigger cancel_goal</code> en <code>rail_driver_node</code>:
+- Invalida <code>have_goal_</code> sincrónicamente en el callback.
+- Publica un estado <code>"canceled"</code> único tick (distinto de "reached").
+- Descarta cualquier cmd_vel_rail en la cola.</p>
+<p>Y eliminar del harness el hack del cancel-goal, reemplazándolo por una
+llamada al servicio. Esto elimina la clase entera de bugs de carrera
+de la que derivan ~60 % de las fallas observadas.</p>
+<h2 id="priorizacion-recomendada-para-iter-22">Priorización recomendada para iter-22<a class="headerlink" href="#priorizacion-recomendada-para-iter-22" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>rail_driver cancel_goal service</strong> (1-2 horas). Desbloquea
+   potencialmente wp10, wp15, y estabiliza wp02.</li>
+<li><strong>FSM <code>push_sticky_flag</code> + <code>min_mode_dwell</code></strong> (1 hora).
+   Desbloquea wp13 y wp14.</li>
+<li><strong>Fresh-TF gate en harness</strong> (30 min). Desbloquea wp02
+   consistentemente.</li>
+<li><strong>BT <code>&lt;Spin&gt;</code> pre-dispatch</strong> (1 hora). Desbloquea wp15.</li>
+<li><strong>rail_approach híbrido geométrico</strong> (2 horas). Mejora precisión
+   de 10 cm a &lt;2 cm en los 5 rail_approach.</li>
+</ol>
+<p>Con 1+2+3+4 esperamos <strong>~14-15 / 16 en iter-22</strong> (sobrevive wp02 flakiness
+marginal). Con 5 aplicado además, cumple el gate de 2 cm que
+<code>specs/acceptance.yaml</code> pide para Phase 2.</p>
+<h2 id="lo-que-la-iter-21-demostro-que-funciona">Lo que la iter-21 demostró que FUNCIONA<a class="headerlink" href="#lo-que-la-iter-21-demostro-que-funciona" title="Permanent link">&para;</a></h2>
+<p>Muy importante consolidar los aciertos:</p>
+<ul>
+<li><strong>iter-15 coarse_skip_radius</strong>: evita que rail_approach lance un
+  goal Nav2 que falla por floor tag yaw=0 sin heading de aproximación.</li>
+<li><strong>iter-16 aux release en approach zone</strong>: permite que wp01 y wp03
+  salgan del trap RAIL_EXIT cuando el cancel del harness los mete.</li>
+<li><strong>iter-17 SETTLED/ABORTED state + publish_status fresco</strong>: el
+  harness puede DETECTAR completitud del fine_servo.</li>
+<li><strong>iter-18 waypoint goals corregidos</strong>: alinea el gate de medición
+  con la geometría real del fine_servo target.</li>
+<li><strong>iter-20 depth=1 state QoS</strong>: elimina la clase de bugs "ABORTED
+  dur=0.0s" por mensajes buffered.</li>
+<li><strong>iter-20 tolerance_xy=0.10</strong>: hace que SETTLED latch al piso real
+  de convergencia del HIL (no al ideal de 2 cm que requiere un híbrido
+  geométrico).</li>
+<li><strong>Registry-driven apriltag_sim_shim</strong>: cortó el cuello de botella
+  del oracle filtering para floor tags.</li>
+</ul>
+<p>Preservar estos fixes es TAN importante como los siguientes. Cualquier
+refactor que los pierda regresaría a 50 %.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2852 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/audit/2026-05-13-greenhouse-hardening/04_localization/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Phase 4 — Localization - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#phase-4-localization" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Phase 4 — Localization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../validation/RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-dual-ekf-configuration-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A. Dual EKF — configuration audit
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A. Dual EKF — configuration audit">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a1-ekf_localyaml-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.1 ekf_local.yaml walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a2-ekf_globalyaml-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.2 ekf_global.yaml walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a3-imu-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.3 IMU filter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a4-cuvslam-greenhouse-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.4 cuVSLAM greenhouse override
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#b-apriltag-fusion-marker_correction_node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B. AprilTag fusion (marker_correction_node)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="B. AprilTag fusion (marker_correction_node)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#b1-architecture-observation-or-set_pose-conditionally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.1 Architecture: observation OR set_pose, conditionally
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b2-range-quadratic-covariance-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.2 Range-quadratic covariance scaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b3-tag-registry-yaml-versioned-with-known-bug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.3 Tag registry: YAML, versioned, with known bug
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b4-anti-spoofing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.4 Anti-spoofing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b5-multi-tag-voting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.5 Multi-tag voting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b6-obliqueness-not-handled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.6 Obliqueness — NOT handled
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b7-tag-size-single-value-not-per-tag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.7 Tag size — single value, not per-tag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b8-camera-intrinsics-live-from-camera_info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.8 Camera intrinsics: live from camera_info
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b9-rail-aisle-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.9 Rail-aisle gating
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b10-cooldown-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.10 Cooldown semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b11-findings-on-marker_correction_node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.11 Findings on marker_correction_node
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="B.11 Findings on marker_correction_node">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-04-02-marker_correction-accepts-grazing-incidence-tag-detections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HIGH-04-02 — marker_correction accepts grazing-incidence tag detections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-04-04-homebrew-yaml-parser-in-marker_correction-accepts-garbage-tag-size-not-per-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HIGH-04-04 — Homebrew YAML parser in marker_correction accepts garbage; tag size not per-entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c-the-agv_factor_graph-black-box-opened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C. The agv_factor_graph black box, opened
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="C. The agv_factor_graph black box, opened">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#c1-what-it-actually-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C.1 What it actually does
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c2-consumer-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C.2 Consumer audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c3-the-architectural-bug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C.3 The architectural bug
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c4-loop-closure-horizon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C.4 Loop-closure horizon
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c5-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C.5 Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="C.5 Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-04-01-factor_graph-consumes-the-marker-corrected-ekf-output-double-counting-apriltag-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HIGH-04-01 — factor_graph consumes the marker-corrected EKF output, double-counting AprilTag information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-04-05-factor_graph-has-zero-downstream-consumers-runs-at-10-hz-for-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MEDIUM-04-05 — factor_graph has zero downstream consumers — runs at 10 Hz for nothing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-04-06-factor-graph-window-200-20-s-horizon-smaller-than-typical-greenhouse-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MEDIUM-04-06 — Factor graph window 200 = ~20 s horizon, smaller than typical greenhouse loop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#d-auto_init_orchestrator-cold-start-cascade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D. auto_init_orchestrator — cold-start cascade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="D. auto_init_orchestrator — cold-start cascade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#d1-the-cascade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.1 The cascade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d2-strengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.2 Strengths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d3-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.3 Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="D.3 Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-04-03-kidnapping-detection-is-declared-as-a-parameter-but-never-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HIGH-04-03 — Kidnapping detection is declared as a parameter but never implemented
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-04-08-cooldown-asymmetry-between-marker_correction-500-ms-and-ekf-rate-10-hz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LOW-04-08 — Cooldown asymmetry between marker_correction (500 ms) and EKF rate (10 Hz)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-04-07-anti-spoofing-behavior-is-correct-but-not-documented-as-a-security-property" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MEDIUM-04-07 — Anti-spoofing behavior is correct but not documented as a security property
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e-local-odom-semantics-the-differential-false-absolute-yaw-issue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E. Local-odom semantics — the differential: false + absolute-yaw issue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E. Local-odom semantics — the differential: false + absolute-yaw issue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-04-09-ekf_local-reads-wheel-yaw-absolute-non-differential-and-imu-yaw-absolute-simultaneously" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HIGH-04-09 — ekf_local reads wheel-yaw absolute (non-differential) AND IMU yaw absolute simultaneously
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#f-slam-toolbox-in-the-production-launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F. SLAM Toolbox in the production launch
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g-hardware-dependent-items-not-in-this-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G. Hardware-dependent items (not in this audit)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H. Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/audit/2026-05-13-greenhouse-hardening/04_localization.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="phase-4-localization">Phase 4 — Localization<a class="headerlink" href="#phase-4-localization" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Phase 4 goal (per prompt): "Pose en <code>map</code> frame estable, sin saltos,
+robusta a passillos largos featureless, con manejo correcto de
+AprilTags como anclas."</p>
+</blockquote>
+<p>The first pass deferred this phase to hardware. That was wrong: the
+<strong>configurations and the source code</strong> for the dual EKF, AprilTag
+fusion, factor graph, auto-init orchestrator, and cuVSLAM override are
+all auditable statically. This file delivers that audit.</p>
+<p>What requires hardware (drift over 100 m, kidnapping recovery time,
+forced sensor blackout) is documented at the end with proposed harnesses.</p>
+<hr />
+<h2 id="a-dual-ekf-configuration-audit">A. Dual EKF — configuration audit<a class="headerlink" href="#a-dual-ekf-configuration-audit" title="Permanent link">&para;</a></h2>
+<h3 id="a1-ekf_localyaml-walkthrough">A.1 <code>ekf_local.yaml</code> walkthrough<a class="headerlink" href="#a1-ekf_localyaml-walkthrough" title="Permanent link">&para;</a></h3>
+<p><a href="../../../src/agv_sensor_fusion/config/ekf_local.yaml"><code>src/agv_sensor_fusion/config/ekf_local.yaml</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Value</th>
+<th>Evaluation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frequency</code></td>
+<td>50.0</td>
+<td>Correct — matches wheel_odom publish rate</td>
+</tr>
+<tr>
+<td><code>two_d_mode</code></td>
+<td>true</td>
+<td>Correct — diff-drive planar</td>
+</tr>
+<tr>
+<td><code>publish_tf</code></td>
+<td>true</td>
+<td>Correct — sole owner of <code>odom→base_link</code></td>
+</tr>
+<tr>
+<td><code>world_frame</code></td>
+<td>odom</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>dynamic_process_noise_covariance</code></td>
+<td>true</td>
+<td>Correct — scales Q with velocity</td>
+</tr>
+<tr>
+<td><code>odom0</code> source</td>
+<td><code>wheel_odom_validated</code> (not raw <code>/agv/wheel_odom</code>)</td>
+<td>Correct — wheel_slip_detector replaces raw</td>
+</tr>
+<tr>
+<td><code>odom0_config</code></td>
+<td><code>[T,T,F, F,F,T, T,F,F, F,F,T, F,F,F]</code></td>
+<td><strong>Mostly correct.</strong> Reads x,y,yaw (pose) AND vx, vyaw (twist). Reading wheel-odom-derived absolute pose is unusual but <code>odom0_differential: false</code> makes the EKF integrate it as a normal observation — this is OK for a single-rate filter where the wheel odom maintains its own integration consistent with the EKF. The pose-read combined with <code>differential: false</code> does means accumulated wheel-odom drift directly contaminates the local pose. See <code>HIGH-04-09</code>.</td>
+</tr>
+<tr>
+<td><code>imu0</code> source</td>
+<td><code>/agv/imu/filtered</code></td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>imu0_config</code></td>
+<td><code>[F,F,F, T,T,T, F,F,F, T,T,T, T,T,F]</code></td>
+<td>Reads roll, pitch, yaw absolute (<code>T,T,T</code> in first orientation block). <strong>Yaw absolute from IMU is acceptable here</strong> because the BMI088 is gyro-only (no magnetometer per <code>agv_sensor_fusion/CLAUDE.md</code>); the "yaw absolute" is actually the integrated gyro from boot, not a magnetometer reading. <strong>But</strong> it makes the local EKF read two sources of yaw absolute (wheel-derived from yaw bit in <code>odom0_config</code> AND IMU-derived from yaw in <code>imu0_config</code>) — they will fight. The system mitigates by giving IMU yaw a tighter covariance (0.001 vs wheel odom yaw 0.03), so IMU wins. Working but architecturally fragile.</td>
+</tr>
+<tr>
+<td><code>imu0_remove_gravitational_acceleration</code></td>
+<td>true</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>imu0_pose_covariance</code> (overrides yaw to 0.02 rad²)</td>
+<td>0.02 rad² on yaw, 0.001 on roll/pitch</td>
+<td>Reasonable for BMI088 spec</td>
+</tr>
+<tr>
+<td><code>imu0_twist_covariance</code> (rate)</td>
+<td>0.0005 on vyaw</td>
+<td>Tight but matches BMI088 noise density <code>0.000244 rad/s/√Hz</code></td>
+</tr>
+<tr>
+<td><code>process_noise_covariance</code></td>
+<td>non-default, x/y=0.05, yaw=0.08, vx=0.025</td>
+<td><strong>Reasonable values</strong> — not identity, not 1e-9. Documented choice.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="a2-ekf_globalyaml-walkthrough">A.2 <code>ekf_global.yaml</code> walkthrough<a class="headerlink" href="#a2-ekf_globalyaml-walkthrough" title="Permanent link">&para;</a></h3>
+<p><a href="../../../src/agv_sensor_fusion/config/ekf_global.yaml"><code>src/agv_sensor_fusion/config/ekf_global.yaml</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Value</th>
+<th>Evaluation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frequency</code></td>
+<td>10.0</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>two_d_mode</code></td>
+<td>true</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>publish_tf</code></td>
+<td>true</td>
+<td>Correct — sole owner of <code>map→odom</code></td>
+</tr>
+<tr>
+<td><code>world_frame</code></td>
+<td>map</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>odom0</code> source</td>
+<td><code>odometry/local</code> (local EKF output)</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>odom0_differential</code></td>
+<td><strong>true</strong></td>
+<td>Correct — prevents double-counting drift</td>
+</tr>
+<tr>
+<td><code>odom1</code> source</td>
+<td><code>/visual_slam/tracking/odometry</code> (cuVSLAM)</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>odom1_differential</code></td>
+<td><strong>true</strong></td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>odom1_pose_rejection_threshold</code></td>
+<td>3.5</td>
+<td>Mahalanobis-distance gating; reasonable. Tightened for greenhouse aliasing (comment line 47)</td>
+</tr>
+<tr>
+<td><code>odom1_twist_rejection_threshold</code></td>
+<td>2.5</td>
+<td>Reasonable</td>
+</tr>
+<tr>
+<td><code>pose0</code> source</td>
+<td><code>marker_pose</code> (AprilTag)</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>pose0_config</code></td>
+<td><code>[T,T,F, F,F,T, F,F,F, F,F,F, F,F,F]</code></td>
+<td>Reads x, y, yaw absolute. Correct</td>
+</tr>
+<tr>
+<td><code>pose0_differential</code></td>
+<td><strong>false</strong></td>
+<td>Correct — AprilTag IS absolute</td>
+</tr>
+<tr>
+<td><code>pose0_rejection_threshold</code></td>
+<td>3.0</td>
+<td>Stricter than cuVSLAM — correct (tags are ground truth)</td>
+</tr>
+<tr>
+<td><code>pose1</code> source</td>
+<td><code>/agv/zed/pose_with_covariance</code> (ZED SDK Area Memory)</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>pose1_differential</code></td>
+<td>false</td>
+<td>Correct</td>
+</tr>
+<tr>
+<td><code>pose1_rejection_threshold</code></td>
+<td>3.0</td>
+<td>Symmetrised with AprilTag (per comment line 86–90)</td>
+</tr>
+<tr>
+<td><code>initial_estimate_covariance</code></td>
+<td>1.0 on x/y, 0.5 on yaw, 1e-9 on rest</td>
+<td><strong>Correct fix</strong> for the cold-start problem documented at line 131–158. Otherwise first absolute pose would be rejected on every boot</td>
+</tr>
+<tr>
+<td><code>process_noise_covariance</code></td>
+<td>non-default, x/y=0.05, yaw=0.04</td>
+<td><strong>Reasonable</strong>. Tighter than local on yaw because global filter trusts its priors more between corrections (comment 105–113)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Net evaluation of dual EKF</strong>: solidly engineered. The tuning is
+documented; choices are justified inline. The only fragility is the
+local EKF's mix of <code>odom0_differential: false</code> with reading wheel-yaw
+absolute — but it's mitigated by IMU yaw weight. See HIGH-04-09 for the
+cleanup proposal.</p>
+<h3 id="a3-imu-filter">A.3 IMU filter<a class="headerlink" href="#a3-imu-filter" title="Permanent link">&para;</a></h3>
+<p><a href="../../../src/agv_sensor_fusion/config/imu_filter.yaml"><code>src/agv_sensor_fusion/config/imu_filter.yaml</code></a>.
+- Butterworth 2nd-order: gyro 10 Hz, accel 5 Hz cutoffs at 200 Hz sample.
+- Comment justifies separation: robot dynamics &lt; 5 Hz, floor vibrations</p>
+<blockquote>
+<p>20 Hz. Clean. <strong>No finding.</strong></p>
+</blockquote>
+<h3 id="a4-cuvslam-greenhouse-override">A.4 cuVSLAM greenhouse override<a class="headerlink" href="#a4-cuvslam-greenhouse-override" title="Permanent link">&para;</a></h3>
+<p><a href="../../../src/agv_bringup/config/cuvslam_greenhouse.yaml"><code>src/agv_bringup/config/cuvslam_greenhouse.yaml</code></a>.
+- Line 10: <code>/**:</code> key correctly used (not the node name) — the
+  TF-disable trap is avoided. <strong>No finding.</strong>
+- <code>publish_odom_to_base_tf: false</code> and <code>publish_map_to_odom_tf: false</code> —
+  both TF flags off. Correct.
+- <code>img_mask_top: 108</code> (greenhouse roof), <code>img_mask_bottom: 72</code> (ground
+  reflections) — sensible greenhouse-specific masking.
+- <code>slam_max_map_size: 500</code>, <code>slam_throttling_time_ms: 300</code> — keyframe
+  budget documented.
+- <code>localizer_horizontal_radius: 3.0</code>, <code>localizer_angular_step: 0.1745</code>
+  (~10°) — grid-search params for relocalization. Reasonable for a
+  greenhouse where the operator may place the robot within 3 m of a
+  prior pose.</p>
+<p><strong>No finding.</strong></p>
+<hr />
+<h2 id="b-apriltag-fusion-marker_correction_node">B. AprilTag fusion (<code>marker_correction_node</code>)<a class="headerlink" href="#b-apriltag-fusion-marker_correction_node" title="Permanent link">&para;</a></h2>
+<p><a href="../../../src/agv_markers/src/marker_correction_node.cpp"><code>src/agv_markers/src/marker_correction_node.cpp</code></a>.</p>
+<p>This is the most carefully engineered node in the workspace. The
+prompt §4.B asks 7 specific questions; here are the verified answers.</p>
+<h3 id="b1-architecture-observation-or-set_pose-conditionally">B.1 Architecture: observation OR <code>set_pose</code>, conditionally<a class="headerlink" href="#b1-architecture-observation-or-set_pose-conditionally" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Default path</strong> (line 552): the node publishes
+  <code>PoseWithCovarianceStamped</code> on <code>marker_pose</code>. This enters <code>ekf_global</code>
+  as <code>pose0</code> (absolute, non-differential). <strong>This is correct — the EKF
+  does the fusion math, not the node.</strong></li>
+<li><strong>Relocalization path</strong> (line 522–545): when drift exceeds
+  <code>relocalization_threshold</code> (2.0 m) AND <code>decision_margin &gt;= 50.0</code> AND
+  no rail-aisle / rail-driving gate is active, the node calls
+  <code>robot_localization/srv/SetPose</code> to hard-reset the EKF.</li>
+<li>The two paths are mutually exclusive per detection cycle. <strong>No
+  pose-jump pathology</strong> of the type the prompt warns about.</li>
+</ul>
+<h3 id="b2-range-quadratic-covariance-scaling">B.2 Range-quadratic covariance scaling<a class="headerlink" href="#b2-range-quadratic-covariance-scaling" title="Permanent link">&para;</a></h3>
+<p>Line 399–400:
+<div class="highlight"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">ref_range</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0</span><span class="p">;</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">range_factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">range</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">ref_range</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">range</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">ref_range</span><span class="p">);</span>
+</code></pre></div>
+Applied at line 492–494:
+<div class="highlight"><pre><span></span><code><span class="n">correction</span><span class="p">.</span><span class="n">pose</span><span class="p">.</span><span class="n">covariance</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mf">0.02</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">final_range_factor</span><span class="p">;</span><span class="w">  </span><span class="c1">// x</span>
+<span class="n">correction</span><span class="p">.</span><span class="n">pose</span><span class="p">.</span><span class="n">covariance</span><span class="p">[</span><span class="mi">7</span><span class="p">]</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mf">0.02</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">final_range_factor</span><span class="p">;</span><span class="w">  </span><span class="c1">// y</span>
+<span class="n">correction</span><span class="p">.</span><span class="n">pose</span><span class="p">.</span><span class="n">covariance</span><span class="p">[</span><span class="mi">35</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.05</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">final_range_factor</span><span class="p">;</span><span class="w">  </span><span class="c1">// yaw</span>
+</code></pre></div></p>
+<p><strong>Correct.</strong> At range 2 m, covariance is 2× the base (<code>range_factor = 2</code>).
+At range 5 m, covariance is 7.25×. This matches the prompt's
+"<code>cov ∝ r²</code>" expectation.</p>
+<h3 id="b3-tag-registry-yaml-versioned-with-known-bug">B.3 Tag registry: YAML, versioned, with known bug<a class="headerlink" href="#b3-tag-registry-yaml-versioned-with-known-bug" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Path: <code>markers_registry.yaml</code> (static) + runtime registry loaded from
+  <code>runtime_registry_file</code> parameter (dashboard-defined tags).</li>
+<li>Static registry lives in <code>src/agv_markers/config/markers_registry.yaml</code>
+  — versioned in git.</li>
+<li>Runtime registry path is <strong>hardcoded</strong> in <code>agv_full.launch.py:546,585</code>
+  to <code>/home/orza/agv_data/runtime_markers_registry.yaml</code> — already
+  flagged as <code>CR-00-03</code>.</li>
+</ul>
+<h3 id="b4-anti-spoofing">B.4 Anti-spoofing<a class="headerlink" href="#b4-anti-spoofing" title="Permanent link">&para;</a></h3>
+<p>Line 289: <code>if (it == registry_.end()) continue;</code>. Tags whose ID is <strong>not
+in the registry</strong> are silently ignored. <strong>This is the correct
+anti-spoofing behavior</strong> for the greenhouse non-adversarial threat model
+— a random tag stuck on a wall by accident won't poison localization.</p>
+<p><strong>However</strong>: a knowledgeable adversary who knows the registry can spoof
+a known ID. There is no cryptographic auth on the tag bits. <strong>For
+greenhouse commercial deployment this is acceptable</strong>; for any future
+public-space deployment, swap to <code>STag</code> or signed-tag schemes.</p>
+<h3 id="b5-multi-tag-voting">B.5 Multi-tag voting<a class="headerlink" href="#b5-multi-tag-voting" title="Permanent link">&para;</a></h3>
+<p>Line 417–470: median-based outlier rejection + inverse-range-squared
+weighted average over inliers. Outlier threshold 1.0 m from median.
+<strong>This is correct and robust</strong>.</p>
+<p>Yaw averaging uses circular mean (<code>atan2(sum_sin, sum_cos)</code>) — correct
+for angles. Best <code>decision_margin</code> used to label the log line.</p>
+<h3 id="b6-obliqueness-not-handled">B.6 Obliqueness — NOT handled<a class="headerlink" href="#b6-obliqueness-not-handled" title="Permanent link">&para;</a></h3>
+<p>Line 287–321: every detected tag goes through <code>solvePnP</code> regardless of
+its observation angle. There is <strong>no rejection of tags seen at extreme
+incidence</strong>.</p>
+<p>The prompt §4.B asks this explicitly: "Tags seen at extreme angles
+produce noisy PnP that poisons EKF." <code>SOLVEPNP_SQPNP</code> (line 319) is more
+robust than <code>ITERATIVE</code> at oblique angles, but it does not magically
+recover from poor geometry. At 80° incidence on a 20 cm tag, even SQPNP
+will have very large covariance — yet the node assigns the <em>same</em>
+<code>range_factor * 0.02</code> covariance regardless of incidence.</p>
+<p>This is <code>HIGH-04-02</code> below.</p>
+<h3 id="b7-tag-size-single-value-not-per-tag">B.7 Tag size — single value, not per-tag<a class="headerlink" href="#b7-tag-size-single-value-not-per-tag" title="Permanent link">&para;</a></h3>
+<p>Line 52: <code>declare_parameter("tag_size", 0.2);</code>. Used in <code>obj_pts</code>
+construction at line 293–297 for every detected tag, ignoring the
+registry. If the registry contains tags of mixed sizes (e.g., 0.10 m
+floor tags and 0.20 m wall tags), all are treated as 0.20 m and PnP
+returns a wrong distance for the smaller tags by a factor of 2.</p>
+<p>Per the agv_markers CLAUDE.md: "Registry includes wall tags (z=0.145m)
+and floor tags (z=0.002m)." It does not say they are different sizes,
+but the registry YAML can in principle declare per-tag sizes that the
+node ignores.</p>
+<p>This is <code>HIGH-04-04</code> below (alongside the homebrew YAML parser).</p>
+<h3 id="b8-camera-intrinsics-live-from-camera_info">B.8 Camera intrinsics: live from <code>camera_info</code><a class="headerlink" href="#b8-camera-intrinsics-live-from-camera_info" title="Permanent link">&para;</a></h3>
+<p>Line 94–105: subscribes to <code>camera_info_topic</code> and captures <code>fx, fy,
+cx, cy</code> on first message. Good — uses the actual camera calibration the
+ZED publishes.</p>
+<p><strong>However</strong>: it never resubscribes if <code>camera_info</code> changes (e.g., the
+ZED is reset and republishes new intrinsics after a USB recovery). The
+node holds the first values forever.</p>
+<p>Low priority — ZED intrinsics are stable for a given lens/sensor combo.</p>
+<h3 id="b9-rail-aisle-gating">B.9 Rail-aisle gating<a class="headerlink" href="#b9-rail-aisle-gating" title="Permanent link">&para;</a></h3>
+<p>Line 504–521: three independent gates suppress relocalization while the
+robot is in a rail aisle:
+1. <code>in_rail_aisle_</code> (from <code>/agv/zone/state</code> JSON)
+2. EKF position suggests rail section (x ≤ 3.5 or x ≥ 7.5 — hardcoded
+   sim geometry)
+3. <code>rail_driver_driving_</code> (from <code>/agv/rail_driver/state</code>)</p>
+<p><strong>Defensive and well-engineered</strong>. The hardcoded x-range at line
+518–519 is a tight coupling to the specific greenhouse layout in the
+USD sim and would need re-tuning for a different greenhouse.</p>
+<p>Worth noting in a "hardcoded greenhouse geometry" backlog item but
+the team explicitly chose this in iter-33 c5 as a chicken-and-egg
+breaker. <strong>No new finding</strong> beyond noting it.</p>
+<h3 id="b10-cooldown-semantics">B.10 Cooldown semantics<a class="headerlink" href="#b10-cooldown-semantics" title="Permanent link">&para;</a></h3>
+<p>Line 268–276: after a successful <code>set_pose</code>, suppress further
+corrections for <code>relocalization_cooldown_ms</code> (500 ms). Raw tag IDs
+still publish to <code>raw_tag_pub_</code> (line 259–263) before the cooldown
+gate. <strong>Correct architecture</strong> — UI tag-visibility tracking is not
+broken by relocalization cooldown.</p>
+<h3 id="b11-findings-on-marker_correction_node">B.11 Findings on <code>marker_correction_node</code><a class="headerlink" href="#b11-findings-on-marker_correction_node" title="Permanent link">&para;</a></h3>
+<hr />
+<h4 id="high-04-02-marker_correction-accepts-grazing-incidence-tag-detections">HIGH-04-02 — <code>marker_correction</code> accepts grazing-incidence tag detections<a class="headerlink" href="#high-04-02-marker_correction-accepts-grazing-incidence-tag-detections" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_markers/src/marker_correction_node.cpp:287-321</code>.
+<strong>Category</strong>: bug.
+<strong>Symptom</strong>: No incidence-angle filter. Tags seen at 80°+ from normal
+produce PnP results with very large effective uncertainty, but the
+output covariance assumes only range-dependent uncertainty.
+<strong>Analysis</strong>: The <code>range_factor = 1 + (range/2)²</code> only models distance
+uncertainty. For a planar tag, projection error growth with incidence
+goes as <code>1/cos²(θ)</code>: at 80° that's a 33× multiplier, far exceeding the
+range factor. SOLVEPNP_SQPNP is numerically stable but cannot recover
+geometric information that doesn't exist in the image.
+<strong>Greenhouse impact</strong>: As the robot rounds a corner or passes a tag at
+the end of a row, the tag transits from frontal to extreme oblique.
+The last few frames before the tag exits FoV will be high-incidence
+high-confidence corrections that pull <code>ekf_global</code> toward a slightly
+wrong position. Over a long mission with many tags, this systematic
+bias accumulates as map-scale drift.
+<strong>Benchmark</strong>: VINS-Fusion's marker plugin rejects detections where
+<code>cos(θ) &lt; 0.3</code> (about 73° from normal). NVIDIA Isaac AprilTag pipeline
+exposes per-detection <code>homography_error</code> for downstream filtering.
+<strong>Recommendation</strong>: Compute the incidence angle from the tag's rvec.
+The tag normal in camera frame is column 2 of the Rodrigues rotation;
+its z-component is <code>cos(incidence)</code>. Reject when <code>cos(incidence) &lt; 0.3</code>
+OR inflate covariance by <code>1 / cos²(incidence)</code>. Surface incidence in
+the log for debugging.
+<strong>Acceptance criterion</strong>: Synthetic test of a tag observed at 0°/45°/75°
+incidence produces published covariances that grow by approximately
+1× / 2× / 15× respectively.
+<strong>Effort</strong>: S.
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h4 id="high-04-04-homebrew-yaml-parser-in-marker_correction-accepts-garbage-tag-size-not-per-entry">HIGH-04-04 — Homebrew YAML parser in <code>marker_correction</code> accepts garbage; tag size not per-entry<a class="headerlink" href="#high-04-04-homebrew-yaml-parser-in-marker_correction-accepts-garbage-tag-size-not-per-entry" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_markers/src/marker_correction_node.cpp:215-238</code> (parser), <code>:52</code> (single <code>tag_size</code> param), <code>:293-297</code> (PnP geometry).
+<strong>Category</strong>: bug.
+<strong>Symptom</strong>: The registry YAML parser is a hand-rolled string-matcher
+that accepts any line beginning with <code>id:</code>, <code>x:</code>, <code>y:</code>, <code>z:</code>, <code>yaw:</code>.
+There is no schema validation, no per-tag <code>size</code>, no <code>family</code>, no
+duplicate-ID check.
+<strong>Analysis</strong>:
+- A tag declared <code>id: 7\nx: 3.5\ny: bogus</code> will: parse <code>id: 7</code> (success),
+  parse <code>x: 3.5</code> (success), reach <code>y: bogus</code> and <code>std::stod("bogus")</code>
+  → throws → process aborts because there's no try-catch at line 231.
+  <strong>A typo in the registry crashes the node.</strong>
+- A second <code>id: 7</code> later in the file silently overwrites the first
+  (line 226: <code>registry_[current_id] = current;</code>).
+- All tags assumed <code>tag_size = 0.2</code> m (line 52). If the registry mixes
+  floor (small) and wall (large) tags, PnP geometry is wrong for the
+  smaller class by the size ratio.
+- The same parser is used for both static and runtime registries —
+  garbage from the dashboard-generated registry crashes the node too.
+<strong>Greenhouse impact</strong>: The dashboard's AprilTagManager generates the
+runtime registry from operator input. An operator who types a malformed
+value triggers a node crash, which silently disables AprilTag
+correction. Drift starts accumulating but no clear alert is raised.
+<strong>Benchmark</strong>: Most production ROS configs use <code>yaml-cpp</code> (already a
+transitive dep via <code>pluginlib</code>). A 30-line <code>yaml-cpp</code> parser handles
+schema, types, and errors with proper messages.
+<strong>Recommendation</strong>:
+1. Replace the hand-rolled parser with <code>yaml-cpp</code>. Validate types and
+   ranges (x, y, z finite; yaw in <code>[-π, π]</code>; size &gt; 0).
+2. Add a per-tag <code>size</code> field; default to the global <code>tag_size</code>
+   parameter if absent. Use the per-tag value in <code>obj_pts</code> construction.
+3. On parse error, log a clear message naming the offending file and
+   line, and either (a) keep the previous registry in memory and warn,
+   or (b) refuse to start at boot.
+4. Detect duplicate IDs — fail to load, log all duplicates.
+<strong>Acceptance criterion</strong>: A malformed <code>markers_registry.yaml</code> produces a
+clear error log and either a refusal to start or a "kept previous
+registry" warning, never a silent crash.
+<strong>Effort</strong>: S (4 hours including tests).
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h2 id="c-the-agv_factor_graph-black-box-opened">C. The <code>agv_factor_graph</code> black box, opened<a class="headerlink" href="#c-the-agv_factor_graph-black-box-opened" title="Permanent link">&para;</a></h2>
+<p><a href="../../../src/agv_factor_graph/src/factor_graph_node.cpp"><code>src/agv_factor_graph/src/factor_graph_node.cpp</code></a>.</p>
+<h3 id="c1-what-it-actually-does">C.1 What it actually does<a class="headerlink" href="#c1-what-it-actually-does" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Constructs a GTSAM iSAM2 sliding-window factor graph (window = 200,
+  ~20 s at 10 Hz).</li>
+<li><strong>Inputs</strong>:</li>
+<li><code>odometry/global</code> (<code>/agv/odometry/global</code>, from <code>ekf_global</code>) →
+    <code>BetweenFactor</code> between consecutive poses (line 68–70, 135–136).</li>
+<li><code>/visual_slam/tracking/odometry</code> → <code>BetweenFactor</code> between most
+    recent pose pair (line 179–180).</li>
+<li><code>marker_pose</code> → <code>PriorFactor</code> on the most recent pose (line 197).</li>
+<li><strong>Output</strong>: <code>/agv/factor_graph/odometry</code> (<code>nav_msgs/Odometry</code>,
+  <code>publish_tf=false</code>).</li>
+</ul>
+<h3 id="c2-consumer-audit">C.2 Consumer audit<a class="headerlink" href="#c2-consumer-audit" title="Permanent link">&para;</a></h3>
+<p><code>specs/interfaces.yaml</code> — <code>factor_graph</code> topics are explicitly noted
+as out-of-scope ("currently out-of-scope for cross-package interface
+tracking, but should be added here when the cutover is planned").</p>
+<p><code>grep -rn "factor_graph/odometry" src/</code> returns:
+- <code>src/agv_factor_graph/src/factor_graph_node.cpp</code> (publisher itself)
+- (no other hits)</p>
+<p><strong>The output topic has zero subscribers in this workspace.</strong> No
+comparator node exists. The factor graph runs at 10 Hz with full
+GTSAM/iSAM2 cost during every navigation session, then drops every
+result on the floor.</p>
+<h3 id="c3-the-architectural-bug">C.3 The architectural bug<a class="headerlink" href="#c3-the-architectural-bug" title="Permanent link">&para;</a></h3>
+<p>The local-odom input is <code>odometry/global</code> (line 69), not
+<code>odometry/local</code>. The latter is the raw wheel+IMU fusion; the former is
+the <strong>already-cuVSLAM-and-marker-corrected</strong> pose from <code>ekf_global</code>.</p>
+<p>The node also subscribes to <code>marker_pose</code> and adds AprilTag observations
+as <code>PriorFactor</code>s. <strong>The marker information is double-counted</strong>: it is
+already inside <code>odometry/global</code> (<code>ekf_global</code> consumed <code>pose0</code>), and
+the factor graph adds it again as a fresh prior. Same observation,
+applied twice with independent noise models, makes the estimate
+artificially confident about marker positions.</p>
+<p>Comment at line 65–67 says "During parallel validation the factor graph
+re-optimizes the same trajectory with AprilTag corrections." The
+intent is correct, but the implementation must consume the
+<strong>marker-free</strong> local odometry to be a true parallel validation. As
+written, it just adds noise around the EKF's output.</p>
+<h3 id="c4-loop-closure-horizon">C.4 Loop-closure horizon<a class="headerlink" href="#c4-loop-closure-horizon" title="Permanent link">&para;</a></h3>
+<p>Line 209–226: the sliding window evicts old poses via
+<code>isam2::marginalizeLeaves</code>. Window size 200 × 10 Hz = 20 s of trajectory.</p>
+<p>A factor graph's selling point is that loop closures <strong>propagate
+corrections backward through the entire history</strong>. With a 20 s window,
+a loop closure on a 5 m corridor (40 s round trip at 0.25 m/s) <strong>cannot
+reach the other end of the loop</strong>. The "main reason" justifying the
+factor graph (per <code>agv_factor_graph/CLAUDE.md</code>) is undermined by the
+window choice.</p>
+<h3 id="c5-findings">C.5 Findings<a class="headerlink" href="#c5-findings" title="Permanent link">&para;</a></h3>
+<hr />
+<h4 id="high-04-01-factor_graph-consumes-the-marker-corrected-ekf-output-double-counting-apriltag-information">HIGH-04-01 — <code>factor_graph</code> consumes the marker-corrected EKF output, double-counting AprilTag information<a class="headerlink" href="#high-04-01-factor_graph-consumes-the-marker-corrected-ekf-output-double-counting-apriltag-information" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_factor_graph/src/factor_graph_node.cpp:68-70</code>, <code>:153-180</code>, <code>:186-207</code>.
+<strong>Category</strong>: bug / architecture.
+<strong>Symptom</strong>: The factor graph reads <code>odometry/global</code> (<code>ekf_global</code>
+output, which already absorbed <code>marker_pose</code>) as its "local odometry"
+BetweenFactor source, AND independently adds <code>marker_pose</code> as
+<code>PriorFactor</code>. The same AprilTag observation enters the factor graph
+twice through different paths.
+<strong>Analysis</strong>: As written, the factor graph is not a true validation of
+the EKF — it observes EKF-output increments and applies marker priors
+on top. Two consequences:
+- During steady-state, the two paths agree because they share the
+  source. <strong>The validation gives a false negative</strong> — any disagreement
+  in the underlying state estimation is invisible.
+- The marker priors push the graph toward a tighter pose at every
+  observation. If <code>ekf_global</code> were silently degrading, the factor
+  graph would still report low residuals because the prior dominates
+  the BetweenFactors.
+<strong>Greenhouse impact</strong>: If the team uses <code>factor_graph/odometry</code> to
+decide whether to cut over from EKF, the decision is meaningless. A
+real cutover under these inputs would replace one estimator with a
+slightly different version of itself.
+<strong>Benchmark</strong>: A true parallel validation in GTSAM-style frameworks
+subscribes to the <strong>raw measurements</strong> (wheel + IMU + visual + marker)
+and runs an independent factor graph. NVIDIA Isaac Robotics' factor
+graph examples and GTSAM tutorials use raw sensor topics, not EKF
+outputs.
+<strong>Recommendation</strong>: Refactor the inputs:
+- Replace <code>odometry/global</code> with <code>odometry/local</code> (wheel + IMU only,
+  no marker). Or, better, with <code>/agv/wheel_odom_validated</code> directly so
+  the IMU also enters separately as an <code>ImuFactor</code>.
+- Keep <code>/visual_slam/tracking/odometry</code> as <code>BetweenFactor</code> (correct).
+- Keep <code>marker_pose</code> as <code>PriorFactor</code> (correct).
+- Document this in <code>agv_factor_graph/CLAUDE.md</code> as the input contract.
+<strong>Acceptance criterion</strong>: With AprilTag observations disabled (e.g.,
+<code>enable_markers:=false</code>), <code>factor_graph/odometry</code> and
+<code>ekf_global/odometry/global</code> produce <strong>different</strong> trajectories under
+the same wheel + IMU + cuVSLAM inputs. Today they will be identical
+modulo numerical noise.
+<strong>Effort</strong>: M (1 day refactor + new bag-based regression test).
+<strong>Prerequisites</strong>: HIGH-04-09 (clean up local-odom semantics).</p>
+<hr />
+<h4 id="medium-04-05-factor_graph-has-zero-downstream-consumers-runs-at-10-hz-for-nothing">MEDIUM-04-05 — <code>factor_graph</code> has zero downstream consumers — runs at 10 Hz for nothing<a class="headerlink" href="#medium-04-05-factor_graph-has-zero-downstream-consumers-runs-at-10-hz-for-nothing" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_factor_graph/src/factor_graph_node.cpp:80-83</code>, <code>agv_full.launch.py:373-388</code>.
+<strong>Category</strong>: performance.
+<strong>Symptom</strong>: The output topic <code>factor_graph/odometry</code> has no subscribers
+in this workspace (grep + spec confirmed). The node is started at t=4.5
+s in <code>agv_full.launch.py</code> and runs the full GTSAM/iSAM2 stack on a Jetson
+that is also running cuVSLAM, MPPI at 20 Hz, nvblox visualization, and
+the operator dashboard.
+<strong>Analysis</strong>: iSAM2 at 10 Hz on a 200-pose window is not free — on a
+Jetson Orin NX 16 GB target it can consume 10–20 % of a CPU core. That
+budget is needed for MPPI's batch_size 1000 × 32 timesteps and for the
+collision_monitor's two-source obstacle processing.
+<strong>Greenhouse impact</strong>: Frame drops in MPPI at the moment that matters
+most (close-quarters maneuvering in a 1.5 m corridor). The
+<code>collision_monitor.yaml:54</code> budget for stop_zone assumes 100 ms reaction
+latency; if MPPI starves, that latency grows.
+<strong>Recommendation</strong>: 
+1. Either (a) write a comparator node that consumes both
+   <code>factor_graph/odometry</code> and <code>ekf_global/odometry/global</code> and emits a
+   <code>DiagnosticArray</code> with residual statistics — turning the factor graph
+   into a real validator — or (b) gate the factor graph behind a launch
+   argument <code>enable_factor_graph</code> (default false) and only enable when
+   the team is actively running a validation campaign.
+2. Default-false is honest about the current state: the node is dormant
+   even though it's running.
+<strong>Acceptance criterion</strong>: Production launch in real mode does not start
+the factor_graph node unless <code>enable_factor_graph:=true</code>. CPU usage on
+the Jetson drops by the measured iSAM2 cost.
+<strong>Effort</strong>: S (launch flag) → M (comparator node).
+<strong>Prerequisites</strong>: HIGH-04-01 (fix the inputs first so the comparator is meaningful).</p>
+<hr />
+<h4 id="medium-04-06-factor-graph-window-200-20-s-horizon-smaller-than-typical-greenhouse-loop">MEDIUM-04-06 — Factor graph window 200 = ~20 s horizon, smaller than typical greenhouse loop<a class="headerlink" href="#medium-04-06-factor-graph-window-200-20-s-horizon-smaller-than-typical-greenhouse-loop" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_factor_graph/src/factor_graph_node.cpp:34</code> (<code>window_size = 200</code>).
+<strong>Category</strong>: bug (subtle).
+<strong>Symptom</strong>: The sliding-window iSAM2 keeps the last 200 poses. At 10
+Hz that's 20 s of robot trajectory.
+<strong>Analysis</strong>: At 0.25 m/s, 20 s = 5 m of trajectory. A loop closure
+between corridor A entrance (t=0) and corridor A exit (t=40 s after a
+10 m straight + 90° turn + return) cannot reach the entrance pose —
+it's already been marginalized.
+<strong>Greenhouse impact</strong>: The factor graph cannot deliver its main
+selling point (backward propagation of loop closures). It degrades to
+an EKF with extra computation.
+<strong>Recommendation</strong>: Either increase <code>window_size</code> to cover a typical
+greenhouse loop (10 minutes × 10 Hz = 6000 poses — quadratic memory cost
+in iSAM2 is fine up to a few thousand), or document this as an explicit
+"local smoothing window only" semantic and don't claim loop closure
+benefits.
+<strong>Acceptance criterion</strong>: An ADR documents the window choice with
+expected loop lengths in the target greenhouse. If window stays at 200,
+the marketing claim in CLAUDE.md ("Loop closures propagate corrections
+backward in time") is removed.
+<strong>Effort</strong>: S (window tuning) → M (memory + perf testing).
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h2 id="d-auto_init_orchestrator-cold-start-cascade">D. <code>auto_init_orchestrator</code> — cold-start cascade<a class="headerlink" href="#d-auto_init_orchestrator-cold-start-cascade" title="Permanent link">&para;</a></h2>
+<p><a href="../../../src/agv_localization_init/src/auto_init_orchestrator_node.cpp"><code>src/agv_localization_init/src/auto_init_orchestrator_node.cpp</code></a>.</p>
+<h3 id="d1-the-cascade">D.1 The cascade<a class="headerlink" href="#d1-the-cascade" title="Permanent link">&para;</a></h3>
+<p>Four ordered paths (from CLAUDE.md state machine):
+0. <strong>ZED SDK Area Memory</strong> — wait up to 8 s for ZED-SDK pose with low
+   covariance for 5 consecutive frames AND <code>spatial_memory_status == OK</code>.
+1. <strong>cuVSLAM + AprilTag hint</strong> — load keyframe DB, wait 10 s for tag,
+   call <code>/visual_slam/localize_in_map(pose_hint)</code>.
+2. <strong>AprilTag absolute pose alone</strong> — if no cuVSLAM DB, use tag as
+   direct <code>SetPose</code>.
+3. <strong>Last-known pose from <code>&lt;map&gt;_meta.json</code></strong> — fallback.</p>
+<p>If all four fail → <code>FAILED</code> state, operator must teleop to a tag and
+call <code>/agv/localization/reinitialize</code>.</p>
+<h3 id="d2-strengths">D.2 Strengths<a class="headerlink" href="#d2-strengths" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Spatial-memory status gate</strong> at line 116–123 (commentary): explicitly
+  protects against the "ZED cold-boot publishes tiny covariance at the
+  origin" false positive. Engineering rigor.</li>
+<li><strong>5 consecutive frames</strong> required to declare LOCALIZED. Defends against
+  single-frame false matches in visually-repetitive crop rows.</li>
+<li><strong>Re-fire on <code>/agv/mode</code> transition to <code>nav</code></strong> (CLAUDE.md mention,
+  line 30–35 of source comment). Closes the case where the operator
+  flips Mapping→Operate without an explicit map-load.</li>
+</ul>
+<h3 id="d3-findings">D.3 Findings<a class="headerlink" href="#d3-findings" title="Permanent link">&para;</a></h3>
+<hr />
+<h4 id="high-04-03-kidnapping-detection-is-declared-as-a-parameter-but-never-implemented">HIGH-04-03 — Kidnapping detection is declared as a parameter but never implemented<a class="headerlink" href="#high-04-03-kidnapping-detection-is-declared-as-a-parameter-but-never-implemented" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_localization_init/src/auto_init_orchestrator_node.cpp:101</code> (<code>kidnapping_drift_m</code> declared); <code>src/agv_localization_init/CLAUDE.md</code> improvement opportunities ("Add kidnapping detection").
+<strong>Category</strong>: bug / missing feature.
+<strong>Symptom</strong>: A parameter <code>kidnapping_drift_m</code> (default 5.0) is declared,
+but no code path reads it or uses it for kidnapping detection. The
+declaration is a TODO marker.
+<strong>Analysis</strong>: Greenhouse operators sometimes pick up the robot to clear
+a stuck wheel, swap battery, or relocate it manually. Without kidnapping
+detection, the robot will:
+1. Notice its position changed (EKF rejects the new wheel-odom delta
+   as outlier, then accepts after the rejection threshold is exceeded);
+2. Continue navigating from its <strong>previous</strong> estimated pose, which is
+   now wrong;
+3. Plan paths to the wrong destination;
+4. Eventually relocalize via AprilTag (Path A0 / A) — but only when one
+   becomes visible, which can be tens of seconds after the kidnap.
+<strong>Greenhouse impact</strong>: Between the kidnap and the relocalization, the
+robot is driving with a wrong pose. In a crowded corridor this is a
+collision hazard.
+<strong>Benchmark</strong>: AMCL has built-in <code>kld_err</code> and <code>kld_z</code> tuning for
+kidnap detection. SLAM Toolbox emits <code>tf_pose_jumped</code> warnings when an
+update exceeds threshold. cuVSLAM's <code>tracking_status</code> field flips to
+<code>LOST</code> when the relative-pose graph cannot match — orchestrator should
+listen to it.
+<strong>Recommendation</strong>:
+1. Subscribe to <code>marker_pose</code> AND <code>odometry/global</code>. Continuously
+   compare. If <code>‖marker_pose - odometry/global‖ &gt; kidnapping_drift_m</code>
+   AND wheel odometry did not show a corresponding delta in the last
+   N seconds (i.e., the robot was supposedly stationary), this is a
+   kidnap signature.
+2. On kidnap detection: re-trigger the full cascade (publish
+   <code>INITIALIZING</code>, call the cascade method). The operator already has
+   an AprilTag in view (that's how we detected the kidnap), so Path A
+   relocalization is immediate.
+3. Surface kidnap events to the dashboard as a "Robot was moved"
+   notification.
+<strong>Acceptance criterion</strong>: A simulated kidnap (teleport via
+<code>/agv/sim/reset_request</code>) triggers <code>INITIALIZING</code> within 2 s of the
+first post-teleport AprilTag observation. Without this, the robot
+continues navigating to phantom coordinates.
+<strong>Effort</strong>: M (1 day implementation + HIL test scenario).
+<strong>Prerequisites</strong>: HIGH-04-02 (incidence filter prevents kidnap detection from firing on grazing-angle tags).</p>
+<hr />
+<h4 id="low-04-08-cooldown-asymmetry-between-marker_correction-500-ms-and-ekf-rate-10-hz">LOW-04-08 — Cooldown asymmetry between marker_correction (500 ms) and EKF rate (10 Hz)<a class="headerlink" href="#low-04-08-cooldown-asymmetry-between-marker_correction-500-ms-and-ekf-rate-10-hz" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_markers/src/marker_correction_node.cpp:55</code>.
+<strong>Category</strong>: NIT.
+<strong>Symptom</strong>: <code>relocalization_cooldown_ms: 500</code> and <code>ekf_global.frequency
+= 10 Hz</code>. 500 ms = 5 EKF cycles. After <code>set_pose</code>, marker_correction
+skips publications for 5 cycles to let the EKF "settle".
+<strong>Analysis</strong>: <code>robot_localization::set_pose</code> resets the EKF state
+synchronously. The cooldown protects against subsequent corrections
+"un-doing" the reset. 5 cycles is a reasonable choice but undocumented.
+<strong>Recommendation</strong>: Document the choice in a comment, or compute the
+cooldown from <code>ekf_global.frequency</code> to keep them aligned automatically.
+<strong>Effort</strong>: NIT.</p>
+<hr />
+<h4 id="medium-04-07-anti-spoofing-behavior-is-correct-but-not-documented-as-a-security-property">MEDIUM-04-07 — Anti-spoofing behavior is correct but not documented as a security property<a class="headerlink" href="#medium-04-07-anti-spoofing-behavior-is-correct-but-not-documented-as-a-security-property" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>: <code>src/agv_markers/src/marker_correction_node.cpp:289</code>.
+<strong>Category</strong>: docs / security.
+<strong>Symptom</strong>: Tags whose ID is not in the registry are silently ignored.
+This is the correct anti-spoofing behavior — a stray tag stuck on a
+wall by accident or maliciously cannot poison localization. But it is
+not documented as a security property anywhere.
+<strong>Analysis</strong>: Documenting this matters because (a) future engineers may
+"helpfully" add a fallback that accepts unregistered tags as "discovery
+hints", undoing the property, and (b) the deployment customer's
+security review needs to see that the anti-spoofing exists.
+<strong>Recommendation</strong>: Add a section "Security model" to
+<code>agv_markers/CLAUDE.md</code> listing:
+- The anti-spoofing property.
+- The class of attack it defends against (random / accidental).
+- The class it does NOT defend against (knowledgeable adversary who
+  knows registry IDs and can print spoof tags).
+- The registry-versioning workflow (operator approves new tag IDs
+  through the dashboard before they enter <code>runtime_markers_registry.yaml</code>).
+<strong>Effort</strong>: NIT (15 min doc write).</p>
+<hr />
+<h2 id="e-local-odom-semantics-the-differential-false-absolute-yaw-issue">E. Local-odom semantics — the <code>differential: false</code> + absolute-yaw issue<a class="headerlink" href="#e-local-odom-semantics-the-differential-false-absolute-yaw-issue" title="Permanent link">&para;</a></h2>
+<hr />
+<h4 id="high-04-09-ekf_local-reads-wheel-yaw-absolute-non-differential-and-imu-yaw-absolute-simultaneously">HIGH-04-09 — <code>ekf_local</code> reads wheel-yaw absolute (non-differential) AND IMU yaw absolute simultaneously<a class="headerlink" href="#high-04-09-ekf_local-reads-wheel-yaw-absolute-non-differential-and-imu-yaw-absolute-simultaneously" title="Permanent link">&para;</a></h4>
+<p><strong>File(s)</strong>:
+- <code>src/agv_sensor_fusion/config/ekf_local.yaml:36-41</code> —
+  <code>odom0_config: [T,T,F, F,F,T, T,F,F, F,F,T, F,F,F]</code> + <code>odom0_differential: false</code>.
+- Same file, <code>:48-53</code> — <code>imu0_config: [F,F,F, T,T,T, F,F,F, T,T,T, T,T,F]</code> + <code>imu0_differential: false</code>.
+<strong>Category</strong>: architecture.
+<strong>Symptom</strong>: Both <code>odom0</code> (wheel) and <code>imu0</code> (IMU) feed yaw absolute to
+the local EKF in non-differential mode. The IMU yaw absolute is the
+integrated gyro since boot (BMI088 is gyro-only — no magnetometer).
+The wheel yaw absolute is derived from <code>wheel_odom_validated</code> which
+integrates encoder ticks.
+<strong>Analysis</strong>: Two sources of "absolute" yaw means the EKF must
+reconcile two integrated heading estimates that drift differently. The
+system mitigates by giving the IMU a much tighter covariance (0.001
+rad²) than wheel odometry (0.03 rad²), so the IMU dominates in the
+fusion. <strong>But this is a tuning workaround for a structural issue</strong>:
+neither source has true absolute yaw (no magnetometer, no GPS+IMU
+heading); both are integration-only.
+The correct pattern for a wheel+gyro fusion in <code>robot_localization</code> is:
+- Wheel odom: read <strong>velocities only</strong> (vx, vyaw), differential mode
+  irrelevant.
+- IMU: read <strong>angular velocity only</strong> (vyaw) plus optionally linear
+  acceleration. Yaw absolute is read only if magnetometer or external
+  heading reference is present.
+- The fused <code>odometry/local</code> accumulates heading internally and is
+  consistent.
+The current setup with both sources reading yaw absolute means a
+crashed-and-restarted IMU resumes from a different yaw than the wheel
+integrator, and the EKF averages them — silent drift.
+<strong>Greenhouse impact</strong>: After IMU restarts (e.g., ZED USB disconnect
+and recovery — a known greenhouse failure mode per the prompt §3.2),
+the IMU yaw resets to 0 while wheel yaw stays at its accumulated value.
+The EKF blends them. The map-frame heading from <code>ekf_global</code> snaps by
+the gap between them.
+<strong>Benchmark</strong>: <code>robot_localization</code> docs (Tom Moore) §"Two-Dimensional
+Drift Removal" recommend velocity-only inputs from wheel+IMU. The dual
+EKF tutorial uses <code>[F,F,F, F,F,F, T,F,F, F,F,T, F,F,F]</code> for wheel and
+<code>[F,F,F, F,F,F, F,F,F, F,F,T, F,F,F]</code> for IMU.
+<strong>Recommendation</strong>: Change <code>odom0_config</code> to read velocities only:
+<code>[F,F,F, F,F,F, T,F,F, F,F,T, F,F,F]</code>. Change <code>imu0_config</code> similarly:
+<code>[F,F,F, F,F,F, F,F,F, F,F,T, T,T,F]</code> (vyaw + linear accel only —
+orientation absolute removed). The EKF accumulates internally and the
+absolute-yaw fight disappears.
+<strong>Acceptance criterion</strong>: After an IMU restart mid-mission (simulated),
+the global EKF pose does not jump by more than the wheel-odom drift
+that accumulated during the IMU outage. Today it would jump by the IMU's
+re-zeroed heading offset.
+<strong>Effort</strong>: M (config change + regression test on existing bags).
+<strong>Prerequisites</strong>: none, but rebuilds the trust calibration of the dual
+EKF — must be validated in HIL before field deployment.</p>
+<hr />
+<h2 id="f-slam-toolbox-in-the-production-launch">F. SLAM Toolbox in the production launch<a class="headerlink" href="#f-slam-toolbox-in-the-production-launch" title="Permanent link">&para;</a></h2>
+<p><a href="../../../src/agv_navigation/config/slam_toolbox_localization.yaml"><code>src/agv_navigation/config/slam_toolbox_localization.yaml</code></a> (referenced; not read in full here)
+and <code>agv_full.launch.py:394-413</code>.</p>
+<p><code>agv_navigation/CLAUDE.md</code> "SLAM Toolbox mode (deferred decision)"
+acknowledges that the production config has <code>mode: mapping</code> (not
+<code>localization</code>) during navigation, which builds its own map
+continuously, publishes to <code>/map</code> (a separate topic from <code>/agv/map</code>),
+and <strong>loop closures don't feed back into <code>ekf_global</code></strong>.</p>
+<p>So:
+- SLAM Toolbox <strong>does</strong> ingest <code>/agv/scan</code> (the LaserScan).
+- SLAM Toolbox <strong>does</strong> publish <code>/map</code> (its own occupancy grid; this
+  is <strong>not</strong> the Nav2 <code>/agv/map</code> consumed by costmaps).
+- SLAM Toolbox publishes nothing to <code>ekf_global</code> because
+  <code>transform_publish_period: 0</code> disables TF and there is no separate
+  pose topic going into the EKF.
+- SLAM Toolbox is <strong>not pure dead code</strong> — it builds a fresh occupancy
+  grid that can be saved on demand (<code>slam_toolbox/serialize_map</code> service),
+  but its loop closures are local-only to that grid.</p>
+<p><strong>This is the "deferred decision" already documented in
+<code>agv_navigation/CLAUDE.md</code>.</strong> No new finding here — the team is aware.
+Tracked as a Phase 5 (mapping) follow-up; the recommendation is in
+that CLAUDE.md.</p>
+<hr />
+<h2 id="g-hardware-dependent-items-not-in-this-audit">G. Hardware-dependent items (not in this audit)<a class="headerlink" href="#g-hardware-dependent-items-not-in-this-audit" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Acceptance criterion (per prompt §4 Phase 4)</th>
+<th>Harness</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100 m loop drift &lt; 0.5 % with AprilTags, &lt; 2 % without</td>
+<td>Bag-driven regression test against a recorded greenhouse trajectory; <code>tests/localization/loop_closure_drift.py</code>.</td>
+</tr>
+<tr>
+<td>No map→base_link discontinuity &gt; 5 cm or 2° in 30 min</td>
+<td><code>tf_monitor</code> + Python listener logging max jump per 5 s window.</td>
+</tr>
+<tr>
+<td>Kidnapping recovery &lt; 10 s</td>
+<td>After HIGH-04-03 fix: HIL <code>/agv/sim/reset_request</code> triggers re-init within 2 s of next tag observation.</td>
+</tr>
+<tr>
+<td>Pose rate ≥ 30 Hz in <code>map</code>, latency &lt; 50 ms</td>
+<td><code>ros2 topic hz</code> + custom latency probe. ekf_global is 10 Hz today — gap to 30 Hz needs investigation.</td>
+</tr>
+<tr>
+<td>Forced sensor blackout 5 s test (camera unplugged)</td>
+<td>HIL or hardware.</td>
+</tr>
+</tbody>
+</table>
+<p>The ekf_global frequency of <strong>10 Hz</strong> is below the prompt's target of
+<strong>30 Hz</strong> for <code>map</code> pose. This is a deliberate choice — local is fast
+(50 Hz), global is slow (10 Hz, because cuVSLAM publishes at ~30 Hz and
+markers at ~5–10 Hz, so 10 Hz is the meaningful update rate). <strong>If the
+prompt's 30 Hz is a strict requirement</strong>, the dual-EKF architecture
+would need to be reconsidered. <strong>If it is a soft target</strong> (e.g., for
+dashboard smoothness), the <code>fusion_monitor</code> republisher at 10 Hz to
+<code>/agv/pose</code> is the consumer-facing pose stream and could be upsampled
+without changing the EKF rate.</p>
+<hr />
+<h2 id="h-status">H. Status<a class="headerlink" href="#h-status" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dual EKF config audit</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>AprilTag fusion audit (7 prompt questions answered)</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>factor_graph</code> opened (was a black box)</td>
+<td>✅ filed <code>HIGH-04-01</code>, <code>MEDIUM-04-05</code>, <code>MEDIUM-04-06</code></td>
+</tr>
+<tr>
+<td>Obliqueness filter for marker_correction</td>
+<td>✅ filed <code>HIGH-04-02</code></td>
+</tr>
+<tr>
+<td>Tag registry parser hardening</td>
+<td>✅ filed <code>HIGH-04-04</code></td>
+</tr>
+<tr>
+<td>Kidnapping detection</td>
+<td>✅ filed <code>HIGH-04-03</code></td>
+</tr>
+<tr>
+<td>Local EKF yaw-absolute structural issue</td>
+<td>✅ filed <code>HIGH-04-09</code></td>
+</tr>
+<tr>
+<td>Anti-spoofing as documented security property</td>
+<td>✅ filed <code>MEDIUM-04-07</code></td>
+</tr>
+<tr>
+<td>Reloc cooldown asymmetry</td>
+<td>✅ filed <code>LOW-04-08</code></td>
+</tr>
+<tr>
+<td>Hardware-dependent items</td>
+<td>⏸ deferred (§G)</td>
+</tr>
+</tbody>
+</table>
+<p>End of Phase 4. 8 findings total: 4 HIGH, 3 MEDIUM, 1 LOW.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

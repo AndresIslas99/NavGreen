@@ -1,0 +1,2106 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/safety/HAZOP_skeleton/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>HAZOP Skeleton — AGV Greenhouse - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#hazop-skeleton-agv-greenhouse" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              HAZOP Skeleton — AGV Greenhouse
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methodology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hazard-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hazard inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hazard inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#h-01-frontal-collision-with-stationary-person" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-01 — Frontal collision with stationary person
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-02-frontal-collision-with-moving-person" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-02 — Frontal collision with moving person
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-03-lateral-collision-with-plant-bed-crop-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-03 — Lateral collision with plant bed / crop row
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-04-running-over-a-coiled-hose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-04 — Running over a coiled hose
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-05-fall-over-a-drainage-step-negative-obstacle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-05 — Fall over a drainage step / negative obstacle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-06-localization-failure-mid-mission" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-06 — Localization failure mid-mission
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-07-loss-of-wifi-to-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-07 — Loss of WiFi to operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-08-motor-failure-on-a-slope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-08 — Motor failure on a slope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-09-jetson-orin-overheating-at-midday-sun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-09 — Jetson Orin overheating at midday sun
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-10-battery-critically-low-in-remote-zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-10 — Battery critically low in remote zone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-11-obstacle-detection-callback-stalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-11 — Obstacle detection callback stalls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-12-spontaneous-reboot-during-operation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-12 — Spontaneous reboot during operation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-13-apriltag-displaced-or-occluded-by-foliage-growth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-13 — AprilTag displaced or occluded by foliage growth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-14-untrained-operator-activates-the-wrong-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-14 — Untrained operator activates the wrong mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-15-robot-stuck-between-plant-and-wall-without-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-15 — Robot stuck between plant and wall without recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-16-tag-spoofing-malicious-actor-places-fake-tag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-16 — Tag spoofing — malicious actor places fake tag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-17-wet-floor-depth-aliasing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-17 — Wet floor depth aliasing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-18-camera-mount-drift-after-a-bump" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H-18 — Camera mount drift after a bump
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/safety/HAZOP_skeleton.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="hazop-skeleton-agv-greenhouse">HAZOP Skeleton — AGV Greenhouse<a class="headerlink" href="#hazop-skeleton-agv-greenhouse" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status</strong>: Skeleton produced by the 2026-05-13 audit as a starting
+point for a proper HAZOP workshop. This file is <strong>not</strong> a signed
+HAZOP. It is a candidate hazard inventory with proposed severities
+and current mitigations, ready for a workshop with the operator,
+engineering lead, and customer safety representative.</p>
+<p><strong>Reference</strong>: per <code>policies/engineering_rules.md</code> Rule 6, this
+repository cannot claim certified functional safety. The hazards and
+mitigations described here are operational safeguards. Certification
+(ISO 13849, IEC 61508, ISO 3691-4) requires hardware-integrated
+scope (safety scanners, dual-channel relays, safety PLCs) outside the
+current MVP.</p>
+</blockquote>
+<h2 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">&para;</a></h2>
+<p>Each hazard is rated on:
+- <strong>Severity (S)</strong> — 1 = nuisance, 5 = serious injury or major damage.
+- <strong>Probability (P)</strong> — 1 = once in robot lifetime, 5 = at least daily.
+- <strong>Risk (R)</strong> = S × P. R ≥ 15 needs mitigation before deployment.
+- <strong>Mitigation today</strong> — citation to code or config that addresses it.
+- <strong>Gap</strong> — what's missing to fully address.</p>
+<p>The values below are <strong>initial estimates</strong> by the auditor based on code
+review and the documented operational profile (commercial greenhouse,
+1.0–1.5 m corridors, mix of trained operator + untrained workers). The
+workshop refines them.</p>
+<h2 id="hazard-inventory">Hazard inventory<a class="headerlink" href="#hazard-inventory" title="Permanent link">&para;</a></h2>
+<h3 id="h-01-frontal-collision-with-stationary-person">H-01 — Frontal collision with stationary person<a class="headerlink" href="#h-01-frontal-collision-with-stationary-person" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: A person stands in the corridor; robot fails to detect
+  and stop.</li>
+<li><strong>S</strong>: 5 (serious injury possible at 0.25 m/s × 30 kg = 1 m/s² impact)</li>
+<li><strong>P</strong>: 2 (would require sensor + planner failures simultaneously)</li>
+<li><strong>R</strong>: 10</li>
+<li><strong>Mitigation today</strong>:</li>
+<li>Costmap inflation 0.55 m around static obstacles
+    (<code>nav2_params.yaml:311</code>).</li>
+<li>collision_monitor stop_zone 20 cm front + scan + pointcloud sources
+    (<code>collision_monitor.yaml:52-67</code>).</li>
+<li>vx_max 0.25 m/s → stop distance ~14 cm (<code>MEDIUM-07-05</code>).</li>
+<li><strong>Gap</strong>: 30 cm ZED minimum depth (<code>agv_navigation/CLAUDE.md</code>); if
+  person ends up within 50 cm of robot front, no sensor sees them.
+  <code>HIGH-09-01</code> hardware E-stop missing.</li>
+</ul>
+<h3 id="h-02-frontal-collision-with-moving-person">H-02 — Frontal collision with moving person<a class="headerlink" href="#h-02-frontal-collision-with-moving-person" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Person walks across robot's path.</li>
+<li><strong>S</strong>: 4 (impact at relative speed ~1.25 m/s assuming person walking)</li>
+<li><strong>P</strong>: 3 (occurs during operator-supervised work)</li>
+<li><strong>R</strong>: 12</li>
+<li><strong>Mitigation today</strong>: Same as H-01.</li>
+<li><strong>Gap</strong>: collision_monitor reactivity at the closing rate. Test
+  required (Phase 9 hardware item).</li>
+</ul>
+<h3 id="h-03-lateral-collision-with-plant-bed-crop-row">H-03 — Lateral collision with plant bed / crop row<a class="headerlink" href="#h-03-lateral-collision-with-plant-bed-crop-row" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Robot scrapes side of cuna de plantas while traversing
+  corridor.</li>
+<li><strong>S</strong>: 2 (plant damage; cumulative crop loss)</li>
+<li><strong>P</strong>: 4 (every mission has lateral excursions if tracking is poor)</li>
+<li><strong>R</strong>: 8</li>
+<li><strong>Mitigation today</strong>:</li>
+<li>Footprint 0.74 m wide (but see CRITICAL-02-02 — actual wheels may
+    stick out).</li>
+<li>PathAlignCritic in MPPI (weight 20).</li>
+<li><strong>Gap</strong>: CRITICAL-02-02 geometry SSOT means Nav2 footprint may not
+  match the physical robot. Once that closes, this risk drops.</li>
+</ul>
+<h3 id="h-04-running-over-a-coiled-hose">H-04 — Running over a coiled hose<a class="headerlink" href="#h-04-running-over-a-coiled-hose" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Greenhouse irrigation hose lying across the corridor;
+  robot drives over and entangles.</li>
+<li><strong>S</strong>: 3 (hose damage; risk of wheel jam; possible irrigation
+  shutdown)</li>
+<li><strong>P</strong>: 4 (hoses are routine greenhouse infrastructure)</li>
+<li><strong>R</strong>: 12</li>
+<li><strong>Mitigation today</strong>:</li>
+<li>Voxel layer <code>min_obstacle_height: 0.10</code> (<code>nav2_params.yaml:274</code>) —
+    hoses below 10 cm are <strong>ignored</strong>.</li>
+<li>pointcloud_to_laserscan <code>min_height: 0.01</code> (<code>agv_full.launch.py:209</code>)
+    — sees small objects in the scan.</li>
+<li>collision_monitor <code>max_points: 1</code> (<code>collision_monitor.yaml:56</code>) —
+    a single point triggers stop.</li>
+<li><strong>Gap</strong>: Costmap doesn't plan around hoses (below voxel threshold),
+  but collision_monitor reacts to them. Mitigation is reactive, not
+  preventive. <strong>Action</strong>: lower <code>min_obstacle_height</code> in voxel layer to
+  match scan threshold, OR keep current setup with explicit operator
+  training "don't leave hoses on the path".</li>
+</ul>
+<h3 id="h-05-fall-over-a-drainage-step-negative-obstacle">H-05 — Fall over a drainage step / negative obstacle<a class="headerlink" href="#h-05-fall-over-a-drainage-step-negative-obstacle" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Greenhouse drainage trench or step-down; robot can't
+  detect a drop and tips.</li>
+<li><strong>S</strong>: 4 (robot damage, possible escape from drainage, possible
+  injury to repair worker)</li>
+<li><strong>P</strong>: 2 (drainage trenches are typically marked / mapped)</li>
+<li><strong>R</strong>: 8</li>
+<li><strong>Mitigation today</strong>: <strong>NONE</strong> — <code>MEDIUM-06-01</code> (no negative-obstacle
+  detection).</li>
+<li><strong>Gap</strong>: This is the most under-engineered hazard. Mitigation
+  options: (a) map drainage as keepout zones; (b) add a downward-facing
+  ToF sensor at the front; (c) lower the camera and use depth gradient
+  detection.</li>
+</ul>
+<h3 id="h-06-localization-failure-mid-mission">H-06 — Localization failure mid-mission<a class="headerlink" href="#h-06-localization-failure-mid-mission" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: AprilTag obscured by foliage; pose drifts; robot
+  navigates to phantom coordinates.</li>
+<li><strong>S</strong>: 3 (potential collision per H-01..H-04)</li>
+<li><strong>P</strong>: 4 (foliage grows; tag occlusion is normal)</li>
+<li><strong>R</strong>: 12</li>
+<li><strong>Mitigation today</strong>:</li>
+<li><code>auto_init_orchestrator</code> cascade (Path A0 / A / B / C).</li>
+<li>LOC pill in dashboard.</li>
+<li><code>sendNavGoal</code> gated on <code>localization.action != FAILED</code> for
+    single-goal navigation.</li>
+<li><strong>Gap</strong>: <code>agv_waypoint_manager</code> bypasses the gate (<code>CR-00-06</code>).
+  Mission execution unprotected. Kidnapping not detected (<code>HIGH-04-03</code>).</li>
+</ul>
+<h3 id="h-07-loss-of-wifi-to-operator">H-07 — Loss of WiFi to operator<a class="headerlink" href="#h-07-loss-of-wifi-to-operator" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Operator on tablet loses dashboard connection; robot
+  continues mission without supervision.</li>
+<li><strong>S</strong>: 3 (no immediate harm, but supervision is lost)</li>
+<li><strong>P</strong>: 4 (greenhouse WiFi is fragile per project notes)</li>
+<li><strong>R</strong>: 12</li>
+<li><strong>Mitigation today</strong>:</li>
+<li><code>agv_odrive_node.cmd_vel_timeout_ms: 200</code> — motors stop if cmd_vel
+    silent.</li>
+<li>But Nav2 mission continues autonomously; cmd_vel keeps flowing.</li>
+<li><strong>Gap</strong>: No "deadman" requirement that the operator remain connected
+  for a mission to continue. <strong>Recommendation</strong>: add a periodic
+  heartbeat from dashboard to robot; if missed for &gt; 10 s, mission
+  pauses (not aborts — pauses, awaiting reconnection or local intervention).</li>
+</ul>
+<h3 id="h-08-motor-failure-on-a-slope">H-08 — Motor failure on a slope<a class="headerlink" href="#h-08-motor-failure-on-a-slope" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Greenhouse floors with slight slopes; a motor fails
+  while moving up.</li>
+<li><strong>S</strong>: 3 (roll-back into operator zone)</li>
+<li><strong>P</strong>: 1 (rare event)</li>
+<li><strong>R</strong>: 3</li>
+<li><strong>Mitigation today</strong>: ODrive S1 monitors temps; ODrive has built-in
+  fault detection.</li>
+<li><strong>Gap</strong>: No software check that asks "is the robot moving the
+  expected direction given commanded cmd_vel?". If the robot rolls
+  back while commanded forward, no current code detects it.</li>
+<li><strong>Recommendation</strong>: Add a "command vs reality" check in
+  <code>fusion_monitor</code> — if <code>cmd_vel.linear.x &gt; 0</code> and <code>odometry/local.linear.x
+  &lt; -threshold</code> for N seconds, raise an event.</li>
+</ul>
+<h3 id="h-09-jetson-orin-overheating-at-midday-sun">H-09 — Jetson Orin overheating at midday sun<a class="headerlink" href="#h-09-jetson-orin-overheating-at-midday-sun" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Sun through translucent roof heats the Jetson;
+  thermal throttle drops performance.</li>
+<li><strong>S</strong>: 2 (mission slowdown, possible thermal shutdown)</li>
+<li><strong>P</strong>: 3 (midday in Mexico is hot, even indoors)</li>
+<li><strong>R</strong>: 6</li>
+<li><strong>Mitigation today</strong>: Jetson L4T thermal management built-in.</li>
+<li><strong>Gap</strong>: No software-level monitoring of CPU thermal throttling. If
+  throttle kicks in, MPPI may miss its 20 Hz cycle, collision_monitor
+  may degrade. <strong>Recommendation</strong>: subscribe to <code>/diagnostics</code> thermal
+  sensors and surface to dashboard. Pause mission above threshold.</li>
+</ul>
+<h3 id="h-10-battery-critically-low-in-remote-zone">H-10 — Battery critically low in remote zone<a class="headerlink" href="#h-10-battery-critically-low-in-remote-zone" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Battery drops below safe threshold while robot is
+  far from charger.</li>
+<li><strong>S</strong>: 3 (robot stranded; possible damage if it sits in puddle)</li>
+<li><strong>P</strong>: 3 (no automatic charging in MVP)</li>
+<li><strong>R</strong>: 9</li>
+<li><strong>Mitigation today</strong>: <strong>NONE</strong> — <code>interfaces.yaml#/agv/battery</code> is
+  marked <code>status: planned</code>. No battery monitoring is wired.</li>
+<li><strong>Gap</strong>: Critical missing telemetry. <strong>Recommendation</strong>: read ODrive
+  VBUS voltage via CAN, publish <code>/agv/battery</code>, set thresholds
+  (warn at 30 %, abort-and-stop at 15 %).</li>
+</ul>
+<h3 id="h-11-obstacle-detection-callback-stalls">H-11 — Obstacle detection callback stalls<a class="headerlink" href="#h-11-obstacle-detection-callback-stalls" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: pointcloud_to_laserscan crashes or hangs; no obstacle
+  topic; collision_monitor degrades.</li>
+<li><strong>S</strong>: 4 (potential collision)</li>
+<li><strong>P</strong>: 1 (well-tested package)</li>
+<li><strong>R</strong>: 4</li>
+<li><strong>Mitigation today</strong>:</li>
+<li><code>safety_supervisor</code> monitors <code>/agv/scan</code> with 250 ms deadline. If
+    silent, <code>safety_ok = false</code> → <code>cmd_vel_gate</code> zeros output.</li>
+<li><strong>No gap.</strong> This is exactly what the supervisor is for.</li>
+</ul>
+<h3 id="h-12-spontaneous-reboot-during-operation">H-12 — Spontaneous reboot during operation<a class="headerlink" href="#h-12-spontaneous-reboot-during-operation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Power glitch / kernel panic / OOM kill; Jetson reboots.</li>
+<li><strong>S</strong>: 3 (mission lost; potential motion glitch during reboot)</li>
+<li><strong>P</strong>: 2 (rare but possible in field)</li>
+<li><strong>R</strong>: 6</li>
+<li><strong>Mitigation today</strong>:</li>
+<li><code>agv_odrive</code> motors disabled on cmd_vel timeout.</li>
+<li><code>agv_start.sh</code> restores last map at boot.</li>
+<li><code>auto_init_orchestrator</code> Path A0/A/B/C cascade restores pose.</li>
+<li><strong>Gap</strong>: Boot takes 30–60 s. During that window the robot is
+  unsupervised. If it was mid-corridor, it stays there.</li>
+<li>Acceptable risk class — physical safety is preserved (no power = no
+  motion).</li>
+</ul>
+<h3 id="h-13-apriltag-displaced-or-occluded-by-foliage-growth">H-13 — AprilTag displaced or occluded by foliage growth<a class="headerlink" href="#h-13-apriltag-displaced-or-occluded-by-foliage-growth" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: A registry tag is covered by a growing plant; pose
+  estimation degrades.</li>
+<li><strong>S</strong>: 3 (drift accumulates; downstream collision risk)</li>
+<li><strong>P</strong>: 4 (continuous in a growing greenhouse)</li>
+<li><strong>R</strong>: 12</li>
+<li><strong>Mitigation today</strong>: Multi-tag voting (<code>marker_correction_node.cpp:417-470</code>);
+  range-quadratic covariance; rejection threshold 3.0 Mahalanobis.</li>
+<li><strong>Gap</strong>: No "tag last seen" telemetry. The dashboard cannot tell
+  operator "tag 14 has not been seen in 24 h, may be occluded".
+  <strong>Recommendation</strong>: AprilTagManager in backend tracks last-detection
+  timestamp per tag; surface stale tags.</li>
+</ul>
+<h3 id="h-14-untrained-operator-activates-the-wrong-mode">H-14 — Untrained operator activates the wrong mode<a class="headerlink" href="#h-14-untrained-operator-activates-the-wrong-mode" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Person not familiar with the dashboard hits "execute
+  mission" without checking robot state.</li>
+<li><strong>S</strong>: 3 (potential collision with unintended path)</li>
+<li><strong>P</strong>: 3 (greenhouse staff turnover)</li>
+<li><strong>R</strong>: 9</li>
+<li><strong>Mitigation today</strong>: <code>agv_ui_backend</code> action gates (motors must be
+  armed, collision_monitor fresh, localization not FAILED).</li>
+<li><strong>Gap</strong>: No operator role / permission layer; any authenticated user
+  can do anything. <strong>Recommendation</strong>: roles <code>viewer</code>, <code>operator</code>,
+  <code>admin</code> in <code>auth.ts</code>. Mission execute requires <code>operator</code>+.</li>
+</ul>
+<h3 id="h-15-robot-stuck-between-plant-and-wall-without-recovery">H-15 — Robot stuck between plant and wall without recovery<a class="headerlink" href="#h-15-robot-stuck-between-plant-and-wall-without-recovery" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Robot drives into a corner it can't exit; BT
+  exhausts recoveries and aborts.</li>
+<li><strong>S</strong>: 2 (no immediate injury; mission failure)</li>
+<li><strong>P</strong>: 3 (greenhouse corners are common)</li>
+<li><strong>R</strong>: 6</li>
+<li><strong>Mitigation today</strong>: Custom BT with <code>Spin(180°)</code> as last recovery
+  (<code>navigate_to_pose_forward_only.xml:80</code>); abort cleanly on failure.</li>
+<li><strong>Gap</strong>: No clear signal to operator (<code>MEDIUM-07-07</code>) — operator may
+  not realize the robot is stuck. Telemetry of "in recovery for X
+  seconds" not surfaced.</li>
+</ul>
+<h3 id="h-16-tag-spoofing-malicious-actor-places-fake-tag">H-16 — Tag spoofing — malicious actor places fake tag<a class="headerlink" href="#h-16-tag-spoofing-malicious-actor-places-fake-tag" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Worker prints a fake AprilTag ID matching a real one
+  and places it elsewhere.</li>
+<li><strong>S</strong>: 3 (pose jump; potential collision)</li>
+<li><strong>P</strong>: 1 (intentional adversary not in threat model)</li>
+<li><strong>R</strong>: 3</li>
+<li><strong>Mitigation today</strong>: Tags not in registry are ignored (correct);
+  known IDs at new locations DO update pose (vulnerable). Single tag
+  outside the median by &gt; 1 m is voted out by multi-tag (<code>marker_correction_node.cpp:430-440</code>).</li>
+<li><strong>Gap</strong>: Single-tag observations are not voted; if the spoof is the
+  only tag visible, it wins. <strong>Recommendation</strong>: refuse to relocalize
+  from a single observation if drift &gt; threshold; require either
+  multi-tag or a confirming cuVSLAM agreement.</li>
+</ul>
+<h3 id="h-17-wet-floor-depth-aliasing">H-17 — Wet floor depth aliasing<a class="headerlink" href="#h-17-wet-floor-depth-aliasing" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Puddle reflects ceiling; ZED depth returns spurious
+  values below floor; voxel layer + collision_monitor get false positives
+  or false negatives.</li>
+<li><strong>S</strong>: 2 (false stops are nuisance; missed detection is hazardous)</li>
+<li><strong>P</strong>: 4 (greenhouses are routinely wet)</li>
+<li><strong>R</strong>: 8</li>
+<li><strong>Mitigation today</strong>: Per <code>MEDIUM-06-04</code> notes — no explicit reflection
+  filter. The voxel layer's <code>min_obstacle_height: 0.10</code> accidentally
+  helps (filters returns at floor level).</li>
+<li><strong>Gap</strong>: A real reflection filter that validates depth against the
+  ground plane. <strong>Recommendation</strong>: ground-plane fit (RANSAC) + reject
+  points that would be below the ground plane.</li>
+</ul>
+<h3 id="h-18-camera-mount-drift-after-a-bump">H-18 — Camera mount drift after a bump<a class="headerlink" href="#h-18-camera-mount-drift-after-a-bump" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Description</strong>: Worker brushes camera housing; extrinsic transform
+  silently incorrect.</li>
+<li><strong>S</strong>: 3 (continuous pose error)</li>
+<li><strong>P</strong>: 3 (greenhouse work is hands-on around equipment)</li>
+<li><strong>R</strong>: 9</li>
+<li><strong>Mitigation today</strong>: <strong>NONE</strong> — <code>MEDIUM-01-03</code> (no online consistency
+  check).</li>
+<li><strong>Gap</strong>: HIGH-01-02 (extrinsic outside this repo) and MEDIUM-01-03
+  (no monitor) together. <strong>Recommendation</strong>: implement the online check
+  proposed in MEDIUM-01-03.</li>
+</ul>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Risk band</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R ≥ 12 (mitigate before deployment)</td>
+<td>6: H-02, H-04, H-06, H-07, H-13 (R=12); H-01, H-03 (R=10/8)</td>
+</tr>
+<tr>
+<td>6 ≤ R &lt; 12</td>
+<td>8: H-05, H-08, H-09, H-10, H-15, H-17, H-18</td>
+</tr>
+<tr>
+<td>R &lt; 6</td>
+<td>4: H-11, H-12, H-14, H-16</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Items with <code>Gap: NONE</code></strong>: H-11 (sensor stall — handled by safety
+supervisor). The remaining 17 have gaps, of which <code>HIGH-04-03</code>
+(kidnapping), <code>HIGH-09-01</code> (hardware E-stop), <code>MEDIUM-06-01</code> (negative
+obstacle), and <code>H-10</code> (battery monitoring) are repeated entries that
+will close several hazards at once.</p>
+<h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Workshop</strong> to refine S and P estimates with site-specific knowledge.</li>
+<li><strong>Closure plan</strong> for items R ≥ 12: assign owner + deadline.</li>
+<li><strong>Re-rate</strong> after Sprint A + B remediation lands.</li>
+<li><strong>Sign-off</strong> by customer safety representative for the field visit.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

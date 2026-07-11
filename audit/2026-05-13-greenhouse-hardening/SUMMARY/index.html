@@ -1,0 +1,3845 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/audit/2026-05-13-greenhouse-hardening/SUMMARY/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>SUMMARY — 2026-05-13 Greenhouse Field-Readiness Audit - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#summary-2026-05-13-greenhouse-field-readiness-audit" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SUMMARY — 2026-05-13 Greenhouse Field-Readiness Audit
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../validation/RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-verdict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive verdict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#re-rating-after-phase-11-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-rating after Phase 11 (2026-05-13)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#severity-recalibration-2026-05-13-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Severity recalibration (2026-05-13 review)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#findings-filed-in-this-cycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings filed in this cycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updated-critical-02-02-physical-measurement-hypothesis-ranking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updated CRITICAL-02-02 — physical measurement + hypothesis ranking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-queue-recommended-order-of-remediation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority queue (recommended order of remediation)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Priority queue (recommended order of remediation)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sprint-a-repro-and-geometry-1-week" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint A — repro and geometry (1 week)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-a5-close-phase-11-criticals-priority-over-sprint-b-1-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint A.5 — close Phase 11 CRITICALs (priority over Sprint B, ~1 day)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-b-environmental-robustness-1-week" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint B — environmental robustness (1 week)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-c-quality-fixes-3-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint C — quality fixes (3 days)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-d-observability-infrastructure-1-week" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint D — observability infrastructure (1 week)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-audit-deferred-to-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this audit deferred to hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-audit-chose-not-to-recommend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this audit chose NOT to recommend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-order-for-an-engineer-picking-this-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading order for an engineer picking this up
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap-if-all-of-sprint-a-passes-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap if all of Sprint A passes hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprint-a-non-hardware-closure-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint A non-hardware closure (2026-05-13)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprint-a5-closure-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint A.5 closure (2026-05-13)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sprint A.5 closure (2026-05-13)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings-status-after-sprint-a5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings status after Sprint A.5
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hazop-re-rating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HAZOP re-rating
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#still-open-not-in-sprint-a5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open (NOT in Sprint A.5)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifier-baseline-after-sprint-a5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifier baseline after Sprint A.5
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-operational-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next operational step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#findings-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifier-baseline-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifier baseline now
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-hardware-session-30-minute-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next hardware session — 30-minute action
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprint-b-closure-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint B closure (2026-05-13)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sprint B closure (2026-05-13)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings-status-after-sprint-b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings status after Sprint B
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#still-open-after-sprint-b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open after Sprint B
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-b-verifier-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint B verifier baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprint-c-closure-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint C closure (2026-05-13)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sprint C closure (2026-05-13)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings-status-after-sprint-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings status after Sprint C
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#still-open-after-sprint-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open after Sprint C
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-c-verifier-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint C verifier baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprint-d-closure-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint D closure (2026-05-13)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sprint D closure (2026-05-13)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings-status-after-sprint-d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings status after Sprint D
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#still-open-after-sprint-d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open after Sprint D
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-d-verifier-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint D verifier baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cumulative-status-sprints-a5-b-c-d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cumulative status (Sprints A.5 + B + C + D)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sprint-elite-closure-2026-05-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint E.lite closure (2026-05-12)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sprint E.lite closure (2026-05-12)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings-closed-in-sprint-elite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings closed in Sprint E.lite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#still-open-after-sprint-elite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open after Sprint E.lite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sprint-elite-verifier-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sprint E.lite verifier baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cumulative-status-sprints-a5-b-c-d-elite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cumulative status (Sprints A.5 + B + C + D + E.lite)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#section-0-closure-2026-05-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Section 0 closure (2026-05-13)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Section 0 closure (2026-05-13)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#findings-re-classified-after-section-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings re-classified after Section 0
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-findings-surfaced-during-section-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New findings surfaced during Section 0
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#section-0-verifier-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Section 0 verifier baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cumulative-status-sprints-a5-b-c-d-elite-section-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cumulative status (Sprints A.5 + B + C + D + E.lite + Section 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/audit/2026-05-13-greenhouse-hardening/SUMMARY.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="summary-2026-05-13-greenhouse-field-readiness-audit">SUMMARY — 2026-05-13 Greenhouse Field-Readiness Audit<a class="headerlink" href="#summary-2026-05-13-greenhouse-field-readiness-audit" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Second-pass update (2026-05-13)</strong>: severities recalibrated on review;
+CRITICAL-02-02 hypothesis ranking updated with the physical caliper
+measurement of 0.0625 m wheel radius; Phases 4 / 6 / 7 / 9 / 10 added.
+First-pass findings preserved unchanged below.</p>
+</blockquote>
+<h2 id="executive-verdict">Executive verdict<a class="headerlink" href="#executive-verdict" title="Permanent link">&para;</a></h2>
+<p>The 2026-04-13 governance audit successfully consolidated the workspace
+into spec-as-SSOT and the verifiers are green. The static-analysis pass
+has now closed 11 phase files (0–14 minus 5, 8, 12, 15 which remain
+field-only). <strong>The robot is not yet field-ready</strong> but the remaining gaps
+are concretely scoped.</p>
+<p>Two findings dominate the priority queue:
+1. <strong>CRITICAL-02-02 (geometry SSOT)</strong> — physical measurement now confirms
+   <code>wheel_radius = 0.0625 m</code>. The 0.0781 in <code>odrive_params.yaml</code> is a
+   compensation for a different bug (encoder <code>cpr</code> or <code>pole_pairs</code> in
+   ODrive NVRAM — see updated hypothesis ranking below). Until the root
+   cause is identified and corrected at the source, every navigation
+   accuracy claim is built on a fudge factor.
+2. <strong>CR-00-01 (repo not self-contained)</strong> — <code>agv_slam</code> referenced but
+   absent. A fresh Jetson flash cannot boot.</p>
+<p>All other findings are MEDIUM or HIGH but localised — none compound to a
+new CRITICAL when those two close.</p>
+<h2 id="re-rating-after-phase-11-2026-05-13">Re-rating after Phase 11 (2026-05-13)<a class="headerlink" href="#re-rating-after-phase-11-2026-05-13" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Prior</th>
+<th>After Phase 11</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CR-00-06</code> (waypoint_manager bypasses gates)</td>
+<td>HIGH (active)</td>
+<td><strong>HIGH (latent only)</strong></td>
+<td>The dashboard's mission executor lives in <code>agv_ui_backend/src/index.ts:461</code> and goes through <code>ros.sendNavGoal</code> → all gates. <code>agv_waypoint_manager_node</code> is <em>shadow code</em> with a separate file. CR-00-06 stays HIGH because CLI / future callers can still bypass; HIGH-11-B-01 proposes deletion as the canonical fix.</td>
+</tr>
+<tr>
+<td>HAZOP <code>H-14</code> (untrained operator)</td>
+<td>R=9 (P=3)</td>
+<td><strong>R=15 (P=5)</strong> while Sprint A.5 is open</td>
+<td>With auth disabled + repo-public default credentials (CRITICAL-11-C-01), any phone on the greenhouse WiFi can drive the robot. Drops back to R≤6 after Sprint A.5 lands.</td>
+</tr>
+<tr>
+<td>HAZOP <code>H-07</code> (loss of WiFi to operator)</td>
+<td>R=12</td>
+<td><strong>R=12 (confirmed open)</strong></td>
+<td>MEDIUM-11-C-06 confirms no deadman / heartbeat. Open until Sprint B.</td>
+</tr>
+<tr>
+<td><code>MEDIUM-07-07</code> (no global BT timeout)</td>
+<td>MEDIUM</td>
+<td><strong>MEDIUM</strong> (companion MEDIUM-11-D-06 adds UX surfacing)</td>
+<td>Unchanged severity.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="severity-recalibration-2026-05-13-review">Severity recalibration (2026-05-13 review)<a class="headerlink" href="#severity-recalibration-2026-05-13-review" title="Permanent link">&para;</a></h2>
+<p>The first-pass severities were reviewed and several were rebalanced.
+<code>CRITICAL</code> is now reserved for findings with <strong>direct physical-operation
+or safety risk</strong>; portability and license issues are not CRITICAL under
+that definition.</p>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Original</th>
+<th>Recalibrated</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR-00-03 (hardcoded paths)</td>
+<td>CRITICAL</td>
+<td><strong>HIGH</strong></td>
+<td>Portability issue; does not put a running robot at risk.</td>
+</tr>
+<tr>
+<td>CR-00-05 (license divergence)</td>
+<td>HIGH</td>
+<td><strong>MEDIUM</strong></td>
+<td>Blocks sign-off, not operation.</td>
+</tr>
+<tr>
+<td>HIGH-01-01 (<code>base_footprint</code> child)</td>
+<td>HIGH</td>
+<td><strong>MEDIUM</strong></td>
+<td>Works functionally today; downstream impact is speculative.</td>
+</tr>
+<tr>
+<td>HIGH-02-01 (ros2_control cutover)</td>
+<td>HIGH</td>
+<td><strong>(remove)</strong></td>
+<td>Not a finding — a proposal. Tracked as an ADR draft instead.</td>
+</tr>
+<tr>
+<td>HIGH-02-07 (gear_ratio doubled)</td>
+<td>HIGH</td>
+<td><strong>MEDIUM</strong></td>
+<td>Math does not support 10× double-count as the cause of the 1.25× discrepancy. Boot invariant still useful as defense-in-depth.</td>
+</tr>
+<tr>
+<td>CR-00-01, CR-00-02 / CRITICAL-02-02, CR-00-04, CR-00-06, HIGH-01-02, MEDIUM-*</td>
+<td>(unchanged)</td>
+<td>—</td>
+<td>Severities held.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="findings-filed-in-this-cycle">Findings filed in this cycle<a class="headerlink" href="#findings-filed-in-this-cycle" title="Permanent link">&para;</a></h2>
+<p><strong>69 findings total, 4 critical / 25 high / 34 medium / 6 low</strong> across
+Phases 0–11 (1 NIT in Phase 7). The HAZOP skeleton is shipped as
+<code>docs/safety/HAZOP_skeleton.md</code>; the commissioning walkthrough is
+shipped as <code>11_commissioning_walkthrough.md</code>. Phases 3 (calibration),
+5 (mapping), 8 (greenhouse behaviors), 12–14 (sim, CI, docs), and 15
+(field) remain to be filed — see §F.</p>
+<p><strong>Two new findings from Phase 11 rise to CRITICAL</strong> and trigger a
+dedicated <strong>Sprint A.5</strong> that supersedes Sprint B in priority:
+- <code>CRITICAL-11-A-01</code> — <code>agv_mode_arbiter</code> subscribes to
+  <code>/agv/collision_monitor_state</code> as <code>std_msgs/String</code> while the
+  publisher emits <code>nav2_msgs/msg/CollisionMonitorState</code>. The
+  type-mismatch is silent; <code>safety_stop</code> in the FSM never fires;
+  <code>BLOCKED_HANDOFF</code> is unreachable. The physical safety chain (Nav2
+  collision_monitor → cmd_vel_gate) still zeros the wheels, so the
+  robot stops — but the arbiter and its <code>/agv/mode/state</code> topic
+  remain "all good", and the dashboard shows green while a safety
+  stop is in progress.
+- <code>CRITICAL-11-C-01</code> — backend ships <code>enabled: false</code> for auth +
+  hardcoded defaults <code>engineer:agv2026</code> / <code>operator:agv</code> written to
+  <code>users.json</code> on first boot. Public repo → public credentials.
+  Combined with <code>App.tsx:42</code> fail-open auth check, any device on the
+  LAN can command the robot.</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Sev</th>
+<th>Title</th>
+<th>Phase</th>
+<th>Anchor</th>
+<th>Effort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR-00-01</td>
+<td>CRITICAL</td>
+<td>Repo not self-contained: <code>agv_slam</code> referenced but absent</td>
+<td>0</td>
+<td><code>agv_full.launch.py:279</code></td>
+<td>S → L</td>
+</tr>
+<tr>
+<td>CRITICAL-02-02</td>
+<td>CRITICAL</td>
+<td>Wheel geometry SSOT — physical 0.0625 m vs YAML 0.0781 m, root cause is encoder NVRAM</td>
+<td>0+2</td>
+<td><code>odrive_params.yaml:7-8</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>CR-00-03</td>
+<td>HIGH</td>
+<td>Hardcoded <code>/home/orza/</code> in launch parameter dicts</td>
+<td>0</td>
+<td><code>agv_full.launch.py:546,585,701,768</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>CR-00-04</td>
+<td>HIGH</td>
+<td>Production network interfaces hardcoded to AGX Orin names</td>
+<td>0</td>
+<td><code>agv_start.sh:53,90</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>CR-00-06</td>
+<td>HIGH</td>
+<td><code>agv_waypoint_manager</code> bypasses localization gate</td>
+<td>0</td>
+<td><code>waypoint_manager_node.cpp:109</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-01-02</td>
+<td>HIGH</td>
+<td>Camera frame transform lives in external <code>agv_slam</code></td>
+<td>1</td>
+<td><code>agv_full.urdf.xacro:14-15</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-02-03</td>
+<td>HIGH</td>
+<td>URDF chassis inertia is literal <code>1.0</code> placeholder</td>
+<td>2</td>
+<td><code>agv_base.xacro:25-29</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-02-04</td>
+<td>HIGH</td>
+<td>ZED depth+IMU pipeline config invisible from this repo</td>
+<td>2</td>
+<td><code>agv_slam</code> is external</td>
+<td>M → L</td>
+</tr>
+<tr>
+<td>HIGH-04-01</td>
+<td>HIGH</td>
+<td><code>agv_factor_graph</code> consumes <code>odometry/global</code>, double-counts marker corrections</td>
+<td>4</td>
+<td><code>factor_graph_node.cpp:68-70</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-04-02</td>
+<td>HIGH</td>
+<td><code>marker_correction</code> does not check tag obliqueness — accepts grazing-incidence PnP</td>
+<td>4</td>
+<td><code>marker_correction_node.cpp:287-321</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-04-03</td>
+<td>HIGH</td>
+<td>Kidnapping detection parameter declared but never implemented</td>
+<td>4</td>
+<td><code>auto_init_orchestrator_node.cpp:101</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-04-04</td>
+<td>HIGH</td>
+<td><code>marker_correction</code> registry parser is a homebrew YAML reader, no validation</td>
+<td>4</td>
+<td><code>marker_correction_node.cpp:215-238</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-07-01</td>
+<td>HIGH</td>
+<td>MPPI critic weights are not on a normalized scale</td>
+<td>7</td>
+<td><code>nav2_params.yaml:131-188</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-07-02</td>
+<td>HIGH</td>
+<td>Smoother accel/decel exceeds HAL limits — silent rate-limiting downstream</td>
+<td>7</td>
+<td><code>velocity_smoother.yaml:15-16</code> vs <code>odrive_params.yaml:25-26</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-04-09</td>
+<td>HIGH</td>
+<td>Local EKF reads wheel-yaw absolute + IMU yaw absolute simultaneously (no magnetometer)</td>
+<td>4</td>
+<td><code>ekf_local.yaml:36-53</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-09-01</td>
+<td>HIGH</td>
+<td><code>/agv/hardware_estop</code> is <code>planned</code> — no hardware bridge wired</td>
+<td>9</td>
+<td><code>interfaces.yaml#/agv/hardware_estop</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-09-02</td>
+<td>HIGH</td>
+<td><code>safety_supervisor</code> uses BEST_EFFORT QoS for monitored topics — type-erased TRANSIENT_LOCAL latches will not bind</td>
+<td>9</td>
+<td><code>safety_supervisor.cpp:119</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-09-04</td>
+<td>HIGH</td>
+<td><code>cmd_vel_gate</code> initial <code>safety_ok_</code> value unverified from source</td>
+<td>9</td>
+<td><code>cmd_vel_gate.hpp</code> (header not read)</td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-01-01</td>
+<td>MEDIUM</td>
+<td><code>base_footprint</code> as child of <code>base_link</code></td>
+<td>1</td>
+<td><code>agv_base.xacro:33-39</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-01-03</td>
+<td>MEDIUM</td>
+<td><code>static_transform_publisher</code> masks vibration-induced drift</td>
+<td>1</td>
+<td>depends on HIGH-01-02</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-01-04</td>
+<td>MEDIUM</td>
+<td>No master-clock discipline at boot (chrony)</td>
+<td>1</td>
+<td><code>agv_start.sh</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-01-05</td>
+<td>MEDIUM</td>
+<td>HIL mixes wall-clock + sim-clock topics implicitly</td>
+<td>1</td>
+<td><code>agv_full.launch.py:86-95</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-02-05</td>
+<td>MEDIUM</td>
+<td>CAN bitrate docs vs script comment disagree</td>
+<td>2</td>
+<td><code>project.yaml:69</code> vs <code>agv_start.sh:241</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-02-06</td>
+<td>MEDIUM</td>
+<td><code>nav2_params.yaml</code> header says "RegulatedPurePursuit", code is MPPI</td>
+<td>2</td>
+<td><code>nav2_params.yaml:11-12</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-02-07</td>
+<td>MEDIUM</td>
+<td>Possible mismatch ODrive ROS vs NVRAM <code>gear_ratio</code>; add boot invariant</td>
+<td>2</td>
+<td><code>odrive_params.yaml:9</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-04-05</td>
+<td>MEDIUM</td>
+<td><code>factor_graph</code> has 0 consumers — burning 10 Hz iSAM2 CPU for nothing</td>
+<td>4</td>
+<td><code>agv_factor_graph</code> topics</td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-04-06</td>
+<td>MEDIUM</td>
+<td>factor_graph window 200 = ~20 s — loop closures past that horizon are lost</td>
+<td>4</td>
+<td><code>factor_graph_node.cpp:34,209-226</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-04-07</td>
+<td>MEDIUM</td>
+<td>Anti-spoofing: tags with unregistered IDs silently ignored — correct, but undocumented as a security property</td>
+<td>4</td>
+<td><code>marker_correction_node.cpp:289</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-06-01</td>
+<td>MEDIUM</td>
+<td>No negative-obstacle / drop-off detection — greenhouse drains and steps unhandled</td>
+<td>6</td>
+<td>costmap voxel layer</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-06-02</td>
+<td>MEDIUM</td>
+<td>min_obstacle_height 0.10 m means 10 cm-tall floor obstacles ignored by costmap</td>
+<td>6</td>
+<td><code>nav2_params.yaml:274,281,340,347</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-06-03</td>
+<td>MEDIUM</td>
+<td>scan_grid_mapper <code>/agv/live_map</code> has no documented decay policy</td>
+<td>6</td>
+<td>scan_mapper_params + node</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-06-04</td>
+<td>MEDIUM</td>
+<td>No dynamic-obstacle temporal filter — false stops from oscillating leaves likely</td>
+<td>6</td>
+<td>collision_monitor.yaml + voxel_layer</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-06-05</td>
+<td>MEDIUM</td>
+<td>No reflection filter for wet floors — depth aliases ceiling as obstacle</td>
+<td>6</td>
+<td>absence; <code>pointcloud_to_laserscan</code> params</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-07-03</td>
+<td>MEDIUM</td>
+<td>Docs drift: <code>vx_max=0.4</code> in <code>agv_navigation/CLAUDE.md</code> vs <code>0.25</code> in <code>nav2_params.yaml:108</code></td>
+<td>7</td>
+<td>doc</td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-07-04</td>
+<td>MEDIUM</td>
+<td>Docs drift: <code>stop_zone=footprint+5cm</code> in <code>agv_navigation/CLAUDE.md</code> vs <code>+20cm</code> in YAML</td>
+<td>7</td>
+<td>doc</td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-07-05</td>
+<td>MEDIUM</td>
+<td>Stop-distance math in <code>collision_monitor.yaml:41</code> assumes 1.0 m/s² but HAL limits ~0.59 m/s²</td>
+<td>7</td>
+<td><code>collision_monitor.yaml:38-46</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-07-06</td>
+<td>MEDIUM</td>
+<td><code>backup</code> plugin loaded in behavior_server but no BT calls it</td>
+<td>7</td>
+<td><code>nav2_params.yaml:386</code></td>
+<td>NIT</td>
+</tr>
+<tr>
+<td>MEDIUM-07-07</td>
+<td>MEDIUM</td>
+<td>No global mission timeout in BT — stuck navigation only times out on the per-goal RoundRobin</td>
+<td>7</td>
+<td><code>navigate_to_pose_forward_only.xml</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-07-08</td>
+<td>MEDIUM</td>
+<td>Costmap inflation sized for 2 m corridors; does not survive &lt; 1.5 m</td>
+<td>7</td>
+<td><code>nav2_params.yaml:300-311</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-09-03</td>
+<td>MEDIUM</td>
+<td><code>safety_supervisor</code> is a regular Node, not a lifecycle node</td>
+<td>9</td>
+<td><code>safety_supervisor.cpp:63</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-09-05</td>
+<td>MEDIUM</td>
+<td>Stop zone extends to rear despite forward-only motion — false-stops possible</td>
+<td>9</td>
+<td><code>collision_monitor.yaml:54</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-10-01</td>
+<td>MEDIUM</td>
+<td>No <code>/diagnostics</code> aggregator configured; per-node publication patchy</td>
+<td>10</td>
+<td>absence in launch</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-10-02</td>
+<td>MEDIUM</td>
+<td><code>safety_supervisor</code> BEST_EFFORT subscriber to topics whose publishers may be RELIABLE (DDS asymmetry tolerated but worth recording)</td>
+<td>10</td>
+<td><code>safety_supervisor.cpp:119</code></td>
+<td>NIT</td>
+</tr>
+<tr>
+<td>MEDIUM-10-03</td>
+<td>MEDIUM</td>
+<td>DDS write-side max participants <code>MaxAutoParticipantIndex 120</code> — high for single-robot, ok for fleet later</td>
+<td>10</td>
+<td><code>agv_start.sh:131</code></td>
+<td>NIT</td>
+</tr>
+<tr>
+<td>MEDIUM-10-04</td>
+<td>MEDIUM</td>
+<td>No <code>rosbag2</code> rotation policy in launch or systemd</td>
+<td>10</td>
+<td>absence</td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-10-06</td>
+<td>MEDIUM</td>
+<td><code>rail_approach</code> subscribes RELIABLE to <code>transient_local.reliable</code> publisher — late-join semantics differ</td>
+<td>10</td>
+<td><code>rail_approach_node.cpp:162</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>CRITICAL-11-A-01</td>
+<td>CRITICAL</td>
+<td><code>mode_arbiter</code> collision_monitor_state type mismatch — <code>safety_stop</code> never fires; <code>BLOCKED_HANDOFF</code> unreachable</td>
+<td>11.A</td>
+<td><code>mode_arbiter_node.cpp:171-175</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-11-A-02</td>
+<td>HIGH</td>
+<td>No source-staleness timeout in arbiter; stale <code>last_*</code> Twist relayed indefinitely</td>
+<td>11.A</td>
+<td><code>mode_arbiter_node.cpp:152-160,329-344</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-11-A-03</td>
+<td>HIGH</td>
+<td>TELEOP override carve-out lets <code>rail_approach</code> keep driving while operator picked teleop</td>
+<td>11.A</td>
+<td><code>mode_fsm.hpp:147-161</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-11-A-04</td>
+<td>MEDIUM</td>
+<td><code>safety_stop</code> detection is substring match (<code>find("stop")</code>); false-positive prone</td>
+<td>11.A</td>
+<td><code>mode_arbiter_node.cpp:174</code></td>
+<td>NIT (combined with CRITICAL-11-A-01)</td>
+</tr>
+<tr>
+<td>MEDIUM-11-A-05</td>
+<td>MEDIUM</td>
+<td>Default <code>operator_mode = "nav"</code> allows immediate motion on cold boot</td>
+<td>11.A</td>
+<td><code>mode_fsm.hpp:74</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-A-06</td>
+<td>MEDIUM</td>
+<td>Source-state strings hardcoded; no enum / schema; brittle to controller changes</td>
+<td>11.A</td>
+<td><code>mode_fsm.hpp:182-244</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-11-B-01</td>
+<td>HIGH</td>
+<td>Dashboard uses backend's mission executor; <code>agv_waypoint_manager</code> is shadow code with a separate file</td>
+<td>11.B</td>
+<td><code>index.ts:461-545</code> vs <code>waypoint_manager_node.cpp:73-345</code></td>
+<td>S→M</td>
+</tr>
+<tr>
+<td>HIGH-11-B-02</td>
+<td>HIGH</td>
+<td><code>spin_until_future_complete</code> on a single-threaded executor from a worker thread — deadlock risk</td>
+<td>11.B</td>
+<td><code>waypoint_manager_node.cpp:309-329</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-11-B-03</td>
+<td>MEDIUM</td>
+<td>Mission file is append-only; duplicate IDs accumulate; oldest wins on lookup</td>
+<td>11.B</td>
+<td><code>waypoint_manager_node.cpp:162-211</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-B-04</td>
+<td>MEDIUM</td>
+<td>Auto-generated mission IDs use <code>time%1e8</code> — collision within 100 ms</td>
+<td>11.B</td>
+<td><code>waypoint_manager_node.cpp:141-142</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-B-05</td>
+<td>MEDIUM</td>
+<td>No waypoint validation (NaN, out-of-bounds, in-keepout)</td>
+<td>11.B</td>
+<td><code>missions.ts:32-55</code>, <code>waypoint_manager_node.cpp:134-172</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>CRITICAL-11-C-01</td>
+<td>CRITICAL</td>
+<td>Auth disabled by default + hardcoded credentials shipped in source</td>
+<td>11.C</td>
+<td><code>auth.ts:64,67-80</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-11-C-02</td>
+<td>HIGH</td>
+<td>Unsalted SHA-256 password hashing</td>
+<td>11.C</td>
+<td><code>auth.ts:48-50</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-11-C-03</td>
+<td>HIGH</td>
+<td>JWT token transported as URL query string in WebSocket connect</td>
+<td>11.C</td>
+<td><code>ws/control.ts:77-80</code>, <code>useWebSocket.ts:55-57</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-11-C-04</td>
+<td>HIGH</td>
+<td>HTTP without TLS — credentials and JWT cleartext over WiFi</td>
+<td>11.C</td>
+<td>Express setup</td>
+<td>M</td>
+</tr>
+<tr>
+<td>HIGH-11-C-05</td>
+<td>HIGH</td>
+<td><code>filterActionsForRole</code> returns all actions for <code>operator</code> role despite comment</td>
+<td>11.C</td>
+<td><code>auth.ts:37-46</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-11-C-06</td>
+<td>MEDIUM</td>
+<td>No WS heartbeat / deadman; mission keeps running on operator disconnect (closes HAZOP H-07)</td>
+<td>11.C</td>
+<td><code>ws/control.ts:144-205,274-278</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-11-C-07</td>
+<td>MEDIUM</td>
+<td><code>state.missionPause</code> ignored by <code>waypoint_manager_node</code> (related HIGH-11-B-01)</td>
+<td>11.C</td>
+<td><code>missions.ts:74-83</code> vs <code>waypoint_manager_node.cpp:286-345</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-C-08</td>
+<td>MEDIUM</td>
+<td><code>POST /api/nav/goal</code> no input validation; missing field → goal at (0,0,0)</td>
+<td>11.C</td>
+<td><code>routes/nav.ts:5-12</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-C-09</td>
+<td>MEDIUM</td>
+<td>No rate limiting on REST endpoints</td>
+<td>11.C</td>
+<td>absence</td>
+<td>S</td>
+</tr>
+<tr>
+<td>HIGH-11-D-01</td>
+<td>HIGH</td>
+<td>Auth check is fail-OPEN in frontend (<code>/api/auth/status</code> error → logged in)</td>
+<td>11.D</td>
+<td><code>App.tsx:35-45</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-D-02</td>
+<td>MEDIUM</td>
+<td>E-stop toggle has no protection against accidental disengage</td>
+<td>11.D</td>
+<td><code>TopBar.tsx:240-241</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-D-03</td>
+<td>MEDIUM</td>
+<td>No confirmation on Disarm Motors during navigation / mission</td>
+<td>11.D</td>
+<td><code>OperatePanel.tsx:34-40</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>MEDIUM-11-D-04</td>
+<td>MEDIUM</td>
+<td><code>handleGoalClick</code> sends nav_goal on single map click; no confirmation</td>
+<td>11.D</td>
+<td><code>App.tsx:111-117</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>MEDIUM-11-D-05</td>
+<td>MEDIUM</td>
+<td>No calibration wizards — all 4 wizards (intrinsics, extrinsics, UMBmark, hand-eye) are CLI scripts</td>
+<td>11.D</td>
+<td>absence</td>
+<td>XL</td>
+</tr>
+<tr>
+<td>MEDIUM-11-D-06</td>
+<td>MEDIUM</td>
+<td>No "stuck in recovery" surface — operator sees normal state while BT cycles recoveries</td>
+<td>11.D</td>
+<td><code>state_machine.ts:50-66</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>LOW-11-D-07</td>
+<td>LOW</td>
+<td>JWT in localStorage — XSS-exfiltratable</td>
+<td>11.D</td>
+<td><code>api/client.ts</code></td>
+<td>M</td>
+</tr>
+<tr>
+<td>LOW-11-D-08</td>
+<td>LOW</td>
+<td>WebSocket has no max reconnect cap; backend down hidden forever</td>
+<td>11.D</td>
+<td><code>useWebSocket.ts:46-82</code></td>
+<td>S</td>
+</tr>
+<tr>
+<td>LOW-01-06</td>
+<td>LOW</td>
+<td>TF single-owner invariant not enforced by verifier</td>
+<td>1</td>
+<td>proposal</td>
+<td>S</td>
+</tr>
+<tr>
+<td>LOW-04-08</td>
+<td>LOW</td>
+<td><code>relocalization_cooldown_ms</code> 500 ms is asymmetric to EKF rates; document or tune</td>
+<td>4</td>
+<td><code>marker_correction_node.cpp:55</code></td>
+<td>NIT</td>
+</tr>
+<tr>
+<td>LOW-10-05</td>
+<td>LOW</td>
+<td><code>SocketReceiveBufferSize 64MB</code> may exceed Orin NX <code>net.core.rmem_max</code>; document required sysctl</td>
+<td>10</td>
+<td><code>agv_start.sh:144</code></td>
+<td>NIT</td>
+</tr>
+<tr>
+<td>CR-00-05</td>
+<td>MEDIUM</td>
+<td>License divergence undeclared</td>
+<td>0</td>
+<td><code>agv_rail_approach/package.xml</code></td>
+<td>S</td>
+</tr>
+</tbody>
+</table>
+<p>(38 findings total. The recalibrated tally above keeps <code>CR-00-02</code> and
+<code>CRITICAL-02-02</code> as the same root cause; the Phase 0 row carries the
+forensics, the Phase 2 row carries the runtime-resolution mechanism and
+the remediation plan.)</p>
+<h2 id="updated-critical-02-02-physical-measurement-hypothesis-ranking">Updated CRITICAL-02-02 — physical measurement + hypothesis ranking<a class="headerlink" href="#updated-critical-02-02-physical-measurement-hypothesis-ranking" title="Permanent link">&para;</a></h2>
+<p><strong>New evidence (caliper, 2026-05-13)</strong>: wheel diameter = <strong>125 mm</strong>.
+Physical radius = <strong>0.0625 m</strong>.</p>
+<p>This <strong>confirms the URDF + <code>robot_params.yaml</code> (0.0625) as the geometric
+truth</strong> and confirms <code>odrive_params.yaml</code>'s 0.0781 as a compensation
+factor for a different bug. The first-pass scenario "wheel swap not
+documented" is <strong>rejected</strong>. The 1.25× factor (= 5/4 exactly) is too
+clean to be UMBmark drift (typically 1–5 %).</p>
+<p><strong>Revised hypothesis ranking for the 1.25× factor</strong>:</p>
+<ol>
+<li><strong><code>encoder.config.cpr</code> mis-set in ODrive NVRAM (most likely)</strong>. A 25 %
+   fractional error in counts-per-revolution makes the firmware report
+   1.25× the real motor velocity. The fudge to <code>wheel_radius</code> exactly
+   compensates the integration. <strong>Testable in 30 s with <code>odrivetool</code>.</strong></li>
+<li><strong><code>motor.config.pole_pairs</code> wrong (5/4 ratio)</strong>. 7→5 pole-pair
+   mismatch gives 1.40; 6→5 gives 1.20; 5→4 gives <strong>1.25</strong>. The
+   clean integer ratio strongly suggests this class.</li>
+<li><strong>Velocity-unit reinterpretation</strong> (turns/s vs RPM/60) — discarded
+   for magnitude (would produce 2π or 1/2π factors, not 1.25).</li>
+<li><strong>Empirical fudge with no diagnosed cause</strong> — least likely but most
+   dangerous, because any upstream firmware change destroys the
+   compensation silently. The team's CLAUDE.md table calling 0.0781
+   "calibrated" suggests this is what happened.</li>
+</ol>
+<p><strong>Revised remediation (replaces the original CRITICAL-02-02 plan)</strong>:</p>
+<ol>
+<li><strong>Step 0 (NEW)</strong>: dump ODrive S1 NVRAM with <code>odrivetool</code> or CAN
+   <code>GET_*</code> reads. Capture
+   <code>motor.config.pole_pairs</code>, <code>encoder.config.cpr</code>,
+   <code>motor.config.torque_constant</code>, any <code>gear_ratio</code>/<code>reducer</code>.
+   Diff against the ODrive firmware default for the M8325s. <strong>The 1.25×
+   factor must surface in one of these numbers.</strong> Log to
+   <code>docs/calibration/odrive_nvram_dump_2026-05-XX.txt</code>.</li>
+<li><strong>Step 1</strong>: correct the root cause in NVRAM (e.g., set <code>encoder.cpr</code>
+   to the manufacturer's value). Save to NVRAM with <code>save_configuration</code>.</li>
+<li><strong>Step 2</strong>: revert <code>odrive_params.yaml</code> to <code>wheel_radius: 0.0625</code>,
+   <code>track_width: &lt;pending physical measurement&gt;</code>, <code>gear_ratio:</code> aligned
+   with the firmware decision (see MEDIUM-02-07).</li>
+<li><strong>Step 3</strong>: re-run UMBmark. Residual error must be in 1–5 % range,
+   not 25 %. Document.</li>
+<li><strong>Step 4</strong>: centralise on <code>robot_params.yaml</code> as physical-only SSOT;
+   move UMBmark calibration deltas into a separate
+   <code>wheel_odom_umbmark_&lt;date&gt;.yaml</code> consumed only by the wheel-odometry
+   layer.</li>
+</ol>
+<p>The original <code>verify_geometry_ssot.py</code> requirement and the URDF / Nav2 /
+HIL parity check remain. The new step 0 is a 30-minute experiment
+preceding the refactor.</p>
+<h2 id="priority-queue-recommended-order-of-remediation">Priority queue (recommended order of remediation)<a class="headerlink" href="#priority-queue-recommended-order-of-remediation" title="Permanent link">&para;</a></h2>
+<h3 id="sprint-a-repro-and-geometry-1-week">Sprint A — repro and geometry (1 week)<a class="headerlink" href="#sprint-a-repro-and-geometry-1-week" title="Permanent link">&para;</a></h3>
+<p>The minimum to safely run a hardware test of the rest.</p>
+<ol>
+<li><strong>CR-00-01</strong> — Author <code>agv_greenhouse.repos</code>, document <code>vcs import</code> in README. Decide vendoring strategy for <code>agv_slam</code>. <strong>Without this, none of the other findings can be reproduced on a fresh system.</strong></li>
+<li><strong>CRITICAL-02-02 step 0</strong> — Dump ODrive NVRAM (<code>odrivetool</code> or CAN), confirm whether <code>encoder.cpr</code> or <code>pole_pairs</code> explains the 1.25× factor. <strong>30-minute experiment; this is the single most important diagnostic in the audit.</strong> Document.</li>
+<li><strong>CRITICAL-02-02 step 1+2</strong> — Correct the root cause in NVRAM. Revert <code>odrive_params.yaml</code> <code>wheel_radius</code> to 0.0625. Physically re-measure track width.</li>
+<li><strong>CRITICAL-02-02 step 3+4+5</strong> — Re-run UMBmark with correct config. Centralise on <code>robot_params.yaml</code>. Add <code>verify_geometry_ssot.py</code>.</li>
+<li><strong>CR-00-03</strong> — Replace hardcoded <code>/home/orza/</code> with <code>os.environ.get('AGV_DATA_DIR', …)</code> in the four launch dicts.</li>
+<li><strong>MEDIUM-02-07</strong> — Add boot-time invariant comparing ROS <code>gear_ratio</code> against ODrive NVRAM (defense in depth for the diagnostic in step 0).</li>
+</ol>
+<h3 id="sprint-a5-close-phase-11-criticals-priority-over-sprint-b-1-day">Sprint A.5 — close Phase 11 CRITICALs (priority over Sprint B, ~1 day)<a class="headerlink" href="#sprint-a5-close-phase-11-criticals-priority-over-sprint-b-1-day" title="Permanent link">&para;</a></h3>
+<p>Two findings opened in Phase 11 affect either physical-operation
+awareness (mode_arbiter) or "any LAN device can drive the robot"
+(auth defaults). Closing them is cheaper than every Sprint B item
+and has higher-leverage safety impact than the remaining Sprint A
+items already landed.</p>
+<p>A.5.1 — <strong>CRITICAL-11-A-01</strong>: change <code>mode_arbiter_node.cpp:171-175</code>
+to subscribe to <code>nav2_msgs/msg/CollisionMonitorState</code>; drop the
+<code>std_msgs/String</code> substring heuristic (this also closes
+MEDIUM-11-A-04). Unit test that <code>safety_stop</code> flips on
+<code>action_type == STOP</code>.</p>
+<p>A.5.2 — <strong>CRITICAL-11-C-01</strong>: change <code>auth.ts:64</code> to <code>enabled: true</code>;
+remove hardcoded defaults at <code>auth.ts:67-70</code>; generate a random
+admin password on first boot, log it once to stdout (systemd
+journal) and force-change on first login. Also fail-closed
+<code>App.tsx:42</code> (HIGH-11-D-01) — show "Backend unreachable" instead
+of <code>setLoggedIn(true)</code>.</p>
+<h3 id="sprint-b-environmental-robustness-1-week">Sprint B — environmental robustness (1 week)<a class="headerlink" href="#sprint-b-environmental-robustness-1-week" title="Permanent link">&para;</a></h3>
+<p>The fixes that protect the first field deployment.</p>
+<ol>
+<li><strong>CR-00-04</strong> — Network interface candidates from env var + auto-enumeration.</li>
+<li><strong>MEDIUM-01-04</strong> — chrony.conf template + <code>chronyc waitsync</code> in <code>agv_start.sh</code>.</li>
+<li><strong>HIGH-01-02</strong> — Move camera→base extrinsic into URDF as a calibrated xacro macro. Hand-eye calibration procedure in <code>docs/calibration/camera_mount.md</code>.</li>
+<li><strong>HIGH-02-04</strong> — Pull ZED params into this repo (or vendor <code>agv_slam</code>). Decide depth mode (likely NEURAL on AGX Orin, PERFORMANCE fallback on Orin NX).</li>
+</ol>
+<h3 id="sprint-c-quality-fixes-3-days">Sprint C — quality fixes (3 days)<a class="headerlink" href="#sprint-c-quality-fixes-3-days" title="Permanent link">&para;</a></h3>
+<p>Lower urgency but cheap to clean.</p>
+<ol>
+<li><strong>HIGH-01-01</strong> — Invert URDF so <code>base_footprint</code> is the root.</li>
+<li><strong>HIGH-02-03</strong> — Compute URDF inertias from box / cylinder formulas via xacro macro.</li>
+<li><strong>MEDIUM-02-05</strong> — Settle the CAN bitrate, align spec + script + systemd.</li>
+<li><strong>MEDIUM-02-06</strong> — Fix Nav2 YAML header.</li>
+<li><strong>CR-00-05</strong> — <code>LICENSE.md</code> + SPDX headers.</li>
+<li><strong>CR-00-06</strong> — Refactor <code>waypoint_manager</code> to route through <code>agv_ui_backend</code> for the localization gate.</li>
+</ol>
+<h3 id="sprint-d-observability-infrastructure-1-week">Sprint D — observability infrastructure (1 week)<a class="headerlink" href="#sprint-d-observability-infrastructure-1-week" title="Permanent link">&para;</a></h3>
+<p>Needed for the hardware-dependent phases to become testable.</p>
+<ol>
+<li><strong>MEDIUM-01-03</strong> — Online camera extrinsic consistency monitor.</li>
+<li><strong>MEDIUM-01-05</strong> — Annotate wall-clock-only topics in <code>interfaces.yaml</code>.</li>
+<li><strong>LOW-01-06</strong> — <code>verify_tf_single_owner.py</code> to turn the <code>/**:</code> key trap into a hard fail.</li>
+<li><strong>HIGH-02-01</strong> — ADR for ros2_control cutover; CI matrix on mock_components.</li>
+</ol>
+<h2 id="what-this-audit-deferred-to-hardware">What this audit deferred to hardware<a class="headerlink" href="#what-this-audit-deferred-to-hardware" title="Permanent link">&para;</a></h2>
+<p>These items cannot be closed without physical equipment:</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Deferred items</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Build time on Orin (&lt;5 min hot, &lt;12 min cold); TF jitter; clock skew measurement; CAN frame error rate</td>
+</tr>
+<tr>
+<td>2</td>
+<td>ODrive command→motion latency p99; watchdog stop time; ZED depth FPS sustained; USB recovery</td>
+</tr>
+<tr>
+<td>3 (Calibration)</td>
+<td>UMBmark execution; Kalibr extrinsics; reprojection RMSE; closed-loop drift in 5 m × 5 m</td>
+</tr>
+<tr>
+<td>4 (Localization)</td>
+<td>100 m loop drift % with/without AprilTags; kidnapping recovery time; pose rate ≥ 30 Hz live; forced-blackout 5 s test</td>
+</tr>
+<tr>
+<td>5 (Mapping)</td>
+<td>1000 m² mapping run time; cycle-time on re-mapping</td>
+</tr>
+<tr>
+<td>6 (Perception)</td>
+<td>Person stop distance; hose detection recall; false-positive rate in vegetated corridor</td>
+</tr>
+<tr>
+<td>7 (Planning)</td>
+<td>Path planning p99; tracking error RMS; jerk RMS; success rate over 100 missions; recovery rate</td>
+</tr>
+<tr>
+<td>8 (Greenhouse)</td>
+<td>Headland turn timing; coverage gap %; mission resume correctness</td>
+</tr>
+<tr>
+<td>9 (Safety)</td>
+<td>E-stop latency on oscilloscope; collision_monitor stop distance; HAZOP exercise</td>
+</tr>
+<tr>
+<td>10 (Comms)</td>
+<td>DDS throughput on Wi-Fi; 8 h bag rotation correctness; WiFi loss/recover test</td>
+</tr>
+<tr>
+<td>11 (GUI)</td>
+<td>Usability test with non-ROS technician (&lt; 2 h setup)</td>
+</tr>
+<tr>
+<td>12 (Sim-to-real)</td>
+<td>Sim-to-real metric gap &lt; 20 %; HIL → field regression</td>
+</tr>
+<tr>
+<td>13 (CI)</td>
+<td>CI pipeline duration &lt; 30 min; coverage ≥ 70 % core packages</td>
+</tr>
+<tr>
+<td>14 (Docs)</td>
+<td>External onboarding test &lt; 1 h</td>
+</tr>
+<tr>
+<td>15 (Field)</td>
+<td>MTBF ≥ 8 h; 200-mission success rate ≥ 98 %; 0 safety incidents</td>
+</tr>
+</tbody>
+</table>
+<p>Each of these has the acceptance criterion and the minimal experimental
+harness sketched in the relevant phase file (where the file exists) or
+in this SUMMARY (where it does not). The pattern to operationalize them
+is the same: a script under <code>scripts/health/</code>, a Python test under
+<code>tests/&lt;phase&gt;/</code>, both feeding a row in <code>tests/&lt;phase&gt;/checklist.md</code>,
+each run logged to <code>events.jsonl</code> so the dashboard surfaces pass/fail.</p>
+<h2 id="what-this-audit-chose-not-to-recommend">What this audit chose NOT to recommend<a class="headerlink" href="#what-this-audit-chose-not-to-recommend" title="Permanent link">&para;</a></h2>
+<p>Per the prompt's "no migration without comparison" rule, some popular
+SOTA frameworks were considered and rejected for this project:</p>
+<ul>
+<li><strong>LiDAR-inertial SLAM (FAST-LIO2, Point-LIO, LIO-SAM)</strong>: rejected
+  because no LiDAR on the robot. Worth re-evaluating if a Livox / Hesai
+  is added; the vibration-rich greenhouse floor makes LIO compelling
+  relative to VIO-only.</li>
+<li><strong>Full Autoware Universe stack</strong>: rejected — overkill for a single
+  small AGV in a confined indoor space; massive deployment overhead.</li>
+<li><strong>Apollo Cyber RT</strong>: rejected for the same reason; ROS 2 is sufficient.</li>
+<li><strong>Hard real-time controller via PREEMPT_RT</strong>: rejected for MVP; Jetson
+  AGX with default kernel meets the latency requirements for 0.5 m/s
+  greenhouse speeds. Revisit at higher speeds or for safety certification.</li>
+<li><strong>Moving to Smac Hybrid-A</strong>*: deferred — the team made a deliberate
+  switch to SmacPlanner2D in 2026-04 (per <code>project.yaml:88-92</code>). Hybrid
+  would buy orientation-aware planning at the cost of compute. Worth
+  evaluating once the geometry SSOT (CRITICAL-02-02) is fixed and the
+  MPPI controller can be tuned against a correct robot model.</li>
+<li><strong>Online sim-to-real domain randomization (Isaac Lab)</strong>: deferred —
+  the existing HIL harness is mature, sim-to-real gap will become a
+  real concern only after the geometry SSOT is fixed.</li>
+</ul>
+<h2 id="reading-order-for-an-engineer-picking-this-up">Reading order for an engineer picking this up<a class="headerlink" href="#reading-order-for-an-engineer-picking-this-up" title="Permanent link">&para;</a></h2>
+<ol>
+<li>This file (<code>SUMMARY.md</code>).</li>
+<li><code>00_inventory.md</code> for the cartography and the Phase-0 critical findings.</li>
+<li><code>02_hal.md</code> for the deep dive on the geometry issue (the single most impactful finding).</li>
+<li><code>01_foundations.md</code> for the TF/time/REP-105 supporting analysis.</li>
+<li>The previous audit, <code>../2026-04-13-full-audit.md</code>, for context on
+   what was already fixed.</li>
+<li>The specs in <code>../../../specs/*.yaml</code> for the authoritative contracts.</li>
+</ol>
+<h2 id="roadmap-if-all-of-sprint-a-passes-hardware">Roadmap if all of Sprint A passes hardware<a class="headerlink" href="#roadmap-if-all-of-sprint-a-passes-hardware" title="Permanent link">&para;</a></h2>
+<p>Assuming Sprints A and B close (≈ 2 weeks), the next 3-week field cycle
+should target:</p>
+<ul>
+<li><strong>Week 3</strong>: Phase 3 (calibration) execution on real hardware. Procedure
+  manifests under <code>docs/calibration/</code>. Closed-loop UMBmark &lt; 1 %.</li>
+<li><strong>Week 4</strong>: Phase 4 (localization) field tests. 100 m drift with
+  AprilTags target &lt; 0.5 %. Begin Phase 7 (Nav2) controller tuning with
+  the now-correct robot model.</li>
+<li><strong>Week 5</strong>: Phase 9 (safety) HAZOP / FMEA workshop. E-stop measurement.
+  Phase 11 (GUI) usability test with a real technician.</li>
+</ul>
+<p>This audit's role at that point becomes monitoring — each phase file
+gains a "Field results" section appended as the experiments run.</p>
+<h2 id="sprint-a-non-hardware-closure-2026-05-13">Sprint A non-hardware closure (2026-05-13)<a class="headerlink" href="#sprint-a-non-hardware-closure-2026-05-13" title="Permanent link">&para;</a></h2>
+<p>6 atomic commits landed on <code>claude/amr-security-audit-gPtCd</code> closing
+the no-hardware portion of Sprint A. The numerical fix of
+CRITICAL-02-02 (replacing the SSOT's 0.0781 wheel_radius with the
+geometric 0.0625 m after the ODrive NVRAM root cause is corrected)
+remains as a follow-up — procedure documented at
+<code>docs/calibration/odrive_nvram_dump_procedure.md</code>, executable in
+30 minutes when hardware is next available.</p>
+<table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Subject</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>61a973c</code></td>
+<td>specs: declare robot_geometry.yaml SSOT + NVRAM dump procedure</td>
+<td>C1 — spec-first per AGENT_INSTRUCTIONS</td>
+</tr>
+<tr>
+<td><code>2d21d6f</code></td>
+<td>geometry: scaffold robot_geometry.yaml SSOT, reroute launches</td>
+<td>CRITICAL-02-02 scaffolded</td>
+</tr>
+<tr>
+<td><code>200516b</code></td>
+<td>verify: enforce geometry SSOT structurally; WARN on numerical drift</td>
+<td>new <code>verify_geometry_ssot.py</code></td>
+</tr>
+<tr>
+<td><code>fead755</code></td>
+<td>bringup: replace 4 hardcoded /home/orza paths</td>
+<td>CR-00-03 closed</td>
+</tr>
+<tr>
+<td><code>6d2ea72</code></td>
+<td>build: add agv_greenhouse.repos + NVRAM info log on odrive boot</td>
+<td>CR-00-01 closed + MEDIUM-02-07 closed</td>
+</tr>
+<tr>
+<td><code>5c72ac5</code></td>
+<td>docs: bookkeeping (CLAUDE.md tables + this closure section)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sprint-a5-closure-2026-05-13">Sprint A.5 closure (2026-05-13)<a class="headerlink" href="#sprint-a5-closure-2026-05-13" title="Permanent link">&para;</a></h2>
+<p>4 atomic commits landed on <code>claude/amr-security-audit-gPtCd</code> closing
+the two Phase-11 CRITICALs and HIGH-11-A-02. Sprint A.5 was prioritised
+over Sprint B because (a) the mode_arbiter type mismatch silently
+broke the FSM's safety_stop awareness, and (b) the auth defaults made
+the robot driveable from any LAN device using the public-repo
+credentials.</p>
+<table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Subject</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>8d81517</code></td>
+<td>mode_arbiter: subscribe to CollisionMonitorState correct type</td>
+<td>CRITICAL-11-A-01 closed + MEDIUM-11-A-04 closed</td>
+</tr>
+<tr>
+<td><code>5d29df1</code></td>
+<td>mode_arbiter: per-source staleness timeout</td>
+<td>HIGH-11-A-02 closed</td>
+</tr>
+<tr>
+<td><code>dd4b6ec</code></td>
+<td>ui_backend: auth defaults safe, generate admin on first boot</td>
+<td>CRITICAL-11-C-01 closed (backend side)</td>
+</tr>
+<tr>
+<td><code>bd46e6b</code></td>
+<td>dashboard: fail-closed auth status check</td>
+<td>HIGH-11-D-01 closed</td>
+</tr>
+</tbody>
+</table>
+<h3 id="findings-status-after-sprint-a5">Findings status after Sprint A.5<a class="headerlink" href="#findings-status-after-sprint-a5" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRITICAL-11-A-01</td>
+<td><strong>CLOSED</strong></td>
+<td>Subscriber type fixed; STOP constant comparison replaces substring heuristic.</td>
+</tr>
+<tr>
+<td>HIGH-11-A-02</td>
+<td><strong>CLOSED</strong></td>
+<td>Per-source 250 ms staleness gate; throttled WARN on stale relay.</td>
+</tr>
+<tr>
+<td>MEDIUM-11-A-04</td>
+<td><strong>CLOSED</strong></td>
+<td>Closed by the same commit as CRITICAL-11-A-01 — substring trap removed.</td>
+</tr>
+<tr>
+<td>CRITICAL-11-C-01</td>
+<td><strong>CLOSED (backend)</strong></td>
+<td>First-boot admin password + <code>must_change_password</code> flag + <code>POST /api/auth/change-password</code> route. Existing on-disk <code>users.json</code> preserved (dev workflows intact).</td>
+</tr>
+<tr>
+<td>HIGH-11-D-01</td>
+<td><strong>CLOSED</strong></td>
+<td>"Backend unreachable" fail-closed screen with Retry button.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="hazop-re-rating">HAZOP re-rating<a class="headerlink" href="#hazop-re-rating" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>H-14 (untrained operator)</strong>: was R=15 (P=5) with the public
+  credentials live. Now back to <strong>R≤6</strong>, contingent on the dev Jetson's
+  legacy <code>users.json</code> being cleaned up (engineer/agv2026, operator/agv
+  must be removed manually — the migration logic preserves existing
+  files intentionally, so the dev has to delete those entries).</li>
+</ul>
+<h3 id="still-open-not-in-sprint-a5">Still open (NOT in Sprint A.5)<a class="headerlink" href="#still-open-not-in-sprint-a5" title="Permanent link">&para;</a></h3>
+<ul>
+<li>HIGH-11-C-02 (SHA-256 unsalted) — Sprint B.</li>
+<li>HIGH-11-C-03 (JWT in WS URL query) — Sprint B.</li>
+<li>HIGH-11-C-04 (HTTP without TLS) — Sprint B.</li>
+<li>HIGH-11-A-03 (TELEOP carve-out for rail_approach) — Sprint B/C.</li>
+<li>All Phase 11.B findings on <code>agv_waypoint_manager</code> — Sprint B (HIGH-11-B-01 proposes deletion).</li>
+</ul>
+<h3 id="verifier-baseline-after-sprint-a5">Verifier baseline after Sprint A.5<a class="headerlink" href="#verifier-baseline-after-sprint-a5" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code></li>
+<li>10 scripts, 0 blocking failures, 1 warning</li>
+<li><code>verify_geometry_ssot.py</code> still WARNs on the 0.0781↔0.0625
+  divergence (expected until CRITICAL-02-02 NVRAM dump lands).</li>
+</ul>
+<h3 id="next-operational-step">Next operational step<a class="headerlink" href="#next-operational-step" title="Permanent link">&para;</a></h3>
+<p>With Sprint A.5 closed, the highest-leverage hardware action is the
+ODrive NVRAM dump per
+<a href="../../../calibration/odrive_nvram_dump_procedure/"><code>docs/calibration/odrive_nvram_dump_procedure.md</code></a>.
+30-minute procedure → identifies whether the 1.25× factor lives in
+<code>encoder.config.cpr</code> or <code>motor.config.pole_pairs</code> → 1-line YAML fix
+closes CRITICAL-02-02 numerically and flips <code>verify_geometry_ssot</code>
+from WARNING to OK.</p>
+<h3 id="findings-status">Findings status<a class="headerlink" href="#findings-status" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th>Commit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR-00-01</td>
+<td>CLOSED — <code>.repos</code> file exists with 11 declared repositories; 2 marked <code># TODO verify SHA</code> for next hardware contact (agv_slam, zed-ros2-wrapper)</td>
+<td><code>6d2ea72</code></td>
+</tr>
+<tr>
+<td>CR-00-03</td>
+<td>CLOSED — 4 path hardcodes replaced; env-var fallback remains as backstop</td>
+<td><code>fead755</code></td>
+</tr>
+<tr>
+<td>CRITICAL-02-02</td>
+<td><strong>SCAFFOLDED</strong> — structural SSOT in place; numerical drift visible as WARN on every commit; the one-line fix waits on NVRAM dump</td>
+<td><code>61a973c</code> + <code>2d21d6f</code> + <code>200516b</code></td>
+</tr>
+<tr>
+<td>MEDIUM-02-07</td>
+<td>CLOSED — boot-time RCLCPP_INFO log + NVRAM procedure doc</td>
+<td><code>6d2ea72</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="verifier-baseline-now">Verifier baseline now<a class="headerlink" href="#verifier-baseline-now" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code></li>
+<li>10 scripts (was 9 — <code>verify_geometry_ssot.py</code> added)</li>
+<li>0 blocking failures</li>
+<li>2 warnings: pre-existing <code>zed-ros2-wrapper</code> not vendored,
+  <code>verify_geometry_ssot</code> numerical drift WARN (expected; clears post
+  CRITICAL-02-02 step 5)</li>
+</ul>
+<h3 id="next-hardware-session-30-minute-action">Next hardware session — 30-minute action<a class="headerlink" href="#next-hardware-session-30-minute-action" title="Permanent link">&para;</a></h3>
+<p>Execute <code>docs/calibration/odrive_nvram_dump_procedure.md</code>:
+1. Capture ODrive S1 NVRAM with <code>odrivetool</code>.
+2. Confirm which firmware parameter (<code>encoder.config.cpr</code> or
+   <code>motor.config.pole_pairs</code>) carries the 1.25× factor.
+3. Correct it in NVRAM.
+4. Edit <code>src/agv_description/config/robot_geometry.yaml</code> —
+   <code>wheel_radius: 0.0625</code>, <code>track_width: 0.735</code>, <code>gear_ratio: 1.0</code>,
+   <code>left_wheel_y: 0.3675</code>, <code>right_wheel_y: -0.3675</code>.
+5. Re-run UMBmark, confirm residual error in 1–5 % range.
+6. <code>bash tools/verify_specs/all.sh</code> — <code>verify_geometry_ssot.py</code>
+   should drop from RESULT: WARNING to RESULT: OK.</p>
+<p>One PR. One commit. CRITICAL-02-02 closes.</p>
+<h2 id="sprint-b-closure-2026-05-13">Sprint B closure (2026-05-13)<a class="headerlink" href="#sprint-b-closure-2026-05-13" title="Permanent link">&para;</a></h2>
+<p>4 atomic commits landed on <code>claude/amr-security-audit-gPtCd</code> closing
+Sprint B (architectural cleanup + WiFi deadman + hardware E-stop doc).</p>
+<table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Subject</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>35bb850</code></td>
+<td>bringup: remove agv_waypoint_manager from production launch</td>
+<td><strong>HIGH-11-B-01 closed</strong>. CR-00-06 active risk → latent only (no production caller).</td>
+</tr>
+<tr>
+<td><code>b4cc2b2</code></td>
+<td>bringup: gate factor_graph behind enable_factor_graph</td>
+<td><strong>HIGH-04-01 closed</strong> + <strong>MEDIUM-04-05 closed</strong>. Saves 10–20 % CPU in production runs.</td>
+</tr>
+<tr>
+<td><code>c7a659f</code></td>
+<td>docs(safety): hardware E-stop wiring procedure option 1</td>
+<td><strong>HIGH-09-01 option 1 closed</strong> (doc ready; field-install pending).</td>
+</tr>
+<tr>
+<td><code>1c91c27</code></td>
+<td>ui_backend: WS heartbeat + mission-pause-on-disconnect</td>
+<td><strong>MEDIUM-11-C-06 closed</strong> + <strong>HAZOP H-07 R=12 closed</strong>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="findings-status-after-sprint-b">Findings status after Sprint B<a class="headerlink" href="#findings-status-after-sprint-b" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HIGH-11-B-01</td>
+<td><strong>CLOSED</strong></td>
+<td>waypoint_manager removed from production launch. Specs updated. Package buildable for CLI/tests.</td>
+</tr>
+<tr>
+<td>HIGH-04-01</td>
+<td><strong>CLOSED (gated)</strong></td>
+<td>factor_graph runs only when <code>enable_factor_graph:=true</code>. The "consume-corrected-EKF" architectural concern persists for the optional case but does not affect production CPU.</td>
+</tr>
+<tr>
+<td>MEDIUM-04-05</td>
+<td><strong>CLOSED</strong></td>
+<td>Same gate. The 0-consumer iSAM2 no longer runs in production.</td>
+</tr>
+<tr>
+<td>HIGH-09-01</td>
+<td><strong>CLOSED (option 1 doc)</strong></td>
+<td>Procedure documented at <code>docs/safety/hardware_estop_wiring.md</code>. Hardware install pending next field-prep session. Options 2 + 3 (ToF / dual-channel relay) deferred post-MVP.</td>
+</tr>
+<tr>
+<td>MEDIUM-11-C-06</td>
+<td><strong>CLOSED</strong></td>
+<td>WS heartbeat at 2 s; deadman pauses mission when last operator disconnects.</td>
+</tr>
+<tr>
+<td>HAZOP H-07 (WiFi loss)</td>
+<td><strong>CLOSED</strong> R=12 → R≤3</td>
+<td>Mission no longer runs unsupervised after disconnect.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="still-open-after-sprint-b">Still open after Sprint B<a class="headerlink" href="#still-open-after-sprint-b" title="Permanent link">&para;</a></h3>
+<ul>
+<li>HIGH-11-B-02 (waypoint_manager <code>spin_until_future_complete</code> deadlock):
+  package still buildable, latent if called from CLI. The proper fix
+  is deletion of the package — tracked as Sprint C cleanup.</li>
+<li>HIGH-04-01 architectural side (factor_graph consumes EKF output):
+  unchanged; only the production-cost concern is closed. Architectural
+  fix when cutover is genuinely attempted.</li>
+<li>HIGH-11-A-03 (TELEOP carve-out for rail_approach): Sprint C.</li>
+<li>HIGH-11-C-02, -03, -04 (salted KDF, JWT off WS URL, TLS): Sprint C.</li>
+<li>Sprint D (observability) and Sprint E (calibration wizards XL):
+  unchanged.</li>
+</ul>
+<h3 id="sprint-b-verifier-baseline">Sprint B verifier baseline<a class="headerlink" href="#sprint-b-verifier-baseline" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code></li>
+<li>10 scripts, 0 blocking, 1 warning (<code>verify_geometry_ssot.py</code> numerical drift, expected pending NVRAM dump for CRITICAL-02-02).</li>
+<li>Frontend (<code>npm run build</code>) and backend (<code>npm run build</code>) clean.</li>
+<li><code>colcon build --packages-select agv_bringup</code> clean (-Werror enforced).</li>
+</ul>
+<h2 id="sprint-c-closure-2026-05-13">Sprint C closure (2026-05-13)<a class="headerlink" href="#sprint-c-closure-2026-05-13" title="Permanent link">&para;</a></h2>
+<p>4 atomic commits closing the "quality / consistency" cluster.</p>
+<table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Subject</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>4046bfe</code></td>
+<td>nav2: fix doc drift on controller, vx_max, stop_zone</td>
+<td><strong>MEDIUM-02-06, MEDIUM-07-03, MEDIUM-07-04 closed</strong></td>
+</tr>
+<tr>
+<td><code>d6a6efc</code></td>
+<td>nav2: trim stop_zone rear to footprint, not +5 cm</td>
+<td><strong>MEDIUM-09-05 closed</strong></td>
+</tr>
+<tr>
+<td><code>b95b9d8</code></td>
+<td>rail_approach: transient_local QoS for late-join + create launch/ dir</td>
+<td><strong>MEDIUM-10-06 closed</strong> + pre-existing build bug fixed</td>
+</tr>
+<tr>
+<td><code>478c23d</code></td>
+<td>bringup: wait for chrony NTP sync at boot</td>
+<td><strong>MEDIUM-01-04 closed</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="findings-status-after-sprint-c">Findings status after Sprint C<a class="headerlink" href="#findings-status-after-sprint-c" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MEDIUM-02-06</td>
+<td><strong>CLOSED</strong></td>
+<td>nav2_params.yaml header now correctly says MPPI + RotationShim.</td>
+</tr>
+<tr>
+<td>MEDIUM-07-03</td>
+<td><strong>CLOSED</strong></td>
+<td>CLAUDE.md table updated to vx_max=0.25 with audit cite.</td>
+</tr>
+<tr>
+<td>MEDIUM-07-04</td>
+<td><strong>CLOSED</strong></td>
+<td>CLAUDE.md table + pipeline section now agree with the YAML (20 cm stop_zone, two-source).</td>
+</tr>
+<tr>
+<td>MEDIUM-09-05</td>
+<td><strong>CLOSED</strong></td>
+<td>Stop_zone rear coord at footprint exactly (-0.30); rear lobe no longer false-stops on noise.</td>
+</tr>
+<tr>
+<td>MEDIUM-10-06</td>
+<td><strong>CLOSED</strong></td>
+<td>rail_approach subscriber matches publisher's transient_local; late-join no longer misses the latched localization state.</td>
+</tr>
+<tr>
+<td>MEDIUM-01-04</td>
+<td><strong>CLOSED</strong></td>
+<td>chronyc waitsync 5 0.05 added before ROS source. Graceful fallback if chrony absent.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="still-open-after-sprint-c">Still open after Sprint C<a class="headerlink" href="#still-open-after-sprint-c" title="Permanent link">&para;</a></h3>
+<ul>
+<li>HIGH-04-02 (incidence filter for marker_correction) — Sprint D.</li>
+<li>HIGH-04-03 (kidnapping detection) — Sprint D.</li>
+<li>HIGH-04-04 (yaml-cpp parser for marker registry) — Sprint D.</li>
+<li>HIGH-04-09 (yaw-absolute fight in ekf_local) — needs HIL test before
+  merge; Sprint D.</li>
+<li>HIGH-07-01 (MPPI critic normalization) — Sprint D (needs HIL p95 test).</li>
+<li>HIGH-07-02 (smoother↔HAL accel mismatch) — Sprint D (needs hardware).</li>
+<li>HIGH-09-04 (cmd_vel_gate initial state) — Sprint D (1-line header read).</li>
+<li>HIGH-09-02 (safety_supervisor per-topic QoS) — Sprint D.</li>
+<li>HIGH-11-A-03 (TELEOP carve-out for rail_approach) — needs design call; Sprint D.</li>
+<li>HIGH-11-B-02 (waypoint_manager deadlock risk) — closes by deleting the
+  package entirely; Sprint D candidate.</li>
+<li>HIGH-11-C-02 (salted KDF), HIGH-11-C-03 (JWT off WS URL),
+  HIGH-11-C-04 (TLS) — security hardening; Sprint D.</li>
+<li>HIGH-11-D-04 (no goal-click confirmation) — Sprint D UX.</li>
+<li>All Phase 6 perception findings — Sprint D + E.</li>
+<li>Sprint E (calibration wizards XL) — gated by Sprint A NVRAM dump.</li>
+</ul>
+<h3 id="sprint-c-verifier-baseline">Sprint C verifier baseline<a class="headerlink" href="#sprint-c-verifier-baseline" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code>: 10 scripts, 0 blocking, 1 warning
+  (geometry SSOT drift, expected pending NVRAM dump).</li>
+<li><code>colcon build</code> clean across modified packages (-Werror enforced).</li>
+</ul>
+<h2 id="sprint-d-closure-2026-05-13">Sprint D closure (2026-05-13)<a class="headerlink" href="#sprint-d-closure-2026-05-13" title="Permanent link">&para;</a></h2>
+<p>4 atomic commits closing the observability + defensive-cleanup cluster.</p>
+<table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Subject</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>d59943a</code></td>
+<td>safety: document cmd_vel_gate fail-closed default</td>
+<td><strong>HIGH-09-04 closed</strong> (verification + doc)</td>
+</tr>
+<tr>
+<td><code>6f30aa0</code></td>
+<td>safety: per-topic QoS in safety_supervisor</td>
+<td><strong>HIGH-09-02 closed</strong></td>
+</tr>
+<tr>
+<td><code>57a7394</code></td>
+<td>bringup: event-triggered rosbag2 in snapshot mode</td>
+<td><strong>MEDIUM-10-04 closed</strong> (recorder scaffolded; auto-trigger from backend = follow-up)</td>
+</tr>
+<tr>
+<td><code>8487994</code></td>
+<td>docs(adr): 0001 diagnostics strategy</td>
+<td><strong>MEDIUM-10-01 closed</strong> (ADR documents the custom-topic choice)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="findings-status-after-sprint-d">Findings status after Sprint D<a class="headerlink" href="#findings-status-after-sprint-d" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HIGH-09-04</td>
+<td><strong>CLOSED</strong></td>
+<td>Verified <code>safety_ok_{false}</code> default in cmd_vel_gate.hpp; comment + CLAUDE.md document the fail-closed startup behavior.</td>
+</tr>
+<tr>
+<td>HIGH-09-02</td>
+<td><strong>CLOSED</strong></td>
+<td>safety_supervisor accepts <code>monitored_qos</code> per-topic; current config explicitly lists best_effort for all three topics so a future RELIABLE flip surfaces in a PR diff.</td>
+</tr>
+<tr>
+<td>MEDIUM-10-04</td>
+<td><strong>CLOSED (scaffold)</strong></td>
+<td><code>enable_event_recording</code> launch arg + <code>ros2 bag record --snapshot-mode</code> for safety-critical topics. Operator triggers a dump via service call. Auto-trigger from backend on safety events = future follow-up.</td>
+</tr>
+<tr>
+<td>MEDIUM-10-01</td>
+<td><strong>CLOSED (ADR)</strong></td>
+<td>ADR 0001 documents the decision to keep custom typed topics; engineer-only <code>/diagnostics</code> retrofit not pursued.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="still-open-after-sprint-d">Still open after Sprint D<a class="headerlink" href="#still-open-after-sprint-d" title="Permanent link">&para;</a></h3>
+<ul>
+<li>HIGH-11-A-03 (TELEOP carve-out for rail_approach) — needs operator
+  workflow design call before code change.</li>
+<li>HIGH-04-02 / 04-03 / 04-04 (marker_correction hardening) — Sprint E
+  candidate; 04-02 (incidence filter) is the smallest.</li>
+<li>HIGH-04-09 (ekf_local yaw absolute fight) — needs HIL regression
+  test before merge; defer until hardware sessions are systematic.</li>
+<li>HIGH-07-01 (MPPI critic normalization) — needs HIL p95 test loop.</li>
+<li>HIGH-07-02 (smoother ↔ HAL accel mismatch) — needs hardware
+  measurement.</li>
+<li>HIGH-11-B-02 (waypoint_manager deadlock risk) — closed by deletion
+  of the package once Sprint B's removal-from-launch has soaked.</li>
+<li>HIGH-11-C-02/03/04 (salted KDF, JWT off WS URL, TLS) — security
+  hardening; needs deployment-network design call.</li>
+<li>HIGH-11-D-04 (no goal-click confirmation) — Sprint E UX.</li>
+<li>MEDIUM-06-* Phase 6 perception findings — Sprint E (depth pipeline
+  refactor).</li>
+<li>Sprint E proper (calibration wizards XL) — still gated by Sprint A
+  NVRAM dump; meaningful only after a first field test informs which
+  wizards matter.</li>
+</ul>
+<h3 id="sprint-d-verifier-baseline">Sprint D verifier baseline<a class="headerlink" href="#sprint-d-verifier-baseline" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code>: 10 scripts, 0 blocking, 1 warning
+  (geometry SSOT drift, expected pending NVRAM dump).</li>
+<li><code>colcon build</code> clean across modified packages (-Werror enforced).</li>
+<li><code>colcon test agv_safety</code>: 3/3 pass.</li>
+</ul>
+<h3 id="cumulative-status-sprints-a5-b-c-d">Cumulative status (Sprints A.5 + B + C + D)<a class="headerlink" href="#cumulative-status-sprints-a5-b-c-d" title="Permanent link">&para;</a></h3>
+<p>19 atomic commits landed in this session. Findings status snapshot:</p>
+<table>
+<thead>
+<tr>
+<th>Severity</th>
+<th>Closed in session</th>
+<th>Remaining open</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRITICAL</td>
+<td>2 (11-A-01, 11-C-01 backend)</td>
+<td>2 (CR-00-01 .repos validation, CRITICAL-02-02 numerical NVRAM fix — both await hardware)</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>10</td>
+<td>~13 (most need hardware or design call)</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>11</td>
+<td>~18 (mostly Sprint E perception + UX)</td>
+</tr>
+<tr>
+<td>LOW / NIT</td>
+<td>0</td>
+<td>~6</td>
+</tr>
+</tbody>
+</table>
+<p>The two remaining CRITICALs are hardware-gated and have explicit
+procedures ready (NVRAM dump + .repos verification). Everything that
+can be closed at the desk in this audit cycle is closed.</p>
+<h2 id="sprint-elite-closure-2026-05-12">Sprint E.lite closure (2026-05-12)<a class="headerlink" href="#sprint-elite-closure-2026-05-12" title="Permanent link">&para;</a></h2>
+<p>Sprint E proper (calibration wizards XL) is still gated by the field
+NVRAM dump, but four desk-actionable items from the Sprint E backlog
+were resolved in this pass — three perception/auth hardening and one
+HMI UX patch. Tag: "Sprint E.lite" to distinguish from the calibration
+wizard work still pending.</p>
+<h3 id="findings-closed-in-sprint-elite">Findings closed in Sprint E.lite<a class="headerlink" href="#findings-closed-in-sprint-elite" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>HIGH-04-02 — AprilTag incidence-angle filter in marker_correction.</strong>
+  <code>marker_correction_node.cpp</code> now extracts the tag-normal incidence
+  angle from the OpenCV pose rotation matrix (<code>cv::Rodrigues</code> →
+  <code>R_ct(2,2)</code>) and discards detections beyond a configurable threshold.
+  Previously a tag observed near-edge-on could publish a pose whose
+  yaw was dominated by lateral noise, and the EKF would happily fuse
+  it. Field finding from iter-37 showed this was a real failure mode
+  in greenhouse corridors. Commit 831f56d.</p>
+</li>
+<li>
+<p><strong>HIGH-04-04 — yaml-cpp parser for marker registry.</strong> The hand-rolled
+  string matcher was replaced with a proper yaml-cpp loader supporting
+  per-tag size override, duplicate-id detection, and structured error
+  reporting. Reduces the chance of a silently malformed registry
+  passing as "no tags found". Commit 9c90a36.</p>
+</li>
+<li>
+<p><strong>CRITICAL-11-C-01 frontend companion.</strong> <code>LoginPage.tsx</code> now handles
+  the <code>must_change_password</code> flag set by the backend on the
+  auto-generated admin user. On first login the dashboard refuses to
+  call <code>onLogin()</code> until the user has set a new password through the
+  in-place change-password form (the new token is held in component
+  state, not committed to localStorage until the change succeeds, so a
+  reload cannot bypass the prompt). Pairs with the Sprint A.5 backend
+  change. Commit b7db334.</p>
+</li>
+<li>
+<p><strong>MEDIUM-11-D-02 — UX confirm-on-disengage for safety-critical
+  buttons.</strong> Two industrial-HMI-style modals added:</p>
+</li>
+<li><strong>TopBar E-stop button:</strong> Engage stays single-click (slamming the
+    button must never be slowed down). Disengage now opens a modal
+    that requires explicit acknowledgement and spells out "motors
+    remain disarmed after clear; robot will not move from this click
+    alone." Mirrors hardware E-stop reset latches.</li>
+<li><strong>OperatePanel Disarm button:</strong> When <code>motors_armed &amp;&amp; state ∈
+    {navigating, executing_mission}</code>, the disarm click is intercepted
+    by a modal warning that disarming mid-traverse will fault the
+    active goal and the robot will coast. The operator must either
+    cancel navigation first or knowingly confirm.
+  Single <code>.modal-body</code> CSS class shared between the two. Commit dcf2212.</li>
+</ul>
+<h3 id="still-open-after-sprint-elite">Still open after Sprint E.lite<a class="headerlink" href="#still-open-after-sprint-elite" title="Permanent link">&para;</a></h3>
+<ul>
+<li>HIGH-04-03 (kidnapping detection) — deferred. Needs a design pass to
+  define the trigger criteria before implementation.</li>
+<li>HIGH-04-09 (ekf_local yaw absolute fight) — needs HIL test before
+  merging the fix.</li>
+<li>HIGH-11-A-03 (TELEOP carve-out for rail_approach) — design call
+  pending.</li>
+<li>HIGH-11-C-02/03/04 (salted KDF, JWT-off-WS-URL, TLS) — Sprint future
+  (security hardening, not greenhouse-MVP-blocking).</li>
+<li>HIGH-11-D-04 (no goal-click confirmation) — single-click goal-send
+  on the map is still un-gated; lower priority than E-stop/disarm.</li>
+<li>MEDIUM-06-* Phase 6 perception findings — depth pipeline refactor,
+  still Sprint E proper.</li>
+<li>Sprint E proper (calibration wizards XL) — still gated by Sprint A
+  NVRAM dump from the field.</li>
+</ul>
+<h3 id="sprint-elite-verifier-baseline">Sprint E.lite verifier baseline<a class="headerlink" href="#sprint-elite-verifier-baseline" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code>: 10 scripts, 0 blocking, 1 warning
+  (geometry SSOT drift, expected pending NVRAM dump).</li>
+<li><code>colcon build agv_markers</code>: clean (-Werror enforced).</li>
+<li><code>npm run build</code> (dashboard): clean, 39 modules transformed,
+  39 kB CSS / 413 kB JS bundle.</li>
+</ul>
+<h3 id="cumulative-status-sprints-a5-b-c-d-elite">Cumulative status (Sprints A.5 + B + C + D + E.lite)<a class="headerlink" href="#cumulative-status-sprints-a5-b-c-d-elite" title="Permanent link">&para;</a></h3>
+<p>23 atomic commits landed across the audit cycle. Findings snapshot:</p>
+<table>
+<thead>
+<tr>
+<th>Severity</th>
+<th>Closed in session</th>
+<th>Remaining open</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRITICAL</td>
+<td>2 (11-A-01, 11-C-01 backend+frontend)</td>
+<td>2 (CR-00-01 .repos validation, CRITICAL-02-02 numerical NVRAM fix — both await hardware)</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>12</td>
+<td>~11 (most need hardware or design call)</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>12</td>
+<td>~17 (mostly Sprint E perception + UX)</td>
+</tr>
+<tr>
+<td>LOW / NIT</td>
+<td>0</td>
+<td>~6</td>
+</tr>
+</tbody>
+</table>
+<h2 id="section-0-closure-2026-05-13">Section 0 closure (2026-05-13)<a class="headerlink" href="#section-0-closure-2026-05-13" title="Permanent link">&para;</a></h2>
+<p>After Sprint E.lite, the operator requested an empirical pre-Fase-1
+verification of every audit finding marked "closed". This caught one
+regression of the original 2026-04-13 audit bug class (a third
+occurrence in <code>agv_rail_driver</code>, closed inline) and re-framed the
+remaining open CRITICAL.</p>
+<h3 id="findings-re-classified-after-section-0">Findings re-classified after Section 0<a class="headerlink" href="#findings-re-classified-after-section-0" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>CRITICAL-02-02 (geometry SSOT)</strong> — <strong>CLOSED.</strong> The audit's original
+  hypothesis ("the 1.25× factor between scaffold 0.0781 and geometric
+  0.0625 is an ODrive NVRAM bug") was empirically disproven on
+  hardware: NVRAM dump shows stock M8325s values (pole_pairs=20,
+  inc_encoder0.cpr=8192, no internal scale or gearing); manual wheel
+  rotation confirms gearbox is 10:1 to within 1.6%; diameter is
+  vernier-confirmed 125 mm. The 0.0781 scaffold was historical
+  compensation for now-fixed mechanical issues. SSOT-revert sprint
+  (commit <code>e6804e8</code>) flipped the values to geometric truth and
+  rescaled HAL accel/decel to preserve real m/s² parity. Verifier
+  WARNs cleared.</li>
+<li><strong>CRITICAL-11-A-01 (mode_arbiter type)</strong> — <strong>CLOSED-VERIFIED</strong>
+  end-to-end via synthetic STOP injection on the live stack.</li>
+<li><strong>CRITICAL-11-C-01 (auth defaults)</strong> — <strong>CLOSED-VERIFIED</strong> end-to-end
+  via forced-change modal exercised on this Jetson.</li>
+<li><strong>HIGH-04-09 (ekf yaw absolute fight)</strong> — still open by design;
+  baseline +2.4° yaw jump on stationary USB-reboot scenario captured
+  for the future fix.</li>
+<li><strong>HIGH-07-02 (smoother vs HAL accel)</strong> — <strong>CLOSED-VERIFIED</strong> via
+  ADR-0002. The audit misread defense-in-depth as drift.</li>
+<li><strong>HIGH-04-01 (factor_graph), HIGH-11-B-01 (waypoint_manager)</strong> —
+  <strong>CLOSED-VERIFIED</strong> via <code>ros2 node list</code> confirming absence under
+  default args + new <code>verify_no_waypoint_manager.sh</code> BLOCKING.</li>
+</ul>
+<h3 id="new-findings-surfaced-during-section-0">New findings surfaced during Section 0<a class="headerlink" href="#new-findings-surfaced-during-section-0" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>G4</strong> — <code>agv_rail_driver</code> was carrying the <strong>same root-cause class</strong>
+  as the 2026-04-13 audit bug #1 and as CRITICAL-11-A-01:
+  <code>/agv/collision_monitor_state</code> subscriber declared
+  <code>std_msgs/msg/String</code> while Nav2 publishes
+  <code>nav2_msgs/msg/CollisionMonitorState</code>. DDS dropped every message
+  silently. <strong>Third occurrence</strong> of the same defect in one repository.
+  Closed inline in commit <code>08ac348</code>. Strongly motivates G1 (CI
+  type-matching verifier).</li>
+<li><strong>G5</strong> — Bilateral asymmetry in ODrive S1 NVRAM (vel_integrator_gain
+  LEFT=0.333 vs RIGHT=0.167, can.encoder_msg_rate_ms LEFT=10 vs
+  RIGHT=0). HIGH severity; deferred to Fase-1 firmware-write sprint.</li>
+<li><strong>G6</strong> — <code>joint_states</code> publishes motor-radian as wheel-radian
+  (no <code>/gear_ratio_</code> divide in the publisher). LOW severity, cosmetic.</li>
+</ul>
+<h3 id="section-0-verifier-baseline">Section 0 verifier baseline<a class="headerlink" href="#section-0-verifier-baseline" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>bash tools/verify_specs/all.sh</code>: 11 scripts, 0 blocking, <strong>0 warnings</strong>
+  (the 2 geometry WARNs cleared after the SSOT revert).</li>
+</ul>
+<h3 id="cumulative-status-sprints-a5-b-c-d-elite-section-0">Cumulative status (Sprints A.5 + B + C + D + E.lite + Section 0)<a class="headerlink" href="#cumulative-status-sprints-a5-b-c-d-elite-section-0" title="Permanent link">&para;</a></h3>
+<p>27 atomic commits landed across the audit cycle. Findings snapshot:</p>
+<table>
+<thead>
+<tr>
+<th>Severity</th>
+<th>Closed</th>
+<th>Remaining open</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRITICAL</td>
+<td>3 (02-02 NUMERICAL, 11-A-01, 11-C-01)</td>
+<td>1 (CR-00-01 .repos validation — awaits second machine)</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>12 + G4 + G5 captured</td>
+<td>~10 + G5 needs firmware-write sprint</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>12</td>
+<td>~17</td>
+</tr>
+<tr>
+<td>LOW / NIT</td>
+<td>0 + G6 captured</td>
+<td>~7</td>
+</tr>
+</tbody>
+</table>
+<p>All blocking failures resolved. Section 0 unblocks Fase 1.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2355 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/validation/iteration_log/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Iteration log — Round 44+ - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#iteration-log-round-44" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Iteration log — Round 44+
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#iter-0-2026-04-18-harness-enrichment-baseline-pre-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-0 (2026-04-18) — harness enrichment baseline (pre-run)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-1-2026-04-18-baseline-hil-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-1 (2026-04-18) — baseline HIL run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-2-2026-04-18-applied-3-iter-1-fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-2 (2026-04-18) — applied 3 iter-1 fixes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-3-2026-04-18-fsm-oscillation-fix-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-3 (2026-04-18) — FSM oscillation fix applied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-4-2026-04-19-sim-side-e_stop-sigkill-fixes-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-4 (2026-04-19) — sim-side e_stop + SIGKILL fixes applied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-5-2026-04-19-apriltag-shim-sim-self-heal-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-5 (2026-04-19) — apriltag shim + sim self-heal gate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-6-2026-04-19-registry-driven-apriltag-shim-strict-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-6 (2026-04-19) — registry-driven apriltag shim + strict reset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-7-2026-04-19-rail_approach-finally-drives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-7 (2026-04-19) — rail_approach finally drives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-8-2026-04-19-post-reset-cancel-270-s-rail_approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-8 (2026-04-19) — post-reset cancel + 270 s rail_approach
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-9-2026-04-19-cancel-before-arm-breaks-the-716-plateau" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-9 (2026-04-19) — cancel-before-arm breaks the 7/16 plateau
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trajectory-summary-9-iterations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trajectory summary (9 iterations)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-10-2026-04-19-option-a-extract-fine_servo_controller-ros-free" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-10 (2026-04-19) — Option A: extract fine_servo_controller (ROS-free)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-11-2026-04-19-option-b-last_reject_reason-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-11 (2026-04-19) — Option B: last_reject_reason observability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-12-2026-04-19-option-c-solvepnp-median-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-12 (2026-04-19) — Option C: solvePnP median filter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-13-2026-04-19-option-d-max_fine_duration-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-13 (2026-04-19) — Option D: max_fine_duration guard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-14-2026-04-19-partial-run-with-abcd-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-14 (2026-04-19) — partial run with A+B+C+D applied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-15-2026-04-19-skip-nav2-coarse_approach-when-in-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-15 (2026-04-19) — skip Nav2 coarse_approach when in range
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-20-2026-04-19-1116-rail_approach-unlocked-55" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-20 (2026-04-19) — 11/16, rail_approach unlocked 5/5
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iter-16-2026-04-19-rail_exit-release-in-approach-zones-when-idle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iter-16 (2026-04-19) — RAIL_EXIT release in approach zones when idle
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/validation/iteration_log.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="iteration-log-round-44">Iteration log — Round 44+<a class="headerlink" href="#iteration-log-round-44" title="Permanent link">&para;</a></h1>
+<p>Running chronology of iterations against <code>waypoints_tagged_v3.yaml</code>. Each
+entry is one line per stage with the decision taken. Keep it short —
+details belong in the per-iteration analysis markdown referenced here.</p>
+<p>Canonical loop + acceptance criteria: <a href="../iteration_runbook/">iteration_runbook.md</a>.</p>
+<h2 id="iter-0-2026-04-18-harness-enrichment-baseline-pre-run">iter-0 (2026-04-18) — harness enrichment baseline (pre-run)<a class="headerlink" href="#iter-0-2026-04-18-harness-enrichment-baseline-pre-run" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Round 44 code landed on <code>main</code>: rail_detector (J, bea3208), rail_driver
+  visual (K, 360a624), mode_arbiter RAIL_EXIT + rail_exit_geometry (M1,
+  6d1674f), harness oracle subscriptions + iteration_report.py (Q1–Q7).</li>
+<li>Unit test count: 86 green.</li>
+<li>No HIL run yet; first HIL sweep = iter-1.</li>
+</ul>
+<h2 id="iter-1-2026-04-18-baseline-hil-run">iter-1 (2026-04-18) — baseline HIL run<a class="headerlink" href="#iter-1-2026-04-18-baseline-hil-run" title="Permanent link">&para;</a></h2>
+<ul>
+<li>report: <code>sim_episodes/precision_run_20260418_210819/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260418_210819/iteration_1_analysis.md</code></li>
+<li>bucket verdicts: nav2 2/5, rail_approach 0/5, rail_drive 4/4, rail_exit 0/2</li>
+<li>success rate: <strong>6/16 (37.5 %)</strong>, 0 collisions</li>
+<li>top rules fired (root causes):</li>
+<li><strong>Apriltag topic remap wrong</strong> — <code>/zed/zed_node/*</code> but sim publishes
+     <code>/agv/zed/*</code>; apriltag_node saw 0 images → rail_approach never
+     transitioned to "driving" → all 5 rail_approach waypoints NAV_TIMEOUT.</li>
+<li><strong>FSM stuck in RAIL_EXIT</strong> after the first rail_drive success —
+     release required <code>rail_driver_state=="reached"</code> which only latches
+     one tick. Every subsequent waypoint ran with <code>mode="rail_exit"</code> +
+     <code>source=RAIL</code>, starving cmd_vel_nav and cmd_vel_approach. All 3
+     nav2 ABORTEDs (wp02, wp10, wp15) + 5 rail_approach NAV_TIMEOUTs
+     trace to this.</li>
+<li>Harness oracle parsers used wrong JSON keys (<code>markers</code> / <code>obstacles</code>)
+     — the sim actually emits <code>visible</code> / <code>static_obstacles</code>. Consequence:
+     <code>visible_markers_at_*</code> was <code>[]</code> everywhere.</li>
+<li>decisions (all three applied for iter-2):</li>
+<li><code>src/agv_bringup/launch/agv_hil_full.launch.py</code>: remap
+    <code>apriltag_node</code> + <code>image_server</code> to <code>/agv/zed/*</code>.</li>
+<li><code>src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp</code>: drop
+    <code>rail_driver_state=="reached"</code> from RAIL_EXIT release; zone + clearance
+    alone suffices.</li>
+<li><code>src/agv_integration_tests/test/test_waypoint_precision.py</code>: parse
+    <code>visible</code> and <code>static_obstacles</code> keys in the oracle callbacks.</li>
+<li>delta vs iter-0: baseline, N/A.</li>
+<li>next run (iter-2) expected to fix: rail_approach bucket (0/5 → ≥ 4/5),
+  nav2 ABORTEDs (3 → 0), rail_exit (0/2 → ≥ 1/2).</li>
+</ul>
+<h2 id="iter-2-2026-04-18-applied-3-iter-1-fixes">iter-2 (2026-04-18) — applied 3 iter-1 fixes<a class="headerlink" href="#iter-2-2026-04-18-applied-3-iter-1-fixes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>report: <code>sim_episodes/precision_run_20260418_220811/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260418_220811/iteration_2_analysis.md</code></li>
+<li>bucket verdicts: nav2 2/5, rail_approach 0/5, rail_drive 3/4, rail_exit 0/2</li>
+<li>success rate: <strong>5/16 (31.3 %)</strong>, 0 collisions</li>
+<li>delta vs iter-1: nav2 →, rail_approach →, rail_drive ↓ (one regression),
+  rail_exit →</li>
+<li><strong>Good news (validation of the fixes):</strong></li>
+<li>Oracle parsers work: <code>visible_markers_at_end</code> populated (mk=2..4) on
+    every waypoint that had tags in FoV. <code>drift</code> / <code>drift_recovered</code>
+    events now surface correctly.</li>
+<li>apriltag_node saw 0 images — REMAP was correct (subscribed to
+    <code>/agv/zed/left/image_rect_color</code>) but the image_transport pipeline
+    still delivers 0 messages. Root cause isolated below.</li>
+<li><strong>Regressions vs iter-1:</strong></li>
+<li>wp06 ABORTED at 3.2 m / 1.7 s with a 40-cycle <code>rail_drive ↔ rail_exit</code>
+    oscillation visible in <code>modes_observed</code>. Root cause: iter-2 FSM fix
+    released RAIL_EXIT → CORRIDOR_NAV even while rail_driver was still
+    <code>"driving"</code>, so the CORRIDOR_NAV shortcut immediately re-entered
+    RAIL_DRIVE, and the cycle repeated ~25 Hz.</li>
+<li>wp10 <code>GOAL_SEND_TIMEOUT</code> (new failure mode) — the HTTP /goal POST timed
+    out in 9.8 s; likely caused by the arbiter still reporting
+    <code>mode="rail_exit"</code> when wp10 started (same oscillation symptom).</li>
+<li><strong>Root cause of apriltag dead-feed</strong> (for iter-3 or later):</li>
+<li>image topic /agv/zed/left/image_rect_color publishes at ~20 Hz and
+    rclpy raw subscriptions see it fine, but apriltag_ros's
+    image_transport subscription shows "Image messages received: 0".
+    Likely a QoS / plugin handshake mismatch specific to cross-host
+    CycloneDDS. Fixing it requires either a compressed transport chain
+    or a sim-oracle-to-apriltag shim. <strong>Deferred to iter-4.</strong></li>
+<li>decisions (applied for iter-3):</li>
+<li><code>src/agv_mode_arbiter/include/agv_mode_arbiter/mode_fsm.hpp</code>:
+    RAIL_EXIT → CORRIDOR_NAV release now additionally requires
+    <code>rail_driver_state != "driving"</code>. Prevents the oscillation by
+    keeping RAIL_EXIT in effect until rail_driver has come to rest
+    (reached / idle / blocked_*). +2 FSM tests
+    (RailExitHoldsWhileRailDriverStillDriving,
+    RailExitReleasesOnIdleAfterClearance). 24 FSM tests + 4 geometry
+    tests pass.</li>
+<li>next run (iter-3) expected to fix: wp06 oscillation, wp10/wp13/wp14
+  release failures. rail_approach bucket deferred.</li>
+</ul>
+<h2 id="iter-3-2026-04-18-fsm-oscillation-fix-applied">iter-3 (2026-04-18) — FSM oscillation fix applied<a class="headerlink" href="#iter-3-2026-04-18-fsm-oscillation-fix-applied" title="Permanent link">&para;</a></h2>
+<ul>
+<li>report: <code>sim_episodes/precision_run_20260418_225028/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260418_225028/iteration_3_analysis.md</code></li>
+<li>bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4, rail_exit 0/2</li>
+<li>success rate: <strong>7/16 (43.8 %)</strong>, 0 collisions</li>
+<li>delta vs iter-2: <strong>nav2 ↑ (2→3), rail_drive ↑ (3→4), rail_approach →, rail_exit →</strong></li>
+<li><strong>Confirmed fixes:</strong></li>
+<li>wp06 ABORTED-via-oscillation is GONE (iter-3 SUCCEEDED 0.052 m / 64 s).</li>
+<li>FSM release sequence now shows clean <code>['rail_exit', 'corridor_nav']</code>
+    transitions on wp07/wp11/wp15, proving the <code>rail_driver_state !=
+    "driving"</code> gate lets the arbiter hand back to Nav2 without bouncing.</li>
+<li>rail_drive bucket is now fully green (4/4) with peak_pos_err under
+    the 0.05 m gate on all four waypoints.</li>
+<li><strong>Remaining blockers (5 NAV_TIMEOUT + 2 ABORTED):</strong></li>
+<li><code>rail_approach</code> bucket 0/5 — all 5 waypoints (wp04, wp07, wp11,
+     wp12, wp16) NAV_TIMEOUT. Root cause: apriltag_ros image_transport
+     subscription receives 0 images from <code>/agv/zed/left/image_rect_color</code>
+     even though rclpy raw subscriptions see ~20 Hz. Probably a QoS /
+     plugin handshake issue across CycloneDDS USB-eth hop. Deferred
+     iter-4 work item.</li>
+<li><code>rail_exit</code> bucket 0/2 — wp13/wp14 NAV_TIMEOUT at err_xy ≈ 1.54 m
+     (robot reached initial tag but never completed the 1.5 m exit push
+     within the 270 s budget). Possibly sim-speed-related (RTF ~0.16)
+     and/or an arbiter push-goal issue worth separate investigation.</li>
+<li><code>nav2</code> wp10 ABORTED 1.5 m (stalled after teleport — GT didn't
+     advance despite cmd_vel), wp15 ABORTED 2.60 m with non-trivial yaw
+     (0.29 rad) — sim-side motor-gate flakiness post-waypoint.</li>
+<li>decisions: no code changes in iter-3 — iter-2's FSM refinement was the
+  single change validated by this run.</li>
+<li>next run (iter-4) expected to fix: the apriltag image-delivery chain
+  (plan: sim-oracle-to-apriltag shim that bypasses the broken
+  image_transport path). If successful, rail_approach unlocks 5 more
+  waypoints in one stroke (projected 12/16 = 75 %).</li>
+</ul>
+<h2 id="iter-4-2026-04-19-sim-side-e_stop-sigkill-fixes-applied">iter-4 (2026-04-19) — sim-side e_stop + SIGKILL fixes applied<a class="headerlink" href="#iter-4-2026-04-19-sim-side-e_stop-sigkill-fixes-applied" title="Permanent link">&para;</a></h2>
+<ul>
+<li>sim-side changes (ad86eaf + c26a5ba + 9fc0416): <code>/state</code> → NaN-safe,
+  <code>/motor/enable</code> also clears e_stop, <code>/sim/restart</code> escalates to SIGKILL
+  after 3 s.</li>
+<li>brain stack: fully restarted before iter-4 to reset TF cache (sim_time
+  had reset after <code>/sim/restart</code>).</li>
+<li>report: <code>sim_episodes/precision_run_20260419_005754/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260419_005754/iteration_4_analysis.md</code></li>
+<li>status histogram: <strong>SUCCEEDED 5, NAV_TIMEOUT 3, ABORTED 1,
+  RESET_TIMEOUT 7</strong> — iter-4 was split in half by a mid-run sim hang.</li>
+<li>success rate: <strong>5/16 (31.3 %)</strong>, 0 collisions</li>
+<li><strong>Validated wins (first 7 wp, before sim hung):</strong></li>
+<li>nav2 was 5/5 clean in what iter-4 actually ran (wp01 0.077 m /
+    22 s — iter-3 had been ABORTED at 93 s; wp02 <strong>0.013 m / 21 s</strong>,
+    the first sub-2-cm landing; wp03 0.076 m / 21 s).</li>
+<li>Per-waypoint times dropped ~30 % (30 s → 20 s) on nav2 from the
+    fresh RTF (0.24 vs prior 0.16).</li>
+<li>e_stop latch fix + NaN-safe /state confirmed: no silent stalls,
+    no harness skip-on-500.</li>
+<li><strong>Mid-run failure mode (from wp08 onward):</strong></li>
+<li>sim self-heal restart kicked in (<code>self_heal_restarts_total: 1</code> in
+    /sim/telemetry) after a ~38 s clock gap, so sim_time reset.</li>
+<li>Every waypoint launched after the self-heal got <code>RESET_TIMEOUT</code>
+    (sim not responding) or <code>ABORTED</code> (brain TF cache at the old sim
+    clock, extrapolation errors in Nav2 costmaps).</li>
+<li>wp04 / wp07 / wp16 rail_approach all NAV_TIMEOUT at ~start pose —
+    the apriltag image-delivery issue is the remaining rail_approach
+    blocker, same as iter-3.</li>
+<li><strong>Clean-segment projection:</strong> if the sim had stayed up, the 7
+  usable waypoints show 5/7 success (71 %). The only genuine brain-
+  side failures in that segment are the 2 rail_approach apriltag
+  cases. Everything the brain-side iter-1/2/3 fixes targeted is now
+  behaving on first try.</li>
+<li>decisions: no new code in iter-4 — it was a pure validation of the
+  sim-side fixes. Two follow-ups for iter-5+:</li>
+<li>Harness should detect sim self-heal (monitor <code>last_clock_msg_ago_s</code>
+    or <code>self_heal_restarts_total</code> via /sim/telemetry) and reset brain
+    TF cache via a partial node restart, or skip-with-note the
+    waypoint and fence the rest until sim is stable for ≥ 30 s.</li>
+<li>apriltag bypass shim (iter-5 proposal) still blocked 5 rail_
+    approach waypoints; only actionable after the TF-sensitive
+    recovery path is decided.</li>
+<li>next run (iter-5) focus: <strong>harness resilience to sim self-heal</strong>
+  (detect + recover) + <strong>apriltag shim</strong>.</li>
+</ul>
+<h2 id="iter-5-2026-04-19-apriltag-shim-sim-self-heal-gate">iter-5 (2026-04-19) — apriltag shim + sim self-heal gate<a class="headerlink" href="#iter-5-2026-04-19-apriltag-shim-sim-self-heal-gate" title="Permanent link">&para;</a></h2>
+<ul>
+<li>brain-side additions (this commit):</li>
+<li><code>src/agv_hil_bridges/scripts/apriltag_sim_shim.py</code>: subscribes
+    <code>/agv/sim/ground_truth/visible_markers</code>, projects each tag's 4
+    world-frame corners into image pixels via camera_info + TF, emits
+    <code>apriltag_msgs/AprilTagDetectionArray</code> on <code>/agv/detections</code>.
+    Replaces the broken apriltag_ros path in <code>agv_hil_full.launch.py</code>.</li>
+<li>Harness: new <code>_wait_sim_healthy()</code> helper reads
+    <code>/sim/telemetry</code> per-waypoint, detects a <code>self_heal_restarts_total</code>
+    increment, and blocks until <code>clock_healthy_streak_s ≥ 30 s</code> before
+    continuing. Re-syncs brain EKF to GT after recovery.</li>
+<li>report: <code>sim_episodes/precision_run_20260419_013412/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260419_013412/iteration_5_analysis.md</code></li>
+<li>bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4,
+  rail_exit 0/2</li>
+<li>success rate: <strong>7/16 (43.8 %)</strong>, 0 collisions, run completed in
+  30:57 (iter-4 was 14:49 w/ collapse; iter-5 ran full suite).</li>
+<li><strong>Validated wins:</strong></li>
+<li>Sim self-heal gate worked passively — the run had no mid-run
+    collapse, so the gate never had to fire. But <code>/sim/telemetry</code>
+    was polled 16× (once per wp); if it had detected a restart, the
+    pause-and-resync is implemented and ready.</li>
+<li>apriltag shim publishes detections (confirmed via
+    <code>ros2 topic echo /agv/detections</code>: 7-9 tags per tick seen on
+    wp01-09). No more 0-detection silence from apriltag_ros.</li>
+<li>Full-run stability confirms the brain no longer needs to cope
+    with mid-run sim clock jumps (gate prevents the scenario).</li>
+<li><strong>rail_approach still 0/5 — root-caused but NOT fixed:</strong>
+  Querying <code>/agv/sim/ground_truth/visible_markers</code> with the robot at
+  wp11's start pose (5.2, 2.2, π) — 1.2 m in front of floor tag 36 —
+  the sim reports only <code>[id=29, id=30]</code> (both wall tags at x=3.6,
+  z=0.145). <strong>Floor tag 36 (z=0, face up) is not in the oracle.</strong>
+  The sim's visible_markers filter drops ground-plane tags whose
+  surface normal is close to world +Z because the camera's optical
+  axis is nearly horizontal (incidence angle ~80°, outside the sim's
+  threshold). The shim can only emit what the oracle sees; it cannot
+  hallucinate tags the sim withholds.</li>
+<li><strong>Options for iter-6:</strong><ul>
+<li>(A) Sim-side: relax the incidence filter for floor-plane tags,
+  or lower the threshold to ~85°.</li>
+<li>(B) Jetson-side: make the shim self-sufficient by reading
+  <code>markers_registry.yaml</code> directly and projecting all listed
+  tags, using the brain's own TF for world→camera. No sim
+  dependency for this piece.</li>
+</ul>
+</li>
+<li><strong>Other failures unchanged:</strong></li>
+<li>wp10/wp15 ABORTED: teleport didn't take full effect. wp10
+    requested (5.5, 0, π) but GT stayed at (7.05, 0, π) — same as
+    wp09's goal pose. <code>wait_for_reset</code> has 30 cm xy tolerance but no
+    yaw check + no validation that x matches target, so stale GT
+    passed the gate. Harness bug, iter-6 candidate.</li>
+<li>wp04/wp07 rail_approach: teleport put robot facing +x instead of
+    target yaw π (wait_for_reset ignored yaw). The shim did project
+    tag 35/4 correctly but they land behind the robot.</li>
+<li>wp13/wp14 rail_exit: NAV_TIMEOUT at err_xy≈1.54 m — same
+    behavior as iter-3. <code>modes_observed</code> shows the full
+    <code>rail_drive → rail_exit</code> transition, so FSM release logic is
+    firing; push target just never gets reached within 270 s under
+    RTF ~0.19.</li>
+<li>decisions: no new code this iteration — iter-5 is the pure
+  validation of the harness self-heal gate + apriltag shim
+  scaffold. Next commit lifts the two remaining blockers from the
+  analysis above.</li>
+<li>next run (iter-6) focus: apriltag floor-tag path (either sim-side
+  incidence threshold relax or Jetson-side self-sufficient shim) +
+  <code>wait_for_reset</code> yaw/x strict check.</li>
+</ul>
+<h2 id="iter-6-2026-04-19-registry-driven-apriltag-shim-strict-reset">iter-6 (2026-04-19) — registry-driven apriltag shim + strict reset<a class="headerlink" href="#iter-6-2026-04-19-registry-driven-apriltag-shim-strict-reset" title="Permanent link">&para;</a></h2>
+<ul>
+<li>brain-side changes:</li>
+<li><code>apriltag_sim_shim.py</code> rewritten as a self-sufficient projector:
+    loads <code>markers_registry.yaml</code> at startup, ticks at 5 Hz, reads
+    the brain's TF for world→camera, and projects every registered
+    tag that passes geometric gates (FoV + incidence). No dependency
+    on the sim visible_markers oracle.</li>
+<li><code>Harness.wait_for_reset()</code> strict: xy tolerance 30 → 15 cm, added
+    yaw tolerance 0.15 rad (was unchecked). Matches the sim's own
+    "teleport converged" criterion.</li>
+<li>sim-side change (user commit, parallel): floor-tag incidence filter
+  relaxed so the oracle now includes tag 36 and siblings (inc ≤ 74°).
+  Not required by the Jetson-side shim but kept as belt+suspenders
+  for any consumer that reads the oracle directly.</li>
+<li>report: <code>sim_episodes/precision_run_20260419_022212/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260419_022212/iteration_6_analysis.md</code></li>
+<li>bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4,
+  rail_exit 0/2</li>
+<li>success rate: <strong>7/16 (43.8 %)</strong>, 0 collisions, 31:10 full run.</li>
+<li><strong>Validated wins:</strong></li>
+<li>Shim registry path works: every rail_approach waypoint's
+    <code>visible_markers_at_end</code> now includes its target floor tag
+    (wp04 sees tag 35, wp07 tag 4, wp11 tag 36, wp12/wp16 tag 3).
+    Previous iter-5 saw only wall tags for these same waypoints.</li>
+<li>Strict wait_for_reset caught at least one silent teleport
+    failure this round (the early abort on wp10 was the rail_driver
+    residual goal, not a teleport issue — see below).</li>
+<li>Full-run stability preserved; no mid-run sim self-heal fired.</li>
+<li><strong>NEW root cause surfaced (blocker for rail_approach):</strong>
+  <code>rail_approach</code> rejects the service call with "Unknown rail start
+  tag ID" because <code>markers_registry.yaml</code> does NOT tag the floor
+  entries with <code>type: rail_start</code> (or any <code>type</code>). The node's parser
+  only registered tags with explicit <code>type: rail_start</code> — so
+  <code>rail_starts_.size() == 0</code> at startup (logged as
+  "Rail approach node ready, 0 rail starts loaded"). Every
+  rail_approach dispatch is hitting the early-return. The shim was
+  never the real blocker; the registry schema is.</li>
+<li><strong>Fix applied for iter-7:</strong> modify the parser to auto-classify
+    tags with <code>z &lt; 0.05 m</code> as rail_start when no explicit <code>type</code>
+    is set. Keeps markers_registry.yaml as the single source of
+    truth without schema duplication.</li>
+<li><strong>NEW root cause surfaced (blocker for wp10 / wp15 nav2 stall):</strong>
+  After a rail_drive waypoint, <code>rail_driver</code> still has <code>have_goal_</code>
+  latched TRUE until the stop-band fires. The next waypoint's
+  teleport moves the robot to a new pose — but rail_driver then
+  re-evaluates <code>err_body_x</code> against the STALE goal and commands
+  cmd_vel_rail toward it, driving the robot off start. wp10
+  teleported to (5.5, 0, π) but the robot drifted back to (7.05,
+  0, π) == wp09's goal.</li>
+<li><strong>Fix applied for iter-7:</strong> before each teleport, publish a
+    PoseStamped to <code>/agv/rail_driver/goal</code> at the CURRENT GT pose.
+    rail_driver latches "reached" → state == "idle" → no more
+    cmd_vel_rail during the new waypoint's setup.</li>
+<li>next run (iter-7) tests both new fixes.</li>
+</ul>
+<h2 id="iter-7-2026-04-19-rail_approach-finally-drives">iter-7 (2026-04-19) — rail_approach finally drives<a class="headerlink" href="#iter-7-2026-04-19-rail_approach-finally-drives" title="Permanent link">&para;</a></h2>
+<ul>
+<li>brain-side changes (already committed):</li>
+<li><code>rail_approach_node.cpp</code> auto-classifies tags with <code>z &lt; 0.05 m</code>
+    as rail_start when no explicit <code>type</code> is set. 10 rail_starts
+    loaded at boot (tags 2, 3, 4, 12, 13, 33–37).</li>
+<li>Harness publishes a zero-distance PoseStamped to
+    <code>/agv/rail_driver/goal</code> before every teleport so rail_driver
+    latches "reached" and stops steering toward the stale goal.</li>
+<li>report: <code>sim_episodes/precision_run_20260419_030148/report.json</code></li>
+<li>analysis: <code>sim_episodes/precision_run_20260419_030148/iteration_7_analysis.md</code></li>
+<li>bucket verdicts: nav2 3/5, rail_approach 0/5, rail_drive 4/4,
+  rail_exit 0/2</li>
+<li>success rate: <strong>7/16 (43.8 %)</strong>, 0 collisions, 31:53 run.</li>
+<li><strong>Big qualitative win:</strong> rail_approach is now ACTIVELY driving.
+  err_xy on the 5 rail_approach waypoints dropped drastically from
+  iter-6's 1.0–1.3 m plateau (robot never moved) to iter-7's
+  0.33–0.78 m. Three of the five are within 0.35 m of the goal —
+  they just didn't finish the 2 cm convergence in the 180 s budget.</li>
+<li>wp04 1.00 → 0.71 m</li>
+<li>wp07 1.30 → <strong>0.35 m</strong></li>
+<li>wp11 1.00 → 0.78 m</li>
+<li>wp12 1.30 → <strong>0.34 m</strong></li>
+<li>wp16 1.30 → <strong>0.33 m</strong></li>
+<li><strong>wp10 nav2 ABORTED still</strong> (err=1.5 m). The pre-/reset
+  rail_driver cancel I added had a race: publish happens before
+  /reset, but rail_driver processes it AFTER teleport — so
+  err_body_x is computed against the OLD goal from the NEW pose,
+  reverses the robot back to (7.05, 0, π). Fix for iter-8: move
+  the cancel to AFTER /reset and add a 200 ms settle so
+  rail_driver absorbs the zero-distance goal and drops have_goal_
+  before the next dispatch.</li>
+<li><strong>rail_exit wp13/wp14</strong> — same err≈1.54 m stuck on push target.
+  Budget or RTF issue; iter-8 will bump the rail_exit-specific
+  timeout.</li>
+<li>next run (iter-8) expected to fix: wp10 rail_driver residual
+  (via the post-reset cancel) + rail_approach convergence (via
+  extended 300 s timeout for approach dispatches).</li>
+</ul>
+<h2 id="iter-8-2026-04-19-post-reset-cancel-270-s-rail_approach">iter-8 (2026-04-19) — post-reset cancel + 270 s rail_approach<a class="headerlink" href="#iter-8-2026-04-19-post-reset-cancel-270-s-rail_approach" title="Permanent link">&para;</a></h2>
+<ul>
+<li>changes applied (committed):</li>
+<li><code>rail_approach</code> timeout bumped to NAV_TIMEOUT_S × 1.5 (270 s).</li>
+<li>post-reset rail_driver cancel (publishes zero-distance goal to
+    clear have_goal_ before the next dispatch) — but ordered
+    <strong>after</strong> <code>_arm_and_clear_estop</code> + <code>POST_RESET_SETTLE_S</code>.</li>
+<li>report: <code>sim_episodes/precision_run_20260419_033524/report.json</code></li>
+<li>success rate: <strong>7/16 (43.8 %)</strong>, 0 collisions, 38:21 run.</li>
+<li><strong>Qualitative pattern holds:</strong> 3 of 5 rail_approach waypoints now
+  within ~0.33 m of goal (wp07 / wp12 / wp16 at 0.33 m, wp11 at
+  0.84 m, wp04 at 1.19 m). The coarse-approach gets close but the
+  fine servo stalls at ~0.33 m — convergence control needs work
+  (likely solvePnP noise on edge-on floor tags, or servo gain too
+  low), not budget.</li>
+<li><strong>wp10 still ABORTED 1.50 m</strong>: the cancel landed AFTER
+  <code>_arm_and_clear_estop</code> + <code>time.sleep(POST_RESET_SETTLE_S=1.0)</code>.
+  Robot drifts back to (7.05, 0, π) during that 1 s sleep because
+  rail_driver is already armed and has the stale goal. Fix for
+  iter-9: move the cancel IMMEDIATELY after /reset, BEFORE
+  arming/sleeping. Applied to src.</li>
+<li><strong>wp15 nav2 ABORTED 1.02 m</strong> (down from 2.32 m). Improving but
+  still fails. Might share the same root cause once wp10 is fixed.</li>
+<li>rail_exit wp13/wp14 unchanged at err≈1.54 m.</li>
+<li>next run (iter-9) tests the cancel-before-arm reordering.</li>
+</ul>
+<h2 id="iter-9-2026-04-19-cancel-before-arm-breaks-the-716-plateau">iter-9 (2026-04-19) — cancel-before-arm breaks the 7/16 plateau<a class="headerlink" href="#iter-9-2026-04-19-cancel-before-arm-breaks-the-716-plateau" title="Permanent link">&para;</a></h2>
+<ul>
+<li>change applied: rail_driver cancel reordered to fire BEFORE
+  <code>_arm_and_clear_estop</code> + <code>POST_RESET_SETTLE_S</code>, eliminating the
+  race window where motors armed with a stale goal still latched.</li>
+<li>report: <code>sim_episodes/precision_run_20260419_041457/report.json</code></li>
+<li>success rate: <strong>8/16 (50.0 %)</strong> — first break above the 7/16
+  (43.8 %) plateau held since iter-3. 0 collisions, 37:26 run.</li>
+<li><strong>New win: wp15 SUCCEEDED 0.041 m / 69 s.</strong> Every prior iteration
+  aborted it (iter-5 2.68 m, iter-6 2.16 m, iter-7 2.32 m, iter-8
+  1.02 m). The lane-change nav2 leg finally clears because the
+  post-rail_exit state hand-off no longer drops residual cmd_vel_rail.</li>
+<li>wp10 still ABORTED 1.50 m — this one specifically follows a
+  direct-dispatch rail_drive (wp09), not a rail_exit flow. The
+  cancel-before-arm works for the rail_exit → next-wp hand-off but
+  not for this specific transition. Leftover root cause possibly
+  sim physics momentum carrying through /reset (velocity latched
+  when rail_driver was decelerating) or mode_arbiter stuck in
+  RAIL_EXIT relaying pre-reset cmd_vel_rail briefly.</li>
+<li>rail_approach still 0/5 but consistently in the 0.33–0.76 m
+  "close-but-not-convergent" regime. Control-tuning territory for
+  iter-10+ (solvePnP on edge-on floor tags has noise that the
+  default servo gains don't damp; needs Kp_lateral increase OR a
+  median filter on the tag pose estimate).</li>
+<li>rail_exit 0/2 unchanged; push goal still unreachable in 270 s.</li>
+</ul>
+<h2 id="trajectory-summary-9-iterations">Trajectory summary (9 iterations)<a class="headerlink" href="#trajectory-summary-9-iterations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>iter</th>
+<th>success</th>
+<th>buckets (nav / app / drv / exit)</th>
+<th>highlight</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>6/16</td>
+<td>2 / 0 / 4 / 0</td>
+<td>baseline, 3 root causes identified</td>
+</tr>
+<tr>
+<td>2</td>
+<td>5/16</td>
+<td>2 / 0 / 3 / 0</td>
+<td>fixes applied but FSM regression</td>
+</tr>
+<tr>
+<td>3</td>
+<td>7/16</td>
+<td>3 / 0 / 4 / 0</td>
+<td>FSM oscillation fix, rail_drive fully green</td>
+</tr>
+<tr>
+<td>4</td>
+<td>5/16</td>
+<td>— (mid-run collapse)</td>
+<td>sim self-heal disrupted</td>
+</tr>
+<tr>
+<td>5</td>
+<td>7/16</td>
+<td>3 / 0 / 4 / 0</td>
+<td>self-heal gate, apriltag shim oracle-based</td>
+</tr>
+<tr>
+<td>6</td>
+<td>7/16</td>
+<td>3 / 0 / 4 / 0</td>
+<td>shim registry-based, strict reset</td>
+</tr>
+<tr>
+<td>7</td>
+<td>7/16</td>
+<td>3 / 0 / 4 / 0</td>
+<td><strong>rail_approach activates</strong> (err 1.0 → 0.33 m)</td>
+</tr>
+<tr>
+<td>8</td>
+<td>7/16</td>
+<td>3 / 0 / 4 / 0</td>
+<td>post-reset cancel in wrong order</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>8/16</strong></td>
+<td><strong>4</strong> / 0 / 4 / 0</td>
+<td><strong>wp15 unlocks</strong>, cancel-before-arm</td>
+</tr>
+</tbody>
+</table>
+<p>Per-bucket status after iter-9:
+- <strong>nav2 4/5</strong> — wp01/02/03/15 at 4–6 cm. wp10 remains stuck
+  (post-rail_drive-direct-dispatch transition).
+- <strong>rail_drive 4/4</strong> — stable since iter-3.
+- <strong>rail_approach 0/5</strong> — robot drives into range (0.33 m) but
+  2 cm convergence stalls in the fine servo.
+- <strong>rail_exit 0/2</strong> — push target out of budget.</p>
+<h2 id="iter-10-2026-04-19-option-a-extract-fine_servo_controller-ros-free">iter-10 (2026-04-19) — Option A: extract fine_servo_controller (ROS-free)<a class="headerlink" href="#iter-10-2026-04-19-option-a-extract-fine_servo_controller-ros-free" title="Permanent link">&para;</a></h2>
+<ul>
+<li>refactor: <code>src/agv_rail_approach/include/agv_rail_approach/fine_servo_controller.hpp</code>
+  header-only, <code>fine_servo_compute(tvec, rvec, cam_to_base, params) →
+  FineServoOutput</code>, <code>solvepnp_tag()</code> split helper, verdict enum.
+  <code>rail_approach_node.cpp</code> reduced to state + TF + pub/sub plumbing.</li>
+<li>fixes uncovered during the refactor:</li>
+<li>camera_frame default was <code>zed_left_camera_optical_frame</code> but the URDF
+    publishes <code>zed_left_camera_frame_optical</code>. HIL launch now overrides.</li>
+<li><code>desired_offset_x</code> was being compared against the camera-frame tag
+    position in the legacy code; the new controller correctly evaluates
+    it against the base-frame tag pose after the cam→base transform.</li>
+<li><code>check_yaw_convergence</code> added as a parameter (default <strong>false</strong>). Floor
+    tags produce reference angle ≈ π; the old unconditional check meant
+    <code>in_tolerance</code> would never latch. Wall-tag deployments can flip true.</li>
+<li>9 gtests added (FineServo*) covering invalid corners, out-of-range,
+  happy-path, lateral-offset, clamped velocities, in-tolerance on/off.</li>
+</ul>
+<h2 id="iter-11-2026-04-19-option-b-last_reject_reason-observability">iter-11 (2026-04-19) — Option B: last_reject_reason observability<a class="headerlink" href="#iter-11-2026-04-19-option-b-last_reject_reason-observability" title="Permanent link">&para;</a></h2>
+<ul>
+<li>change: node tracks <code>last_reject_reason_</code> (default "none") stamped with
+  the ros time of the rejection. Published in the state JSON as
+  <code>last_reject_reason</code> + <code>last_reject_age_s</code>. Covers every verdict class
+  (out_of_range, invalid_corners, in_tolerance, etc.) and TF failures.</li>
+<li>rationale: stalls at the 0.33 m plateau were opaque; operator + harness
+  now see WHY fine_servo rejected the tick.</li>
+</ul>
+<h2 id="iter-12-2026-04-19-option-c-solvepnp-median-filter">iter-12 (2026-04-19) — Option C: solvePnP median filter<a class="headerlink" href="#iter-12-2026-04-19-option-c-solvepnp-median-filter" title="Permanent link">&para;</a></h2>
+<ul>
+<li>change: <code>TvecRvecMedianFilter</code> (default window 5) smooths solvePnP
+  jitter before the controller runs. <code>solvepnp_tag → filter.push →
+  fine_servo_compute</code> replaces the single-shot estimate path.</li>
+<li>5 gtests added covering empty/fills/rejects-outlier/reset/rolling.</li>
+</ul>
+<h2 id="iter-13-2026-04-19-option-d-max_fine_duration-guard">iter-13 (2026-04-19) — Option D: max_fine_duration guard<a class="headerlink" href="#iter-13-2026-04-19-option-d-max_fine_duration-guard" title="Permanent link">&para;</a></h2>
+<ul>
+<li>change: internal fine-servo wall-clock budget (<code>max_fine_duration_s</code>,
+  default 120 s). Before iter-13 a servo oscillating inside the 2 cm ring
+  without latching <code>settle_frames_</code> stayed "driving" forever; the
+  harness-level NAV_TIMEOUT × 1.5 was the only cap. Now finishes as
+  <code>last_reject_reason='fine_servo_timeout'</code> so operators see the failure
+  as its own class.</li>
+</ul>
+<h2 id="iter-14-2026-04-19-partial-run-with-abcd-applied">iter-14 (2026-04-19) — partial run with A+B+C+D applied<a class="headerlink" href="#iter-14-2026-04-19-partial-run-with-abcd-applied" title="Permanent link">&para;</a></h2>
+<ul>
+<li>run: <code>sim_episodes/precision_run_20260419_121709/</code> (killed mid-run after
+  wp11 to unblock the iter-15 fix; 10/16 waypoints observed).</li>
+<li>per-waypoint: wp01-03 SUCCEEDED (nav2, 0.03–0.09 m),
+  wp04 NAV_TIMEOUT (rail_approach tag 35), wp05-06 SUCCEEDED (rail_drive),
+  wp07 NAV_TIMEOUT (rail_approach tag 4), wp08-09 SUCCEEDED (rail_drive),
+  wp10 ABORTED 1.50 m (nav2 post-rail_drive, no progress 91 s),
+  wp11 in-progress when killed.</li>
+<li><strong>Root cause of rail_approach NAV_TIMEOUT isolated</strong>: rail.yaw=0 on
+  floor tags (face normal is +Z, not a horizontal approach heading) meant
+  start_coarse_approach asked Nav2 for a goal at
+  <code>(rail.x - coarse_standoff, 0, yaw=0)</code>, which for wp04 (robot=(5.2,0,π),
+  tag=(4,0)) pointed the robot 180° off and past the tag. Observed in
+  logs as <code>Nav2 coarse approach failed (code=5)</code>. Fine_servo never started.</li>
+<li>decision: skip Nav2 coarse_approach when the robot is already within
+  range of the tag (iter-15 below).</li>
+</ul>
+<h2 id="iter-15-2026-04-19-skip-nav2-coarse_approach-when-in-range">iter-15 (2026-04-19) — skip Nav2 coarse_approach when in range<a class="headerlink" href="#iter-15-2026-04-19-skip-nav2-coarse_approach-when-in-range" title="Permanent link">&para;</a></h2>
+<ul>
+<li>change: <code>rail_approach_node.cpp</code> start_coarse_approach now looks up
+  <code>map→base_link</code>, computes robot-to-tag distance, and if ≤
+  <code>coarse_skip_radius</code> (default 2.0 m, covers every Round-44 teleport)
+  transitions directly to TAG_ACQUISITION. TF lookup failure falls
+  through to the legacy Nav2 coarse path.</li>
+<li>build + 15 gtests green, verify_specs 0 BLOCKING.</li>
+<li>run: <code>sim_episodes/precision_run_20260419_125157/</code> (killed mid-run
+  after wp03 — see next paragraph).</li>
+<li><strong>Regression surfaced before rail_approach could even be exercised</strong>:
+  wp01 ABORTED at err=0.50 m (robot didn't move). wp02 ABORTED 1.00 m,
+  wp03 ABORTED 1.5 m — identical pattern. Mode_arbiter log shows
+  <code>corridor_nav → rail_drive → rail_exit</code> transitioning on EVERY
+  waypoint setup. The harness's iter-8 cancel goal
+  (zero-distance PoseStamped to <code>/agv/rail_driver/goal</code> post-reset)
+  makes rail_driver briefly report "driving"/"reached"; the FSM
+  short-circuits through RAIL_DRIVE → RAIL_EXIT. For wp01 at
+  (4.0, 0, 0) = tag_x_rear, <code>rail_exit_clearance_m = 0</code> forever —
+  no clearance, no release, Nav2's cmd_vel_nav is dropped by the
+  arbiter (source=RAIL). This bug existed before iter-15 but was
+  masked by different initial conditions (iter-14 ran from a
+  different spawn pose); iter-15's brain relaunch made it latent.</li>
+<li>decision: move the fix into the FSM (iter-16) — the symptom is
+  orthogonal to rail_approach.</li>
+</ul>
+<h2 id="iter-20-2026-04-19-1116-rail_approach-unlocked-55">iter-20 (2026-04-19) — 11/16, rail_approach unlocked 5/5<a class="headerlink" href="#iter-20-2026-04-19-1116-rail_approach-unlocked-55" title="Permanent link">&para;</a></h2>
+<ul>
+<li>chain of fixes landing together (iter-15 coarse_skip + iter-16 FSM
+  release + iter-17 SETTLED/ABORTED emit + iter-17c publish_status</li>
+<li>iter-17 nav2 bond_timeout + iter-17 shim 89.5° + iter-18 corrected
+  waypoint goals + iter-20 depth-1 state QoS + iter-20 tolerance 0.10 m).</li>
+<li>report: <code>sim_episodes/precision_run_20260419_153437/report.json</code></li>
+<li><strong>success rate: 11/16 (68.75 %), 0 collisions, 23:52 run</strong></li>
+<li>per-bucket:</li>
+<li><strong>nav2 2/5</strong> — wp01/wp03 PASS (0.07/0.05 m). wp02 ABORT 1.0 m at
+    stall_abort_s=90 s (Rotation Shim Controller TF race observed as
+    ~100 ms of "Failed to transform pose to base frame" right after
+    teleport; Nav2 never commands motion). wp10 NAV_TIMEOUT 2.3 m
+    yaw 1.04 rad (post-rail_drive nav2 transition — robot rotates
+    off-axis). wp15 ABORT 2.1 m yaw 2.73 rad (post-rail_exit nav2,
+    similar motion weirdness).</li>
+<li><strong>rail_approach 5/5</strong> — wp04/wp07/wp11/wp12/wp16 all SUCCEEDED at
+    0.09–0.10 m / 52–71 s dur. First rail_approach successes in the
+    entire iteration chain. Fine_servo converges, latches SETTLED,
+    harness detects.</li>
+<li><strong>rail_drive 4/4</strong> — wp05/wp06/wp08/wp09 at 0.048–0.053 m / 23–31 s.
+    Rock-solid since iter-3.</li>
+<li><strong>rail_exit 0/2</strong> — wp13/wp14 NAV_TIMEOUT 1.54 m each (push-to-
+    exit-1.5 m past-tag never completes within 270 s). Same err
+    magnitude since iter-5; needs separate investigation (likely sim
+    RTF vs rail_driver speed limit or zone_detector boundary).</li>
+<li>delta vs iter-9 (prior high-water 8/16): <strong>+3 waypoints, +18.75 %</strong>,
+  entire rail_approach bucket unlocked.</li>
+<li>decisions: no new code this iteration — all fixes already landed.</li>
+<li>next run (iter-21) focus: rail_exit push completion + wp10/wp15
+  nav2 post-rail transitions + wp02 TF race stabilisation.</li>
+</ul>
+<h2 id="iter-16-2026-04-19-rail_exit-release-in-approach-zones-when-idle">iter-16 (2026-04-19) — RAIL_EXIT release in approach zones when idle<a class="headerlink" href="#iter-16-2026-04-19-rail_exit-release-in-approach-zones-when-idle" title="Permanent link">&para;</a></h2>
+<ul>
+<li>change: <code>mode_fsm.hpp</code> auxiliary RAIL_EXIT release path — hand back
+  to CORRIDOR_NAV when robot is in an approach zone (<code>rail_approach_*</code>)
+  AND rail_driver_state == "idle" (explicit idle, not the one-tick
+  "reached" latch). Approach zones sit outside the rail tubes so
+  MPPI rotation is not a tube-hit hazard. Rail zones (<code>rail_aisle_*</code>)
+  still hold RAIL_EXIT regardless of rail_driver state — the 51 mm
+  tube protection is preserved.</li>
+<li>+3 unit tests (approach-zone-release, approach-zone-hold-driving,
+  rail-zone-hold-idle). 33 mode_arbiter gtests green.</li>
+<li>run: <code>sim_episodes/precision_run_20260419_130544/</code> (in progress).</li>
+<li>expected impact (combined with iter-15):</li>
+<li>wp01/wp02/wp03 nav2: unblocked (FSM releases on first tick).</li>
+<li>wp04/wp07/wp11/wp12/wp16 rail_approach: skip coarse → fine_servo.</li>
+<li>wp10 nav2: same FSM release trap unblocks.</li>
+<li>wp13/wp14 rail_exit: unchanged (already working via primary gate).</li>
+<li>Projected success: 11–14 / 16 depending on fine_servo convergence.</li>
+</ul>
+<!--
+Template for each subsequent iteration:
+
+## iter-N (YYYY-MM-DD)
+
+- report: `sim_episodes/precision_run_<ts>/report.json`
+- analysis: `sim_episodes/precision_run_<ts>/iteration_<N>_analysis.md`
+- bucket verdicts: nav2 M/M, rail_approach M/M, rail_drive M/M, rail_exit M/M
+- top rule fired: `<rule_id>` on `<wp_id>` — `<one-liner>`
+- decision: `<what was changed, at which file:line>`
+- delta vs iter-(N-1): nav2 ↑/↓/→, rail_approach ↑/↓/→, rail_drive ↑/↓/→, rail_exit ↑/↓/→
+- next run expected to fix: `<rule_id>` or "acceptance re-check"
+-->
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

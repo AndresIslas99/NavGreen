@@ -1,0 +1,2270 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/architectural_gaps/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architectural Gaps and Adoption Roadmap - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architectural-gaps-and-adoption-roadmap" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architectural Gaps and Adoption Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../validation/RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gap-1-ros2_control-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gap 1 — ros2_control migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gap 1 — ros2_control migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adoption-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risk-if-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk if deferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gap-2-agv_safety-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gap 2 — agv_safety package
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gap 2 — agv_safety package">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-state_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-state_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-matters_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adoption-cost_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risk-if-deferred_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk if deferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gap-3-centralized-configuration-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gap 3 — Centralized configuration layout
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gap 3 — Centralized configuration layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-state_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-state_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-matters_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adoption-cost_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risk-if-deferred_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk if deferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gap-4-per-package-launch_testing-and-coverage-parity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gap 4 — Per-package launch_testing and coverage parity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gap 4 — Per-package launch_testing and coverage parity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-state_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-state_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-matters_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adoption-cost_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risk-if-deferred_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk if deferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gap-5-perception-composable-container-nitros" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gap 5 — Perception composable container (NITROS)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gap 5 — Perception composable container (NITROS)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-state_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-state_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-matters_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adoption-cost_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risk-if-deferred_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk if deferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gap-6-interfacesyaml-change-governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gap 6 — interfaces.yaml change governance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gap 6 — interfaces.yaml change governance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-state_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-state_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-matters_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adoption-cost_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risk-if-deferred_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk if deferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adoption-priority-and-sequencing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adoption priority and sequencing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope-for-this-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope for this document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-patches-against-vendored-third-party-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local patches against vendored third-party packages
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Local patches against vendored third-party packages">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lp-1-zed-ros2-wrapper-area-memory-save-added-2026-04-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LP-1 — zed-ros2-wrapper Area Memory save (added 2026-04-12)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/architectural_gaps.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="architectural-gaps-and-adoption-roadmap">Architectural Gaps and Adoption Roadmap<a class="headerlink" href="#architectural-gaps-and-adoption-roadmap" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>This is a planning document, not a spec.</strong> Binding decisions live in <a href="../specs/">specs/</a> and <a href="../policies/engineering_rules.md">policies/engineering_rules.md</a>. This file describes where the workspace structure should evolve and in what order. It does not override <a href="../CLAUDE.md">CLAUDE.md</a> or any TASK.yaml.</p>
+</blockquote>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Verified</strong>: 2026-04-11</li>
+<li><strong>Against commit</strong>: <code>a8180b7</code> (main)</li>
+<li><strong>Verified by</strong>: direct grep / file reads on the working tree (see each gap for the exact check).</li>
+</ul>
+<p>The current system topology is captured in <a href="../architecture/">docs/architecture.md</a>. Per-package build and test status is in <a href="../production_readiness_assessment/">docs/production_readiness_assessment.md</a>. This document is the forward-looking complement to those two — what is missing and how to close it.</p>
+<hr />
+<h2 id="gap-1-ros2_control-migration">Gap 1 — ros2_control migration<a class="headerlink" href="#gap-1-ros2_control-migration" title="Permanent link">&para;</a></h2>
+<h3 id="current-state">Current state<a class="headerlink" href="#current-state" title="Permanent link">&para;</a></h3>
+<p><a href="../src/agv_odrive/">src/agv_odrive/</a> is a standalone ROS2 node that talks to the ODrive over CAN, publishes wheel odometry, and subscribes to <code>/cmd_vel</code>. There are zero references to <code>ros2_control</code>, <code>controller_manager</code>, or <code>hardware_interface</code> in any <code>package.xml</code> under <a href="../src/">src/</a> (verified via grep against <code>src/**/package.xml</code>).</p>
+<h3 id="target-state">Target state<a class="headerlink" href="#target-state" title="Permanent link">&para;</a></h3>
+<p>Wrap the existing CAN code as a <code>hardware_interface::SystemInterface</code> plugin loaded by <code>controller_manager</code>. Use <code>diff_drive_controller</code> from <code>ros2_controllers</code> for kinematics and odometry. Add a <code>mock_components/GenericSystem</code> configuration so navigation and behaviors can run end-to-end without the physical robot.</p>
+<h3 id="why-it-matters">Why it matters<a class="headerlink" href="#why-it-matters" title="Permanent link">&para;</a></h3>
+<p>Without <code>ros2_control</code>, anyone working on navigation, behaviors, or the dashboard either needs the real robot or has to mock topics by hand. Both block parallel development. <code>mock_components</code> is a free deliverable of the migration — no extra code needed.</p>
+<h3 id="adoption-cost">Adoption cost<a class="headerlink" href="#adoption-cost" title="Permanent link">&para;</a></h3>
+<p>Several days. Touches <a href="../src/agv_odrive/">src/agv_odrive/</a>, <a href="../src/agv_description/">src/agv_description/</a> (URDF needs <code>&lt;ros2_control&gt;</code> blocks), and <a href="../src/agv_bringup/">src/agv_bringup/</a> (launch + controller config). The CAN code itself is wrapped, not rewritten — <code>read()</code> and <code>write()</code> become method bodies on the plugin class.</p>
+<h3 id="risk-if-deferred">Risk if deferred<a class="headerlink" href="#risk-if-deferred" title="Permanent link">&para;</a></h3>
+<p>Development velocity stays bottlenecked on hardware availability. Every new contributor has to learn the bespoke topic shape of <code>agv_odrive</code> instead of the standard <code>diff_drive_controller</code> interface.</p>
+<hr />
+<h2 id="gap-2-agv_safety-package">Gap 2 — agv_safety package<a class="headerlink" href="#gap-2-agv_safety-package" title="Permanent link">&para;</a></h2>
+<h3 id="current-state_1">Current state<a class="headerlink" href="#current-state_1" title="Permanent link">&para;</a></h3>
+<p>No <code>src/agv_safety/</code> directory exists (verified via glob). Collision monitoring lives only as a Nav2 component configured in <a href="../src/agv_navigation/config/collision_monitor.yaml">src/agv_navigation/config/collision_monitor.yaml</a>. There is no central supervisor for node heartbeats, software E-stop arbitration, velocity limiting, or ODrive thermal monitoring.</p>
+<h3 id="target-state_1">Target state<a class="headerlink" href="#target-state_1" title="Permanent link">&para;</a></h3>
+<p>A new package <code>agv_safety</code> containing:
+- A <code>SafetyStatus.msg</code> in <a href="../src/agv_interfaces/">src/agv_interfaces/</a> (or in <code>agv_safety/msg/</code> if the team prefers per-package messages).
+- A C++17 <code>safety_supervisor</code> node that monitors deadline QoS on critical topics, aggregates per-node heartbeats, and publishes a single <code>safety_ok</code> boolean plus a structured status.
+- A <code>cmd_vel</code> mux/gate node that only forwards velocity commands when <code>safety_ok</code> is true.
+- Zero internal dependencies beyond <code>agv_interfaces</code>.</p>
+<p>This complements but does <strong>not</strong> replace the operational guardrails listed in <a href="../policies/engineering_rules.md">Rule 6 of policies/engineering_rules.md</a>. Software safety remains operational only — certified functional safety stays out of scope.</p>
+<h3 id="why-it-matters_1">Why it matters<a class="headerlink" href="#why-it-matters_1" title="Permanent link">&para;</a></h3>
+<p>Greenhouse operation in Mexico places the AGV near workers. Even without certified hardware safety, a software supervisor that forces a stop when any critical node goes silent is a baseline operational requirement. Today, if <code>agv_sensor_fusion</code> crashes mid-run, nothing forces the motors to stop until Nav2's collision monitor reacts to a downstream symptom.</p>
+<h3 id="adoption-cost_1">Adoption cost<a class="headerlink" href="#adoption-cost_1" title="Permanent link">&para;</a></h3>
+<p>A stub (empty package + msg + node skeleton + launch_testing) is half a day. The full supervisor with deadline-QoS wiring and a real velocity gate is a few days, partly because it has to be integrated into <a href="../src/agv_bringup/launch/agv_full.launch.py">src/agv_bringup/launch/agv_full.launch.py</a> before any other node can publish to <code>/cmd_vel</code>.</p>
+<h3 id="risk-if-deferred_1">Risk if deferred<a class="headerlink" href="#risk-if-deferred_1" title="Permanent link">&para;</a></h3>
+<p>A single-node failure in the perception or fusion stack does not automatically translate into a stop command. The current Nav2 collision monitor catches some failure modes but is not a watchdog over the rest of the pipeline.</p>
+<hr />
+<h2 id="gap-3-centralized-configuration-layout">Gap 3 — Centralized configuration layout<a class="headerlink" href="#gap-3-centralized-configuration-layout" title="Permanent link">&para;</a></h2>
+<h3 id="current-state_2">Current state<a class="headerlink" href="#current-state_2" title="Permanent link">&para;</a></h3>
+<p><a href="../src/agv_bringup/config/">src/agv_bringup/config/</a> exists but contains only four files: <code>cuvslam_greenhouse.yaml</code>, <code>cuvslam_no_tf.yaml</code>, <code>cyclonedds_hil.xml</code>, <code>cyclonedds_production.xml</code>. The rest of YAML configuration lives inside individual packages (<code>agv_navigation/config/</code>, <code>agv_sensor_fusion/config/</code>, etc.). There is no Clearpath-style <code>common/ robot/ greenhouse/ simulation/</code> hierarchy.</p>
+<h3 id="target-state_2">Target state<a class="headerlink" href="#target-state_2" title="Permanent link">&para;</a></h3>
+<p>Move (or symlink, then migrate) shared YAML into a centralized layout under <code>agv_bringup/config/</code>:</p>
+<div class="highlight"><pre><span></span><code>src/agv_bringup/config/
+  common/         # parameters shared across deployments
+  robot/          # this AGV&#39;s physical config
+  greenhouse/     # site-specific (example/, future sites)
+  simulation/     # sim-only overrides
+  hil/            # hardware-in-the-loop overrides
+</code></pre></div>
+<p>A launch argument <code>site:=&lt;name&gt;</code> (default <code>example</code>) selects which <code>greenhouse/&lt;name&gt;/</code> overlay to merge on top of <code>common/</code> and <code>robot/</code>. Per-package configs still exist for things that are genuinely package-internal — the goal is centralization of <em>deployment</em> parameters, not all parameters.</p>
+<h3 id="why-it-matters_2">Why it matters<a class="headerlink" href="#why-it-matters_2" title="Permanent link">&para;</a></h3>
+<p>Deploying to a second greenhouse currently requires editing YAML files inside multiple packages. With the overlay layout, an integrator changes a single launch argument. This is also the precondition for any future multi-site deployment.</p>
+<h3 id="adoption-cost_2">Adoption cost<a class="headerlink" href="#adoption-cost_2" title="Permanent link">&para;</a></h3>
+<p>One afternoon, organizational only. Risk is mostly that a launch file misses an updated path during the move — easy to catch with <code>colcon test</code> and a smoke run.</p>
+<h3 id="risk-if-deferred_2">Risk if deferred<a class="headerlink" href="#risk-if-deferred_2" title="Permanent link">&para;</a></h3>
+<p>Each new site or robot variant duplicates YAML across packages, and drift between packages becomes inevitable.</p>
+<hr />
+<h2 id="gap-4-per-package-launch_testing-and-coverage-parity">Gap 4 — Per-package launch_testing and coverage parity<a class="headerlink" href="#gap-4-per-package-launch_testing-and-coverage-parity" title="Permanent link">&para;</a></h2>
+<h3 id="current-state_3">Current state<a class="headerlink" href="#current-state_3" title="Permanent link">&para;</a></h3>
+<p><strong>This gap was reformulated during verification.</strong> Unit tests already exist across nine packages (verified via glob <code>src/*/test/test_*.cpp</code>):</p>
+<ul>
+<li><a href="../src/agv_odrive/test/test_kinematics.cpp">src/agv_odrive/test/test_kinematics.cpp</a>, <a href="../src/agv_odrive/test/test_odom_integration.cpp">test_odom_integration.cpp</a></li>
+<li><a href="../src/agv_slam/test/test_slam_monitor_node.cpp">src/agv_slam/test/test_slam_monitor_node.cpp</a>, <a href="../src/agv_slam/test/test_rate_tracker.cpp">test_rate_tracker.cpp</a>, <a href="../src/agv_slam/test/test_tegrastats_parser.cpp">test_tegrastats_parser.cpp</a></li>
+<li><a href="../src/agv_map_manager/test/test_zone_persistence.cpp">src/agv_map_manager/test/test_zone_persistence.cpp</a></li>
+<li><a href="../src/agv_waypoint_manager/test/test_mission_persistence.cpp">src/agv_waypoint_manager/test/test_mission_persistence.cpp</a></li>
+<li><a href="../src/agv_markers/test/test_marker_lookup.cpp">src/agv_markers/test/test_marker_lookup.cpp</a></li>
+<li><a href="../src/agv_behaviors/test/test_bt_loading.cpp">src/agv_behaviors/test/test_bt_loading.cpp</a></li>
+<li><a href="../src/agv_scan_mapper/test/test_grid_math.cpp">src/agv_scan_mapper/test/test_grid_math.cpp</a></li>
+<li><a href="../src/agv_sensor_fusion/test/test_sensor_health.cpp">src/agv_sensor_fusion/test/test_sensor_health.cpp</a></li>
+<li><a href="../src/agv_image_server/test/test_image_pipeline.cpp">src/agv_image_server/test/test_image_pipeline.cpp</a></li>
+</ul>
+<p>The unit-test layer is real and not the gap. The actual gaps are:</p>
+<ol>
+<li><strong>Coverage is uneven</strong> — some packages test pure kinematics thoroughly, others have one smoke test.</li>
+<li><strong>No <code>launch_testing</code> per package</strong> — there is no <code>&lt;package&gt;/test/launch/test_&lt;name&gt;.launch.py</code> pattern. Integration coverage is concentrated in <a href="../src/agv_integration_tests/">src/agv_integration_tests/</a> at the system level only, which means a single broken node fails an opaque end-to-end test instead of a targeted package-level test.</li>
+</ol>
+<h3 id="target-state_3">Target state<a class="headerlink" href="#target-state_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Each package adds one <code>launch_testing</code> test that brings up just that package's nodes (with <code>mock_components</code> from Gap 1, where applicable) and asserts on its public topics/services.</li>
+<li>Coverage parity is enforced by adding a test count to the <a href="../production_readiness_assessment/">docs/production_readiness_assessment.md</a> matrix and reviewing it during package work.</li>
+<li><a href="../src/agv_integration_tests/">src/agv_integration_tests/</a> stays for true end-to-end flows.</li>
+</ul>
+<h3 id="why-it-matters_3">Why it matters<a class="headerlink" href="#why-it-matters_3" title="Permanent link">&para;</a></h3>
+<p>A developer touching one package can run their tests in seconds without launching the full stack. End-to-end tests stay valuable but stop being the only signal.</p>
+<h3 id="adoption-cost_3">Adoption cost<a class="headerlink" href="#adoption-cost_3" title="Permanent link">&para;</a></h3>
+<p>Adopt gradually as packages are touched, not as one big PR. Each package is one to two hours of <code>launch_testing</code> boilerplate plus a couple of assertions.</p>
+<h3 id="risk-if-deferred_3">Risk if deferred<a class="headerlink" href="#risk-if-deferred_3" title="Permanent link">&para;</a></h3>
+<p>The feedback loop stays slow for solo package work, and end-to-end test failures keep being hard to localize.</p>
+<hr />
+<h2 id="gap-5-perception-composable-container-nitros">Gap 5 — Perception composable container (NITROS)<a class="headerlink" href="#gap-5-perception-composable-container-nitros" title="Permanent link">&para;</a></h2>
+<h3 id="current-state_4">Current state<a class="headerlink" href="#current-state_4" title="Permanent link">&para;</a></h3>
+<p><a href="../src/agv_bringup/launch/agv_full.launch.py">src/agv_bringup/launch/agv_full.launch.py</a> contains zero references to <code>ComposableNode</code>, <code>composable_node</code>, or <code>container</code> (verified via grep). cuVSLAM, <code>pointcloud_to_laserscan</code>, and <code>agv_image_server</code> all run as separate processes. On the AGX Orin this means GPU-to-GPU data is being copied through normal ROS2 transport instead of zero-copy via Isaac ROS NITROS.</p>
+<h3 id="target-state_4">Target state<a class="headerlink" href="#target-state_4" title="Permanent link">&para;</a></h3>
+<p>Group the GPU-bound perception nodes (cuVSLAM, image processing, any future crop-detection DNN) into a single <code>ComposableNodeContainer</code> declared in a new <code>perception.launch.py</code>. Split <a href="../src/agv_bringup/launch/agv_full.launch.py">agv_full.launch.py</a> into three top-level launch files orchestrated by a single bringup file:</p>
+<ul>
+<li><code>hardware.launch.py</code> — motors and direct sensors</li>
+<li><code>perception.launch.py</code> — the composable container</li>
+<li><code>navigation.launch.py</code> — Nav2 stack</li>
+</ul>
+<p>This is a launch-file change. <strong>No source code is rewritten.</strong></p>
+<h3 id="why-it-matters_4">Why it matters<a class="headerlink" href="#why-it-matters_4" title="Permanent link">&para;</a></h3>
+<p>On a Jetson, separating perception nodes into discrete processes leaves zero-copy GPU performance on the table. NITROS-style composition is the standard Isaac ROS pattern and is what the AGX Orin was chosen to enable.</p>
+<h3 id="adoption-cost_4">Adoption cost<a class="headerlink" href="#adoption-cost_4" title="Permanent link">&para;</a></h3>
+<p>Half a day to a day. Risk is low because nodes that are designed as components can be loaded into a container without code changes; the only failure mode is finding a node that was not built as a component, in which case it stays a process.</p>
+<h3 id="risk-if-deferred_4">Risk if deferred<a class="headerlink" href="#risk-if-deferred_4" title="Permanent link">&para;</a></h3>
+<p>Perception latency and GPU memory traffic stay higher than necessary. This is invisible until the system is stressed under real greenhouse field conditions, at which point it is harder to diagnose.</p>
+<hr />
+<h2 id="gap-6-interfacesyaml-change-governance">Gap 6 — interfaces.yaml change governance<a class="headerlink" href="#gap-6-interfacesyaml-change-governance" title="Permanent link">&para;</a></h2>
+<h3 id="current-state_5">Current state<a class="headerlink" href="#current-state_5" title="Permanent link">&para;</a></h3>
+<p><a href="../specs/interfaces.yaml">specs/interfaces.yaml</a> is the canonical contract for TF frames, topics, services, and message rates. <a href="../policies/engineering_rules.md">policies/engineering_rules.md</a> has eight rules but <strong>none of them mentions <code>interfaces.yaml</code></strong> or how changes to it should be reviewed. The contract exists; the change process does not.</p>
+<h3 id="target-state_5">Target state<a class="headerlink" href="#target-state_5" title="Permanent link">&para;</a></h3>
+<p>Add a new rule (Rule 9) to <a href="../policies/engineering_rules.md">policies/engineering_rules.md</a>:</p>
+<blockquote>
+<p><strong>Rule 9 — Interface change governance.</strong> Any change to <a href="../specs/interfaces.yaml">specs/interfaces.yaml</a> requires review by every team that consumes or produces the affected topic, service, or frame. The PR description must list which packages depend on the change and why the new shape is necessary. Bump the version field at the top of <code>interfaces.yaml</code> on every merge.</p>
+</blockquote>
+<p>This is a process change, not a code change. It is a separate small PR — not part of this roadmap doc.</p>
+<h3 id="why-it-matters_5">Why it matters<a class="headerlink" href="#why-it-matters_5" title="Permanent link">&para;</a></h3>
+<p>Today there is no friction against silently changing a topic name or rate, which would break consumers in other packages. The contract is only useful if changes to it are visible to the people who depend on it.</p>
+<h3 id="adoption-cost_5">Adoption cost<a class="headerlink" href="#adoption-cost_5" title="Permanent link">&para;</a></h3>
+<p>One small PR to <code>engineering_rules.md</code>.</p>
+<h3 id="risk-if-deferred_5">Risk if deferred<a class="headerlink" href="#risk-if-deferred_5" title="Permanent link">&para;</a></h3>
+<p>Drift between <a href="../specs/interfaces.yaml">specs/interfaces.yaml</a> and actual runtime behavior, with no mechanism to catch it at review time.</p>
+<hr />
+<h2 id="adoption-priority-and-sequencing">Adoption priority and sequencing<a class="headerlink" href="#adoption-priority-and-sequencing" title="Permanent link">&para;</a></h2>
+<p>Ordered by impact-vs-cost. This ordering matches the user's analysis on 2026-04-11.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Gap</th>
+<th>Impact</th>
+<th>Cost</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>ros2_control migration</td>
+<td>High — unblocks parallel development</td>
+<td>Several days</td>
+<td>Before next major navigation work</td>
+</tr>
+<tr>
+<td>2</td>
+<td>agv_safety package</td>
+<td>High — production prerequisite</td>
+<td>Half day stub, days for full</td>
+<td>Before first greenhouse field visit with personnel present</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Config centralization</td>
+<td>Medium — unblocks multi-site</td>
+<td>One afternoon</td>
+<td>Anytime; low risk</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Perception composable container</td>
+<td>Medium — GPU performance</td>
+<td>Half day to a day</td>
+<td>After Gap 1 (so the container also covers any new perception controllers)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Per-package launch_testing</td>
+<td>Medium — developer velocity</td>
+<td>Gradual</td>
+<td>Adopt as packages are touched</td>
+</tr>
+<tr>
+<td>6</td>
+<td>interfaces.yaml governance</td>
+<td>Low effort, important</td>
+<td>One PR</td>
+<td>Anytime</td>
+</tr>
+</tbody>
+</table>
+<p>Gaps 3 and 6 can be done immediately and independently. Gaps 1, 2, 4 each warrant their own plan file before implementation. Gap 5 is a habit, not a project.</p>
+<hr />
+<h2 id="out-of-scope-for-this-document">Out of scope for this document<a class="headerlink" href="#out-of-scope-for-this-document" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Implementing any of the six gaps. Each becomes its own future task with its own plan.</li>
+<li>Modifying <a href="../policies/engineering_rules.md">policies/engineering_rules.md</a> to add Rule 9. That is the separate PR described in Gap 6.</li>
+<li>Updating <a href="../CLAUDE.md">CLAUDE.md</a>'s canonical source order. This document is a downstream reference, not a source of authority.</li>
+<li>Touching anything under <a href="../src/">src/</a>.</li>
+</ul>
+<hr />
+<h2 id="local-patches-against-vendored-third-party-packages">Local patches against vendored third-party packages<a class="headerlink" href="#local-patches-against-vendored-third-party-packages" title="Permanent link">&para;</a></h2>
+<p>Track every modification we make to upstream code that lives under <a href="../src/">src/</a> but is <em>not</em> ours. Each entry must list the files touched, the rationale, and the upstream-reporting status so a future <code>git pull</code> of the vendor source can be reconciled.</p>
+<h3 id="lp-1-zed-ros2-wrapper-area-memory-save-added-2026-04-12">LP-1 — zed-ros2-wrapper Area Memory save (added 2026-04-12)<a class="headerlink" href="#lp-1-zed-ros2-wrapper-area-memory-save-added-2026-04-12" title="Permanent link">&para;</a></h3>
+<p><strong>Vendor</strong>: <a href="https://github.com/stereolabs/zed-ros2-wrapper">stereolabs/zed-ros2-wrapper</a> at <a href="../src/zed-ros2-wrapper/">src/zed-ros2-wrapper/</a></p>
+<p><strong>Problem</strong>: The wrapper as shipped accepts <code>pos_tracking.area_memory_db_path</code> but only uses it as the LOAD path at startup. It never calls <code>disablePositionalTracking(path)</code> or <code>saveAreaMap(path)</code> on shutdown, so the SDK landmark database is loaded into RAM, refined throughout the session, and discarded on exit. This makes Area Memory effectively useless for cross-session relocalisation — exactly the use case Stereolabs documents.</p>
+<p><strong>Patch</strong>: Three additive changes, all marked with <code>// AGV greenhouse local patch</code> and <code>// ────────── end AGV greenhouse local patch ──────────</code> markers so they are obvious in <code>git diff</code>. No upstream lines were deleted or rewritten.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../src/zed-ros2-wrapper/zed_components/src/zed_camera/include/zed_camera_component.hpp">src/zed-ros2-wrapper/zed_components/src/zed_camera/include/zed_camera_component.hpp</a></td>
+<td>Declare <code>callback_saveAreaMemory()</code>, <code>mSaveAreaMemorySrv</code> member, and <code>mSrvSaveAreaMemoryName</code> constant</td>
+</tr>
+<tr>
+<td><a href="../src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp">src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp</a> (<code>~ZedCamera</code>)</td>
+<td>Call <code>mZed-&gt;disablePositionalTracking(mAreaMemoryDbPath)</code> and poll <code>getAreaExportState()</code> with a 15 s timeout before tearing down threads — autosave on clean shutdown</td>
+</tr>
+<tr>
+<td><a href="../src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp">src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp</a> (<code>initServices</code>)</td>
+<td>Register the new <code>~/save_area_memory</code> Trigger service</td>
+</tr>
+<tr>
+<td><a href="../src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp">src/zed-ros2-wrapper/zed_components/src/zed_camera/src/zed_camera_component.cpp</a> (new method)</td>
+<td>Implement <code>callback_saveAreaMemory()</code> — calls SDK <code>saveAreaMap(path)</code> and polls <code>getAreaExportState()</code> synchronously so the caller knows when the file is on disk</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Total diff</strong>: ~95 lines, all additive, in two files. No new package dependencies (uses <code>std_srvs::srv::Trigger</code> which the wrapper already had transitively).</p>
+<p><strong>Why we didn't fork or vendor differently</strong>: The wrapper is already cloned into our <code>src/</code> tree (it is not a binary apt package). Vendoring it means we own its build outputs. Patching in place keeps the change visible to anyone reading <code>git status</code> on the repo and avoids a wrapper-of-wrapper indirection.</p>
+<p><strong>Why a service and not just the destructor patch</strong>: The orchestrator and the dashboard need a runtime trigger to save Area Memory after a successful mapping run, <em>before</em> the wrapper shuts down. The destructor patch is the safety net for unclean shutdowns; the service is the primary mechanism. Both use the same SDK function (<code>saveAreaMap</code> is the documented async call; <code>disablePositionalTracking(path)</code> calls it internally per <a href="file:///usr/local/zed/include/sl/Camera.hpp">Camera.hpp:10715</a>).</p>
+<p><strong>Why a Trigger and not a custom srv</strong>: To avoid making the wrapper depend on <code>agv_interfaces</code>. The destination path is read from the existing <code>pos_tracking.area_memory_db_path</code> parameter, which the wrapper already declares. One source of truth.</p>
+<p><strong>Consumers (in this workspace) that depend on the patch</strong>:
+- <a href="../src/agv_map_manager/src/map_manager_node.cpp">src/agv_map_manager/src/map_manager_node.cpp</a> — calls <code>/zed/zed_node/save_area_memory</code> from <code>on_save_map()</code> after the cuVSLAM keyframe DB save
+- <a href="../src/agv_localization_init/src/auto_init_orchestrator_node.cpp">src/agv_localization_init/src/auto_init_orchestrator_node.cpp</a> — Path A0 subscribes to <code>/zed/zed_node/pose_with_covariance</code> (the wrapper publishes this when <code>pos_tracking_enabled: true</code>, which is the same flag that enables the saved Area Memory load — flipped in <a href="../src/agv_slam/config/zed2i_override.yaml">src/agv_slam/config/zed2i_override.yaml</a>)
+- <a href="../src/agv_sensor_fusion/config/ekf_global.yaml">src/agv_sensor_fusion/config/ekf_global.yaml</a> — <code>pose1</code> source consumes the same wrapper topic as a continuous absolute correction</p>
+<p><strong>Upstream status</strong>: Not yet reported. Candidate issue/PR title for stereolabs/zed-ros2-wrapper: <em>"Expose <code>saveAreaMap()</code> as a ROS service and call <code>disablePositionalTracking(path)</code> in the destructor when <code>area_memory_db_path</code> is set"</em>. Both changes are individually small and self-contained — file as two PRs.</p>
+<p><strong>Reconciliation procedure</strong> when pulling new upstream wrapper code:
+1. <code>git pull</code> the wrapper subtree (or rebase the wrapper branch).
+2. <code>git diff</code> against this commit to surface the four marked blocks.
+3. If the upstream reorganized <code>~ZedCamera()</code> or <code>initServices()</code>, re-apply the marked blocks at their new locations — they are self-contained and have no cross-references except <code>mPosTrackingStarted</code>, <code>mAreaMemoryDbPath</code>, and <code>mZed</code>, all of which are existing wrapper members.
+4. <code>colcon build --packages-select zed_components</code> and rerun the verification: enable Path A0 in the orchestrator, mask all AprilTags, mode-switch to <code>nav</code>, confirm <code>LOCALIZED</code> reaches the dashboard via the SDK Area Memory path.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

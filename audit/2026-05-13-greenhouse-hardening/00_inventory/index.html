@@ -1,0 +1,2502 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autonomous navigation for greenhouse robots — ROS 2, spec-driven, dual-EKF localization, Nav2, rail-riding drivetrain, operator dashboard.">
+      
+      
+        <meta name="author" content="OrzaTech">
+      
+      
+        <link rel="canonical" href="https://andresislas99.github.io/NavGreen/audit/2026-05-13-greenhouse-hardening/00_inventory/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/navgreen-mark.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Phase 0 — Inventory & Cartography - NavGreen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#phase-0-inventory-cartography" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NavGreen" class="md-header__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NavGreen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Phase 0 — Inventory &amp; Cartography
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/drive-in-simulation/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../hardware_setup/" class="md-tabs__link">
+          
+  
+  
+  Hardware
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../operator_runbook/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/packages/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../community/contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NavGreen" class="md-nav__button md-logo" aria-label="NavGreen" data-md-component="logo">
+      
+  <img src="../../../assets/navgreen-mark.svg" alt="logo">
+
+    </a>
+    NavGreen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AndresIslas99/NavGreen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AndresIslas99/NavGreen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/drive-in-simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive the robot in simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/operator-dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run the operator dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/build-a-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Map a greenhouse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization (dual EKF)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/navigation-and-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Navigation & mode arbitration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/spec-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The spec system (SSOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../hardware_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jetson & CAN setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../odrive_low_speed_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ODrive low-speed tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../low_speed_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drivetrain commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operator_runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mapping_commissioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mapping commissioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../validation/RUNBOOK_lan_hil/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HIL validation runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/packages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interfaces & specs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reviews/2026-07-06-community-readiness-review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community-readiness review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-workspace-cartography" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A. Workspace cartography
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A. Workspace cartography">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a1-top-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.1 Top level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a2-packages-in-src-24-total" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.2 Packages in src/ (24 total)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a3-launch-entry-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.3 Launch entry points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a4-external-non-vendored-dependencies-the-workspace-expects-to-find" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.4 External (non-vendored) dependencies the workspace expects to find
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a5-front-end-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A.5 Front-end + fleet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#b-modes-runtime-layers-launch-dag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B. Modes, runtime layers, launch DAG
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="B. Modes, runtime layers, launch DAG">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#b1-the-four-layer-mode-matrix-verbatim-from-spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.1 The four-layer mode matrix (verbatim from spec)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b2-launch-dag-compressed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.2 Launch DAG (compressed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b3-cmd_vel-chain-verbatim-verified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B.3 cmd_vel chain (verbatim — verified)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c-tf-tree-claimed-vs-verifiable-from-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C. TF tree (claimed vs verifiable from code)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#d-persistence-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D. Persistence summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e-critical-findings-emerging-from-phase-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E. Critical findings emerging from Phase 0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E. Critical findings emerging from Phase 0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cr-00-01-repository-is-not-self-contained-agv_slam-is-required-but-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CR-00-01 — Repository is not self-contained: agv_slam is required but absent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cr-00-02-wheel-track-geometry-has-two-contradictory-sources-of-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CR-00-02 — Wheel &amp; track geometry has two contradictory sources of truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cr-00-03-hardcoded-homeorza-paths-inside-launch-parameter-dicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CR-00-03 — Hardcoded /home/orza/... paths inside launch parameter dicts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cr-00-04-production-network-interfaces-are-hardcoded-to-agx-orin-devkit-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CR-00-04 — Production network interfaces are hardcoded to AGX Orin DevKit names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cr-00-05-license-divergence-within-the-workspace-undeclared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CR-00-05 — License divergence within the workspace, undeclared
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cr-00-06-agv_waypoint_manager-bypasses-the-localization-gate-known-gap-restated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CR-00-06 — agv_waypoint_manager bypasses the localization gate (known gap, restated)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#f-what-this-phase-0-does-not-cover-deferred-to-phase-n" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F. What this Phase 0 does NOT cover (deferred to Phase N)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g-readers-checklist-the-30-min-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G. Reader's checklist (the "&lt; 30 min" requirement)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h-status-end-of-phase-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H. Status (end of Phase 0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/AndresIslas99/NavGreen/edit/main/docs/audit/2026-05-13-greenhouse-hardening/00_inventory.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="phase-0-inventory-cartography">Phase 0 — Inventory &amp; Cartography<a class="headerlink" href="#phase-0-inventory-cartography" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Phase 0 goal (per prompt): "Reporte produce visualización clara del
+workspace, un humano nuevo puede entender el sistema en &lt; 30 min
+leyéndolo."</p>
+</blockquote>
+<p>This file is the <strong>map</strong>: what is in the workspace, what depends on what,
+where the contracts live, and which assumptions a fresh reader is licensed
+to make. Critical findings discovered while building the map are filed
+here so they are not lost — deeper analysis goes in the phase-specific
+files that follow.</p>
+<p><strong>Date</strong>: 2026-05-13 — <strong>Branch</strong>: <code>claude/amr-security-audit-gPtCd</code> — <strong>Working tree</strong>: clean
+<strong>Prior audit context</strong>: <a href="../../2026-04-13-full-audit/"><code>../2026-04-13-full-audit.md</code></a> (33 KB, governance audit; 6 latent bugs identified, 5 marked FIXED in specs)
+<strong>Spec verifier baseline</strong>: <code>bash tools/verify_specs/all.sh</code> → 9 scripts run, 0 blocking failures, 1 warning (vendored <code>zed-ros2-wrapper</code> absent from this clone, expected).</p>
+<hr />
+<h2 id="a-workspace-cartography">A. Workspace cartography<a class="headerlink" href="#a-workspace-cartography" title="Permanent link">&para;</a></h2>
+<h3 id="a1-top-level">A.1 Top level<a class="headerlink" href="#a1-top-level" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>agv-greenhouse/
+├── AGENTS.md, AGENT_INSTRUCTIONS.md, CLAUDE.md       — agent governance
+├── README.md, STATUS.yaml                            — project descriptor
+├── agents/registry.yaml                              — agent roles
+├── policies/engineering_rules.md                     — Rules 0–9
+├── specs/                                            — SSOT (8 YAMLs, 41 KB interfaces.yaml)
+│   ├── README.md
+│   ├── project.yaml, state_machine.yaml,
+│   │   launch_sequence.yaml, persistence.yaml,
+│   │   interfaces.yaml, acceptance.yaml, hmi_api.yaml
+├── docs/                                             — human + audit docs
+│   ├── architecture.md, hardware_setup.md, …
+│   └── audit/2026-04-13-*.md, audit/2026-05-13-greenhouse-hardening/  (this folder)
+├── src/                                              — 24 ROS 2 packages
+├── web/agv_dashboard/                                — React 19 + Vite + Leaflet operator HMI
+├── fleet/                                            — VDA 5050 + MQTT (out of MVP scope)
+├── tools/                                            — verify_specs/, calib_runs/
+└── scripts/                                          — kill_hil_stack.sh (dev)
+</code></pre></div>
+<h3 id="a2-packages-in-src-24-total">A.2 Packages in <code>src/</code> (24 total)<a class="headerlink" href="#a2-packages-in-src-24-total" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Pkg</th>
+<th>Lang</th>
+<th>Test files</th>
+<th>Werror</th>
+<th>License</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>agv_behaviors</td>
+<td>C++17</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>BehaviorTree.CPP v3</td>
+</tr>
+<tr>
+<td>agv_bringup</td>
+<td>Python launch</td>
+<td>0</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>3 production entry points</td>
+</tr>
+<tr>
+<td>agv_description</td>
+<td>xacro</td>
+<td>1</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>URDF entry: <code>agv_full.urdf.xacro</code></td>
+</tr>
+<tr>
+<td>agv_factor_graph</td>
+<td>C++17 + Py dev</td>
+<td>0</td>
+<td>✅</td>
+<td>MIT</td>
+<td>GTSAM parallel (publish_tf=false)</td>
+</tr>
+<tr>
+<td>agv_hil_bridges</td>
+<td>Python</td>
+<td>0</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>HIL only — <code>dev_only: true</code> in TASK</td>
+</tr>
+<tr>
+<td>agv_hw_interface</td>
+<td>C++17 + Py dev</td>
+<td>2</td>
+<td>✅</td>
+<td>MIT</td>
+<td>ros2_control SystemInterface (alt path to ODrive; OPT-IN, not production default)</td>
+</tr>
+<tr>
+<td>agv_image_server</td>
+<td>C++17</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>MJPEG :8091</td>
+</tr>
+<tr>
+<td>agv_integration_tests</td>
+<td>Python</td>
+<td>24</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>HIL test harness</td>
+</tr>
+<tr>
+<td>agv_interfaces</td>
+<td>IDL</td>
+<td>0</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>2 msg + 6 srv</td>
+</tr>
+<tr>
+<td>agv_localization_init</td>
+<td>C++17 + Py dev</td>
+<td>0</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Auto-init orchestrator cascade</td>
+</tr>
+<tr>
+<td>agv_map_manager</td>
+<td>C++17 + Py dev</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Save/Load + zones.json + .area copy</td>
+</tr>
+<tr>
+<td>agv_markers</td>
+<td>C++17</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>AprilTag pose factor</td>
+</tr>
+<tr>
+<td>agv_mode_arbiter</td>
+<td>C++17 + Py dev</td>
+<td>2</td>
+<td>✅</td>
+<td>MIT</td>
+<td>3-source cmd_vel multiplexer FSM</td>
+</tr>
+<tr>
+<td>agv_navigation</td>
+<td>YAML/Py launch</td>
+<td>0</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>Nav2 SmacPlanner2D + MPPI</td>
+</tr>
+<tr>
+<td>agv_odrive</td>
+<td>C++17 + Py dev</td>
+<td>5</td>
+<td>✅</td>
+<td>MIT</td>
+<td>CAN driver + wheel_odom 50 Hz</td>
+</tr>
+<tr>
+<td><strong>agv_rail_approach</strong></td>
+<td>C++17</td>
+<td>1</td>
+<td>✅</td>
+<td><strong>Proprietary (Orza)</strong></td>
+<td><strong>License divergence — see CR-00-05</strong></td>
+</tr>
+<tr>
+<td>agv_rail_detector</td>
+<td>C++17 + Py dev</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Depth → BEV → RANSAC rail tube</td>
+</tr>
+<tr>
+<td>agv_rail_driver</td>
+<td>C++17 + Py dev</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Longitudinal-only, wz=0 hard</td>
+</tr>
+<tr>
+<td>agv_safety</td>
+<td>C++17 + Py dev</td>
+<td>3</td>
+<td>✅</td>
+<td>MIT</td>
+<td><code>safety_supervisor</code> + <code>cmd_vel_gate</code></td>
+</tr>
+<tr>
+<td>agv_scan_mapper</td>
+<td>C++17</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Live <code>/agv/live_map</code> overlay</td>
+</tr>
+<tr>
+<td>agv_sensor_fusion</td>
+<td>C++17 + Py dev</td>
+<td>3</td>
+<td>✅</td>
+<td>MIT</td>
+<td>dual-EKF + IMU filter + slip detector + caster dwell</td>
+</tr>
+<tr>
+<td>agv_ui_backend</td>
+<td>TypeScript</td>
+<td>0</td>
+<td>n/a</td>
+<td>MIT</td>
+<td>Express + rclnodejs + WS</td>
+</tr>
+<tr>
+<td>agv_waypoint_manager</td>
+<td>C++17</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Mission CRUD + dispatch (bypasses backend gates — known gap)</td>
+</tr>
+<tr>
+<td>agv_zone_detector</td>
+<td>C++17 + Py dev</td>
+<td>1</td>
+<td>✅</td>
+<td>MIT</td>
+<td>Aisle/corridor classifier</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Verification</strong>: <code>grep -rn 'Werror' src/*/CMakeLists.txt</code> lists 17 hits across the 17 C++ packages — <code>-Werror</code> is enforced. The previous Explore agent's claim of "0 Werror enforcement" is wrong; <code>verify_werror.sh</code> passes precisely because the flag exists in every C++ package's <code>CMakeLists.txt:5</code>.</p>
+<h3 id="a3-launch-entry-points">A.3 Launch entry points<a class="headerlink" href="#a3-launch-entry-points" title="Permanent link">&para;</a></h3>
+<p>Only <strong>three</strong> production launch files in <code>agv_bringup/launch/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Selected when</th>
+<th>TF owner for <code>map→odom</code></th>
+<th>Safety chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agv_full.launch.py</code></td>
+<td><code>AGV_MODE=real</code> (default)</td>
+<td><code>ekf_global</code></td>
+<td>active iff <code>has_map</code> (collision_monitor + cmd_vel_gate)</td>
+</tr>
+<tr>
+<td><code>agv_full.launch.py hil_mode:=true</code></td>
+<td><code>AGV_MODE=hil_full</code></td>
+<td><code>ekf_global</code></td>
+<td>active iff <code>has_map</code></td>
+</tr>
+<tr>
+<td><code>agv_mapping.launch.py</code></td>
+<td><code>AGV_MODE=mapping</code></td>
+<td>cuVSLAM (different invariant!)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>agv_hil_full.launch.py</code></td>
+<td><code>AGV_MODE=hil</code></td>
+<td><code>ekf_global</code> (sim provides <code>/visual_slam/tracking/odometry</code>)</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p>10+ previously-existing launch files were deleted in the 2026-04-13 audit (Fase 6 bug #4); cross-check confirms no dead launch files remain.</p>
+<h3 id="a4-external-non-vendored-dependencies-the-workspace-expects-to-find">A.4 External (non-vendored) dependencies the workspace expects to find<a class="headerlink" href="#a4-external-non-vendored-dependencies-the-workspace-expects-to-find" title="Permanent link">&para;</a></h3>
+<p>These packages are referenced by the production launch but are <strong>not in <code>src/</code></strong>. They must be installed elsewhere (<code>/home/orza/ros2_ws/install/</code> per <code>agv_start.sh:165</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Role</th>
+<th>Risk if missing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agv_slam</code></td>
+<td>cuVSLAM + nvblox + ZED wrapper integration</td>
+<td>Production launch fails at <code>IncludeLaunchDescription(... agv_slam.launch.py ...)</code> — fatal</td>
+</tr>
+<tr>
+<td><code>isaac_ros_visual_slam</code>, <code>isaac_ros_apriltag</code></td>
+<td>Isaac ROS pipeline</td>
+<td>cuVSLAM, AprilTag detection fail</td>
+</tr>
+<tr>
+<td><code>zed-ros2-wrapper</code>, <code>zed_components</code>, <code>zed_msgs</code></td>
+<td>ZED 2i driver (PATCHED — re-reads area_memory_db_path live)</td>
+<td>Cannot get camera, IMU, depth</td>
+</tr>
+<tr>
+<td><code>slam_toolbox</code></td>
+<td>Loop closure (optional)</td>
+<td>Drift grows unbounded over long runs</td>
+</tr>
+<tr>
+<td><code>nav2_*</code> (collision_monitor, smoother, bt_navigator, …)</td>
+<td>Navigation stack</td>
+<td>All goals fail</td>
+</tr>
+<tr>
+<td><code>pointcloud_to_laserscan</code></td>
+<td>Depth → 2-D scan</td>
+<td>Costmap loses obstacle source; collision_monitor degraded</td>
+</tr>
+<tr>
+<td><code>foxglove_bridge</code></td>
+<td>Diagnostic WS on :8765 (opt-in)</td>
+<td>Engineering visibility lost</td>
+</tr>
+<tr>
+<td><code>apriltag_ros</code> (community / Christian Rauch fork)</td>
+<td>Tag detection</td>
+<td>Marker correction silent</td>
+</tr>
+<tr>
+<td><code>robot_localization</code></td>
+<td>EKF nodes</td>
+<td>No fusion possible</td>
+</tr>
+<tr>
+<td><code>robot_state_publisher</code>, <code>xacro</code></td>
+<td>URDF → TF</td>
+<td>TF tree collapses</td>
+</tr>
+</tbody>
+</table>
+<p><strong>See finding CR-00-01.</strong> A fresh clone cannot boot or build without procuring these. The repo has no <code>*.repos</code> file, no submodules, no vendoring policy, no <code>dockerfile</code>. Reproducibility is implicit.</p>
+<h3 id="a5-front-end-fleet">A.5 Front-end + fleet<a class="headerlink" href="#a5-front-end-fleet" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>web/agv_dashboard/</code> — React 19 + Vite + Leaflet + TypeScript 5.9 (operator HMI per <code>specs/hmi_api.yaml</code>).</li>
+<li><code>fleet/agv_fleet_manager</code>, <code>fleet/agv_vda5050_adapter</code>, <code>fleet/mosquitto</code> — Node.js + Express + MQTT 5. <strong>Out of MVP scope</strong> per <code>specs/project.yaml#scope.out_of_scope</code> ("VDA 5050 interoperability", "fleet management").</li>
+</ul>
+<hr />
+<h2 id="b-modes-runtime-layers-launch-dag">B. Modes, runtime layers, launch DAG<a class="headerlink" href="#b-modes-runtime-layers-launch-dag" title="Permanent link">&para;</a></h2>
+<h3 id="b1-the-four-layer-mode-matrix-verbatim-from-spec">B.1 The four-layer mode matrix (verbatim from spec)<a class="headerlink" href="#b1-the-four-layer-mode-matrix-verbatim-from-spec" title="Permanent link">&para;</a></h3>
+<p><a href="../../../specs/state_machine.yaml"><code>specs/state_machine.yaml</code></a> is authoritative. Summary:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Variable</th>
+<th>Authority</th>
+<th>Live-switchable</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. systemd</td>
+<td hil="hil" mapping_="mapping," real_="real,"><code>AGV_MODE</code> ∈</td>
+<td>operator (<code>systemctl edit</code>)</td>
+<td>no — different launch file</td>
+<td><code>agv.service</code> env</td>
+</tr>
+<tr>
+<td>2. launch</td>
+<td with_map_="with_map," without_map="without_map"><code>has_map</code> ∈</td>
+<td>derived at boot from <code>AGV_MAP</code> resolution</td>
+<td>no — different topology</td>
+<td><code>agv_full.launch.py:74</code></td>
+</tr>
+<tr>
+<td>3. runtime</td>
+<td mapping_="mapping," nav="nav" teleop_="teleop,"><code>currentMode</code> ∈</td>
+<td>operator (dashboard)</td>
+<td><strong>yes</strong> (WS message)</td>
+<td><code>agv_ui_backend::setMode</code></td>
+</tr>
+<tr>
+<td>4. derived</td>
+<td blocked_="blocked," e_stop_="e_stop," executing_mission_="executing_mission," fault="fault" idle_="idle," mapping_="mapping," navigating_="navigating," ready_="ready,"><code>RobotState</code> ∈</td>
+<td>sensors</td>
+<td>observation only</td>
+<td><code>state_machine.ts::deriveState</code></td>
+</tr>
+</tbody>
+</table>
+<p>The spec's six <code>valid_combinations</code> enumerate the supported tuples; "any other combination either never happens or silently produces broken behavior." That asymmetry — invalid combinations producing silence, not crashes — is the root cause of the historical teleop-broken incident (2026-04-13 audit bug #1) and remains a class of risk.</p>
+<h3 id="b2-launch-dag-compressed">B.2 Launch DAG (compressed)<a class="headerlink" href="#b2-launch-dag-compressed" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>t = 0.0 s  robot_state_publisher      (TF base_link → wheels)
+           odrive_can_node            (cmd_vel → motors, /agv/wheel_odom 50 Hz)
+           pointcloud_to_laserscan    (/agv/zed/point_cloud → /agv/scan)
+           image_server               (:8091 MJPEG)
+           scan_grid_mapper           (/agv/live_map)
+t = 3.0 s  agv_slam (external)        (cuVSLAM, TF DISABLED via /**: key in cuvslam_greenhouse.yaml)
+t = 3.5 s  imu_filter                 (Butterworth 10 Hz / 5 Hz cutoffs)
+t = 3.8 s  wheel_slip_detector        (inflates wheel_odom covariance on caster slip)
+           caster_dwell_advisor       (/agv/caster/dwell_state — no consumer yet)
+t = 4.0 s  ekf_local                  (odom → base_link, 50 Hz, SOLE OWNER)
+           ekf_global                 (map → odom, 10 Hz, SOLE OWNER)
+           fusion_monitor             (/agv/pose, /diagnostics)
+t = 4.5 s  factor_graph (parallel)    (publish_tf=false, validation only)
+t = 5.0 s  slam_toolbox_localization  (transform_publish_period=0 → TF DISABLED)
+           map_manager                (save/load + zones.json + .area copy)
+           waypoint_manager           (mission CRUD — bypasses backend gates)
+t = 6.0 s  Nav2 stack  [has_map]      (SmacPlanner2D + MPPI + collision_monitor + velocity_smoother)
+t = 6.5 s  agv_safety stack [has_map] (safety_supervisor + cmd_vel_gate)
+t = 7.0 s  apriltag + marker_correction + rail_approach [enable_markers]
+           zone_detector + rail_detector + mode_arbiter + rail_driver [has_map]
+           auto_init_orchestrator    [has_map]
+           behavior_executor          [enable_behaviors — default false, NEVER ENABLED]
+t = 7.5 s  foxglove_bridge            [enable_foxglove_bridge — default false]
+t = 8.0 s  teleop_backend (Node.js)   (REST :8090, WS /ws/control)
+</code></pre></div>
+<p>The spec (<a href="../../../specs/launch_sequence.yaml"><code>specs/launch_sequence.yaml</code></a>) is authoritative; this is a compressed view for orientation.</p>
+<h3 id="b3-cmd_vel-chain-verbatim-verified">B.3 cmd_vel chain (verbatim — verified)<a class="headerlink" href="#b3-cmd_vel-chain-verbatim-verified" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>Dashboard joystick / WS → teleop_server.cmd_vel
+              ↓ Phase-2 (arbiter): teleop_server publishes only if mode_arbiter source == NONE
+                       ↓ Phase-2 sources: cmd_vel_nav | cmd_vel_approach | cmd_vel_rail
+              ↓ mode_arbiter relays
+       /agv/cmd_vel
+        ↓ has_map=false ───────────────────────────→ agv_odrive_node
+        ↓ has_map=true
+       velocity_smoother  (Nav2)
+        ↓ /agv/cmd_vel_smoothed
+       collision_monitor (Nav2)         polygons: slowdown + stop, scan + pointcloud
+        ↓ /agv/cmd_vel_collision_safe   (renamed 2026-04 from cmd_vel_safe)
+       cmd_vel_gate (agv_safety)        watchdog 0.5 s; e_stop + hardware_estop force zero
+        ↓ /agv/cmd_vel_safe
+       agv_odrive_node → CAN → wheels
+</code></pre></div>
+<p><strong>Single owner of <code>map→odom</code></strong>: <code>ekf_global</code>.
+<strong>Single owner of <code>odom→base_link</code></strong>: <code>ekf_local</code>.
+The cuVSLAM TF disable uses the <code>/**:</code> YAML key (NOT the node name) — a hidden convention. Misuse silently leaves dual publishers.</p>
+<hr />
+<h2 id="c-tf-tree-claimed-vs-verifiable-from-code">C. TF tree (claimed vs verifiable from code)<a class="headerlink" href="#c-tf-tree-claimed-vs-verifiable-from-code" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>                map
+                 │  ekf_global @ 10 Hz       (single publisher)
+                odom
+                 │  ekf_local  @ 50 Hz       (single publisher)
+             base_link
+            ╱   │   ╲
+   left_wheel  │  right_wheel               (URDF; robot_state_publisher)
+               │
+        base_footprint (z = -0.200 m)        (URDF; child of base_link)
+               │
+        [ZED frames] ← NOT IN URDF           (published by agv_slam, which is
+                                              external and not in this repo)
+</code></pre></div>
+<p><strong>Issues flagged for Phase 1 deep dive</strong>:
+1. <code>base_footprint</code> is a <strong>child</strong> of <code>base_link</code> at z = -0.200 m. REP-103 has no opinion on the ordering, but REP-105 specifically lists <code>… → base_link → base_footprint</code> is <strong>non-standard</strong> for AGVs: most platforms (Husky, Jackal, Turtlebot4) put <code>base_footprint</code> at the <strong>root</strong> of the chain because it is the kinematic origin on the floor. The current order works for Nav2 (which uses <code>robot_base_frame: base_link</code>) but breaks the convention multi-robot fleets and external tooling rely on. Tracked as <code>HIGH-01-XX</code> in Phase 1.
+2. ZED frames are not in URDF. Camera-to-base extrinsics live in a <code>static_transform_publisher</code> inside <code>agv_slam</code> (external). Any in-field disturbance to the camera mount must be calibrated and applied <strong>outside this repo</strong>, which violates the workspace's own SSOT principle (<code>specs/persistence.yaml</code> lists configs but does not cover external static TFs).
+3. The <code>/**:</code> YAML key invariant for cuVSLAM TF disable is a single-line trap: using the node name silently re-enables a competing publisher. The spec annotates this; it is not enforced by any verifier.</p>
+<hr />
+<h2 id="d-persistence-summary">D. Persistence summary<a class="headerlink" href="#d-persistence-summary" title="Permanent link">&para;</a></h2>
+<p><a href="../../../specs/persistence.yaml"><code>specs/persistence.yaml</code></a> lists 14 artifacts. Key facts for a fresh reader:</p>
+<ul>
+<li><strong>Canonical base</strong>: <code>${AGV_DATA_DIR}</code> (default <code>/home/orza/agv_data</code>).</li>
+<li><strong>Per-map quadruplet</strong>: <code>&lt;X&gt;.yaml + &lt;X&gt;.pgm + &lt;X&gt;_cuvslam/ + &lt;X&gt;.area + &lt;X&gt;_meta.json</code>. Save Map must produce all five atomically; Load Map must consume all five.</li>
+<li><strong>Boot marker</strong>: <code>~/.agv/last_map</code> (plain text, no extension). Read by <code>agv_start.sh</code> <em>before</em> ROS is sourced.</li>
+<li><strong>Whitelisted hardcodes</strong>: 4 locations still hardcode <code>/home/orza/agv_data/maps/.current.area</code> — see <code>verify_no_hardcoded_paths.sh</code> whitelist. Cleanup tracked in the prior audit, not in this one.</li>
+</ul>
+<hr />
+<h2 id="e-critical-findings-emerging-from-phase-0">E. Critical findings emerging from Phase 0<a class="headerlink" href="#e-critical-findings-emerging-from-phase-0" title="Permanent link">&para;</a></h2>
+<p>Five findings rise to the surface from the cartography work alone. Each is filed once here; deeper analysis lives in the per-phase files that follow.</p>
+<hr />
+<h3 id="cr-00-01-repository-is-not-self-contained-agv_slam-is-required-but-absent">CR-00-01 — Repository is not self-contained: <code>agv_slam</code> is required but absent<a class="headerlink" href="#cr-00-01-repository-is-not-self-contained-agv_slam-is-required-but-absent" title="Permanent link">&para;</a></h3>
+<p><strong>File(s)</strong>: <code>src/agv_bringup/launch/agv_full.launch.py:279,128</code>; <code>src/agv_bringup/launch/agv_mapping.launch.py:116</code>; <code>src/agv_bringup/launch/agv_hil_full.launch.py:298</code>; <code>src/agv_bringup/scripts/agv_start.sh:165</code> (<code>source /home/orza/ros2_ws/install/setup.bash</code>).
+<strong>Category</strong>: architecture / reproducibility.
+<strong>Symptom</strong>: All three production launch files call <code>FindPackageShare('agv_slam')</code> to include <code>agv_slam.launch.py</code>. <code>find /home/user/agv-greenhouse -type d -name agv_slam</code> returns nothing. The expected sibling workspace at <code>/home/orza/ros2_ws/install/</code> is hard-wired into the boot script.
+<strong>Analysis</strong>: <code>agv_slam</code> packages cuVSLAM + nvblox + ZED wrapper integration + a <code>static_transform_publisher</code> for the camera frame (per the URDF header comment at <code>agv_full.urdf.xacro:14-15</code>). The repo is layered: this workspace assumes a <strong>sibling install</strong> that contains <code>agv_slam</code> and the vendored Isaac ROS packages. There is no <code>*.repos</code> file (no <code>vcs import</code> reproducibility), no submodule, no Docker context, no documentation of which sibling repo provides <code>agv_slam</code>. A new engineer cloning this repo cannot build it; a CI runner cannot validate it; a backup of the robot Jetson can be restored only if the sibling workspace was also backed up.
+<strong>Greenhouse impact</strong>: At first field visit, if the SD card / NVMe is reflashed, the team will discover this at the worst possible moment. There is no documented recovery procedure. Production stack will fail to launch and the error message (<code>agv_slam not found</code>) gives no clue that a separate workspace is needed.
+<strong>Benchmark</strong>: ROS-Industrial publishes a <code>*.repos</code> for every distribution. Autoware Universe uses <code>vcs import</code> from <code>autoware.repos</code>. Open Navigation publishes a docker base image with all upstream deps pinned. ANYbotics / ETH RSL maintain a per-distribution <code>dependencies.repos</code>. The minimum bar is a <code>agv_greenhouse.repos</code> listing the URLs and pinned SHAs of every external dependency.
+<strong>Recommendation</strong> (3 options, by ascending cost):
+1. <strong>Quick win (S)</strong>: Add <code>agv_greenhouse.repos</code> to the repo root listing <code>agv_slam</code>, <code>zed-ros2-wrapper</code>, all <code>isaac_ros_*</code>, <code>slam_toolbox</code>, <code>nav2_*</code>, <code>apriltag_ros</code>, <code>foxglove_bridge</code>, <code>robot_localization</code>, <code>pointcloud_to_laserscan</code> with pinned SHAs. Document <code>vcs import src &lt; agv_greenhouse.repos</code> in README.
+2. <strong>Medium (M)</strong>: Vendor <code>agv_slam</code> as a submodule (or absorb into <code>src/</code> if licensing allows). The cuVSLAM/Nvblox config is small; the only non-trivial dependency is the patched <code>zed-ros2-wrapper</code>.
+3. <strong>Long (L)</strong>: Reproducible build via a Dockerfile + <code>colcon mixin</code> setup; CI matrix on <code>industrial_ci</code> validates that the repo + <code>.repos</code> file builds from a clean Jetson L4T image.
+<strong>Acceptance criterion</strong>: <code>git clone &lt;repo&gt; &amp;&amp; vcs import src &lt; agv_greenhouse.repos &amp;&amp; colcon build</code> produces a runnable workspace on a fresh Ubuntu 22.04 + JetPack 6 system with no manual steps. CI runs this end-to-end on every PR.
+<strong>Effort</strong>: S (option 1) → L (option 3).
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h3 id="cr-00-02-wheel-track-geometry-has-two-contradictory-sources-of-truth">CR-00-02 — Wheel &amp; track geometry has two contradictory sources of truth<a class="headerlink" href="#cr-00-02-wheel-track-geometry-has-two-contradictory-sources-of-truth" title="Permanent link">&para;</a></h3>
+<p><strong>File(s)</strong>:
+- <code>src/agv_description/urdf/agv_full.urdf.xacro:20</code> — <code>wheel_radius default="0.0625"</code> (62.5 mm)
+- <code>src/agv_description/config/robot_params.yaml:33</code> — <code>radius: 0.0625</code> + <code>track_width: 0.735</code>
+- <code>src/agv_odrive/config/odrive_params.yaml:7</code> — <code>wheel_radius: 0.0781</code> (calibrated 2026-04-08) + <code>track_width: 0.960</code> (calibrated 2026-04-08)
+- <code>src/agv_navigation/config/nav2_params.yaml:250,322</code> — footprint <code>[[0.50, 0.37], [0.50, -0.37], [-0.30, -0.37], [-0.30, 0.37]]</code> (width 0.74 m)</p>
+<p><strong>Category</strong>: calibration / bug.
+<strong>Symptom</strong>: Three configuration files declare wheel radius and track width with <strong>incompatible values</strong>. The URDF (62.5 mm) and <code>robot_params.yaml</code> (called out as "Single Source of Truth" in its own header) agree on 62.5 mm radius and 0.735 m track width. The ODrive YAML — annotated <code>calibrated 2026-04-08 (ratio 2.66/2.13 from 3-trial test)</code> for the radius and <code>calibrated 2026-04-08 (effective, from 2 spin trials)</code> for the track — uses 78.1 mm radius and 0.960 m effective track width. The Nav2 footprint was sized to the URDF, not to ODrive.
+<strong>Analysis</strong>: The ODrive value is the post-UMBmark "effective" calibration (Borenstein-style), which by construction can differ from the geometric measurement because it absorbs systematic error (encoder ticks/rev mismatch, gear backlash, tire deformation). Either:
+- The URDF is <strong>the geometric ground truth</strong> and ODrive <strong>introduces a calibration bias</strong> that should NOT propagate to URDF/Nav2 (the standard practice — UMBmark calibration is private to the odometry layer). In this case <code>robot_params.yaml</code>'s SSOT claim is intact, but the ODrive YAML's variable names (<code>wheel_radius</code>, <code>track_width</code>) are a misnomer — they should be named <code>effective_radius</code> / <code>effective_track_width</code> to make clear they are odometry-tuning parameters, not physical measurements.
+- OR the URDF was simply never updated after the 2026-04-08 wheel/measurement change and is stale. In this case the URDF is incorrect by ~25 % radius and ~23 % width, and Nav2's footprint is correspondingly wrong.
+The 25 % radius difference is too large to be UMBmark-only. UMBmark typically yields corrections in the 1–5 % range; 25 % implies a different wheel was installed or the original CAD value was wrong. The 0.735→0.960 m track delta (+23 %) is similar in magnitude. <strong>The most likely explanation is that the physical platform was modified (new wheels / new axles) and only <code>odrive_params.yaml</code> was updated.</strong>
+<strong>Greenhouse impact</strong>:
+- <strong>Collision risk</strong>: Nav2's footprint is 0.74 m wide. If real track is 0.960 m, wheels stick out 0.11 m on each side <strong>outside the costmap footprint</strong>. Nav2 plans through corridors that physically scrape the cuna de plantas. The greenhouse uses 1.0–1.5 m corridors; an undeclared 0.22 m of wheel does not survive.
+- <strong>Odometry drift</strong>: with a 25 % wheel radius error, every 1 m of commanded distance becomes 0.80 m of actual travel (or vice versa). The dual-EKF will fight this against the IMU yaw rate and produce a degraded pose estimate that wanders.
+- <strong>MPPI controller</strong>: the controller models the robot kinematics assuming Nav2's footprint and robot params. Mismatched values degrade tracking and produce undamped oscillation.
+- <strong>HIL ↔ real divergence</strong>: <code>agv_hil_bridges</code> is documented (<code>src/agv_hil_bridges/CLAUDE.md:22-24</code>) to use the <em>same</em> <code>wheel_radius</code> / <code>track_width</code> as <code>odrive_params.yaml</code>. So HIL is consistent with calibrated ODrive but inconsistent with URDF, which means HIL is <strong>not testing what Nav2 sees</strong>.
+<strong>Benchmark</strong>: Nav2 community recommends a single physical-parameter YAML loaded into both <code>robot_state_publisher</code> (via <code>xacro --inorder</code>) and the controller config — see Steve Macenski's nav2_bringup pattern. ros2_control's <code>diff_drive_controller</code> reads <code>wheel_separation</code> and <code>wheel_radius</code> from the controller YAML, and the URDF macro references the same numbers via xacro args. Both ETH RSL's ANYmal and Clearpath Husky-Jackal stacks centralize wheelbase/track in a single YAML and propagate via xacro.
+<strong>Recommendation</strong>:
+1. <strong>Decide which value is the physical ground truth.</strong> Physically re-measure with a caliper + tape measure: distance between wheel-tread centers (track), and wheel rolling-circumference / 2π (radius). Document the measurement procedure in <code>docs/calibration/physical_geometry.md</code> with photos.
+2. <strong>Update <code>robot_params.yaml</code></strong> to that physical truth. Update the URDF defaults to read from it via xacro args (currently <code>agv_full.urdf.xacro:20-25</code> hardcodes defaults; replace with <code>&lt;xacro:arg name="..."/&gt;</code> reading from a single <code>robot_params.yaml</code> loaded by <code>description.launch.py</code>).
+3. <strong>Rename ODrive parameters</strong> to <code>effective_radius</code> / <code>effective_track_width</code> if they are odometry-calibration values. Document the UMBmark output as the <em>difference</em> from physical, not the absolute physical value. If the 25 % delta is real (not UMBmark — actually new wheels), then both parameter sets must agree at the physical value, with no per-package overrides.
+4. <strong>Update Nav2 footprint</strong> to match physical track + 2× wheel-tread half-width + safety margin. Currently footprint front edge x=+0.50 vs chassis front x=+0.70 in URDF — also off by 0.20 m. Footprint should be <code>physical_chassis + margin</code> not <code>physical_chassis − 0.20 m</code>.
+<strong>Acceptance criterion</strong>: <code>robot_params.yaml</code> is the only file declaring wheel/track values. URDF, Nav2 footprint, ODrive odometry kinematics, and HIL bridge all derive from it (verified by <code>tools/verify_specs/verify_geometry_ssot.py</code> — to be written). UMBmark calibration values, if any, live in a separate <code>wheel_odom_calibration.yaml</code> with explicit "effective" naming. The 100 m closed-loop drift on hardware is &lt; 0.5 % with AprilTags and &lt; 2 % without (per Phase 4 acceptance).
+<strong>Effort</strong>: M (one day of measurement + half-day of refactor + verification).
+<strong>Prerequisites</strong>: none, but blocks every navigation accuracy claim.</p>
+<hr />
+<h3 id="cr-00-03-hardcoded-homeorza-paths-inside-launch-parameter-dicts">CR-00-03 — Hardcoded <code>/home/orza/...</code> paths inside launch parameter dicts<a class="headerlink" href="#cr-00-03-hardcoded-homeorza-paths-inside-launch-parameter-dicts" title="Permanent link">&para;</a></h3>
+<p><strong>File(s)</strong>:
+- <code>src/agv_bringup/launch/agv_full.launch.py:546</code> — <code>'runtime_registry_file': '/home/orza/agv_data/runtime_markers_registry.yaml'</code>
+- <code>src/agv_bringup/launch/agv_full.launch.py:585</code> — same path, second occurrence
+- <code>src/agv_bringup/launch/agv_full.launch.py:701</code> — <code>{'map_dir': '/home/orza/agv_data/maps'}</code>
+- <code>src/agv_bringup/launch/agv_full.launch.py:768</code> — <code>additional_env={'AGV_DATA_DIR': '/home/orza/agv_data', ...}</code>
+- <code>src/agv_bringup/scripts/agv_start.sh:165,175,179,187,189</code> — multiple hardcodes including <code>MAP_DIR="${AGV_MAP_DIR:-/home/orza/ros2_ws/install/agv_navigation/share/agv_navigation/maps}"</code></p>
+<p><strong>Category</strong>: portability / reproducibility.
+<strong>Symptom</strong>: The verifier <code>verify_no_hardcoded_paths.sh</code> passes because it whitelists known paths and only greps source files. Paths embedded in <strong>Python dictionaries inside launch files</strong> are not currently flagged. Production deployment is hard-pinned to a <code>/home/orza/</code> home directory.
+<strong>Analysis</strong>: The Jetson AGX Orin DevKit (current dev target) was set up with username <code>orza</code>. The production target is Jetson Orin NX 16 GB, which may or may not have the same username. The code mostly uses <code>AGV_DATA_DIR</code> with a fallback (<code>agv_full.launch.py:68</code> does <code>os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data')</code>), but the four launch-parameter dicts above and the boot script hardcode the literal — there's no env-var fallback.
+<strong>Greenhouse impact</strong>: Reflashing or migrating the robot to a clean Jetson with a different username silently breaks marker registry loading and last-known-pose recovery (which depend on <code>runtime_markers_registry.yaml</code> and <code>meta.json</code> paths). Field technicians will not understand why AprilTag-defined waypoints are missing or why the robot cannot resume after reboot.
+<strong>Benchmark</strong>: Apollo Cyber RT and Autoware Universe enforce zero hardcoded user paths at lint time. Nav2 reference launches use <code>LaunchConfiguration</code> substitutions and <code>PathJoinSubstitution([FindPackageShare(...), ...])</code> exclusively.
+<strong>Recommendation</strong>:
+1. <strong>Replace all 4 launch-param hardcodes</strong> with <code>LaunchConfiguration('data_dir')</code> derived from <code>os.environ.get('AGV_DATA_DIR', '/home/orza/agv_data')</code> once at the top of <code>generate_launch_description()</code> and reused.
+2. <strong>Refactor <code>agv_start.sh</code></strong> to compute <code>AGV_DATA_DIR</code>, <code>AGV_MAP_DIR</code>, <code>ROS_WS</code> from <code>${HOME}</code> if not set, and document the env override in the systemd unit. Move the <code>source /home/orza/ros2_ws/install/setup.bash</code> to use <code>${ROS_WS:-${HOME}/ros2_ws}/install/setup.bash</code>.
+3. <strong>Extend <code>verify_no_hardcoded_paths.sh</code></strong> to also grep Python literal strings inside launch files (<code>*.launch.py</code>) for <code>/home/</code>, with explicit allow-list for the fallback <code>default=</code> cases.
+<strong>Acceptance criterion</strong>: <code>grep -rn '/home/orza' src/</code> returns 0 hits (or only in comments / docs explicitly noted). Re-flashing to a Jetson with username <code>agv</code> requires zero source modifications.
+<strong>Effort</strong>: S.
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h3 id="cr-00-04-production-network-interfaces-are-hardcoded-to-agx-orin-devkit-names">CR-00-04 — Production network interfaces are hardcoded to AGX Orin DevKit names<a class="headerlink" href="#cr-00-04-production-network-interfaces-are-hardcoded-to-agx-orin-devkit-names" title="Permanent link">&para;</a></h3>
+<p><strong>File(s)</strong>:
+- <code>src/agv_bringup/scripts/agv_start.sh:53,90</code> — <code>for iface in eno1 wlP1p1s0; …; CYCLONE_CANDIDATES="eno1 wlP1p1s0"</code>.</p>
+<p><strong>Category</strong>: portability / bug.
+<strong>Symptom</strong>: <code>agv_start.sh</code> generates <code>/tmp/agv_cyclonedds_runtime.xml</code> at boot by enumerating exactly two interface names: <code>eno1</code> and <code>wlP1p1s0</code>. Both are AGX Orin DevKit specific (the WiFi card is <code>wlP1p1s0</code> on the AGX, but the Orin NX 16 GB module on a third-party carrier almost certainly exposes a different name — <code>wlan0</code>, <code>wlx*</code>, etc.).
+<strong>Analysis</strong>: This file is a careful piece of work — it specifically handles rfkill state, the dual operstate/carrier check, and dynamic XML generation to dodge CycloneDDS's hard requirement that listed interfaces exist. The carefulness is undermined by hardcoding the candidate list. There's no <code>${AGV_NETWORK_IFACES:-eno1 wlP1p1s0}</code> env override.
+<strong>Greenhouse impact</strong>: Moving from the AGX Orin 64 GB development target to the Orin NX 16 GB production target (declared in <code>specs/project.yaml:deployment_targets.production</code>) will silently fall back to the localhost-only DDS config (<code>agv_start.sh:121-124</code>). Operator dashboard on tablet <strong>cannot discover the robot</strong> because Cyclone is listening only on <code>localhost</code>. The fallback is correct and safe (no SIGABRT), but it is silent — the operator just sees "robot offline" with no diagnostic clue.
+<strong>Benchmark</strong>: Most production robots (Husky, Spot, Locus) enumerate interfaces dynamically — Spot does this via <code>bosdyn-system-helpers</code>. Robotec.ai's launch scripts pull from <code>/etc/network/interfaces</code> or <code>nmcli</code>. Apollo Cyber RT lists interfaces by capability (<code>HAS_IPV4</code>), not by name.
+<strong>Recommendation</strong>:
+1. <strong>Read interface candidates from env / config</strong>, with the current AGX-specific list as a fallback. <code>CYCLONE_CANDIDATES="${AGV_NETWORK_IFACES:-$(ls /sys/class/net | grep -vE '^(lo|docker|veth|can|usb)' | tr '\n' ' ')}"</code> (auto-enumerate, exclude virtual + non-IP).
+2. <strong>Add an end-of-boot diagnostic</strong>: if no whitelisted iface is up, emit a clear <code>journalctl</code> line and a dashboard event so the operator sees "DDS listening on localhost only — no LAN interface".
+3. <strong>Document the override</strong> in <code>docs/deployment/network.md</code> (new file) — what env var to set, how to test.
+<strong>Acceptance criterion</strong>: Booting on a Jetson Orin NX with a <code>wlan0</code> interface in <code>AGV_NETWORK_IFACES</code> env produces <code>agv_cyclonedds_runtime.xml</code> listing that interface, and the dashboard can reach the robot on the LAN without manual editing.
+<strong>Effort</strong>: S.
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h3 id="cr-00-05-license-divergence-within-the-workspace-undeclared">CR-00-05 — License divergence within the workspace, undeclared<a class="headerlink" href="#cr-00-05-license-divergence-within-the-workspace-undeclared" title="Permanent link">&para;</a></h3>
+<p><strong>File(s)</strong>:
+- <code>src/agv_rail_approach/package.xml</code> — <code>&lt;license&gt;Proprietary&lt;/license&gt;</code>, <code>&lt;maintainer email="dev@orza.mx"&gt;Orza&lt;/maintainer&gt;</code>.
+- All other 23 packages — <code>&lt;license&gt;MIT&lt;/license&gt;</code>, <code>&lt;maintainer&gt;</code> set to project lead.</p>
+<p><strong>Category</strong>: governance / docs.
+<strong>Symptom</strong>: One package (<code>agv_rail_approach</code>) is Proprietary; everything else is MIT. There is no workspace-level <code>LICENSE.md</code> and no <code>NOTICE</code> file enumerating which components are under which license. <code>README.md</code> does not mention licensing at all.
+<strong>Analysis</strong>: <code>agv_rail_approach</code> is greenhouse-customer-specific IP (it's the AprilTag-guided dock controller for rail entry). Mixing MIT and Proprietary is legitimate — many real robotics products do — but it must be <strong>declared</strong>. The current ambiguity creates downstream risks:
+- Someone forks the repo assuming all of it is MIT and ships a derivative work that includes the proprietary node.
+- A new package added to <code>src/agv_*</code> defaults to MIT (the workspace template implies it), but if the new code wraps or extends <code>agv_rail_approach</code>, it inherits the proprietary obligations.
+- CI / <code>verify_specs/verify_canonical_sources.sh</code> does not check license consistency.
+<strong>Greenhouse impact</strong>: Indirect, but real — when the customer's legal team reviews the deployment, the mixed licensing without a manifest will block sign-off until clarified.
+<strong>Benchmark</strong>: Autoware publishes <code>LICENSE.md</code> listing every package and its license. Open Robotics publishes a <code>NOTICE</code> file per repo. Reuse / SPDX expects an <code>SPDX-License-Identifier:</code> comment header on every source file.
+<strong>Recommendation</strong>:
+1. <strong>Add <code>LICENSE.md</code></strong> at the repo root: project-level MIT for the workspace + an explicit carve-out for <code>agv_rail_approach</code> (Proprietary, owned by Orza, contact <code>dev@orza.mx</code>).
+2. <strong>Add SPDX headers</strong> to every source file:
+   - <code>// SPDX-License-Identifier: MIT</code> for MIT files
+   - <code>// SPDX-License-Identifier: LicenseRef-Orza-Proprietary</code> for the proprietary package
+3. <strong>Extend <code>verify_canonical_sources.sh</code></strong> (or add <code>verify_license.sh</code>) to assert that every source file under <code>src/agv_*/{src,include}</code> has a SPDX header that matches its <code>package.xml</code> declaration.
+<strong>Acceptance criterion</strong>: A new external contributor reading <code>LICENSE.md</code> knows exactly which parts they can fork and which they cannot. <code>verify_license.sh</code> blocks PRs that add a source file without an SPDX header.
+<strong>Effort</strong>: S (LICENSE.md + headers) → M (verifier + retroactive header pass).
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h3 id="cr-00-06-agv_waypoint_manager-bypasses-the-localization-gate-known-gap-restated">CR-00-06 — <code>agv_waypoint_manager</code> bypasses the localization gate (known gap, restated)<a class="headerlink" href="#cr-00-06-agv_waypoint_manager-bypasses-the-localization-gate-known-gap-restated" title="Permanent link">&para;</a></h3>
+<p><strong>File(s)</strong>:
+- <code>src/agv_waypoint_manager/src/waypoint_manager_node.cpp:109</code> (cited in <code>specs/interfaces.yaml#actions</code>).
+- <code>specs/state_machine.yaml#invariants.nav_goal_requires_localization</code> — <code>known_gap</code> block.</p>
+<p><strong>Category</strong>: bug / safety.
+<strong>Symptom</strong>: The single-goal path through <code>agv_ui_backend::sendNavGoal</code> checks the localization state (<code>localization.action != 'FAILED'</code>) before dispatching to Nav2. The mission-execution path goes directly from <code>waypoint_manager_node</code> to the Nav2 action client, bypassing that gate. The spec acknowledges this as a known gap tracked for "Fase 8".
+<strong>Analysis</strong>: The spec is honest about this and the 2026-04-13 audit already documented it. It is restated here because it has not closed and it is a direct safety/operational risk in greenhouse missions.
+<strong>Greenhouse impact</strong>: An operator clicks "Run Mission" on a 12-waypoint route through the rows. If localization has silently degraded to FAILED (e.g., the AprilTag at the start was occluded), Nav2 receives map-frame goals with a stale <code>map→odom</code> offset and the robot physically navigates to phantom coordinates. The 2026-04-13 trip log records a 2.98 m goal that advanced 0.67 m in 3 m 30 s before manual cancellation — for a single goal. A 12-waypoint mission compounds the risk.
+<strong>Recommendation</strong>:
+Two options:
+1. <strong>Refactor (preferred)</strong>: Mission executor sends an HTTP POST to <code>agv_ui_backend/api/nav/goal_internal</code> instead of using its own action client. Reuses the existing gate. Documented in <code>specs/hmi_api.yaml</code>.
+2. <strong>Local gate (quick fix)</strong>: Have <code>waypoint_manager_node</code> subscribe to <code>/agv/localization/state</code> and reject <code>execute_mission</code> if state is <code>FAILED</code>. Lighter, but duplicates the logic that lives in TypeScript today.
+<strong>Acceptance criterion</strong>: Field test "Mission with localization revoked mid-way" — Nav2 goal is cancelled, robot stops, operator gets an event log entry. No physical motion to phantom coordinates.
+<strong>Effort</strong>: M.
+<strong>Prerequisites</strong>: none.</p>
+<hr />
+<h2 id="f-what-this-phase-0-does-not-cover-deferred-to-phase-n">F. What this Phase 0 does NOT cover (deferred to Phase N)<a class="headerlink" href="#f-what-this-phase-0-does-not-cover-deferred-to-phase-n" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Deferred to</th>
+<th>Why deferred</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Build reproducibility timings (&lt;5 min Orin)</td>
+<td>Phase 1 (<code>01_foundations.md</code>)</td>
+<td>Requires hardware</td>
+</tr>
+<tr>
+<td>TF jitter / extrapolation</td>
+<td>Phase 1</td>
+<td>Requires running stack</td>
+</tr>
+<tr>
+<td>URDF inertias (1.0 placeholder)</td>
+<td>Phase 2 (<code>02_hal.md</code>)</td>
+<td>Linked to ros2_control discussion</td>
+</tr>
+<tr>
+<td>ZED depth FPS sustained</td>
+<td>Phase 2</td>
+<td>Hardware</td>
+</tr>
+<tr>
+<td>Calibration UMBmark execution</td>
+<td>Phase 3</td>
+<td>Hardware</td>
+</tr>
+<tr>
+<td>AprilTag-as-factor vs <code>SetPose</code> analysis</td>
+<td>Phase 4</td>
+<td>Architectural — needs file-level read</td>
+</tr>
+<tr>
+<td>Costmap inflation saturation in 1.0–1.5 m corridors</td>
+<td>Phase 7</td>
+<td>Needs experiment + nav2 params analysis</td>
+</tr>
+<tr>
+<td>HAZOP / FMEA</td>
+<td>Phase 9</td>
+<td>Significant work; create skeleton</td>
+</tr>
+<tr>
+<td>GUI usability test with non-ROS technician</td>
+<td>Phase 11</td>
+<td>Needs a real technician</td>
+</tr>
+<tr>
+<td>8 h × 5 day endurance MTBF</td>
+<td>Phase 15</td>
+<td>Field, multi-day</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="g-readers-checklist-the-30-min-requirement">G. Reader's checklist (the "&lt; 30 min" requirement)<a class="headerlink" href="#g-readers-checklist-the-30-min-requirement" title="Permanent link">&para;</a></h2>
+<p>A new engineer who reads this file should be able to answer:</p>
+<ul>
+<li>[x] How many ROS 2 packages and what languages? <strong>24 packages; mostly C++17, some TypeScript (UI backend), some Python (HIL bridges + dev tools).</strong></li>
+<li>[x] What is the production entry point? <strong><code>agv_start.sh</code> → <code>agv_full.launch.py</code> with <code>AGV_MODE=real</code>.</strong></li>
+<li>[x] How does the robot pick which map to load on boot? <strong><code>AGV_MAP</code> env &gt; <code>~/.agv/last_map</code> &gt; <code>default_empty.yaml</code> fallback.</strong></li>
+<li>[x] Who owns <code>map→odom</code>? <code>odom→base_link</code>? <strong><code>ekf_global</code> and <code>ekf_local</code> respectively. Single publishers.</strong></li>
+<li>[x] What runtime modes exist? <strong>Four-layer matrix: systemd, has_map, currentMode, RobotState. See <a href="../../../specs/state_machine.yaml"><code>specs/state_machine.yaml</code></a>.</strong></li>
+<li>[x] Where do maps live? <strong><code>${AGV_DATA_DIR}/maps/&lt;X&gt;.{yaml,pgm,area}</code> + <code>&lt;X&gt;_cuvslam/</code> + <code>&lt;X&gt;_meta.json</code>.</strong></li>
+<li>[x] What is the cmd_vel chain? <strong>See B.3.</strong></li>
+<li>[x] What stops the robot? <strong>Software path: <code>cmd_vel_gate</code> → zero output on <code>safety_status.safety_ok=false</code> OR <code>/agv/e_stop=true</code>. Hardware path: planned via <code>/agv/hardware_estop</code>, not yet wired (see <code>specs/interfaces.yaml#topics./agv/hardware_estop.status=planned</code>).</strong></li>
+<li>[x] What are the <strong>biggest</strong> unsolved problems? <strong>CR-00-01 (repo not self-contained), CR-00-02 (geometry SSOT broken), CR-00-06 (waypoint bypass).</strong></li>
+</ul>
+<hr />
+<h2 id="h-status-end-of-phase-0">H. Status (end of Phase 0)<a class="headerlink" href="#h-status-end-of-phase-0" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workspace cartography</td>
+<td>✅ complete</td>
+</tr>
+<tr>
+<td>Critical findings filed</td>
+<td>✅ 6 (CR-00-01 … CR-00-06)</td>
+</tr>
+<tr>
+<td>Spec verifier baseline</td>
+<td>✅ green</td>
+</tr>
+<tr>
+<td>Drift from 2026-04-13 audit</td>
+<td>✅ none observed (all flagged bugs are <code>FIXED</code> or whitelisted)</td>
+</tr>
+<tr>
+<td>Hardware-dependent gates</td>
+<td>⏸ deferred (documented in F)</td>
+</tr>
+<tr>
+<td>Phase 1 file</td>
+<td>⏳ next</td>
+</tr>
+</tbody>
+</table>
+<p>End of Phase 0.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Developed and maintained by <a href="https://orzatech.com" target="_blank" rel="noopener">OrzaTech</a> — MIT licensed.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://orzatech.com" target="_blank" rel="noopener" title="OrzaTech" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/AndresIslas99/NavGreen" target="_blank" rel="noopener" title="NavGreen on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:andresislas2107@gmail.com" target="_blank" rel="noopener" title="Contact the maintainer" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
