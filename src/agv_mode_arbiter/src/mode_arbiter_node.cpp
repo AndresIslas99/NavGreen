@@ -220,8 +220,13 @@ class ModeArbiterNode : public rclcpp::Node {
                      nav2_msgs::msg::CollisionMonitorState::STOP);
               });
     }
+    // QoS — transient_local so we receive the operator's last-published
+    // mode even when this arbiter starts AFTER the dashboard backend
+    // (systemd units boot in non-deterministic order; with volatile QoS
+    // the backend's boot-seed publish was lost when the arbiter started
+    // later). Both sides must be transient_local for late-joiner delivery.
     sub_operator_ = create_subscription<std_msgs::msg::String>(
-        operator_topic, rclcpp::QoS{10},
+        operator_topic, rclcpp::QoS(1).transient_local().reliable(),
         [this](std_msgs::msg::String::ConstSharedPtr msg) {
           latest_inputs_.operator_mode = msg->data;
         });

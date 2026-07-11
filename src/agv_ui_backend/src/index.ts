@@ -190,7 +190,17 @@ async function main() {
   // Phase-2 mode_arbiter consumes this to pick its operator_mode (nav|teleop|idle).
   // Without it the arbiter stays in its default 'nav' and stomps the cmd_vel topic
   // at 20 Hz with zero-Twist while teleop_server also publishes joystick commands.
-  const operatorModePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode/set`);
+  //
+  // QoS — transient_local so the arbiter receives the last-published value
+  // regardless of whether it started before or after this backend (the two
+  // systemd units boot in non-deterministic order; with volatile QoS the
+  // boot-seed publish was lost when the arbiter started later, leaving
+  // operator_mode stuck at 'nav' and the joystick clobbered by the arbiter's
+  // 20 Hz zero-Twist stream). Must match the arbiter's subscription QoS.
+  const operatorModePub = node.createPublisher('std_msgs/msg/String', `/${NAMESPACE}/mode/set`,
+    { qos: new rclnodejs.QoS(rclnodejs.QoS.HistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, 1,
+      rclnodejs.QoS.ReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+      rclnodejs.QoS.DurabilityPolicy.RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL) });
   // AprilTag registry reload trigger (transient_local so marker_correction picks it up after restart)
   const markerReloadPub = node.createPublisher('std_msgs/msg/Empty',
     `/${NAMESPACE}/markers/registry_reload`,
