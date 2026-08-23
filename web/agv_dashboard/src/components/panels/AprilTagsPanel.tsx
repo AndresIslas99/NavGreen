@@ -73,8 +73,8 @@ export function AprilTagsPanel() {
         const err = await r.json().catch(() => ({}))
         alert(`Failed to send goal: ${err.error || 'unknown'}`)
       }
-    } catch (e: any) {
-      alert(`Network error: ${e?.message}`)
+    } catch (e: unknown) {
+      alert(`Network error: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
@@ -97,8 +97,8 @@ export function AprilTagsPanel() {
         const err = await r.json().catch(() => ({}))
         alert(`Align failed: ${err.error || 'unknown'}`)
       }
-    } catch (e: any) {
-      alert(`Network error: ${e?.message}`)
+    } catch (e: unknown) {
+      alert(`Network error: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 

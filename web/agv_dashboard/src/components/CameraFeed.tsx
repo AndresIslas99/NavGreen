@@ -91,7 +91,7 @@ export function CameraFeed({ visible, expanded: forceExpanded }: Props) {
             tabIndex={0}
             className="camera-snapshot-btn"
             onClick={handleSnapshot}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSnapshot(e as any); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSnapshot(e); } }}
             title="Guardar snapshot"
             aria-label="Guardar snapshot"
           >

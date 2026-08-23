@@ -60,7 +60,7 @@ export interface EnclosureBounds {
   minX: number; maxX: number; minY: number; maxY: number;
 }
 
-export interface CorridorBounds extends EnclosureBounds {}
+export type CorridorBounds = EnclosureBounds;
 
 export interface RowBand {
   /** 'A'..'E' derived from y-center index (bottom-up). */

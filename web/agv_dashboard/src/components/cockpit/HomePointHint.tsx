@@ -32,11 +32,11 @@ export function HomePointHint({ homePoint, currentPose, onSet }: Props) {
     if (!currentPose) return;
     setBusy(true); setError(null);
     try {
-      const resp: any = await api.setHomePoint({ ...currentPose, name });
+      const resp = await api.setHomePoint({ ...currentPose, name }) as { home_point?: Parameters<typeof onSet>[0] };
       if (resp?.home_point) onSet(resp.home_point);
       setModalOpen(false);
-    } catch (e: any) {
-      setError(e?.message || 'No se pudo guardar la base');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar la base');
     } finally {
       setBusy(false);
     }

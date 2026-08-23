@@ -42,11 +42,11 @@ export function ActionStack({
     try {
       await fn();
       toast.push({ tone: 'ok', title: `${label} ✓` });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.push({
         tone: 'crit',
         title: `No se pudo: ${label.toLowerCase()}`,
-        description: e?.message,
+        description: e instanceof Error ? e.message : undefined,
       });
     }
   };

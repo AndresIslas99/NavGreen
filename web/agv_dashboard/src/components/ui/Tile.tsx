@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- compound Tile.* subcomponents */
 /**
  * Tile — compositional card with icon circle + content stack.
  *
