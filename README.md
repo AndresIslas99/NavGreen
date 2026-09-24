@@ -14,9 +14,9 @@
   Developed and maintained by <a href="https://orzatech.com"><b>OrzaTech</b></a>
 </p>
 
-**NavGreen** is a production-grade autonomous navigation stack for greenhouse
-robots (AGVs). It covers the full stack of a real field robot deployed in a
-commercial greenhouse in Mexico: CAN motor control, dual-EKF localization fused
+**NavGreen** is an autonomous navigation stack for greenhouse robots (AGVs),
+in pilot at two commercial greenhouses in Mexico. It covers the full stack of a
+field robot: CAN motor control, dual-EKF localization fused
 with visual SLAM and AprilTag corrections, Nav2 autonomy, a rail-riding mode
 for heating-pipe crop rows, a software safety chain, a browser operator
 dashboard, and an optional VDA 5050 fleet layer.
@@ -24,9 +24,9 @@ dashboard, and an optional VDA 5050 fleet layer.
 📖 **[Documentation site](https://andresislas99.github.io/NavGreen/)** —
 getting started, tutorials, and architecture deep-dives.
 
-**Current MVP**: first field visit with a local-WiFi operator workflow —
-teleoperation, map commissioning, waypoint missions, and live monitoring from a
-browser tablet.
+**Current MVP** (in pilot): a local-WiFi operator workflow — teleoperation,
+map commissioning, waypoint missions, and live monitoring from a browser
+tablet.
 
 > NavGreen is the project name; ROS package names keep the `agv_` prefix
 > (like Nav2's `nav2_*` packages live under the Nav2 brand).
