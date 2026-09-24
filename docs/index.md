@@ -3,8 +3,8 @@
 **Autonomous navigation for greenhouse robots.**
 
 NavGreen is the full software stack of an autonomous differential-drive AGV
-built for commercial greenhouse operation in Mexico. It is a production-grade
-ROS 2 workspace, not a demo: every robot node is C++17 compiled with
+built for commercial greenhouse operation in Mexico, now in pilot at two
+commercial greenhouses. It is an engineering-grade ROS 2 workspace, not a demo: every robot node is C++17 compiled with
 `-Werror`, localization is a dual-EKF fusing 50 Hz wheel odometry with GPU
 visual SLAM (cuVSLAM) and AprilTag (tag36h11) pose corrections, autonomy runs
 on Nav2, and a dedicated rail-riding mode drives the robot along the
@@ -128,11 +128,11 @@ NavGreen documents what is weak as carefully as what works:
 
 NavGreen is a working engineering codebase, honestly mid-journey:
 
-- **Target deployment**: a commercial greenhouse in Mexico. The core stack is
+- **Deployment**: in pilot at two commercial greenhouses in Mexico. The core stack is
   implemented and validated hardware-in-the-loop (HIL); per
   [`specs/project.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/project.yaml),
   field validation on the physical robot is the current milestone. The MVP
-  scope is the first field visit: teleoperation, map commissioning, waypoint
+  scope for the pilot: teleoperation, map commissioning, waypoint
   missions, and live monitoring from a browser tablet over local WiFi.
 - **CI is green** ([workflow](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)),
   with four jobs:
