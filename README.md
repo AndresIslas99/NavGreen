@@ -15,7 +15,7 @@
 </p>
 
 **NavGreen** is an autonomous navigation stack for greenhouse robots (AGVs),
-in pilot at two commercial greenhouses in Mexico. It covers the full stack of a
+piloted at two commercial greenhouses in Mexico. It covers the full stack of a
 field robot: CAN motor control, dual-EKF localization fused
 with visual SLAM and AprilTag corrections, Nav2 autonomy, a rail-riding mode
 for heating-pipe crop rows, a software safety chain, a browser operator
@@ -24,7 +24,7 @@ dashboard, and an optional VDA 5050 fleet layer.
 📖 **[Documentation site](https://andresislas99.github.io/NavGreen/)** —
 getting started, tutorials, and architecture deep-dives.
 
-**Current MVP** (in pilot): a local-WiFi operator workflow — teleoperation,
+**Current MVP** (as piloted): a local-WiFi operator workflow — teleoperation,
 map commissioning, waypoint missions, and live monitoring from a browser
 tablet.
 
