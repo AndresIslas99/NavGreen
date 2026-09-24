@@ -38,8 +38,8 @@ export function AprilTagAssignmentModal({ hardwareId, onClose }: Props) {
         const data = await r.json().catch(() => ({}))
         setError(data.error || 'Assignment failed')
       }
-    } catch (e: any) {
-      setError(e?.message || 'Network error')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Network error')
     } finally {
       setSubmitting(false)
     }

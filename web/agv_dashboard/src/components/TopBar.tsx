@@ -43,7 +43,7 @@ function BrandLogo() {
 }
 
 export function TopBar({
-  status, state: _state, connected,
+  status, connected,
   onEStop, onNavCancel, username, userRole, onLogout,
 }: Props) {
   const navActive = status?.nav_state?.active || false

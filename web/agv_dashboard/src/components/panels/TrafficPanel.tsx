@@ -62,7 +62,7 @@ export function TrafficPanel({ onDrawZone, drawnPolygon, onClearDrawn }: Props) 
       onDrawZone?.(false)
       onClearDrawn?.()
       refresh()
-    } catch (e) {
+    } catch {
       setError('Failed to create zone')
     }
   }

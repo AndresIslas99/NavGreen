@@ -559,7 +559,8 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       zoneLayerRef.current = null
       greenhouseLayerRef.current = null
       rowBandLayerRef.current = null
-      rowRectsRef.current.clear()
+      const rowRects = rowRectsRef.current
+      rowRects.clear()
       rowBandsRef.current = []
       trailRef.current = []
     }
@@ -1164,7 +1165,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
           interactive: false,
           className: 'apriltag-ripple',
         }).addTo(group)
-        window.setTimeout(() => { try { group.removeLayer(ring) } catch {} }, 900)
+        window.setTimeout(() => { try { group.removeLayer(ring) } catch { /* layer already gone */ } }, 900)
         toast.push({
           tone: 'ok',
           title: `AprilTag ${t.label}`,
@@ -1392,7 +1393,7 @@ export function MapView({ mapData, pose, path, scanPoints, mode, onGoalClick, wa
       pathLayerRef.current.setStyle({
         color, dashArray, opacity: latlngs.length > 0 ? 0.92 : 0,
       })
-      ;(pathLayerRef.current.options as any).className = className
+      ;(pathLayerRef.current.options as L.PolylineOptions).className = className
     } else if (latlngs.length > 0) {
       pathLayerRef.current = L.polyline(latlngs, {
         color,
