@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/AndresIslas99/NavGreen/actions/workflows/ci.yaml"><img src="https://github.com/AndresIslas99/NavGreen/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
-  <a href="#ros-2-distributions"><img src="https://img.shields.io/badge/ROS%202-Humble%20%2F%20Jazzy-blue.svg" alt="ROS 2"></a>
+  <a href="#ros-2-distributions"><img src="https://img.shields.io/badge/ROS%202-Humble-blue.svg" alt="ROS 2"></a>
   <a href="policies/engineering_rules.md"><img src="https://img.shields.io/badge/robot%20nodes-C%2B%2B17%20%2B%20--Werror-orange.svg" alt="C++17 -Werror"></a>
   <a href="https://orzatech.com"><img src="https://img.shields.io/badge/by-OrzaTech-1B5E20.svg" alt="by OrzaTech"></a>
 </p>
@@ -262,10 +262,11 @@ etc.) that are cloned separately into `src/` on the Jetson.
 
 ### ROS 2 distributions
 
-CI builds and tests on **ROS 2 Humble** (`ros:humble` container). The
-greenhouse Jetson runs **ROS 2 Jazzy**; the HIL simulation host runs Humble.
-Only standard message types cross that cross-distro DDS boundary — the
-rationale is documented in [`specs/launch_sequence.yaml`](specs/launch_sequence.yaml)
+Everything runs on **ROS 2 Humble**: CI (`ros:humble` container), the robot's
+Jetson AGX Orin developer kit (Humble is the default for its Ubuntu 22.04 base)
+and the HIL simulation host. Only standard message types cross the robot ↔ sim
+DDS boundary, as a conservative interop rule — see
+[`specs/launch_sequence.yaml`](specs/launch_sequence.yaml)
 and [`specs/interfaces.yaml`](specs/interfaces.yaml).
 
 ## Launch modes
