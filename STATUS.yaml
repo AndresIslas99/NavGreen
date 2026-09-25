@@ -33,4 +33,7 @@ agv_ui_backend_ts: built     # TypeScript + rclnodejs, builds clean
 # Operator Dashboard
 dashboard: operational       # React/TypeScript, ISA-101, scan accumulation, mission control
 
-# Next: real hardware validation (dual EKF + Nav2 on physical robot)
+# Field
+field_trials: greenhouse_pilots  # ran on the physical robot (hardware listed in the README) in two
+                                 # commercial greenhouses in Mexico; first field session 2026-05-13.
+                                 # The code was consolidated into this NavGreen repo afterwards.
