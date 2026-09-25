@@ -128,12 +128,12 @@ NavGreen documents what is weak as carefully as what works:
 
 NavGreen is a working engineering codebase, honestly mid-journey:
 
-- **Deployment**: piloted at two commercial greenhouses in Mexico. The core stack is
-  implemented and validated hardware-in-the-loop (HIL); per
-  [`specs/project.yaml`](https://github.com/AndresIslas99/NavGreen/blob/main/specs/project.yaml),
-  field validation on the physical robot is the current milestone. The MVP
-  scope for the pilot: teleoperation, map commissioning, waypoint
-  missions, and live monitoring from a browser tablet over local WiFi.
+- **Deployment**: piloted at two commercial greenhouses in Mexico on the
+  physical robot (first field session: May 2026), before the code was
+  consolidated into this repo. Hardware-in-the-loop (HIL) testing remains the
+  regression harness. The MVP scope for the pilot: teleoperation, map
+  commissioning, waypoint missions, and live monitoring from a browser tablet
+  over local WiFi.
 - **CI is green** ([workflow](https://github.com/AndresIslas99/NavGreen/blob/main/.github/workflows/ci.yaml)),
   with four jobs:
     - **Spec verification** — the same `tools/verify_specs/all.sh` suite as
