@@ -19,7 +19,7 @@ piloted at two commercial greenhouses in Mexico. It covers the full stack of a
 field robot: CAN motor control, dual-EKF localization fused
 with visual SLAM and AprilTag corrections, Nav2 autonomy, a rail-riding mode
 for heating-pipe crop rows, a software safety chain, a browser operator
-dashboard, and an optional VDA 5050 fleet layer.
+dashboard, and an optional VDA 5050 layer (single-robot adapter plus a fleet-master scaffold).
 
 📖 **[Documentation site](https://andresislas99.github.io/NavGreen/)** —
 getting started, tutorials, and architecture deep-dives.
