@@ -84,7 +84,7 @@ entry_points:
           - {method: "POST", path: "/sim/restart", effect: "kills Isaac; supervisor relaunches with auto-play; returns immediately. LLM must poll GET /state until gt_pose is non-null (~30–60 s)."}
         topic_mirror: "/agv/sim/control (std_msgs/String JSON command=play|stop|pause) for play/stop; restart is not topic-exposed because it kills the Kit process."
       cross_distro_boundary:
-        description: "sim host runs ROS 2 Humble; Jetson runs ROS 2 Jazzy. Cyclone DDS interops at wire level as long as only standard msg types cross."
+        description: "sim host and Jetson both run ROS 2 Humble. Only standard msg types cross the robot-sim DDS boundary (conservative interop rule kept from an earlier cross-distro setup)."
         allowed_types: ["std_msgs/*", "geometry_msgs/*", "nav_msgs/*", "nav2_msgs/*", "sensor_msgs/*"]
         forbidden: "agv_interfaces/* and any other custom msg — IDL is not guaranteed byte-compatible across distros."
       dds_peer_list:
