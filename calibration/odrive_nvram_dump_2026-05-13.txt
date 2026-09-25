@@ -1,0 +1,132 @@
+# ODrive S1 NVRAM read-only dump — fw 0.6.x schema
+# date: 2026-05-13T02:18:17.301182
+# operator: Section-0 Day-2 verification (auto-driven)
+# robot: orza/agv (Jetson AGX Orin 64 GB)
+# procedure: docs/calibration/odrive_nvram_dump_procedure.md
+# note: procedure was written for fw 0.5.x; this dump uses the
+#       fw 0.6.x paths discovered via introspection. NO writes.
+#
+# Mapping summary:
+#   axis0.config.motor.pole_pairs    = fw 0.5.x  motor.config.pole_pairs
+#   inc_encoder0.config.cpr          = fw 0.5.x  encoder.config.cpr
+#   axis0.config.commutation_encoder = which encoder is used for commutation
+#   axis0.config.load_encoder        = which encoder is used for control
+#
+
+=== ODrive serial 00627472D645 ===
+  role (from CAN node_id): LEFT
+  hw_version: 5.2.0
+  fw_version: 0.6.11
+  motor.pole_pairs                 : 20
+  motor.torque_constant            : 0.08269999921321869
+  motor.current_soft_max           : 50.0
+  motor.current_hard_max           : 70.0
+  motor.calibration_current        : 10.0
+  motor.effective_current_lim      : 50.0
+  inc_encoder0.cpr                 : 8192
+  commutation_encoder              : 13
+  load_encoder                     : 13
+  encoder_bandwidth                : 1000.0
+  startup_idx_search               : False
+  startup_offset_calib             : False
+  controller.vel_limit             : 10.0
+  controller.vel_limit_tol         : 1.2999999523162842
+  controller.vel_gain              : 0.16670000553131104
+  controller.vel_int_gain          : 0.33329999446868896
+  controller.input_mode            : 2
+  controller.control_mode          : 2
+  controller.enable_vel_lim        : True
+  trap_traj.vel_limit              : 2.0
+  can.node_id                      : 0
+  can.encoder_msg_rate_ms          : 10
+
+=== ODrive serial 003CF674849B ===
+  role (from CAN node_id): RIGHT
+  hw_version: 5.2.0
+  fw_version: 0.6.11
+  motor.pole_pairs                 : 20
+  motor.torque_constant            : 0.08269999921321869
+  motor.current_soft_max           : 50.0
+  motor.current_hard_max           : 70.0
+  motor.calibration_current        : 10.0
+  motor.effective_current_lim      : 50.0
+  inc_encoder0.cpr                 : 8192
+  commutation_encoder              : 13
+  load_encoder                     : 13
+  encoder_bandwidth                : 1000.0
+  startup_idx_search               : False
+  startup_offset_calib             : False
+  controller.vel_limit             : 10.0
+  controller.vel_limit_tol         : 1.2000000476837158
+  controller.vel_gain              : 0.1666666716337204
+  controller.vel_int_gain          : 0.16699999570846558
+  controller.input_mode            : 2
+  controller.control_mode          : 2
+  controller.enable_vel_lim        : True
+  trap_traj.vel_limit              : 2.0
+  can.node_id                      : 1
+  can.encoder_msg_rate_ms          : 0
+
+
+=== Section-0 analysis (auto-driven) ===
+
+Both ODrive S1 boards report IDENTICAL motor and encoder parameters:
+  pole_pairs       = 20    (on both axes)
+  inc_encoder0.cpr = 8192  (on both axes)
+  torque_constant  = 0.0827 Nm/A (on both axes)
+
+Therefore the CRITICAL-02-02 1.25× factor (geometric 0.0625 vs runtime
+0.0781) is NOT explained by a NVRAM mis-configuration of pole_pairs or
+encoder.cpr. The hypothesis tested by the dump procedure assumed fw
+0.5.x and a single-axis firmware divergence; that is not the case here.
+
+Remaining hypotheses to confirm CRITICAL-02-02:
+  (H1) The M8325s motor's spec pp differs from 20. Need datasheet.
+       If spec is 20 → no firmware bug, the 1.25× is mechanical.
+       If spec is 25 → 20/25 = 0.8 → 1.25× effective. Likely candidate.
+  (H2) Real gearbox ratio differs from the 10:1 assumed by
+       agv_odrive/src/odrive_can_node.cpp and robot_geometry.yaml.
+       If real gearbox is 12.5:1, 10/12.5 = 0.8 → 1.25× effective.
+       Inspect the physical gearbox stamp on the motor to confirm.
+  (H3) Wheel radius is actually 0.0781 m (the caliper measurement that
+       reported 0.0625 m may have been the bare hub diameter, not the
+       inflated tire / tread surface). Re-measure with a tape around
+       the wheel circumference and divide by 2π. If C/(2π) ≈ 0.078,
+       the geometric truth was wrong from the start.
+
+The F1 1 m forward test in Section-0 Day 2 is the empirical arbiter
+of which hypothesis (if any) holds.
+
+=== Bilateral asymmetries discovered (NEW finding, not in audit) ===
+
+Beyond the documented CRITICAL-02-02 scope, the dump reveals two
+parameter mismatches between the LEFT and RIGHT controllers:
+
+  vel_integrator_gain    LEFT 0.333    RIGHT 0.167   2× ratio
+  vel_limit_tolerance    LEFT 1.30     RIGHT 1.20
+  can.encoder_msg_rate   LEFT 10 ms    RIGHT 0 ms (DISABLED on RIGHT)
+
+Implications:
+
+(A) vel_integrator_gain asymmetry: the right wheel's controller will
+    correct errors twice as slowly as the left's. On a straight-line
+    command, the wheels will diverge in transient response — left
+    settles faster, contributing a yaw bias whose sign depends on the
+    direction of the residual error. This is plausibly part of the
+    caster-drag / heading-drift signature that the iter-46 caster
+    sprint tried to compensate with covariance inflation.
+
+(B) encoder_msg_rate_ms = 0 on RIGHT: that disables automatic
+    encoder updates via CAN. The right wheel encoder estimate must
+    therefore be obtained via RTR polls in odrive_can_node. If at
+    any point the polling stalls (CAN bus saturation, RTR loss),
+    the right wheel odometry would silently freeze. Bug pattern
+    similar to the original 2026-04-13 audit findings.
+
+Section-0 verdict: capture as a NEW finding for the post-Section-0
+backlog. Both asymmetries are NVRAM-resident (firmware) so the fix
+is a one-time `save_configuration()` after writing matched values;
+that requires a separate maintenance window and is intentionally NOT
+done inside Section 0.
+
+=== End of analysis ===
